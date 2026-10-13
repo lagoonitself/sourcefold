@@ -1,0 +1,324 @@
+import { canonicalizeUrl, detectSource, formatDate } from "@sourcefold/core";
+import {
+  parseGrokipediaHtml,
+  grokipediaToMarkdown,
+  GrokipediaParseError,
+  type GrokipediaArticle,
+} from "@sourcefold/core/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Tables } from "@/lib/database.types";
+import {
+  GROKIPEDIA_ERROR_MESSAGES,
+  formatDuplicateMessage,
+  type GrokipediaErrorCode,
+  type GrokipediaDuplicateErrorPayload,
+} from "./grokipedia-errors";
+
+export interface SaveGrokipediaParams {
+  url: string;
+  folderId: string;
+}
+
+export type SavedGrokipediaItem = Pick<
+  Tables<"items">,
+  "id" | "folder_id" | "kind" | "title" | "source_url" | "status" | "created_at"
+>;
+
+export type SaveGrokipediaSuccess = {
+  success: true;
+  item: SavedGrokipediaItem;
+};
+
+export type SaveGrokipediaDuplicateError = {
+  success: false;
+  status: 409;
+  error: GrokipediaDuplicateErrorPayload;
+};
+
+export type SaveGrokipediaGeneralError = {
+  success: false;
+  status: 400 | 404 | 422 | 500 | 502;
+  error: {
+    code: Exclude<GrokipediaErrorCode, "duplicate">;
+    message: string;
+  };
+};
+
+export type SaveGrokipediaError = SaveGrokipediaDuplicateError | SaveGrokipediaGeneralError;
+
+export type SaveGrokipediaResult = SaveGrokipediaSuccess | SaveGrokipediaError;
+
+export async function findExistingItemByCanonicalUrl(
+  supabase: SupabaseClient<Database>,
+  canonicalUrl: string,
+): Promise<{ id: string; folder_id: string; folder_name: string } | null> {
+  const { data: item, error } = await supabase
+    .from("items")
+    .select("id, folder_id")
+    .eq("canonical_url", canonicalUrl)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error || !item) {
+    return null;
+  }
+
+  let folderName = "Unknown";
+  if (item.folder_id) {
+    const { data: folder } = await supabase
+      .from("folders")
+      .select("name")
+      .eq("id", item.folder_id)
+      .maybeSingle();
+
+    if (folder?.name) {
+      folderName = folder.name;
+    }
+  }
+
+  return {
+    id: item.id,
+    folder_id: item.folder_id,
+    folder_name: folderName,
+  };
+}
+
+export async function saveGrokipediaLink(
+  supabase: SupabaseClient<Database>,
+  { url, folderId }: SaveGrokipediaParams,
+): Promise<SaveGrokipediaResult> {
+  // Step 1: Canonicalize URL and detect source
+  let canonical: string;
+  try {
+    canonical = canonicalizeUrl(url);
+  } catch {
+    return {
+      success: false,
+      status: 400,
+      error: {
+        code: "invalid_url",
+        message: GROKIPEDIA_ERROR_MESSAGES.invalid_url,
+      },
+    };
+  }
+
+  if (detectSource(canonical) !== "grokipedia") {
+    return {
+      success: false,
+      status: 422,
+      error: {
+        code: "not_grokipedia",
+        message: GROKIPEDIA_ERROR_MESSAGES.not_grokipedia,
+      },
+    };
+  }
+
+  // Step 2: Duplicate check
+  const existing = await findExistingItemByCanonicalUrl(supabase, canonical);
+  if (existing) {
+    return {
+      success: false,
+      status: 409,
+      error: {
+        code: "duplicate",
+        message: formatDuplicateMessage(existing.folder_name),
+        item_id: existing.id,
+        folder_id: existing.folder_id,
+        folder_name: existing.folder_name,
+      },
+    };
+  }
+
+  // Step 3: Fetch canonical HTML
+  let response: Response;
+  try {
+    response = await fetch(canonical, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; Sourcefold/0.1; +https://github.com/lagoonitself/sourcefold)",
+        Accept: "text/html",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch {
+    return {
+      success: false,
+      status: 502,
+      error: {
+        code: "fetch_failed",
+        message: GROKIPEDIA_ERROR_MESSAGES.fetch_failed,
+      },
+    };
+  }
+
+  if (response.status === 404) {
+    return {
+      success: false,
+      status: 404,
+      error: {
+        code: "not_found",
+        message: GROKIPEDIA_ERROR_MESSAGES.not_found,
+      },
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      success: false,
+      status: 502,
+      error: {
+        code: "fetch_failed",
+        message: GROKIPEDIA_ERROR_MESSAGES.fetch_failed,
+      },
+    };
+  }
+
+  let html: string;
+  try {
+    html = await response.text();
+  } catch {
+    return {
+      success: false,
+      status: 502,
+      error: {
+        code: "fetch_failed",
+        message: GROKIPEDIA_ERROR_MESSAGES.fetch_failed,
+      },
+    };
+  }
+
+  // Step 4: Parse Grokipedia HTML
+  let article: GrokipediaArticle;
+  try {
+    article = parseGrokipediaHtml(html, canonical);
+  } catch (err) {
+    if (err instanceof GrokipediaParseError) {
+      return {
+        success: false,
+        status: 422,
+        error: {
+          code: "parse_failed",
+          message: GROKIPEDIA_ERROR_MESSAGES.parse_failed,
+        },
+      };
+    }
+    return {
+      success: false,
+      status: 422,
+      error: {
+        code: "parse_failed",
+        message: GROKIPEDIA_ERROR_MESSAGES.parse_failed,
+      },
+    };
+  }
+
+  // Step 5: Calculate next position in target folder
+  const { data: siblings, error: sibError } = await supabase
+    .from("items")
+    .select("position")
+    .eq("folder_id", folderId)
+    .is("deleted_at", null);
+
+  if (sibError) {
+    return {
+      success: false,
+      status: 500,
+      error: {
+        code: "unknown",
+        message: sibError.message,
+      },
+    };
+  }
+
+  const maxPosition =
+    siblings && siblings.length > 0 ? Math.max(...siblings.map((item) => item.position)) : -1;
+  const position = maxPosition + 1;
+
+  // Step 6: Convert to markdown and insert item
+  const markdown = grokipediaToMarkdown(article, {
+    savedAt: formatDate(new Date()),
+  });
+
+  const { data: insertedItem, error: insertError } = await supabase
+    .from("items")
+    .insert({
+      folder_id: folderId,
+      kind: "grokipedia",
+      title: article.title,
+      source_url: canonical,
+      canonical_url: canonical,
+      status: "saved",
+      markdown,
+      meta: {
+        summary: article.summary,
+        fact_checked_at: article.factCheckedAt,
+        reference_count: article.references.length,
+        saved_at: new Date().toISOString(),
+      },
+      position,
+    })
+    .select("id, folder_id, kind, title, source_url, status, created_at")
+    .single();
+
+  if (insertError) {
+    // Postgres unique violation (code 23505) or unique constraint clash
+    if (
+      insertError.code === "23505" ||
+      insertError.message.includes("items_user_canonical_url_key") ||
+      insertError.message.includes("duplicate key")
+    ) {
+      const raceExisting = await findExistingItemByCanonicalUrl(supabase, canonical);
+      const folderName = raceExisting?.folder_name ?? "another folder";
+      return {
+        success: false,
+        status: 409,
+        error: {
+          code: "duplicate",
+          message: formatDuplicateMessage(folderName),
+          item_id: raceExisting?.id ?? "",
+          folder_id: raceExisting?.folder_id ?? folderId,
+          folder_name: folderName,
+        },
+      };
+    }
+
+    // Trigger check_item_folder raises exception 'invalid folder'
+    if (insertError.message.includes("invalid folder")) {
+      return {
+        success: false,
+        status: 400,
+        error: {
+          code: "invalid_folder",
+          message: GROKIPEDIA_ERROR_MESSAGES.invalid_folder,
+        },
+      };
+    }
+
+    return {
+      success: false,
+      status: 500,
+      error: {
+        code: "unknown",
+        message: insertError.message || GROKIPEDIA_ERROR_MESSAGES.unknown,
+      },
+    };
+  }
+
+  if (!insertedItem) {
+    return {
+      success: false,
+      status: 500,
+      error: {
+        code: "unknown",
+        message: GROKIPEDIA_ERROR_MESSAGES.unknown,
+      },
+    };
+  }
+
+  // Step 7: Success
+  return {
+    success: true,
+    item: insertedItem,
+  };
+}

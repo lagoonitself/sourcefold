@@ -1,5 +1,5 @@
-import { htmlToMarkdown } from "../html-to-markdown.js";
-import type { GrokipediaArticle } from "./parse.js";
+import { htmlToMarkdown } from "../html-to-markdown";
+import type { GrokipediaArticle } from "./parse";
 
 export function grokipediaToMarkdown(
   article: GrokipediaArticle,

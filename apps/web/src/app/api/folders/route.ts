@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonData, jsonError, requireUser } from "@/lib/api";
+import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { loadFolders } from "@/features/folders/load-folders";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +13,12 @@ const createFolderSchema = z.object({
   parent_id: z.string().uuid("Invalid parent folder ID").nullable().optional(),
 });
 
-export async function GET() {
-  const auth = await requireUser();
+export async function GET(request: Request) {
+  const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
 
   try {
-    const folders = await loadFolders(auth.supabase);
+    const folders = await loadFolders(auth.db, auth.userId);
     return jsonData(folders);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to load folders";
@@ -27,7 +27,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireUser();
+  const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
 
   let body: unknown;
@@ -46,7 +46,11 @@ export async function POST(request: Request) {
   const parentId = parsed.data.parent_id ?? null;
 
   // Determine max position among siblings
-  let siblingsQuery = auth.supabase.from("folders").select("position").is("deleted_at", null);
+  let siblingsQuery = auth.db
+    .from("folders")
+    .select("position")
+    .eq("user_id", auth.userId)
+    .is("deleted_at", null);
 
   if (parentId === null) {
     siblingsQuery = siblingsQuery.is("parent_id", null);
@@ -63,12 +67,13 @@ export async function POST(request: Request) {
     siblings && siblings.length > 0 ? Math.max(...siblings.map((s) => s.position)) : -1;
   const position = maxPosition + 1;
 
-  const { data: newFolder, error: insertError } = await auth.supabase
+  const { data: newFolder, error: insertError } = await auth.db
     .from("folders")
     .insert({
       name,
       parent_id: parentId,
       position,
+      user_id: auth.userId,
     })
     .select()
     .single();

@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { jsonData, jsonError, requireUser } from "@/lib/api";
+import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 const folderIdSchema = z.string().uuid("Invalid folder ID");
 
 export async function GET(request: Request) {
-  const auth = await requireUser();
+  const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
 
   const url = new URL(request.url);
@@ -23,9 +23,10 @@ export async function GET(request: Request) {
       return jsonError(400, "Invalid folder ID");
     }
 
-    const { data: items, error } = await auth.supabase
+    const { data: items, error } = await auth.db
       .from("items")
       .select("id, folder_id, kind, title, source_url, status, created_at, meta")
+      .eq("user_id", auth.userId)
       .eq("folder_id", folder)
       .is("deleted_at", null)
       .order("position", { ascending: true })
@@ -41,9 +42,10 @@ export async function GET(request: Request) {
   if (q) {
     const escaped = q.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 
-    const { data: items, error } = await auth.supabase
+    const { data: items, error } = await auth.db
       .from("items")
       .select("id, folder_id, kind, title, source_url, status, created_at, meta")
+      .eq("user_id", auth.userId)
       .is("deleted_at", null)
       .ilike("title", `%${escaped}%`)
       .order("title", { ascending: true })

@@ -9,15 +9,19 @@ export type FolderItem = {
   item_count: number;
 };
 
-export async function loadFolders(supabase: SupabaseClient<Database>): Promise<FolderItem[]> {
+export async function loadFolders(
+  db: SupabaseClient<Database>,
+  userId: string,
+): Promise<FolderItem[]> {
   const [foldersResult, itemsResult] = await Promise.all([
-    supabase
+    db
       .from("folders")
       .select("id, parent_id, name, position")
+      .eq("user_id", userId)
       .is("deleted_at", null)
       .order("position", { ascending: true })
       .order("name", { ascending: true }),
-    supabase.from("items").select("folder_id").is("deleted_at", null),
+    db.from("items").select("folder_id").eq("user_id", userId).is("deleted_at", null),
   ]);
 
   if (foldersResult.error) {

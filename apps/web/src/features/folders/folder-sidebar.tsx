@@ -9,7 +9,12 @@ export async function FolderSidebar() {
   const supabase = await createClient();
   let folders: FolderItem[] = [];
   try {
-    folders = await loadFolders(supabase);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      folders = await loadFolders(supabase, user.id);
+    }
   } catch (err) {
     console.error("Failed to load folders:", err);
   }

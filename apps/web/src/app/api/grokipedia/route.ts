@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUser } from "@/lib/api";
+import { requireApiUser } from "@/lib/api";
 import { saveGrokipediaLink } from "@/features/grokipedia/save-grokipedia";
 import { GROKIPEDIA_ERROR_MESSAGES } from "@/features/grokipedia/grokipedia-errors";
 
@@ -13,7 +13,7 @@ const saveGrokipediaSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const auth = await requireUser();
+  const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
 
   let body: unknown;
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await saveGrokipediaLink(auth.supabase, {
+  const result = await saveGrokipediaLink(auth.db, auth.userId, {
     url: parsed.data.url,
     folderId: parsed.data.folder_id,
   });

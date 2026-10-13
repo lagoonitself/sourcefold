@@ -49,12 +49,14 @@ export type SaveGrokipediaError = SaveGrokipediaDuplicateError | SaveGrokipediaG
 export type SaveGrokipediaResult = SaveGrokipediaSuccess | SaveGrokipediaError;
 
 export async function findExistingItemByCanonicalUrl(
-  supabase: SupabaseClient<Database>,
+  db: SupabaseClient<Database>,
+  userId: string,
   canonicalUrl: string,
 ): Promise<{ id: string; folder_id: string; folder_name: string } | null> {
-  const { data: item, error } = await supabase
+  const { data: item, error } = await db
     .from("items")
     .select("id, folder_id")
+    .eq("user_id", userId)
     .eq("canonical_url", canonicalUrl)
     .is("deleted_at", null)
     .maybeSingle();
@@ -65,9 +67,10 @@ export async function findExistingItemByCanonicalUrl(
 
   let folderName = "Unknown";
   if (item.folder_id) {
-    const { data: folder } = await supabase
+    const { data: folder } = await db
       .from("folders")
       .select("name")
+      .eq("user_id", userId)
       .eq("id", item.folder_id)
       .maybeSingle();
 
@@ -84,7 +87,8 @@ export async function findExistingItemByCanonicalUrl(
 }
 
 export async function saveGrokipediaLink(
-  supabase: SupabaseClient<Database>,
+  db: SupabaseClient<Database>,
+  userId: string,
   { url, folderId }: SaveGrokipediaParams,
 ): Promise<SaveGrokipediaResult> {
   // Step 1: Canonicalize URL and detect source
@@ -114,7 +118,7 @@ export async function saveGrokipediaLink(
   }
 
   // Step 2: Duplicate check
-  const existing = await findExistingItemByCanonicalUrl(supabase, canonical);
+  const existing = await findExistingItemByCanonicalUrl(db, userId, canonical);
   if (existing) {
     return {
       success: false,
@@ -214,9 +218,10 @@ export async function saveGrokipediaLink(
   }
 
   // Step 5: Calculate next position in target folder
-  const { data: siblings, error: sibError } = await supabase
+  const { data: siblings, error: sibError } = await db
     .from("items")
     .select("position")
+    .eq("user_id", userId)
     .eq("folder_id", folderId)
     .is("deleted_at", null);
 
@@ -240,9 +245,10 @@ export async function saveGrokipediaLink(
     savedAt: formatDate(new Date()),
   });
 
-  const { data: insertedItem, error: insertError } = await supabase
+  const { data: insertedItem, error: insertError } = await db
     .from("items")
     .insert({
+      user_id: userId,
       folder_id: folderId,
       kind: "grokipedia",
       title: article.title,
@@ -268,7 +274,7 @@ export async function saveGrokipediaLink(
       insertError.message.includes("items_user_canonical_url_key") ||
       insertError.message.includes("duplicate key")
     ) {
-      const raceExisting = await findExistingItemByCanonicalUrl(supabase, canonical);
+      const raceExisting = await findExistingItemByCanonicalUrl(db, userId, canonical);
       const folderName = raceExisting?.folder_name ?? "another folder";
       return {
         success: false,

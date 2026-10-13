@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { canonicalizeUrl } from "@sourcefold/core";
-import { jsonData, jsonError, requireUser } from "@/lib/api";
+import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { findExistingItemByCanonicalUrl } from "@/features/grokipedia/save-grokipedia";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ const checkSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const auth = await requireUser();
+  const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
 
   let body: unknown;
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     return jsonError(400, "That isn't a valid link.");
   }
 
-  const existing = await findExistingItemByCanonicalUrl(auth.supabase, canonical);
+  const existing = await findExistingItemByCanonicalUrl(auth.db, auth.userId, canonical);
 
   if (!existing) {
     return jsonData({ exists: false });

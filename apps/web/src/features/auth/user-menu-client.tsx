@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +14,7 @@ interface UserMenuClientProps {
 }
 
 export function UserMenuClient({ email }: UserMenuClientProps) {
+  const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
   const initial = email.charAt(0).toUpperCase();
 
@@ -30,6 +32,7 @@ export function UserMenuClient({ email }: UserMenuClientProps) {
           <span className="truncate text-[13px] text-muted-foreground">{email}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="top" className="w-(--anchor-width) min-w-44">
+          <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
               formRef.current?.submit();

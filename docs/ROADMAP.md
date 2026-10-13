@@ -16,6 +16,7 @@ Status as of 2026-10-13. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - Article parser: title, summary, fact-checked date, body with paragraphs, tables and links, and every reference as a footnote.
   - `POST /api/grokipedia` with duplicate detection.
   - "Add links" paste box with sequential queue, per-link status, retry and stop.
+  - Extended fixture suite: short articles without references and articles with nested lists, GFM tables, and footnotes.
 - **Wave 3, Extension and Substack:**
   - Settings page in the web app: create, view and revoke extension access tokens (`api_tokens` table).
   - Bearer-token auth for API routes used by the extension (`/api/folders`, `/api/items`, `/api/capture`, etc.).
@@ -35,21 +36,17 @@ Status as of 2026-10-13. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
 - **Wave 6, Notes and image sources:**
   - Item notes and standalone Markdown notes in folders (`POST /api/notes`, note modal).
   - Direct-to-Storage image uploads with client-side bypass of server payload limits, Supabase Storage RLS on private `images` bucket, signed link playback (`/api/items/:id/file`), Drive mirror sync.
-- **Wave 7, Polish:**
+- **Wave 7, Polish & Production:**
   - Right-click "Save link to Sourcefold" background context menu in extension.
   - Comprehensive self-hosting guide in `README.md` covering Supabase, Google Cloud, Vercel deployment, extension setup, and troubleshooting.
+  - Deployed to Vercel production: `https://sourcefold-eight.vercel.app`.
+  - Set GitHub Actions `APP_URL` variable to `https://sourcefold-eight.vercel.app` and verified daily keep-alive workflow (`38417818515` success).
   - All CI tests and builds passing on GitHub Actions.
 
-## Current Setup & Verification Steps
+## Final Steps to Use
 
-1. **Fix `SUPABASE_SECRET_KEY` in `apps/web/.env.local`:**
-   - In Supabase Dashboard -> Project Settings -> API, copy the `service_role` secret key.
-   - Paste it as `SUPABASE_SECRET_KEY=<your_service_role_key>` in `apps/web/.env.local`.
-2. **Sign in locally:**
-   - With `npm run dev` running, open `http://localhost:3000/login` and click **Continue with Google** using `anilreddy2569900@gmail.com`.
-   - Verify that Google refresh token is saved in `public.google_tokens`.
-3. **Deploy to Vercel (free Hobby plan):**
-   - Connect repo `lagoonitself/sourcefold` with Root Directory `apps/web`.
-   - Set environment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ALLOWED_EMAIL`, `SUPABASE_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
-   - Add Vercel domain to Google OAuth origins and Supabase redirect URLs.
-   - Set GitHub repository variable `APP_URL` to enable daily keep-alive ping.
+1. **Authorize OAuth redirect URLs:**
+   - **Google Cloud Console:** add `https://sourcefold-eight.vercel.app` to **Authorized JavaScript origins** and add `https://dhqrexvkinplupshqyma.supabase.co/auth/v1/callback` to **Authorized redirect URIs**.
+   - **Supabase Dashboard:** under **Authentication** → **URL Configuration**, set **Site URL** to `https://sourcefold-eight.vercel.app` and add `https://sourcefold-eight.vercel.app/**` to **Redirect URLs**.
+2. **Sign in:**
+   - Open `https://sourcefold-eight.vercel.app/login` (or `http://localhost:3000/login` locally) and click **Continue with Google** using `anilreddy2569900@gmail.com` to grant Google Drive sync access.

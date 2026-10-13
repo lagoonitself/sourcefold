@@ -2,7 +2,7 @@
 
 Read this first in any new session. When the user says "continue", pick up at **Next steps** below. Keep this file current.
 
-Last updated: 2026-10-13, after commit `bb7a605`.
+Last updated: 2026-10-13, after commit `67d4983` and production deployment.
 
 ## What we're building
 
@@ -28,22 +28,25 @@ Full detail:
 
 ## Current state
 
-**All Core Waves (0 through 7) are fully implemented and passing all tests, typechecks, linter, and CI builds!**
+**All Core Waves (0 through 7) are fully implemented, tested, and deployed!**
 
 - **Database:** Supabase schema with row-level security (`20261013000000_initial_schema.sql`, `20261013010000_drive_sync.sql`, and `20261013020000_image_storage.sql` applied).
+- **Production Deployment:** Live on Vercel at **`https://sourcefold-eight.vercel.app`**.
+- **Keep-Alive:** Configured `APP_URL` repository variable on GitHub. Daily keep-alive workflow pings `/api/health` to keep Supabase free tier active (`38417818515` verified).
 - **Auth:** Google OAuth configured with offline access (`drive.file` scope) and email allowlist validation (`ALLOWED_EMAIL`).
 - **Web App:** Next.js 16 (Turbopack) with folder sidebar, interactive drag reordering, Grokipedia bulk importer, item menu (rename, move, note, delete), standalone notes, direct-to-Storage image uploads, search, settings page for API token management and Drive reconnect, and Drive sync engine.
 - **Extension:** WXT + React extension with folder selection, Substack parser, X thread extractor, add-to-thread, duplicate warnings, and right-click context menu save.
-- **CI & Build:** Clean `npm run lint`, `npm run typecheck`, vitest test suite, extension build, and Next.js production build. GitHub Actions CI status is green.
+- **CI & Build:** Clean `npm run lint`, `npm run typecheck`, vitest test suite (95 tests passing), extension build, and Next.js production build. GitHub Actions CI status is green.
 
 ## Next steps
 
-1. **Paste valid `SUPABASE_SECRET_KEY` in `apps/web/.env.local`:**
-   - In Supabase Dashboard -> Project Settings -> API, copy the `service_role` secret key.
-   - Replace the corrupted value in `apps/web/.env.local` with the real key.
-2. **Sign in locally:**
-   - Open `http://localhost:3000/login` in the browser.
-   - Click **Continue with Google** and authenticate with `anilreddy2569900@gmail.com`.
-   - Verify folders, item uploads, and Drive sync.
-3. **Deploy to Vercel:**
-   - Follow the self-hosting guide in `README.md`.
+1. **Authorize OAuth redirect URLs:**
+   - In **Google Cloud Console** (project `folder-511509`): add `https://sourcefold-eight.vercel.app` to **Authorized JavaScript origins**.
+   - In **Supabase Dashboard** (`dhqrexvkinplupshqyma`): under **Authentication** → **URL Configuration**, set **Site URL** to `https://sourcefold-eight.vercel.app` and add `https://sourcefold-eight.vercel.app/**` to **Redirect URLs**.
+2. **First-time sign in:**
+   - Visit `https://sourcefold-eight.vercel.app/login` (or `http://localhost:3000/login` locally) and click **Continue with Google** using `anilreddy2569900@gmail.com`.
+   - Grant the Google Drive access consent.
+3. **Install & connect Chrome extension:**
+   - Run `npm run build -w @sourcefold/extension`.
+   - In Chrome (`chrome://extensions`), turn on Developer mode and click "Load unpacked" on `apps/extension/.output/chrome-mv3`.
+   - Open Settings in Sourcefold, generate a token, and connect the extension.

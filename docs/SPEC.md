@@ -105,7 +105,7 @@ All tables have `user_id uuid not null references auth.users`, `created_at`, `up
 - `source_url text null`, `canonical_url text null`, unique per user where `deleted_at is null`
 - `status text` one of `pending | saved | failed | unavailable` (unavailable = paid post you cannot access)
 - `error text null`
-- `markdown text null` (the generated file body, including front matter)
+- `markdown text null` (the Markdown body WITHOUT front matter; front matter is generated at Drive-save time from the item, its `meta` and its current folder path, so it never goes stale after a move or rename)
 - `meta jsonb` (per-kind fields, see section 5)
 - `note text null` (your note on this item)
 - `position int`

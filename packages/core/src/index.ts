@@ -1,3 +1,4 @@
+// Browser-safe helpers. Server-only parsers live in ./server.
 export { slugify } from "./slugify";
 export {
   InvalidUrlError,

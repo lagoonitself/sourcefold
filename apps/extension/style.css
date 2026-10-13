@@ -61,7 +61,8 @@ body {
 
 button,
 input,
-select {
+select,
+summary {
   font-family: inherit;
   font-size: 14px;
 }
@@ -69,6 +70,7 @@ select {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
+summary:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
@@ -138,6 +140,32 @@ a:focus-visible {
   background-color: var(--muted);
 }
 
+.btn-text {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+}
+
+.btn-text:hover {
+  text-decoration: underline;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.btn-full {
+  width: 100%;
+}
+
 .input-field {
   width: 100%;
   padding: 8px 12px;
@@ -205,15 +233,53 @@ a:focus-visible {
   margin: 0;
 }
 
+.popup-folder-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .popup-select {
   width: 100%;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
+  background-color: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.popup-select:disabled {
   background-color: var(--muted);
   color: var(--muted-foreground);
   cursor: not-allowed;
   opacity: 0.7;
+}
+
+.popup-new-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background-color: var(--sidebar);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.popup-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--foreground);
+  cursor: pointer;
+  user-select: none;
+}
+
+.popup-new-folder-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .popup-connect-text {
@@ -227,6 +293,99 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.popup-result {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  margin: 0;
+}
+
+.popup-result-success {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.popup-result-warning {
+  color: var(--warning);
+}
+
+.popup-result-error {
+  color: var(--destructive);
+}
+
+/* X "Add to this thread" */
+.popup-details {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.popup-summary {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground);
+  cursor: pointer;
+  user-select: none;
+}
+
+.popup-thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.popup-thread-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--foreground);
+  transition: background-color 120ms ease;
+}
+
+.popup-thread-item:hover:not(:disabled) {
+  background-color: var(--muted);
+}
+
+.popup-thread-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.popup-thread-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-serif);
+  flex: 1;
+}
+
+.popup-thread-item-adding {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.popup-thread-loading,
+.popup-thread-empty {
+  font-size: 13px;
+  color: var(--muted-foreground);
+  margin: 4px 0;
 }
 
 /* Options */

@@ -9,11 +9,20 @@ export default defineConfig({
     version: "0.1.0",
     permissions: ["storage", "activeTab", "scripting", "contextMenus"],
     host_permissions: ["http://localhost:3000/*", "https://*.vercel.app/*"],
+    optional_host_permissions: ["https://*/*", "http://*/*"],
     action: {
       default_title: "Sourcefold",
     },
     options_ui: {
       open_in_tab: true,
+    },
+    commands: {
+      _execute_action: {
+        suggested_key: {
+          default: "Alt+Shift+S",
+        },
+        description: "Open Sourcefold",
+      },
     },
   },
 });

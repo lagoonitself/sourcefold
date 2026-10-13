@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { browser } from "wxt/browser";
 import { getSettings, saveSettings } from "../../lib/settings";
 
 export default function App() {
@@ -19,6 +20,23 @@ export default function App() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveStatus("");
+    const targetUrl = appUrl.trim().replace(/\/+$/, "");
+
+    try {
+      const parsed = new URL(targetUrl);
+      const origin = parsed.origin;
+      const hostname = parsed.hostname.toLowerCase();
+      const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+      const isVercel = hostname.endsWith(".vercel.app");
+
+      if (!isLocalhost && !isVercel) {
+        await browser.permissions.request({ origins: [`${origin}/*`] });
+      }
+    } catch {
+      // Ignore URL parse error, still save
+    }
+
     await saveSettings({ appUrl, token });
     setSaveStatus("Saved");
   };
@@ -27,22 +45,54 @@ export default function App() {
     setIsTesting(true);
     setTestResult(null);
     const targetUrl = appUrl.trim().replace(/\/+$/, "");
+
     try {
-      const response = await fetch(`${targetUrl}/api/health`);
-      if (response.status === 200) {
-        const data = await response.json();
-        if (data && data.status === "ok") {
-          setTestResult({ message: "Connected to Sourcefold", isError: false });
-          return;
-        }
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+      };
+      if (token.trim()) {
+        headers["Authorization"] = `Bearer ${token.trim()}`;
       }
+
+      const response = await fetch(`${targetUrl}/api/folders`, {
+        method: "GET",
+        headers,
+      });
+
+      let body: any = null;
+      try {
+        body = await response.json();
+      } catch {
+        // Non-JSON
+      }
+
+      if (response.status === 401) {
+        setTestResult({
+          message: "Your access token isn't valid. Create a new one in Sourcefold's Settings.",
+          isError: true,
+        });
+        return;
+      }
+
+      if (response.ok && body && Array.isArray(body.data)) {
+        const count = body.data.length;
+        setTestResult({
+          message: `Connected. ${count} folders.`,
+          isError: false,
+        });
+        return;
+      }
+
+      const errMsg =
+        body?.error?.message ||
+        `Couldn't reach Sourcefold at ${targetUrl}. Check the address in settings.`;
       setTestResult({
-        message: `Couldn't reach Sourcefold at ${targetUrl}. Check the URL and that the app is running.`,
+        message: errMsg,
         isError: true,
       });
     } catch {
       setTestResult({
-        message: `Couldn't reach Sourcefold at ${targetUrl}. Check the URL and that the app is running.`,
+        message: `Couldn't reach Sourcefold at ${targetUrl}. Check the address in settings.`,
         isError: true,
       });
     } finally {
@@ -101,7 +151,7 @@ export default function App() {
               onClick={handleTestConnection}
               disabled={isTesting}
             >
-              {isTesting ? "Testing..." : "Test connection"}
+              {isTesting ? "Testing…" : "Test connection"}
             </button>
           </div>
 

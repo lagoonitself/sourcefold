@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { getSettings, saveSettings } from '../../lib/settings';
+import React, { useEffect, useState } from "react";
+import { getSettings, saveSettings } from "../../lib/settings";
 
 export default function App() {
-  const [appUrl, setAppUrl] = useState('http://localhost:3000');
-  const [token, setToken] = useState('');
-  const [saveStatus, setSaveStatus] = useState<string>('');
+  const [appUrl, setAppUrl] = useState("http://localhost:3000");
+  const [token, setToken] = useState("");
+  const [saveStatus, setSaveStatus] = useState<string>("");
   const [testResult, setTestResult] = useState<{ message: string; isError: boolean } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
@@ -20,19 +20,19 @@ export default function App() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     await saveSettings({ appUrl, token });
-    setSaveStatus('Saved');
+    setSaveStatus("Saved");
   };
 
   const handleTestConnection = async () => {
     setIsTesting(true);
     setTestResult(null);
-    const targetUrl = appUrl.trim().replace(/\/+$/, '');
+    const targetUrl = appUrl.trim().replace(/\/+$/, "");
     try {
       const response = await fetch(`${targetUrl}/api/health`);
       if (response.status === 200) {
         const data = await response.json();
-        if (data && data.status === 'ok') {
-          setTestResult({ message: 'Connected to Sourcefold', isError: false });
+        if (data && data.status === "ok") {
+          setTestResult({ message: "Connected to Sourcefold", isError: false });
           return;
         }
       }
@@ -67,7 +67,7 @@ export default function App() {
               value={appUrl}
               onChange={(e) => {
                 setAppUrl(e.target.value);
-                setSaveStatus('');
+                setSaveStatus("");
               }}
               placeholder="http://localhost:3000"
             />
@@ -84,7 +84,7 @@ export default function App() {
               value={token}
               onChange={(e) => {
                 setToken(e.target.value);
-                setSaveStatus('');
+                setSaveStatus("");
               }}
               placeholder="Paste token here"
             />
@@ -101,14 +101,16 @@ export default function App() {
               onClick={handleTestConnection}
               disabled={isTesting}
             >
-              {isTesting ? 'Testing...' : 'Test connection'}
+              {isTesting ? "Testing..." : "Test connection"}
             </button>
           </div>
 
           {saveStatus && <p className="status-message status-success">{saveStatus}</p>}
 
           {testResult && (
-            <p className={`status-message ${testResult.isError ? 'status-error' : 'status-success'}`}>
+            <p
+              className={`status-message ${testResult.isError ? "status-error" : "status-success"}`}
+            >
               {testResult.message}
             </p>
           )}

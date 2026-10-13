@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { browser } from 'wxt/browser';
-import { getSettings } from '../../lib/settings';
-import { detectPageType, type PageType } from '../../lib/page-type';
+import React, { useEffect, useState } from "react";
+import { browser } from "wxt/browser";
+import { getSettings } from "../../lib/settings";
+import { detectPageType, type PageType } from "../../lib/page-type";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [hasToken, setHasToken] = useState(false);
-  const [pageTitle, setPageTitle] = useState('');
+  const [pageTitle, setPageTitle] = useState("");
   const [pageType, setPageType] = useState<PageType>(null);
 
   useEffect(() => {
@@ -20,12 +20,12 @@ export default function App() {
           const tabs = await browser.tabs.query({ active: true, currentWindow: true });
           const activeTab = tabs[0];
           if (activeTab) {
-            setPageTitle(activeTab.title || activeTab.url || '');
+            setPageTitle(activeTab.title || activeTab.url || "");
             setPageType(detectPageType(activeTab.url));
           }
         }
       } catch (err) {
-        console.error('Failed to load extension popup state', err);
+        console.error("Failed to load extension popup state", err);
       } finally {
         setLoading(false);
       }
@@ -40,12 +40,12 @@ export default function App() {
 
   const getDetectedTypeLabel = (type: PageType): string => {
     switch (type) {
-      case 'grokipedia':
-        return 'Grokipedia article';
-      case 'substack':
-        return 'Substack post';
-      case 'x':
-        return 'X post';
+      case "grokipedia":
+        return "Grokipedia article";
+      case "substack":
+        return "Substack post";
+      case "x":
+        return "X post";
       default:
         return "This page can't be saved yet. Open a Grokipedia article, a Substack post or an X post.";
     }
@@ -94,7 +94,7 @@ export default function App() {
         </div>
       ) : (
         <div className="popup-main">
-          <h2 className="popup-page-title">{pageTitle || 'Untitled page'}</h2>
+          <h2 className="popup-page-title">{pageTitle || "Untitled page"}</h2>
           <p className="popup-detected-type">{getDetectedTypeLabel(pageType)}</p>
           <select className="popup-select" disabled value="">
             <option value="">Folders load in the next version</option>

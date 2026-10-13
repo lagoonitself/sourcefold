@@ -31,3 +31,6 @@ Thumbs.db
 
 # Test output
 packages/core/test/output/
+
+.vercel
+.env*

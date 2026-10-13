@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { buildFolderPaths } from "./folder-paths";
+import { ITEM_LIST_COLUMNS } from "./item-columns";
 import { ItemList } from "./item-list";
 
 export interface FolderViewProps {
@@ -30,7 +31,7 @@ export async function FolderView({ folderId }: FolderViewProps) {
 
   const { data: items } = await supabase
     .from("items")
-    .select("*")
+    .select(ITEM_LIST_COLUMNS)
     .eq("folder_id", folderId)
     .is("deleted_at", null)
     .order("position", { ascending: true })

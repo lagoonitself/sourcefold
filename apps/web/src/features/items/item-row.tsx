@@ -10,11 +10,11 @@ import {
   Newspaper,
   StickyNote,
 } from "lucide-react";
-import type { Tables } from "@/lib/database.types";
+import type { ItemListRow } from "./item-columns";
 import { cn } from "@/lib/utils";
 
 export interface ItemRowProps {
-  item: Tables<"items">;
+  item: ItemListRow;
   subtitle?: string;
 }
 

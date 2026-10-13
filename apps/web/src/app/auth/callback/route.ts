@@ -1,12 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAllowedEmails } from "@/lib/env";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const rawNext = requestUrl.searchParams.get("next");
-  const next = rawNext && rawNext.startsWith("/") ? rawNext : "/";
+  const next = safeRedirectPath(rawNext);
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=auth_failed", request.url));

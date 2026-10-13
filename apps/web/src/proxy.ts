@@ -1,9 +1,51 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
+import { getAllowedEmails } from "@/lib/env";
 
 export async function proxy(request: NextRequest) {
   const { response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
+
+  let allowedEmails: string[] = [];
+  try {
+    allowedEmails = getAllowedEmails();
+  } catch {
+    allowedEmails = [];
+  }
+
+  const userEmail = user?.email?.toLowerCase();
+  const isAllowed = !!userEmail && allowedEmails.includes(userEmail);
+
+  // If there is a user whose email is not allowed and path does not start with /login, /auth or /api
+  if (
+    user &&
+    !isAllowed &&
+    !pathname.startsWith("/login") &&
+    !pathname.startsWith("/auth") &&
+    !pathname.startsWith("/api")
+  ) {
+    const redirectResponse = NextResponse.redirect(
+      new URL("/login?error=not_allowed", request.url),
+    );
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
+    const sbCookieNames = new Set<string>();
+    for (const cookie of request.cookies.getAll()) {
+      if (cookie.name.startsWith("sb-")) {
+        sbCookieNames.add(cookie.name);
+      }
+    }
+    for (const cookie of redirectResponse.cookies.getAll()) {
+      if (cookie.name.startsWith("sb-")) {
+        sbCookieNames.add(cookie.name);
+      }
+    }
+    for (const name of sbCookieNames) {
+      redirectResponse.cookies.delete(name);
+    }
+    return redirectResponse;
+  }
 
   // No user and path does not start with /login, /auth or /api -> redirect to /login
   if (
@@ -20,7 +62,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // User present and path is /login -> redirect to /
-  if (user && pathname === "/login") {
+  if (user && isAllowed && pathname === "/login") {
     const redirectResponse = NextResponse.redirect(new URL("/", request.url));
     response.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie);

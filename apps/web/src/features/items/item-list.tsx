@@ -1,9 +1,9 @@
-import type { Tables } from "@/lib/database.types";
+import type { ItemListRow } from "./item-columns";
 import { ItemRow } from "./item-row";
 
 export interface ItemListProps {
-  items: Tables<"items">[];
-  getSubTitle?: (item: Tables<"items">) => string | undefined;
+  items: ItemListRow[];
+  getSubTitle?: (item: ItemListRow) => string | undefined;
 }
 
 export function ItemList({ items, getSubTitle }: ItemListProps) {

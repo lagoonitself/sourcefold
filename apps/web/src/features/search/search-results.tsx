@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
 import { buildFolderPaths } from "@/features/items/folder-paths";
 import { ItemList } from "@/features/items/item-list";
 
@@ -17,7 +18,7 @@ export async function SearchResults({ query }: SearchResultsProps) {
     supabase.from("folders").select("id, parent_id, name").is("deleted_at", null),
     supabase
       .from("items")
-      .select("*")
+      .select(ITEM_LIST_COLUMNS)
       .is("deleted_at", null)
       .ilike("title", `%${escapeIlike(query)}%`)
       .order("title", { ascending: true })

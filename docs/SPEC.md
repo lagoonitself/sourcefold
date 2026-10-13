@@ -153,13 +153,13 @@ folder: AI Research/Risks
 
 ## References
 
-1. [Artificial Intelligence and the Future of Humans | Pew Research Center](https://...) - pewresearch.org
-2. ...
+[^1]: [Artificial Intelligence and the Future of Humans | Pew Research Center](https://...) - pewresearch.org
+[^2]: ...
 ```
 
 - `summary` comes from the page's meta description (the first paragraph). Free to keep; the list shows the title only.
-- `fact_checked` is the absolute date if the HTML has one; otherwise the text as shown ("14 days ago") converted using the save date.
-- Footnote markers in the body become `[^n]`-style links to the reference number.
+- `fact_checked` comes from the page's JSON-LD `dateModified` (the "Fact-checked by Grok" date).
+- Citation markers in the body become GFM footnotes (`[^1]`), and each reference is the matching footnote definition, so the citations stay readable as plain text in NotebookLM and other tools.
 
 ### Substack
 

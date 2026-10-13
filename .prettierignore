@@ -1,0 +1,9 @@
+node_modules
+.next
+dist
+build
+.output
+.wxt
+package-lock.json
+apps/web/src/lib/database.types.ts
+apps/web/src/components/ui

@@ -20,27 +20,27 @@ Later (not in scope now): a public website per video where every claim links to 
 
 ## 2. Decisions
 
-| Topic | Decision |
-| --- | --- |
-| Name | Sourcefold |
-| License | MIT, public GitHub repo |
-| Cost | $0. Free tiers only. |
-| Platform | Hosted web app (desktop browser) + Chrome extension |
-| Hosting | Vercel Hobby (free) |
-| Backend | Supabase free plan: Postgres, Auth (Google), Storage |
-| Master copy | Supabase database |
-| Drive | One-way mirror. One **Save to Drive** button (and Ctrl+S) saves everything changed. Drive never writes back. |
-| Organizing | Folders inside folders, unlimited depth. A "project" is a top-level folder. |
-| One home | Each item lives in exactly one folder. |
-| Search | Titles only |
-| Duplicates | Warn "already saved in <folder>", do not save twice |
-| File format | Markdown with a YAML front-matter header |
-| Grokipedia | Bulk paste box in the app. Saved once, never updated. Keep tables, inline links and the references list with links. |
-| Substack | Captured by the extension. Free posts, plus paid posts you subscribe to (the extension reads the page while you are logged in). Paid posts you cannot access: show "paid post, not saved". Skip comments and images. Save author and publication info. |
-| X | Captured by the extension. Text only. Keep post link, author name, handle, profile link and date. Threads and reposts stored as a tree. "Add to this thread" attaches more posts later. |
-| Notes | A note box on every item, plus standalone notes (Markdown text) that live in folders like sources |
-| Own sources | Pasted text (as notes) and uploaded images |
-| Capture style | One click reads the page you are viewing |
+| Topic         | Decision                                                                                                                                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Name          | Sourcefold                                                                                                                                                                                                                                             |
+| License       | MIT, public GitHub repo                                                                                                                                                                                                                                |
+| Cost          | $0. Free tiers only.                                                                                                                                                                                                                                   |
+| Platform      | Hosted web app (desktop browser) + Chrome extension                                                                                                                                                                                                    |
+| Hosting       | Vercel Hobby (free)                                                                                                                                                                                                                                    |
+| Backend       | Supabase free plan: Postgres, Auth (Google), Storage                                                                                                                                                                                                   |
+| Master copy   | Supabase database                                                                                                                                                                                                                                      |
+| Drive         | One-way mirror. One **Save to Drive** button (and Ctrl+S) saves everything changed. Drive never writes back.                                                                                                                                           |
+| Organizing    | Folders inside folders, unlimited depth. A "project" is a top-level folder.                                                                                                                                                                            |
+| One home      | Each item lives in exactly one folder.                                                                                                                                                                                                                 |
+| Search        | Titles only                                                                                                                                                                                                                                            |
+| Duplicates    | Warn "already saved in <folder>", do not save twice                                                                                                                                                                                                    |
+| File format   | Markdown with a YAML front-matter header                                                                                                                                                                                                               |
+| Grokipedia    | Bulk paste box in the app. Saved once, never updated. Keep tables, inline links and the references list with links.                                                                                                                                    |
+| Substack      | Captured by the extension. Free posts, plus paid posts you subscribe to (the extension reads the page while you are logged in). Paid posts you cannot access: show "paid post, not saved". Skip comments and images. Save author and publication info. |
+| X             | Captured by the extension. Text only. Keep post link, author name, handle, profile link and date. Threads and reposts stored as a tree. "Add to this thread" attaches more posts later.                                                                |
+| Notes         | A note box on every item, plus standalone notes (Markdown text) that live in folders like sources                                                                                                                                                      |
+| Own sources   | Pasted text (as notes) and uploaded images                                                                                                                                                                                                             |
+| Capture style | One click reads the page you are viewing                                                                                                                                                                                                               |
 
 ## 3. Architecture
 
@@ -71,11 +71,11 @@ docs/              Spec and references
 
 ### Where fetching happens
 
-| Source | Fetched by | Why |
-| --- | --- | --- |
+| Source     | Fetched by     | Why                                                                                                                                                              |
+| ---------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Grokipedia | Web app server | Pages are plain HTML (tested 2026-10-13 from a home connection). Enables bulk paste. Fallback if Vercel's servers get blocked: the extension fetches it instead. |
-| Substack | Extension | Uses your logged-in session for subscribed paid posts. No cookies leave your browser. |
-| X | Extension | X blocks logged-out access and its API is paid. Reading the page you are viewing avoids both. |
+| Substack   | Extension      | Uses your logged-in session for subscribed paid posts. No cookies leave your browser.                                                                            |
+| X          | Extension      | X blocks logged-out access and its API is paid. Reading the page you are viewing avoids both.                                                                    |
 
 ### Authentication
 
@@ -93,10 +93,12 @@ Supabase pauses free projects after about a week with no activity. A GitHub Acti
 All tables have `user_id uuid not null references auth.users`, `created_at`, `updated_at`. Soft delete via `deleted_at` so Drive can mirror deletions.
 
 **folders**
+
 - `id uuid pk`, `parent_id uuid null references folders`, `name text`, `position int`
 - `drive_folder_id text null`, `drive_synced_at timestamptz null`, `deleted_at timestamptz null`
 
 **items**
+
 - `id uuid pk`, `folder_id uuid references folders`
 - `kind text` one of `grokipedia | substack | x | note | image`
 - `title text` (the heading; this is the "description" in the list)
@@ -111,6 +113,7 @@ All tables have `user_id uuid not null references auth.users`, `created_at`, `up
 - `drive_file_id text null`, `drive_synced_at timestamptz null`, `deleted_at timestamptz null`
 
 **x_posts** (nodes of an X tree; the tree's item has `kind = 'x'`)
+
 - `id uuid pk`, `item_id uuid references items`, `parent_id uuid null references x_posts`
 - `post_url text`, `canonical_url text`, unique per item
 - `author_name text`, `handle text`, `author_url text`, `posted_at timestamptz`, `text text`, `position int`
@@ -283,21 +286,21 @@ Case-insensitive match on `title` across all folders. Results show the folder pa
 
 All routes require a Supabase session (web) or a Bearer token (extension).
 
-| Method | Route | Purpose |
-| --- | --- | --- |
-| GET | `/api/health` | Keep-alive and uptime check (no auth) |
-| GET | `/api/folders` | Folder tree |
-| POST/PATCH/DELETE | `/api/folders[/:id]` | Create, rename/move/reorder, delete |
-| GET | `/api/items?folder=&q=` | Items in a folder, or title search |
-| POST | `/api/items/check` | Duplicate check for a URL |
-| POST | `/api/grokipedia` | Fetch, convert and save one Grokipedia URL |
-| POST | `/api/capture` | Save extension-captured Substack or X content |
-| POST | `/api/x/:itemId/posts` | Add a post to an X tree |
-| PATCH/DELETE | `/api/items/:id` | Rename, move, note, delete |
-| POST | `/api/notes` | Create a standalone note |
-| POST | `/api/uploads` | Upload an image source |
-| POST | `/api/drive/save` | Run one batch of the Drive save |
-| POST/DELETE | `/api/tokens[/:id]` | Create or revoke extension tokens |
+| Method            | Route                   | Purpose                                       |
+| ----------------- | ----------------------- | --------------------------------------------- |
+| GET               | `/api/health`           | Keep-alive and uptime check (no auth)         |
+| GET               | `/api/folders`          | Folder tree                                   |
+| POST/PATCH/DELETE | `/api/folders[/:id]`    | Create, rename/move/reorder, delete           |
+| GET               | `/api/items?folder=&q=` | Items in a folder, or title search            |
+| POST              | `/api/items/check`      | Duplicate check for a URL                     |
+| POST              | `/api/grokipedia`       | Fetch, convert and save one Grokipedia URL    |
+| POST              | `/api/capture`          | Save extension-captured Substack or X content |
+| POST              | `/api/x/:itemId/posts`  | Add a post to an X tree                       |
+| PATCH/DELETE      | `/api/items/:id`        | Rename, move, note, delete                    |
+| POST              | `/api/notes`            | Create a standalone note                      |
+| POST              | `/api/uploads`          | Upload an image source                        |
+| POST              | `/api/drive/save`       | Run one batch of the Drive save               |
+| POST/DELETE       | `/api/tokens[/:id]`     | Create or revoke extension tokens             |
 
 ## 9. URL canonicalization (duplicates)
 
@@ -311,9 +314,11 @@ All routes require a Supabase session (web) or a Bearer token (extension).
 Each wave ends with a working, deployed app. Tasks inside a wave marked **(parallel)** can go to separate subagents.
 
 ### Wave 0: Setup (done 2026-10-13)
+
 - Spec, MIT license, README, public GitHub repo.
 
 ### Wave 1: Foundation
+
 - Monorepo scaffold: npm workspaces, TypeScript, lint, format.
 - Supabase project, migrations for all tables, RLS policies.
 - Google sign-in with `ALLOWED_EMAIL` restriction.
@@ -324,6 +329,7 @@ Each wave ends with a working, deployed app. Tasks inside a wave marked **(paral
 - **Done when:** you can sign in on the live URL and build a nested folder tree.
 
 ### Wave 2: Grokipedia (parallel with Wave 3)
+
 - `packages/core`: HTML-to-Markdown (Turndown + GFM tables), front matter, canonical URLs, file-name slugs.
 - `POST /api/grokipedia`: fetch, extract title, summary, fact-checked date, body, references.
 - Paste box UI with per-link status, duplicate warning, retry.
@@ -331,6 +337,7 @@ Each wave ends with a working, deployed app. Tasks inside a wave marked **(paral
 - **Done when:** 40 pasted links become 40 saved items with correct references.
 
 ### Wave 3: Extension + Substack (parallel with Wave 2)
+
 - WXT extension scaffold, settings page, token auth, `/api/tokens`.
 - Popup: page detection, folder picker with last-used default, save, status messages.
 - Substack capture: free and subscribed paid posts, paywall detection, author and publication metadata.
@@ -338,33 +345,37 @@ Each wave ends with a working, deployed app. Tasks inside a wave marked **(paral
 - **Done when:** saving a free post, a subscribed paid post and an inaccessible paid post each gives the right result.
 
 ### Wave 4: X
+
 - X capture: single post, author thread, tree building.
 - "Add to this thread".
 - X Markdown renderer.
 - **Done when:** a thread, a quote/repost and a later-added reply render as one correct tree file.
 
 ### Wave 5: Save to Drive (parallel with Wave 4)
+
 - Google `drive.file` consent and refresh-token storage.
 - Folder mirroring, file create/update/move/rename/trash, resumable batches, Ctrl+S, unsaved count.
 - **Done when:** renaming, moving and deleting in the app shows up correctly in Drive after one Save.
 
 ### Wave 6: Notes and own sources
+
 - Note box on items, standalone notes with a Markdown editor, image uploads to Supabase Storage (copied to Drive on Save).
 
 ### Wave 7: Polish
+
 - Right-click save, keyboard shortcut, error states, empty states.
 - Self-hosting guide in README (Supabase, Google Cloud, Vercel setup).
 
 ## 11. Risks and checks
 
-| Risk | Plan |
-| --- | --- |
-| Grokipedia blocks Vercel's servers | Test in Wave 2. Fallback: extension fetches the page. |
-| X changes its page structure | All selectors in one file; capture failures show a clear error. |
-| Supabase free project pauses | Daily keep-alive workflow. |
-| Google refresh token expires | OAuth app set to "In production"; app shows "Reconnect Drive" if refresh fails. |
-| Free limits (500 MB database, 1 GB storage on Supabase free) | Text is small; thousands of articles fit. Images are the only large data. |
-| Project folder is inside OneDrive | OneDrive syncing `node_modules` causes slowdowns and file locks. Move the repo outside OneDrive (for example `C:\dev\sourcefold`) before Wave 1, or exclude the folder from OneDrive sync. |
+| Risk                                                         | Plan                                                                                                                                                                                       |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Grokipedia blocks Vercel's servers                           | Test in Wave 2. Fallback: extension fetches the page.                                                                                                                                      |
+| X changes its page structure                                 | All selectors in one file; capture failures show a clear error.                                                                                                                            |
+| Supabase free project pauses                                 | Daily keep-alive workflow.                                                                                                                                                                 |
+| Google refresh token expires                                 | OAuth app set to "In production"; app shows "Reconnect Drive" if refresh fails.                                                                                                            |
+| Free limits (500 MB database, 1 GB storage on Supabase free) | Text is small; thousands of articles fit. Images are the only large data.                                                                                                                  |
+| Project folder is inside OneDrive                            | OneDrive syncing `node_modules` causes slowdowns and file locks. Move the repo outside OneDrive (for example `C:\dev\sourcefold`) before Wave 1, or exclude the folder from OneDrive sync. |
 
 ## 12. Your setup tasks (needed for Wave 1)
 

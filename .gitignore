@@ -9,6 +9,7 @@ build/
 .output/
 .wxt/
 *.tsbuildinfo
+next-env.d.ts
 
 # Environment and secrets
 .env

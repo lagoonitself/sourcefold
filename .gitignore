@@ -28,3 +28,6 @@ Thumbs.db
 
 # Local agent settings
 .claude/settings.local.json
+
+# Test output
+packages/core/test/output/

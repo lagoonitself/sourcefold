@@ -154,6 +154,7 @@ folder: AI Research/Risks
 ## References
 
 [^1]: [Artificial Intelligence and the Future of Humans | Pew Research Center](https://...) - pewresearch.org
+
 [^2]: ...
 ```
 

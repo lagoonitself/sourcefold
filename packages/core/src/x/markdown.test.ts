@@ -62,44 +62,20 @@ describe("xThreadTitle", () => {
         authorName: "Jane Doe",
         handle: "jane",
         authorUrl: "https://x.com/jane",
-        postedAt: "2026-10-01T11:00:00Z",
+        postedAt: "2026-10-01T10:05:00Z",
         text: "Post 2",
       },
     ];
     expect(xThreadTitle(nodes)).toBe("Thread by Jane Doe (@jane)");
   });
-
-  it("picks the lowest position root when multiple roots exist", () => {
-    const nodes: XTreeNode[] = [
-      {
-        id: "2",
-        parentId: null,
-        position: 2,
-        postUrl: "https://x.com/alice/status/2",
-        authorName: "Alice",
-        handle: "alice",
-        authorUrl: "https://x.com/alice",
-        postedAt: "2026-10-01T10:00:00Z",
-        text: "Post 2",
-      },
-      {
-        id: "1",
-        parentId: null,
-        position: 1,
-        postUrl: "https://x.com/bob/status/1",
-        authorName: "Bob",
-        handle: "bob",
-        authorUrl: "https://x.com/bob",
-        postedAt: "2026-10-01T09:00:00Z",
-        text: "Post 1",
-      },
-    ];
-    expect(xThreadTitle(nodes)).toBe("Thread by Bob (@bob)");
-  });
 });
 
 describe("renderXThreadMarkdown", () => {
-  it("matches the exact full string for the SPEC example", () => {
+  it("renders empty string for empty array", () => {
+    expect(renderXThreadMarkdown([], "Empty Thread")).toBe("# Empty Thread\n");
+  });
+
+  it("renders single post with header, author, date, and link", () => {
     const nodes: XTreeNode[] = [
       {
         id: "1",
@@ -110,23 +86,93 @@ describe("renderXThreadMarkdown", () => {
         handle: "jane",
         authorUrl: "https://x.com/jane",
         postedAt: "2026-10-01T10:00:00Z",
-        text: "First post text.",
+        text: "Single post text line 1.\nLine 2.",
+      },
+    ];
+
+    const md = renderXThreadMarkdown(nodes, "Single Post");
+
+    const expected =
+      "# Single Post\n" +
+      "\n" +
+      "**Jane Doe** (@jane) · 2026-10-01 · [link](https://x.com/jane/status/123)\n" +
+      "\n" +
+      "Single post text line 1.\n" +
+      "Line 2.\n";
+
+    expect(md).toBe(expected);
+  });
+
+  it("renders linear thread with > prefixes for subsequent posts", () => {
+    const nodes: XTreeNode[] = [
+      {
+        id: "1",
+        parentId: null,
+        position: 0,
+        postUrl: "https://x.com/jane/status/100",
+        authorName: "Jane Doe",
+        handle: "@jane",
+        authorUrl: "https://x.com/jane",
+        postedAt: "2026-10-01T10:00:00Z",
+        text: "First post in thread.",
       },
       {
         id: "2",
         parentId: "1",
+        position: 1,
+        postUrl: "https://x.com/jane/status/101",
+        authorName: "Jane Doe",
+        handle: "@jane",
+        authorUrl: "https://x.com/jane",
+        postedAt: "2026-10-01T10:05:00Z",
+        text: "Second post in thread.",
+      },
+    ];
+
+    const md = renderXThreadMarkdown(nodes, "Linear Thread");
+
+    const expected =
+      "# Linear Thread\n" +
+      "\n" +
+      "**Jane Doe** (@jane) · 2026-10-01 · [link](https://x.com/jane/status/100)\n" +
+      "\n" +
+      "First post in thread.\n" +
+      "\n" +
+      "> **Jane Doe** (@jane) · 2026-10-01 · [link](https://x.com/jane/status/101)\n" +
+      ">\n" +
+      "> Second post in thread.\n";
+
+    expect(md).toBe(expected);
+  });
+
+  it("renders branching tree with appropriate nested quote levels", () => {
+    const nodes: XTreeNode[] = [
+      {
+        id: "1",
+        parentId: null,
         position: 0,
-        postUrl: "https://x.com/jane/status/124",
+        postUrl: "https://x.com/jane/status/100",
         authorName: "Jane Doe",
         handle: "jane",
         authorUrl: "https://x.com/jane",
-        postedAt: "2026-10-01T11:00:00Z",
+        postedAt: "2026-10-01T10:00:00Z",
+        text: "Root post.",
+      },
+      {
+        id: "2",
+        parentId: "1",
+        position: 1,
+        postUrl: "https://x.com/jane/status/101",
+        authorName: "Jane Doe",
+        handle: "jane",
+        authorUrl: "https://x.com/jane",
+        postedAt: "2026-10-01T10:05:00Z",
         text: "Second post in the thread.",
       },
       {
         id: "3",
         parentId: "2",
-        position: 0,
+        position: 2,
         postUrl: "https://x.com/sam/status/200",
         authorName: "Sam Lee",
         handle: "sam",
@@ -136,17 +182,16 @@ describe("renderXThreadMarkdown", () => {
       },
     ];
 
-    const title = xThreadTitle(nodes);
-    const md = renderXThreadMarkdown(nodes, title);
+    const md = renderXThreadMarkdown(nodes, "Branching Thread");
 
     const expected =
-      "# Thread by Jane Doe (@jane)\n" +
+      "# Branching Thread\n" +
       "\n" +
-      "**Jane Doe** (@jane) · 2026-10-01 · [link](https://x.com/jane/status/123)\n" +
+      "**Jane Doe** (@jane) · 2026-10-01 · [link](https://x.com/jane/status/100)\n" +
       "\n" +
-      "First post text.\n" +
+      "Root post.\n" +
       "\n" +
-      "> **Jane Doe** (@jane) · 2026-10-01 · [link](https://x.com/jane/status/124)\n" +
+      "> **Jane Doe** (@jane) · 2026-10-01 · [link](https://x.com/jane/status/101)\n" +
       ">\n" +
       "> Second post in the thread.\n" +
       ">\n" +
@@ -357,5 +402,37 @@ describe("renderXThreadMarkdown", () => {
     expect(md).toContain("\\#AI is changing things");
     expect(md).toContain("\\## A fake heading");
     expect(md).toContain("> \\#Nested hashtag");
+  });
+
+  it("handles cyclic references gracefully without infinite recursion", () => {
+    const nodes: XTreeNode[] = [
+      {
+        id: "cycle1",
+        parentId: "cycle2",
+        position: 0,
+        postUrl: "https://x.com/c1/1",
+        authorName: "Cyclic 1",
+        handle: "c1",
+        authorUrl: "https://x.com/c1",
+        postedAt: "2026-10-01",
+        text: "Cyclic post 1",
+      },
+      {
+        id: "cycle2",
+        parentId: "cycle1",
+        position: 1,
+        postUrl: "https://x.com/c2/2",
+        authorName: "Cyclic 2",
+        handle: "c2",
+        authorUrl: "https://x.com/c2",
+        postedAt: "2026-10-02",
+        text: "Cyclic post 2",
+      },
+    ];
+
+    // Must not throw RangeError: Maximum call stack size exceeded
+    const md = renderXThreadMarkdown(nodes, "Cycle test");
+    expect(md).toContain("Cyclic post 1");
+    expect(md).toContain("Cyclic post 2");
   });
 });

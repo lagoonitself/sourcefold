@@ -103,7 +103,13 @@ export function renderXThreadMarkdown(nodes: XTreeNode[], title: string): string
   }
 
   const ordered: { node: XTreeNode; depth: number }[] = [];
+  const visited = new Set<string>();
+
   function traverse(node: XTreeNode, depth: number) {
+    if (visited.has(node.id)) {
+      return;
+    }
+    visited.add(node.id);
     ordered.push({ node, depth });
     const children = childrenMap.get(node.id);
     if (children) {
@@ -115,6 +121,14 @@ export function renderXThreadMarkdown(nodes: XTreeNode[], title: string): string
 
   for (const root of roots) {
     traverse(root, 0);
+  }
+
+  // Handle any remaining cyclic nodes that didn't have a parent outside the cycle
+  if (visited.size < nodes.length) {
+    const unvisited = nodes.filter((n) => !visited.has(n.id)).sort(compareNodes);
+    for (const orphan of unvisited) {
+      traverse(orphan, 0);
+    }
   }
 
   const lines: string[] = [`# ${title}`, ""];

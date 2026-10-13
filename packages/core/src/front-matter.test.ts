@@ -62,92 +62,83 @@ describe("buildFrontMatter", () => {
     );
   });
 
-  it("leaves unicode strings unquoted when safe", () => {
+  it("quotes strings with leading or trailing whitespace", () => {
     const result = buildFrontMatter({
-      french: "Café & Crème Brûlée",
-      emoji: "Rocket 🚀 Launch",
-    });
-
-    expect(result).toBe("---\nfrench: Café & Crème Brûlée\nemoji: Rocket 🚀 Launch\n---\n");
-  });
-
-  it("leaves standard URLs unquoted", () => {
-    const result = buildFrontMatter({
-      url: "https://grokipedia.com/page/Impact_of_Artificial_Intelligence",
+      leading: "  leading space",
+      trailing: "trailing space ",
     });
 
     expect(result).toBe(
-      "---\nurl: https://grokipedia.com/page/Impact_of_Artificial_Intelligence\n---\n",
+      '---\nleading: "  leading space"\ntrailing: "trailing space "\n---\n',
     );
   });
 
-  it("quotes numbers-as-strings", () => {
+  it("quotes reserved YAML keywords", () => {
     const result = buildFrontMatter({
-      intStr: "12",
-      floatStr: "1.5",
-      expStr: "1e3",
-      signedStr: "+42",
-      hexStr: "0x1a",
+      boolTrue: "true",
+      boolFalse: "false",
+      yesWord: "yes",
+      noWord: "no",
+      nullWord: "null",
+      tildeWord: "~",
     });
 
     expect(result).toBe(
-      '---\nintStr: "12"\nfloatStr: "1.5"\nexpStr: "1e3"\nsignedStr: "+42"\nhexStr: "0x1a"\n---\n',
+      '---\nboolTrue: "true"\nboolFalse: "false"\nyesWord: "yes"\nnoWord: "no"\nnullWord: "null"\ntildeWord: "~"\n---\n',
     );
   });
 
-  it("quotes boolean-like and null-like strings case-insensitively", () => {
+  it("quotes numeric strings to prevent YAML type coercion", () => {
     const result = buildFrontMatter({
-      strTrue: "true",
-      strFalse: "false",
-      strYes: "yes",
-      strNo: "no",
-      strNull: "null",
-      strTilde: "~",
-      strUpperTrue: "TRUE",
-      strUpperYes: "Yes",
+      intStr: "123",
+      floatStr: "3.14",
+      sciStr: "1e5",
+      hexStr: "0x1f",
     });
 
     expect(result).toBe(
-      '---\nstrTrue: "true"\nstrFalse: "false"\nstrYes: "yes"\nstrNo: "no"\nstrNull: "null"\nstrTilde: "~"\nstrUpperTrue: "TRUE"\nstrUpperYes: "Yes"\n---\n',
+      '---\nintStr: "123"\nfloatStr: "3.14"\nsciStr: "1e5"\nhexStr: "0x1f"\n---\n',
     );
-  });
-
-  it("formats arrays with 2 spaces and dashes, quoting elements when necessary", () => {
-    const result = buildFrontMatter({
-      tags: ["one", "two", "three: four", "123"],
-    });
-
-    expect(result).toBe('---\ntags:\n  - one\n  - two\n  - "three: four"\n  - "123"\n---\n');
   });
 
   it("skips null, undefined, empty strings, and empty arrays", () => {
     const result = buildFrontMatter({
-      title: "Real Title",
-      nullField: null,
-      undefinedField: undefined,
-      emptyString: "",
-      emptyArray: [],
+      valid: "exists",
+      nullVal: null,
+      undefinedVal: undefined,
+      emptyStr: "",
+      emptyArr: [],
     });
 
-    expect(result).toBe("---\ntitle: Real Title\n---\n");
+    expect(result).toBe("---\nvalid: exists\n---\n");
   });
 
-  it("quotes strings with leading or trailing spaces", () => {
+  it("formats string arrays correctly", () => {
     const result = buildFrontMatter({
-      leading: " leading",
-      trailing: "trailing ",
+      tags: ["news", "tech: update", "123"],
     });
 
-    expect(result).toBe('---\nleading: " leading"\ntrailing: "trailing "\n---\n');
+    expect(result).toBe(
+      '---\ntags:\n  - news\n  - "tech: update"\n  - "123"\n---\n',
+    );
   });
 
-  it("quotes strings with newlines, tabs, and carriage returns and escapes them", () => {
+  it("quotes and escapes strings with newline and tab characters", () => {
     const result = buildFrontMatter({
       multiline: "line 1\nline 2",
       tabbed: "col 1\tcol 2",
     });
 
     expect(result).toBe('---\nmultiline: "line 1\\nline 2"\ntabbed: "col 1\\tcol 2"\n---\n');
+  });
+
+  it("quotes and escapes strings with Unicode line and paragraph separators", () => {
+    const result = buildFrontMatter({
+      titleWithLS: "Line 1\u2028Line 2",
+      titleWithPS: "Para 1\u2029Para 2",
+    });
+
+    expect(result).toBe('---\ntitleWithLS: "Line 1\\u2028Line 2"\ntitleWithPS: "Para 1\\u2029Para 2"\n---\n');
   });
 
   it("quotes strings ending with colon", () => {

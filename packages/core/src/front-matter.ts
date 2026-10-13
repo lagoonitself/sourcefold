@@ -2,7 +2,7 @@ export type FrontMatterValue = string | number | boolean | null | undefined | st
 
 const KEYWORD_TYPES = new Set(["true", "false", "yes", "no", "null", "~"]);
 
-const DISALLOWED_START_CHARS = /^[-?:,[\]{}#&*!|>'"%@`]/;
+const DISALLOWED_START_CHARS = /^[-?:,[\]{}#&*!|>'\"%@`]/;
 const NUMBER_REGEX =
   /^[+-]?(?:0x[0-9a-fA-F]+|0o[0-7]+|0b[01]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/;
 
@@ -16,7 +16,7 @@ function shouldQuoteString(str: string): boolean {
     return true;
   }
 
-  // 2. starts with any of -?:,[]{}#&*!|>'"%@ or a backtick
+  // 2. starts with any of -?:,[]{}#&*!|>'\"%@ or a backtick
   if (DISALLOWED_START_CHARS.test(str)) {
     return true;
   }
@@ -26,8 +26,14 @@ function shouldQuoteString(str: string): boolean {
     return true;
   }
 
-  // 4. contains a newline or tab
-  if (str.includes("\n") || str.includes("\r") || str.includes("\t")) {
+  // 4. contains a newline, tab, or Unicode line separator
+  if (
+    str.includes("\n") ||
+    str.includes("\r") ||
+    str.includes("\t") ||
+    str.includes("\u2028") ||
+    str.includes("\u2029")
+  ) {
     return true;
   }
 
@@ -55,7 +61,9 @@ function escapeAndQuoteString(str: string): string {
     .replace(/"/g, '\\"')
     .replace(/\r?\n/g, "\\n")
     .replace(/\r/g, "\\n")
-    .replace(/\t/g, "\\t");
+    .replace(/\t/g, "\\t")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
   return `"${escaped}"`;
 }
 

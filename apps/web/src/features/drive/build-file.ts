@@ -18,6 +18,8 @@ export interface ItemData {
   note?: string | null;
 }
 
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
 export function driveFileName(
   title: string,
   itemId: string,
@@ -32,7 +34,12 @@ export function driveFileName(
   );
 
   const idSuffix = itemId ? itemId.slice(0, 6) : "";
-  const finalSlug = hasCollision && idSuffix ? `${baseSlug}-${idSuffix}` : baseSlug;
+  let finalSlug = hasCollision && idSuffix ? `${baseSlug}-${idSuffix}` : baseSlug;
+
+  if (WINDOWS_RESERVED.test(finalSlug)) {
+    finalSlug = `${finalSlug}-${idSuffix || "file"}`;
+  }
+
   return cleanExt ? `${finalSlug}.${cleanExt}` : finalSlug;
 }
 

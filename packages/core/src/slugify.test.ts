@@ -39,4 +39,10 @@ describe("slugify", () => {
   it("converts mixed case to lower case", () => {
     expect(slugify("SoUrCeFoLd ApP")).toBe("sourcefold-app");
   });
+
+  it("supports non-Latin scripts without collapsing to untitled", () => {
+    expect(slugify("人工智能 (AI)")).toBe("人工智能-ai");
+    expect(slugify("Искусственный интеллект")).toBe("искусственныи-интеллект");
+    expect(slugify("ذكاء اصطناعي")).toBe("ذكاء-اصطناعي");
+  });
 });

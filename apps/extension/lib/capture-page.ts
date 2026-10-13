@@ -14,9 +14,16 @@ export async function capturePage(tabId: number): Promise<CaptureResult> {
   }
 
   try {
-    const response = (await browser.tabs.sendMessage(tabId, {
-      type: "sourcefold:capture",
-    })) as CaptureContentResponse | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout waiting for content script response")), 10000),
+    );
+
+    const response = (await Promise.race([
+      browser.tabs.sendMessage(tabId, {
+        type: "sourcefold:capture",
+      }),
+      timeoutPromise,
+    ])) as CaptureContentResponse | undefined;
 
     if (!response || typeof response !== "object" || !("kind" in response)) {
       return { kind: "unsupported" };

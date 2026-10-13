@@ -92,6 +92,20 @@ export async function requireApiUser(request: Request): Promise<ApiAuthResult> {
     };
   }
 
+  // Verify that the token owner is still in ALLOWED_EMAILS
+  let allowedEmails: string[] = [];
+  try {
+    allowedEmails = getAllowedEmails();
+  } catch {
+    return { response: jsonError(403, "This account can't use Sourcefold.") };
+  }
+
+  const { data: userData, error: userError } = await admin.auth.admin.getUserById(token.user_id);
+  const userEmail = userData?.user?.email?.trim().toLowerCase();
+  if (userError || !userEmail || !allowedEmails.includes(userEmail)) {
+    return { response: jsonError(403, "This account can't use Sourcefold.") };
+  }
+
   await admin
     .from("api_tokens")
     .update({ last_used_at: new Date().toISOString() })

@@ -27,14 +27,19 @@ export default function App() {
       const parsed = new URL(targetUrl);
       const origin = parsed.origin;
       const hostname = parsed.hostname.toLowerCase();
-      const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
-      const isVercel = hostname.endsWith(".vercel.app");
+      const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 
-      if (!isLocalhost && !isVercel) {
+      if (parsed.protocol !== "https:" && !isLoopback) {
+        setSaveStatus("Remote URLs must use HTTPS");
+        return;
+      }
+
+      if (!isLoopback) {
         await browser.permissions.request({ origins: [`${origin}/*`] });
       }
     } catch {
-      // Ignore URL parse error, still save
+      setSaveStatus("Please enter a valid URL");
+      return;
     }
 
     await saveSettings({ appUrl, token });

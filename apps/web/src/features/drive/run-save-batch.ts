@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/database.types";
+import type { Database, Json } from "@/lib/database.types";
 import { createFolder, getFile, updateFile, uploadFile, DriveApiError } from "@/lib/google/drive";
 import { DriveAuthError } from "@/lib/google/oauth";
 import { buildItemFile, driveFileName, folderPathOf, type FolderRef } from "./build-file";
@@ -119,8 +119,8 @@ export async function runSaveBatch(
     );
     if (hadRoot) {
       // The old root was deleted in Drive, taking every folder and file with it.
-      await supabase.from("folders").update({ drive_synced_at: null }).is("deleted_at", null);
-      await supabase.from("items").update({ drive_synced_at: null }).is("deleted_at", null);
+      await supabase.from("folders").update({ drive_synced_at: null }).eq("user_id", userId).is("deleted_at", null);
+      await supabase.from("items").update({ drive_synced_at: null }).eq("user_id", userId).is("deleted_at", null);
     }
     remainingBudget--;
     processed++;
@@ -129,7 +129,8 @@ export async function runSaveBatch(
   // 2. Folders
   const { data: allFoldersData, error: allFoldersError } = await supabase
     .from("folders")
-    .select("id, parent_id, name, drive_folder_id, deleted_at");
+    .select("id, parent_id, name, drive_folder_id, deleted_at")
+    .eq("user_id", userId);
 
   if (allFoldersError || !allFoldersData) {
     throw new Error(allFoldersError?.message || "Failed to load folders");
@@ -150,21 +151,20 @@ export async function runSaveBatch(
   const liveDirtyFolders = dirtyFolders
     .filter((f) => f.deleted_at === null)
     .sort((a, b) => (depths.get(a.id) ?? 0) - (depths.get(b.id) ?? 0));
-  const deletedDirtyFolders = dirtyFolders.filter(
-    (f) => f.deleted_at !== null && f.drive_folder_id !== null,
-  );
+  const deletedDirtyFolders = dirtyFolders.filter((f) => f.deleted_at !== null);
 
   for (const folder of liveDirtyFolders) {
     if (remainingBudget <= 0) break;
 
-    const parentDriveId =
-      folder.parent_id === null
-        ? rootFolderId
-        : (foldersById.get(folder.parent_id)?.drive_folder_id ?? null);
-
-    if (!parentDriveId) {
-      // Parent has no Drive ID yet; skip this folder for this batch
-      continue;
+    let parentDriveId: string;
+    if (folder.parent_id === null) {
+      parentDriveId = rootFolderId;
+    } else {
+      const parentRow = foldersById.get(folder.parent_id);
+      if (!parentRow?.drive_folder_id) {
+        continue;
+      }
+      parentDriveId = parentRow.drive_folder_id;
     }
 
     if (!folder.drive_folder_id) {
@@ -193,12 +193,14 @@ export async function runSaveBatch(
             .from("folders")
             .update({ drive_synced_at: null })
             .in("id", childFolderIds)
+            .eq("user_id", userId)
             .is("deleted_at", null);
         }
         await supabase
           .from("items")
           .update({ drive_synced_at: null })
           .in("folder_id", subtreeIds)
+          .eq("user_id", userId)
           .is("deleted_at", null);
 
         await supabase.rpc("mark_folder_synced", {
@@ -227,13 +229,6 @@ export async function runSaveBatch(
         });
         processed++;
         remainingBudget--;
-
-        const descendantIds = getFolderAndDescendantIds(folder.id, allFoldersData);
-        await supabase
-          .from("items")
-          .update({ drive_synced_at: null })
-          .in("folder_id", descendantIds)
-          .is("deleted_at", null);
       }
     }
   }
@@ -253,7 +248,7 @@ export async function runSaveBatch(
         }
       }
 
-      await supabase.from("folders").update({ drive_folder_id: null }).eq("id", folder.id);
+      await supabase.from("folders").update({ drive_folder_id: null }).eq("id", folder.id).eq("user_id", userId);
 
       const folderRef = foldersById.get(folder.id);
       if (folderRef) folderRef.drive_folder_id = null;
@@ -281,6 +276,7 @@ export async function runSaveBatch(
         .from("items")
         .select("id, title")
         .eq("folder_id", folderId)
+        .eq("user_id", userId)
         .is("deleted_at", null);
       if (error || !data) return [];
       folderItemsCache.set(folderId, data);
@@ -305,7 +301,7 @@ export async function runSaveBatch(
               }
             }
 
-            await supabase.from("items").update({ drive_file_id: null }).eq("id", item.id);
+            await supabase.from("items").update({ drive_file_id: null }).eq("id", item.id).eq("user_id", userId);
 
             processed++;
             remainingBudget--;
@@ -427,11 +423,40 @@ export async function runSaveBatch(
         if (err instanceof DriveApiError && err.status === 401) {
           throw new DriveAuthError(err.message);
         }
+        const errMessage = err instanceof Error ? err.message : String(err);
         failed.push({
           id: item.id,
           title: item.title,
-          message: err instanceof Error ? err.message : String(err),
+          message: errMessage,
         });
+
+        // Record attempt in item meta to avoid wedging FIFO queue
+        const currentMeta =
+          typeof item.meta === "object" && item.meta !== null
+            ? (item.meta as Record<string, unknown>)
+            : {};
+        const syncAttempts = ((currentMeta.drive_sync_attempts as number) || 0) + 1;
+        const updatedMeta = {
+          ...currentMeta,
+          drive_sync_attempts: syncAttempts,
+          drive_last_error: errMessage,
+          drive_last_attempt_at: new Date().toISOString(),
+        };
+
+        const updatePayload: Database["public"]["Tables"]["items"]["Update"] = {
+          meta: updatedMeta as Json,
+        };
+        if (syncAttempts >= 3) {
+          // Advance drive_synced_at so poison pill doesn't block future batch syncs
+          updatePayload.drive_synced_at = new Date().toISOString();
+        }
+
+        await supabase
+          .from("items")
+          .update(updatePayload)
+          .eq("id", item.id)
+          .eq("user_id", userId);
+
         remainingBudget--;
       }
     }
@@ -449,7 +474,6 @@ export async function runSaveBatch(
     await supabase.from("drive_state").upsert(
       {
         user_id: userId,
-        root_folder_id: rootFolderId,
         last_saved_at: new Date().toISOString(),
       },
       { onConflict: "user_id" },

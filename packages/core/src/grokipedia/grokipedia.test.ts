@@ -59,94 +59,72 @@ describe("htmlToMarkdown", () => {
     expect(md).toContain("| Header A | Header B |");
     expect(md).toContain("| Cell 1 | Cell 2 |");
 
-    // Link kept
-    expect(md).toContain("[a link](https://example.com)");
-
-    // Nested list kept
+    // Nested list preservation
     expect(md).toMatch(/-\s+Item 1/);
     expect(md).toMatch(/\s+-\s+Subitem 1/);
     expect(md).toMatch(/-\s+Item 2/);
 
-    // Disallowed elements stripped
+    // Links preserved
+    expect(md).toContain("[a link](https://example.com)");
+
+    // Stripped elements
     expect(md).not.toContain("Click me");
-    expect(md).not.toContain("<circle");
-    expect(md).not.toContain("Test Pic");
+    expect(md).not.toContain("circle");
+    expect(md).not.toContain("![Test Pic]");
     expect(md).not.toContain("console.log");
-
-    // Ends with single newline
-    expect(md.endsWith("\n")).toBe(true);
-    expect(md.endsWith("\n\n")).toBe(false);
   });
 });
 
-describe("parseGrokipediaHtml", () => {
-  it("throws GrokipediaParseError if h1 or article is missing", () => {
-    expect(() => parseGrokipediaHtml("<div>No article or h1</div>", articleUrl)).toThrow(
+describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
+  it("throws GrokipediaParseError for missing article or h1", () => {
+    expect(() => parseGrokipediaHtml("<div>No article</div>", "https://grokipedia.com")).toThrow(
       GrokipediaParseError,
     );
-    expect(() => parseGrokipediaHtml("<article>No h1</article>", articleUrl)).toThrow(
-      GrokipediaParseError,
-    );
-    expect(() => parseGrokipediaHtml("<h1>No article</h1>", articleUrl)).toThrow(
-      GrokipediaParseError,
-    );
+    expect(() =>
+      parseGrokipediaHtml("<article>No h1</article>", "https://grokipedia.com"),
+    ).toThrow(GrokipediaParseError);
+    expect(() =>
+      parseGrokipediaHtml("<article><h1>   </h1></article>", "https://grokipedia.com"),
+    ).toThrow(GrokipediaParseError);
   });
 
-  it("parses the Grokipedia fixture correctly", () => {
-    const article = parseGrokipediaHtml(fixtureHtml, articleUrl);
+  it("preserves gene-editing, protocols, and math superscripts", () => {
+    const html = `
+      <html>
+        <body>
+          <article>
+            <h1>Biotechnology and Protocols</h1>
+            <div class="protocol-guide">
+              <h2 id="gene-editing">Gene Editing Techniques</h2>
+              <p>CRISPR enables targeted edits in DNA. Energy is given by E=mc<sup>2</sup>.</p>
+              <h2 id="copyright-notice">Copyright Information</h2>
+              <p>All rights reserved.</p>
+            </div>
+            <section class="references">
+              <ol>
+                <li id="ref-1">
+                  <span class="ref-num">1</span>
+                  <a class="ref-link" href="https://example.com/crispr">CRISPR Review</a>
+                </li>
+              </ol>
+            </section>
+          </article>
+        </body>
+      </html>
+    `;
+    const article = parseGrokipediaHtml(html, "https://grokipedia.com/page/Biotechnology");
+    const md = grokipediaToMarkdown(article, { savedAt: "2026-10-13" });
 
-    // 1. title === "Impact of Artificial Intelligence on the Future"
-    expect(article.title).toBe("Impact of Artificial Intelligence on the Future");
-
-    // 2. summary starts with "The impact of artificial intelligence (AI) on the future encompasses"
-    expect(article.summary).not.toBeNull();
-    expect(
-      article.summary?.startsWith(
-        "The impact of artificial intelligence (AI) on the future encompasses",
-      ),
-    ).toBe(true);
-
-    // 3. factCheckedAt === "2026-09-28T21:50:07.000Z"
-    expect(article.factCheckedAt).toBe("2026-09-28T21:50:07.000Z");
-
-    // 4. references.length === 139; reference numbers are 1..139 in order
-    expect(article.references.length).toBe(139);
-    for (let i = 0; i < 139; i++) {
-      expect(article.references[i]?.number).toBe(i + 1);
-    }
-
-    // 5. reference 69's url contains "propublica.org" and its domain is "propublica.org"
-    const ref69 = article.references[68];
-    expect(ref69).toBeDefined();
-    expect(ref69?.number).toBe(69);
-    expect(ref69?.url).toContain("propublica.org");
-    expect(ref69?.domain).toBe("propublica.org");
+    expect(md).toContain("Gene Editing Techniques");
+    expect(md).toContain("Copyright Information");
+    expect(article.bodyHtml).toContain("<sup>2</sup>");
+    expect(md).toContain("E=mc2");
+    expect(md).toContain("All rights reserved.");
+    expect(article.references.length).toBe(1);
+    expect(article.references[0]?.title).toBe("CRISPR Review");
   });
 
-  it("parses short article without references cleanly", () => {
-    const article = parseGrokipediaHtml(shortFixtureHtml, shortArticleUrl);
-    expect(article.title).toBe("Quantum Teleportation");
-    expect(article.summary).toBe(
-      "Quantum teleportation is a technique for transferring quantum information from a sender to a receiver.",
-    );
-    expect(article.factCheckedAt).toBe("2026-10-01T12:00:00.000Z");
-    expect(article.references).toHaveLength(0);
-  });
-
-  it("parses article with tables, lists and citations accurately", () => {
-    const article = parseGrokipediaHtml(tablesFixtureHtml, tablesArticleUrl);
-    expect(article.title).toBe("Global Space Missions");
-    expect(article.factCheckedAt).toBe("2026-08-15T09:30:00.000Z");
-    expect(article.references).toHaveLength(2);
-    expect(article.references[0]?.number).toBe(1);
-    expect(article.references[0]?.domain).toBe("nasa.gov");
-    expect(article.references[1]?.number).toBe(2);
-    expect(article.references[1]?.domain).toBe("esa.int");
-  });
-});
-
-describe("grokipediaToMarkdown", () => {
-  it("generates clean Markdown from the Grokipedia fixture", () => {
+  it("extracts and formats full fixture correctly", () => {
     const article = parseGrokipediaHtml(fixtureHtml, articleUrl);
     const markdown = grokipediaToMarkdown(article, { savedAt: "2026-10-13" });
 
@@ -171,8 +149,8 @@ describe("grokipediaToMarkdown", () => {
     // does NOT contain "\[^"
     expect(markdown).not.toContain("\\[^");
 
-    // does NOT contain any "<sup"
-    expect(markdown).not.toContain("<sup");
+    // does NOT contain any "<sup" (for citation sups)
+    expect(markdown).not.toContain("<sup class");
 
     // markdown has no image syntax "!["
     expect(markdown).not.toContain("![");

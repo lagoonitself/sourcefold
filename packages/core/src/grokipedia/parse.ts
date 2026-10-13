@@ -67,8 +67,9 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
 
   // Parse references
   const references: GrokipediaReference[] = [];
+  const refSelector = "#references, .references, [aria-labelledby='references-title']";
   const referencesEl =
-    document.querySelector("#references") || articleEl.querySelector("#references");
+    document.querySelector(refSelector) || articleEl.querySelector(refSelector);
   if (referencesEl) {
     const liElements = referencesEl.querySelectorAll("li");
     for (const li of liElements) {
@@ -137,7 +138,7 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
 
   // 1. Remove references section
   clone
-    .querySelectorAll("#references, .references, [aria-labelledby='references-title']")
+    .querySelectorAll(refSelector)
     .forEach((el) => {
       el.remove();
     });
@@ -153,8 +154,12 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
       el.textContent?.includes("Fact-checked by Grok") &&
       !Array.from(el.children).some((child) => child.textContent?.includes("Fact-checked by Grok"))
     ) {
-      const line = el.closest(".type-hint") ?? el.parentElement ?? el;
-      line.remove();
+      const hintWrapper = el.closest(".type-hint");
+      if (hintWrapper) {
+        hintWrapper.remove();
+      } else {
+        el.remove();
+      }
     }
   }
 
@@ -165,7 +170,7 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
 
   // 4. Remove table of contents / nav
   clone
-    .querySelectorAll("nav, [class*='toc'], [id*='toc'], [aria-label*='contents' i]")
+    .querySelectorAll("nav, .toc, #toc, [class~='toc'], [id~='toc'], [class*='table-of-contents'], [id*='table-of-contents'], [aria-label*='contents' i]")
     .forEach((el) => {
       el.remove();
     });
@@ -182,15 +187,16 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
     const text = (el.textContent ?? "").trim();
     if (/^(?:suggest\s+edit|edit\s+history|copy\s+link|copy)$/i.test(text)) {
       el.remove();
-    } else if (
-      el.classList?.contains("heading-copy-link") ||
-      el.classList?.contains("heading-listen") ||
-      el.classList?.contains("swap-btn") ||
-      el.id?.includes("copy") ||
-      el.id?.includes("edit") ||
-      el.id?.includes("tts")
-    ) {
-      el.remove();
+    } else {
+      const hasActionClass =
+        el.classList?.contains("heading-copy-link") ||
+        el.classList?.contains("heading-listen") ||
+        el.classList?.contains("swap-btn");
+      const isActionControl = ["BUTTON", "A", "SPAN"].includes(el.tagName);
+      const isActionId = /(?:^|[-_])(?:edit|copy|tts)(?:[-_]|$)/i.test(el.id || "");
+      if (hasActionClass || (isActionControl && isActionId)) {
+        el.remove();
+      }
     }
   }
 
@@ -220,9 +226,10 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
       const markerText = numbers.map((n) => `[^${n}]`).join("");
       const textNode = clone.ownerDocument.createTextNode(markerText);
       sup.replaceWith(textNode);
-    } else {
+    } else if (sup.classList?.contains("citation") || sup.classList?.contains("ref") || refLinks.length > 0) {
       sup.remove();
     }
+    // Otherwise, leave non-citation superscripts (e.g. math powers x^2, ordinals 1^st) intact!
   }
 
   // 8. Rewrite relative links to absolute against https://grokipedia.com, and drop #fragment-only links

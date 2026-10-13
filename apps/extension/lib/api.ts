@@ -56,6 +56,20 @@ export class ApiError extends Error {
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const settings = await getSettings();
   const baseUrl = settings.appUrl.replace(/\/+$/, "");
+
+  try {
+    const parsed = new URL(baseUrl);
+    const isLoopback =
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "[::1]";
+    if (parsed.protocol !== "https:" && !isLoopback) {
+      throw new ApiError("Remote Sourcefold addresses must use HTTPS.", 0);
+    }
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+  }
+
   const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 
   const headers = new Headers(init?.headers);

@@ -1,19 +1,18 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import type { ItemListRow } from "./item-columns";
 
 export interface NoteDialogProps {
@@ -33,6 +32,7 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
   const [markdown, setMarkdown] = useState("");
   const [itemNote, setItemNote] = useState("");
   const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [isLoadError, setIsLoadError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -44,6 +44,7 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
       queueMicrotask(() => {
         if (isMounted) {
           setItemNote(item.note ?? "");
+          setIsLoadError(false);
         }
       });
     } else if (isEdit && item) {
@@ -52,6 +53,7 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
           setTitle(item.title);
           setMarkdown("");
           setIsLoadingContent(true);
+          setIsLoadError(false);
         }
       });
 
@@ -64,10 +66,12 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
           if (isMounted && json.data) {
             setTitle(json.data.title ?? item.title);
             setMarkdown(json.data.markdown ?? "");
+            setIsLoadError(false);
           }
         })
         .catch(() => {
           if (isMounted) {
+            setIsLoadError(true);
             toast.error("Couldn't load note content. Try again.");
           }
         })
@@ -83,6 +87,7 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
           setTitle("");
           setMarkdown("");
           setIsLoadingContent(false);
+          setIsLoadError(false);
         }
       });
     }
@@ -93,7 +98,7 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
   }, [open, isStandalone, isEdit, item]);
 
   const handleSave = async () => {
-    if (isSaving || isLoadingContent) return;
+    if (isSaving || isLoadingContent || isLoadError) return;
 
     if (!isStandalone && item) {
       // (a) Item note: Save PATCHes { note }
@@ -128,7 +133,10 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
         const res = await fetch(`/api/items/${item.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: trimmedTitle, markdown }),
+          body: JSON.stringify({
+            title: trimmedTitle,
+            markdown,
+          }),
         });
         const json = await res.json();
         if (!res.ok) {
@@ -144,16 +152,20 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
         setIsSaving(false);
       }
     } else {
-      // (b) Standalone note create: POSTs /api/notes
+      // (c) Standalone note create: POSTs to /api/notes
       const trimmedTitle = title.trim();
-      if (!trimmedTitle || !folderId) return;
+      if (!trimmedTitle) return;
 
       setIsSaving(true);
       try {
         const res = await fetch("/api/notes", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ folder_id: folderId, title: trimmedTitle, markdown }),
+          body: JSON.stringify({
+            title: trimmedTitle,
+            markdown: markdown.trim() === "" ? null : markdown,
+            folder_id: folderId,
+          }),
         });
         const json = await res.json();
         if (!res.ok) {
@@ -171,45 +183,43 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-      e.preventDefault();
-      void handleSave();
-    }
-  };
-
-  const dialogTitle = !isStandalone ? "Note" : isEdit ? "Edit note" : "New note";
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={cn(isStandalone ? "sm:max-w-[720px]" : "sm:max-w-[560px]")}
-        onKeyDown={handleKeyDown}
-      >
+      <DialogContent className="max-w-[640px]">
         <DialogHeader>
-          <DialogTitle className="font-sans text-[18px] font-semibold leading-[24px] text-foreground">
-            {dialogTitle}
+          <DialogTitle>
+            {!isStandalone ? "Edit note" : isEdit ? "Edit note" : "New note"}
           </DialogTitle>
+          <DialogDescription>
+            {!isStandalone
+              ? `Personal note on "${item?.title ?? ""}"`
+              : isEdit
+                ? "Edit your standalone note."
+                : "Create a standalone note."}
+          </DialogDescription>
         </DialogHeader>
 
         {!isStandalone ? (
-          <div className="flex flex-col gap-4">
+          <div>
             <textarea
               value={itemNote}
               onChange={(e) => setItemNote(e.target.value)}
-              placeholder="Add your note here..."
+              placeholder="Add your thoughts or highlights..."
               rows={8}
-              disabled={isSaving}
               autoFocus
-              className="min-h-[200px] w-full resize-y rounded-[6px] border border-input bg-transparent p-3 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isSaving}
+              className="w-full resize-y rounded-[6px] border border-input bg-transparent p-3 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="space-y-3">
             {isLoadingContent ? (
-              <div className="flex flex-col gap-3 py-4">
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-48 w-full" />
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                Loading content...
+              </div>
+            ) : isLoadError ? (
+              <div className="py-8 text-center text-sm text-destructive">
+                Failed to load note content. Please close and try again.
               </div>
             ) : (
               <>
@@ -253,6 +263,7 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
             disabled={
               isSaving ||
               isLoadingContent ||
+              isLoadError ||
               (isStandalone && !title.trim()) ||
               (!isStandalone && !item)
             }

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getAllowedEmails } from "@/lib/env";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 
@@ -29,7 +30,14 @@ export async function GET(request: NextRequest) {
   }
 
   if (!userEmail || !allowedEmails.includes(userEmail)) {
+    const userId = data.session.user.id;
     await supabase.auth.signOut();
+    try {
+      const admin = createAdminClient();
+      await admin.auth.admin.deleteUser(userId);
+    } catch (cleanupErr) {
+      console.error("Failed to clean up unallowed user record:", cleanupErr);
+    }
     return NextResponse.redirect(new URL("/login?error=not_allowed", request.url));
   }
 

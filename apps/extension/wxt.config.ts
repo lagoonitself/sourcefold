@@ -8,7 +8,7 @@ export default defineConfig({
     description: "Save Grokipedia, Substack and X pages to your Sourcefold folders.",
     version: "0.1.0",
     permissions: ["storage", "activeTab", "scripting", "contextMenus"],
-    host_permissions: ["http://localhost:3000/*", "https://*.vercel.app/*"],
+    host_permissions: ["http://localhost:3000/*"],
     optional_host_permissions: ["https://*/*", "http://*/*"],
     action: {
       default_title: "Sourcefold",

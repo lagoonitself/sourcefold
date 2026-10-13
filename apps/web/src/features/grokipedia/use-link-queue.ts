@@ -1,34 +1,38 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export type QueueItemStatus = "waiting" | "saving" | "saved" | "duplicate" | "failed";
 
-export type QueueItem = {
+export interface QueueItem {
   id: string;
   url: string;
   title?: string;
   status: QueueItemStatus;
   message?: string;
-};
+  savedItem?: { id: string; title: string; folder_id: string };
+  duplicateItem?: { folder_id: string; folder_name?: string };
+}
 
 export type QueueState = "idle" | "running" | "stopped" | "finished";
 
 export function useLinkQueue() {
   const router = useRouter();
+
   const [items, setItems] = useState<QueueItem[]>([]);
   const [status, setStatus] = useState<QueueState>("idle");
-  const [sessionExpired, setSessionExpired] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const itemsRef = useRef<QueueItem[]>([]);
-  const statusRef = useRef<QueueState>("idle");
-  const isStoppingRef = useRef(false);
   const isRunningRef = useRef(false);
+  const isStoppingRef = useRef(false);
+  const statusRef = useRef<QueueState>("idle");
   const folderIdRef = useRef<string>("");
   const sessionExpiredRef = useRef(false);
+  const runIdRef = useRef(0);
 
   const updateItem = useCallback((id: string, patch: Partial<QueueItem>) => {
     itemsRef.current = itemsRef.current.map((item) =>
@@ -41,6 +45,7 @@ export function useLinkQueue() {
     if (isRunningRef.current) return;
     if (sessionExpiredRef.current) return;
 
+    const currentRunId = ++runIdRef.current;
     isRunningRef.current = true;
     isStoppingRef.current = false;
     setIsStopping(false);
@@ -51,7 +56,11 @@ export function useLinkQueue() {
     let batchSavesSinceRefresh = 0;
 
     try {
-      while (!isStoppingRef.current && !sessionExpiredRef.current) {
+      while (
+        !isStoppingRef.current &&
+        !sessionExpiredRef.current &&
+        runIdRef.current === currentRunId
+      ) {
         const nextIndex = itemsRef.current.findIndex((item) => item.status === "waiting");
         if (nextIndex === -1) {
           break;
@@ -72,86 +81,99 @@ export function useLinkQueue() {
         try {
           res = await fetch("/api/grokipedia", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               url: currentItem.url,
               folder_id: folderIdRef.current,
             }),
           });
-
-          try {
-            json = await res.json();
-          } catch {
-            json = null;
-          }
-        } catch (err: unknown) {
+          json = await res.json();
+        } catch {
           fetchFailed = true;
-          errorMessage = err instanceof Error ? err.message : "Network error";
+        }
+
+        // Abort processing if queue was reset or superseded while fetching
+        if (runIdRef.current !== currentRunId) {
+          break;
+        }
+
+        if (res?.status === 401) {
+          sessionExpiredRef.current = true;
+          setSessionExpired(true);
+          updateItem(currentItem.id, {
+            status: "failed",
+            message: "Session expired. Sign in again to continue saving.",
+          });
+          toast.error("Session expired. Sign in again to continue saving.");
+          break;
         }
 
         if (fetchFailed || !res) {
           updateItem(currentItem.id, {
             status: "failed",
-            message: errorMessage ?? "Failed to reach server.",
+            message: "Could not reach server. Check your connection and retry.",
           });
-        } else if (res.status === 401) {
-          const msg = json?.error?.message ?? "Your session ended. Sign in again.";
-          updateItem(currentItem.id, {
-            status: "failed",
-            message: msg,
-          });
-          sessionExpiredRef.current = true;
-          setSessionExpired(true);
-          isStoppingRef.current = true;
-          break;
-        } else if (res.status === 201 || (res.ok && json?.data?.item)) {
-          const title = json?.data?.item?.title;
-          updateItem(currentItem.id, {
-            status: "saved",
-            title: title || undefined,
-          });
-          savedInThisRun += 1;
-          batchSavesSinceRefresh += 1;
-          if (batchSavesSinceRefresh >= 5) {
-            router.refresh();
-            batchSavesSinceRefresh = 0;
-          }
-        } else if (res.status === 409 || json?.error?.code === "duplicate") {
-          const duplicateMsg =
-            json?.error?.message ??
-            (json?.folder_name ? `Already saved in "${json.folder_name}".` : "Already saved.");
+        } else if (res.status === 409) {
           updateItem(currentItem.id, {
             status: "duplicate",
-            message: duplicateMsg,
+            message: json?.error?.message ?? "Already saved",
+            duplicateItem: {
+              folder_id: "",
+              folder_name: json?.folder_name ?? json?.error?.message ?? undefined,
+            },
           });
+        } else if (res.ok && json?.data?.item) {
+          const item = json.data.item;
+          updateItem(currentItem.id, {
+            status: "saved",
+            title: item.title || undefined,
+            savedItem: {
+              id: item.id || "",
+              title: item.title || "",
+              folder_id: item.folder_id || folderIdRef.current,
+            },
+          });
+          savedInThisRun++;
+          batchSavesSinceRefresh++;
+
+          if (batchSavesSinceRefresh >= 3) {
+            batchSavesSinceRefresh = 0;
+            router.refresh();
+          }
         } else {
-          const msg = json?.error?.message ?? "Failed to save link.";
+          errorMessage =
+            json?.error?.message ?? `Saving failed (${res.status}). Try again.`;
           updateItem(currentItem.id, {
             status: "failed",
-            message: msg,
+            message: errorMessage,
           });
         }
 
         const hasMoreWaiting = itemsRef.current.some((item) => item.status === "waiting");
-        if (hasMoreWaiting && !isStoppingRef.current && !sessionExpiredRef.current) {
+        if (
+          hasMoreWaiting &&
+          !isStoppingRef.current &&
+          !sessionExpiredRef.current &&
+          runIdRef.current === currentRunId
+        ) {
           await new Promise((resolve) => setTimeout(resolve, 400));
         }
       }
     } finally {
-      isRunningRef.current = false;
-      setIsStopping(false);
+      if (runIdRef.current === currentRunId) {
+        isRunningRef.current = false;
+        setIsStopping(false);
 
-      const hasWaiting = itemsRef.current.some((item) => item.status === "waiting");
-      const nextStatus: QueueState = isStoppingRef.current && hasWaiting ? "stopped" : "finished";
-      statusRef.current = nextStatus;
-      setStatus(nextStatus);
+        const hasWaiting = itemsRef.current.some((item) => item.status === "waiting");
+        const nextStatus: QueueState = isStoppingRef.current && hasWaiting ? "stopped" : "finished";
+        statusRef.current = nextStatus;
+        setStatus(nextStatus);
 
-      router.refresh();
+        router.refresh();
 
-      if (savedInThisRun > 0) {
-        toast.success(savedInThisRun === 1 ? "Added 1 link" : `Added ${savedInThisRun} links`);
+        if (savedInThisRun > 0) {
+          toast.success(savedInThisRun === 1 ? "Added 1 link" : `Added ${savedInThisRun} links`);
+        }
       }
     }
   }, [router, updateItem]);
@@ -202,6 +224,7 @@ export function useLinkQueue() {
   );
 
   const reset = useCallback(() => {
+    runIdRef.current++;
     isStoppingRef.current = true;
     isRunningRef.current = false;
     itemsRef.current = [];

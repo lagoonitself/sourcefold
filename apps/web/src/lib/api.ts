@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAllowedEmails } from "@/lib/env";
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { Database } from "@/lib/database.types";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { hashApiToken } from "@/lib/api-tokens";
 
 export function jsonData<T>(data: T, status = 200) {
   return NextResponse.json({ data }, { status });
@@ -46,4 +49,53 @@ export async function requireUser(): Promise<AuthResult> {
   }
 
   return { supabase, user };
+}
+
+export type ApiUser = {
+  // RLS client for a web session; admin client (RLS bypassed) for an extension token.
+  // Always filter by userId and set user_id on inserts so both paths behave the same.
+  db: SupabaseClient<Database>;
+  userId: string;
+  via: "session" | "token";
+};
+
+export type ApiAuthResult = ApiUser | AuthFailure;
+
+// Accepts either the web session cookie or an extension token (Authorization: Bearer sf_...).
+export async function requireApiUser(request: Request): Promise<ApiAuthResult> {
+  const header = request.headers.get("authorization");
+  const match = header?.match(/^Bearer\s+(\S+)$/i);
+
+  if (!match?.[1]) {
+    const auth = await requireUser();
+    if ("response" in auth) return auth;
+    return { db: auth.supabase, userId: auth.user.id, via: "session" };
+  }
+
+  let admin: SupabaseClient<Database>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { response: jsonError(500, "The server is missing SUPABASE_SECRET_KEY.") };
+  }
+
+  const { data: token, error } = await admin
+    .from("api_tokens")
+    .select("id, user_id")
+    .eq("token_hash", hashApiToken(match[1]))
+    .is("revoked_at", null)
+    .maybeSingle();
+
+  if (error || !token) {
+    return {
+      response: jsonError(401, "This access token isn't valid. Create a new one in Settings."),
+    };
+  }
+
+  await admin
+    .from("api_tokens")
+    .update({ last_used_at: new Date().toISOString() })
+    .eq("id", token.id);
+
+  return { db: admin, userId: token.user_id, via: "token" };
 }

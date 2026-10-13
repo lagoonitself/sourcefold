@@ -284,7 +284,67 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      drive_dirty_folders: {
+        Args: never
+        Returns: {
+          created_at: string
+          deleted_at: string | null
+          drive_folder_id: string | null
+          drive_synced_at: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          position: number
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "folders"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      drive_dirty_items: {
+        Args: { p_limit?: number }
+        Returns: {
+          canonical_url: string | null
+          created_at: string
+          deleted_at: string | null
+          drive_file_id: string | null
+          drive_synced_at: string | null
+          error: string | null
+          folder_id: string
+          id: string
+          kind: string
+          markdown: string | null
+          meta: Json
+          note: string | null
+          position: number
+          source_url: string | null
+          status: string
+          storage_path: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      drive_unsaved_count: { Args: never; Returns: number }
       health: { Args: never; Returns: string }
+      mark_folder_synced: {
+        Args: { p_drive_folder_id: string; p_id: string }
+        Returns: undefined
+      }
+      mark_item_synced: {
+        Args: { p_drive_file_id: string; p_id: string }
+        Returns: undefined
+      }
       save_google_refresh_token: {
         Args: { p_refresh_token: string }
         Returns: undefined

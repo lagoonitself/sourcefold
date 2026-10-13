@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { buildFolderPaths } from "./folder-paths";
 import { ITEM_LIST_COLUMNS } from "./item-columns";
 import { ItemList } from "./item-list";
+import { AddImageButton } from "./add-image-button";
 import { NewNoteButton } from "./new-note-button";
 
 export interface FolderViewProps {
@@ -56,6 +57,7 @@ export async function FolderView({ folderId }: FolderViewProps) {
           <span className="font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
             {countText}
           </span>
+          <AddImageButton folderId={folderId} />
           <NewNoteButton folderId={folderId} />
         </div>
       </div>

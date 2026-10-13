@@ -215,6 +215,15 @@ export function ItemRow({ item, subtitle }: ItemRowProps) {
         >
           {content}
         </a>
+      ) : item.kind === "image" ? (
+        <a
+          href={`/api/items/${item.id}/file`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={interactiveClasses}
+        >
+          {content}
+        </a>
       ) : item.kind === "note" ? (
         <button
           type="button"

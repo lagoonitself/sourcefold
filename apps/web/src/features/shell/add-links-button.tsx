@@ -1,21 +1,22 @@
 "use client";
 
+import { Suspense, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AddLinksDialog } from "@/features/grokipedia/add-links-dialog";
 
 export function AddLinksButton() {
+  const [open, setOpen] = useState(false);
+
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button variant="outline" disabled className="disabled:pointer-events-auto">
-            <Plus className="size-4" />
-            Add links
-          </Button>
-        }
-      />
-      <TooltipContent>Coming soon</TooltipContent>
-    </Tooltip>
+    <>
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        <Plus className="size-4" />
+        Add links
+      </Button>
+      <Suspense fallback={null}>
+        <AddLinksDialog open={open} onOpenChange={setOpen} />
+      </Suspense>
+    </>
   );
 }

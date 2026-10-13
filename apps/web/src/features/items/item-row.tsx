@@ -1,4 +1,6 @@
-import type * as React from "react";
+"use client";
+
+import React, { useState } from "react";
 import {
   BookOpen,
   Check,
@@ -6,11 +8,13 @@ import {
   Image as ImageIcon,
   Loader2,
   Lock,
+  MessageSquare,
   MessageSquareText,
   Newspaper,
   StickyNote,
 } from "lucide-react";
 import type { ItemListRow } from "./item-columns";
+import { ItemMenu } from "./item-menu";
 import { cn } from "@/lib/utils";
 
 export interface ItemRowProps {
@@ -126,6 +130,8 @@ function renderStatusIcon(status: string, error: string | null) {
 }
 
 export function ItemRow({ item, subtitle }: ItemRowProps) {
+  const [noteOpen, setNoteOpen] = useState(false);
+
   const kindConfig = KIND_CONFIG[item.kind] ?? DEFAULT_KIND_CONFIG;
   const KindIcon = kindConfig.Icon;
 
@@ -144,10 +150,7 @@ export function ItemRow({ item, subtitle }: ItemRowProps) {
 
   const formattedDate = formatDate(item.created_at);
   const statusIcon = renderStatusIcon(item.status, item.error);
-
-  const baseClasses = "group flex min-h-[48px] w-full items-stretch transition-colors";
-  const interactiveClasses =
-    "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  const hasNote = Boolean(item.kind !== "note" && item.note && item.note.trim().length > 0);
 
   const content = (
     <>
@@ -155,13 +158,23 @@ export function ItemRow({ item, subtitle }: ItemRowProps) {
         className={cn("w-[3px] shrink-0 self-stretch", kindConfig.barClass)}
         aria-hidden="true"
       />
-      <div className="flex min-h-[48px] min-w-0 flex-1 items-center gap-3 pl-3 pr-4 py-2">
+      <div className="flex min-h-[48px] min-w-0 flex-1 items-center gap-3 pl-3 pr-2 py-2">
         <KindIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="flex min-w-0 flex-1 flex-col justify-center">
           <div className="flex min-w-0 items-baseline gap-2">
             <span className="truncate font-serif text-[15px] font-medium leading-[22px] text-foreground">
               {item.title}
             </span>
+            {hasNote && (
+              <span
+                role="img"
+                aria-label="Has a note"
+                title="Has a note"
+                className="inline-flex shrink-0 self-center text-muted-foreground"
+              >
+                <MessageSquare className="size-3.5" aria-hidden="true" />
+              </span>
+            )}
             {author && (
               <span className="shrink-0 font-sans text-[13px] font-normal leading-[18px] text-muted-foreground">
                 {author}
@@ -185,23 +198,38 @@ export function ItemRow({ item, subtitle }: ItemRowProps) {
     </>
   );
 
-  if (item.source_url) {
-    return (
-      <a
-        href={item.source_url}
-        target="_blank"
-        rel="noopener noreferrer"
-        role="listitem"
-        className={cn(baseClasses, interactiveClasses)}
-      >
-        {content}
-      </a>
-    );
-  }
+  const interactiveClasses =
+    "flex min-w-0 flex-1 items-stretch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
   return (
-    <div role="listitem" className={baseClasses}>
-      {content}
+    <div
+      role="listitem"
+      className="group flex min-h-[48px] w-full items-stretch transition-colors hover:bg-muted"
+    >
+      {item.source_url ? (
+        <a
+          href={item.source_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={interactiveClasses}
+        >
+          {content}
+        </a>
+      ) : item.kind === "note" ? (
+        <button
+          type="button"
+          onClick={() => setNoteOpen(true)}
+          className={cn(interactiveClasses, "text-left cursor-pointer")}
+        >
+          {content}
+        </button>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-stretch">{content}</div>
+      )}
+
+      <div className="flex items-center pr-2">
+        <ItemMenu item={item} noteOpen={noteOpen} onNoteOpenChange={setNoteOpen} />
+      </div>
     </div>
   );
 }

@@ -8,7 +8,7 @@ A personal research source collector. Save Grokipedia articles, Substack posts a
 - **Read at the source:** clicking an item opens the original page.
 - **Google Drive:** one Save button mirrors your folders and files into Drive.
 
-> **Status:** planning. See [docs/SPEC.md](docs/SPEC.md) for the full spec and build plan.
+> **Status:** in progress. See [docs/ROADMAP.md](docs/ROADMAP.md) for what is done and what is left, and [docs/SPEC.md](docs/SPEC.md) for the full spec.
 
 ## Stack
 

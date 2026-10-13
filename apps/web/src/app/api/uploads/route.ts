@@ -4,117 +4,84 @@ import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
 
 export const dynamic = "force-dynamic";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
 
-function toSafeFileName(fileName: string): string {
-  const lower = fileName.toLowerCase();
-  const lastDot = lower.lastIndexOf(".");
-  let base: string;
-  let ext: string;
-
-  if (lastDot >= 0) {
-    base = lower.slice(0, lastDot);
-    ext = lower.slice(lastDot);
-  } else {
-    base = lower;
-    ext = "";
-  }
-
-  // safe name: lowercase, keep [a-z0-9._-], collapse others to -, max 100 chars, keep extension
-  let safeBase = base.replace(/[^a-z0-9._-]+/g, "-");
-  const safeExt = ext.replace(/[^a-z0-9._-]+/g, "-");
-
-  if (!safeBase) {
-    safeBase = "image";
-  }
-
-  if (safeExt.length >= 100) {
-    return safeExt.slice(0, 100);
-  }
-
-  const maxBaseLen = 100 - safeExt.length;
-  if (safeBase.length > maxBaseLen) {
-    safeBase = safeBase.slice(0, maxBaseLen);
-  }
-
-  return safeBase + safeExt;
-}
+const uploadSchema = z.object({
+  item_id: z.string().uuid("Invalid item ID."),
+  folder_id: z.string().uuid("Invalid folder ID."),
+  storage_path: z.string().min(1).max(400),
+  file_name: z.string().min(1).max(300),
+  mime_type: z.enum(ALLOWED_MIME_TYPES),
+  size: z.number().int().min(1).max(10485760),
+  title: z.string().optional(),
+});
 
 export async function POST(request: Request) {
   const auth = await requireUser();
   if ("response" in auth) return auth.response;
   const { supabase, user } = auth;
 
-  let formData: FormData;
+  let body: unknown;
   try {
-    formData = await request.formData();
+    body = await request.json();
   } catch {
-    return jsonError(400, "Invalid form data.");
+    return jsonError(400, "Invalid JSON body.");
   }
 
-  const file = formData.get("file");
-  if (!file || !(file instanceof File)) {
-    return jsonError(400, "File is required.");
+  const parsed = uploadSchema.safeParse(body);
+  if (!parsed.success) {
+    return jsonError(400, parsed.error.issues[0]?.message ?? "Invalid request body.");
   }
 
-  const folderIdRaw = formData.get("folder_id");
-  if (typeof folderIdRaw !== "string" || !folderIdRaw) {
-    return jsonError(400, "Folder ID is required.");
+  const {
+    item_id,
+    folder_id,
+    storage_path,
+    file_name,
+    mime_type,
+    size,
+    title: titleInput,
+  } = parsed.data;
+
+  const expectedPrefix = `${user.id}/${item_id}/`;
+  if (!storage_path.startsWith(expectedPrefix) || storage_path.includes("..")) {
+    return jsonError(400, "Invalid upload path.");
   }
 
-  const folderIdParsed = z.string().uuid("Invalid folder ID.").safeParse(folderIdRaw);
-  if (!folderIdParsed.success) {
-    return jsonError(400, folderIdParsed.error.issues[0]?.message ?? "Invalid folder ID.");
-  }
-  const folderId = folderIdParsed.data;
-
-  if (file.size > MAX_FILE_SIZE) {
-    return jsonError(413, "Images can be up to 10 MB.");
+  const lastSegment = storage_path.split("/").pop();
+  if (!lastSegment) {
+    return jsonError(400, "Invalid upload path.");
   }
 
-  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-    return jsonError(415, "Upload a PNG, JPEG, GIF or WebP image.");
+  const { data: files, error: listError } = await supabase.storage
+    .from("images")
+    .list(`${user.id}/${item_id}`);
+
+  if (listError || !files || !files.some((f) => f.name === lastSegment)) {
+    return jsonError(400, "Upload the image first.");
   }
 
-  const titleRaw = formData.get("title");
   let title: string;
-  if (typeof titleRaw === "string" && titleRaw.trim().length > 0) {
-    title = titleRaw.trim();
+  if (titleInput && titleInput.trim().length > 0) {
+    title = titleInput.trim();
   } else {
-    const lastDot = file.name.lastIndexOf(".");
-    const baseName = (lastDot >= 0 ? file.name.slice(0, lastDot) : file.name).trim();
+    const lastDot = file_name.lastIndexOf(".");
+    const baseName = (lastDot >= 0 ? file_name.slice(0, lastDot) : file_name).trim();
     title = baseName || "Untitled image";
   }
   if (title.length > 500) {
     title = title.slice(0, 500);
   }
 
-  const itemId = crypto.randomUUID();
-  const safeName = toSafeFileName(file.name || "image");
-  const storagePath = `${user.id}/${itemId}/${safeName}`;
-
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  const { error: uploadError } = await supabase.storage.from("images").upload(storagePath, buffer, {
-    contentType: file.type,
-    upsert: false,
-  });
-
-  if (uploadError) {
-    return jsonError(500, uploadError.message);
-  }
-
   const { data: siblings, error: sibError } = await supabase
     .from("items")
     .select("position")
-    .eq("folder_id", folderId)
+    .eq("folder_id", folder_id)
     .eq("user_id", user.id)
     .is("deleted_at", null);
 
   if (sibError) {
-    await supabase.storage.from("images").remove([storagePath]);
+    await supabase.storage.from("images").remove([storage_path]);
     return jsonError(500, sibError.message);
   }
 
@@ -125,19 +92,19 @@ export async function POST(request: Request) {
   const { data: item, error: insertError } = await supabase
     .from("items")
     .insert({
-      id: itemId,
+      id: item_id,
       user_id: user.id,
-      folder_id: folderId,
+      folder_id,
       kind: "image",
       title,
       status: "saved",
       source_url: null,
       canonical_url: null,
-      storage_path: storagePath,
+      storage_path,
       meta: {
-        mime_type: file.type,
-        file_name: file.name,
-        size: file.size,
+        mime_type,
+        file_name,
+        size,
       },
       position,
     })
@@ -145,7 +112,7 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError) {
-    await supabase.storage.from("images").remove([storagePath]);
+    await supabase.storage.from("images").remove([storage_path]);
     if (insertError.message.includes("invalid folder")) {
       return jsonError(400, "That folder no longer exists.");
     }

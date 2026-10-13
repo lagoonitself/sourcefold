@@ -9,11 +9,16 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
   useDraggable,
   useDroppable,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 
@@ -36,6 +41,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { type FolderNode, descendantIds, findNode, getAncestorIds } from "./tree";
+import { getSiblings, moveFolderInside, reorderTreeNodes } from "./reorder";
 
 const STORAGE_KEY = "sourcefold:open-folders";
 
@@ -43,6 +49,56 @@ type VisibleRow = {
   node: FolderNode;
   level: number;
 };
+
+type DropZone = "before" | "inside" | "after";
+
+type DropTarget = {
+  folderId: string;
+  zone: DropZone;
+} | null;
+
+/**
+ * Three drop zones are calculated over each 32px row by pointer position:
+ * - Top quarter (< 25% height): "before" (2px line above the row, indented to that level)
+ * - Bottom quarter (> 75% height): "after" (2px line below the row, indented to that level)
+ * - Middle half (25% - 75% height): "inside" (existing re-parent highlight)
+ *
+ * The current viewport pointer Y is computed from event.activatorEvent (clientY) + delta.y,
+ * then measured against the target row's bounding client rect.
+ */
+function calculateDropZone(
+  activatorEvent: Event | null,
+  deltaY: number,
+  rowRect: { top: number; height: number } | null | undefined,
+): DropZone {
+  if (!rowRect) return "inside";
+
+  let clientY: number | null = null;
+  if (
+    activatorEvent &&
+    "clientY" in activatorEvent &&
+    typeof (activatorEvent as MouseEvent).clientY === "number"
+  ) {
+    clientY = (activatorEvent as MouseEvent).clientY + deltaY;
+  } else if (
+    activatorEvent &&
+    "touches" in activatorEvent &&
+    (activatorEvent as TouchEvent).touches &&
+    (activatorEvent as TouchEvent).touches.length > 0
+  ) {
+    clientY = (activatorEvent as TouchEvent).touches[0].clientY + deltaY;
+  }
+
+  if (clientY === null) return "inside";
+
+  const relY = clientY - rowRect.top;
+  const height = rowRect.height || 32;
+  const ratio = relY / height;
+
+  if (ratio < 0.25) return "before";
+  if (ratio > 0.75) return "after";
+  return "inside";
+}
 
 function flattenVisibleTree(
   nodes: FolderNode[],
@@ -148,6 +204,17 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
   const searchParams = useSearchParams();
   const selectedFolderId = searchParams.get("folder");
 
+  // Optimistic tree state (cleared when prop `tree` updates)
+  const [prevTree, setPrevTree] = useState(tree);
+  const [optimisticTree, setOptimisticTree] = useState<FolderNode[] | null>(null);
+
+  if (prevTree !== tree) {
+    setPrevTree(tree);
+    setOptimisticTree(null);
+  }
+
+  const localTree = optimisticTree ?? tree;
+
   // Load initial open state from localStorage
   const [openFolders, setOpenFolders] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set<string>();
@@ -169,6 +236,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
 
   // Drag-and-drop state
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget>(null);
 
   // Mutation inline states
   const [isCreatingRoot, setIsCreatingRoot] = useState(false);
@@ -177,6 +245,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
   const [deletingFolder, setDeletingFolder] = useState<FolderNode | null>(null);
 
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const isSavingRef = useRef(false);
 
   // Sensors for dnd-kit
   const sensors = useSensors(
@@ -190,8 +259,8 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
   // Selected folder ancestors are automatically opened
   const selectedAncestors = useMemo(() => {
     if (!selectedFolderId) return [];
-    return getAncestorIds(tree, selectedFolderId);
-  }, [tree, selectedFolderId]);
+    return getAncestorIds(localTree, selectedFolderId);
+  }, [localTree, selectedFolderId]);
 
   const isFolderExpanded = useCallback(
     (folderId: string) => {
@@ -232,8 +301,8 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
 
   // Flatten visible rows for arrow navigation and roving tabIndex
   const visibleRows = useMemo(
-    () => flattenVisibleTree(tree, isFolderExpanded),
-    [tree, isFolderExpanded],
+    () => flattenVisibleTree(localTree, isFolderExpanded),
+    [localTree, isFolderExpanded],
   );
 
   // Derived effective focused ID for roving tabIndex
@@ -248,10 +317,111 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
     return visibleRows[0]?.node.id ?? null;
   }, [visibleRows, focusedId, selectedFolderId]);
 
+  const activeDragNode = useMemo(
+    () => (activeDragId ? findNode(localTree, activeDragId) : null),
+    [activeDragId, localTree],
+  );
+
+  const blockedDropIds = useMemo(() => {
+    if (!activeDragId) return new Set<string>();
+    const set = new Set(descendantIds(localTree, activeDragId));
+    set.add(activeDragId);
+    return set;
+  }, [activeDragId, localTree]);
+
+  const getRowRect = useCallback(
+    (folderId: string, fallbackRect?: { top: number; height: number } | null) => {
+      const el = rowRefs.current.get(folderId);
+      if (el) {
+        const r = el.getBoundingClientRect();
+        return { top: r.top, height: r.height };
+      }
+      if (fallbackRect) {
+        return { top: fallbackRect.top, height: fallbackRect.height };
+      }
+      return null;
+    },
+    [],
+  );
+
+  // Reorder persistence with optimistic UI
+  const handleReorder = useCallback(
+    async (activeId: string, targetId: string, zone: "before" | "after") => {
+      const result = reorderTreeNodes(localTree, activeId, targetId, zone);
+      if (!result || result.updates.length === 0) return;
+
+      // Optimistic UI update
+      setOptimisticTree(result.newTree);
+      if (result.targetParentId !== null) {
+        toggleFolder(result.targetParentId, true);
+      }
+
+      try {
+        isSavingRef.current = true;
+        for (const update of result.updates) {
+          const res = await fetch(`/api/folders/${update.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(update.body),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(json.error?.message ?? "Failed to reorder folders");
+          }
+        }
+        router.refresh();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to reorder folders";
+        toast.error(message);
+        setOptimisticTree(null);
+        router.refresh();
+      } finally {
+        isSavingRef.current = false;
+      }
+    },
+    [localTree, router, toggleFolder],
+  );
+
+  // Keyboard reorder handler for Alt+ArrowUp / Alt+ArrowDown
+  const handleKeyboardReorder = useCallback(
+    async (currentNode: FolderNode, direction: "up" | "down") => {
+      if (isSavingRef.current) return;
+
+      const siblings = getSiblings(localTree, currentNode.parentId);
+      const index = siblings.findIndex((s) => s.id === currentNode.id);
+      if (index === -1) return;
+
+      if (direction === "up" && index === 0) return;
+      if (direction === "down" && index === siblings.length - 1) return;
+
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      const targetNode = siblings[targetIndex];
+      if (!targetNode) return;
+
+      const zone = direction === "up" ? "before" : "after";
+      await handleReorder(currentNode.id, targetNode.id, zone);
+
+      setFocusedId(currentNode.id);
+      requestAnimationFrame(() => {
+        rowRefs.current.get(currentNode.id)?.focus();
+      });
+    },
+    [handleReorder, localTree],
+  );
+
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent, currentNode: FolderNode) => {
       if (renamingFolderId) return;
+
+      // Alt+ArrowUp / Alt+ArrowDown moves the folder among its siblings
+      if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault();
+        e.stopPropagation();
+        const direction = e.key === "ArrowUp" ? "up" : "down";
+        void handleKeyboardReorder(currentNode, direction);
+        return;
+      }
 
       const currentIndex = visibleRows.findIndex((r) => r.node.id === currentNode.id);
       if (currentIndex === -1) return;
@@ -305,7 +475,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
         }
       }
     },
-    [visibleRows, isFolderExpanded, renamingFolderId, toggleFolder, router],
+    [renamingFolderId, handleKeyboardReorder, visibleRows, isFolderExpanded, toggleFolder, router],
   );
 
   // Mutations
@@ -356,6 +526,16 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
   };
 
   const handleMoveFolder = async (folderId: string, parentId: string | null) => {
+    // Optimistic UI for move inside / move to top level
+    const activeNode = findNode(localTree, folderId);
+    if (activeNode) {
+      const optimistic = moveFolderInside(localTree, folderId, parentId);
+      setOptimisticTree(optimistic);
+      if (parentId) {
+        toggleFolder(parentId, true);
+      }
+    }
+
     try {
       const res = await fetch(`/api/folders/${folderId}`, {
         method: "PATCH",
@@ -365,6 +545,8 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
       const json = await res.json();
       if (!res.ok) {
         toast.error(json.error?.message ?? "Failed to move folder");
+        setOptimisticTree(null);
+        router.refresh();
         return;
       }
       toast("Folder moved");
@@ -374,6 +556,8 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
       router.refresh();
     } catch {
       toast.error("Failed to move folder");
+      setOptimisticTree(null);
+      router.refresh();
     }
   };
 
@@ -392,7 +576,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
       toast("Folder deleted");
       const isSelectedDeleted =
         selectedFolderId === folder.id ||
-        descendantIds(tree, folder.id).includes(selectedFolderId ?? "");
+        descendantIds(localTree, folder.id).includes(selectedFolderId ?? "");
       if (isSelectedDeleted) {
         router.push("/");
       }
@@ -406,47 +590,98 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
 
   // DnD Handlers
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveDragId(event.active.id as string);
+    setActiveDragId(String(event.active.id));
+    setDropTarget(null);
+  };
+
+  const updateDropTarget = useCallback(
+    (event: DragMoveEvent | DragOverEvent) => {
+      const { active, over } = event;
+      if (!over || !active) {
+        setDropTarget(null);
+        return;
+      }
+
+      const activeId = String(active.id);
+      const overId = String(over.id);
+
+      if (overId === "top-level" || overId === activeId || blockedDropIds.has(overId)) {
+        setDropTarget(null);
+        return;
+      }
+
+      const rect = getRowRect(overId, over.rect);
+      const zone = calculateDropZone(event.activatorEvent, event.delta.y, rect);
+
+      setDropTarget((prev) => {
+        if (prev && prev.folderId === overId && prev.zone === zone) {
+          return prev;
+        }
+        return { folderId: overId, zone };
+      });
+    },
+    [blockedDropIds, getRowRect],
+  );
+
+  const handleDragMove = (event: DragMoveEvent) => {
+    updateDropTarget(event);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    updateDropTarget(event);
+  };
+
+  const handleDragCancel = () => {
+    setActiveDragId(null);
+    setDropTarget(null);
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
+    const currentDropTarget = dropTarget;
     setActiveDragId(null);
-    if (!over) return;
+    setDropTarget(null);
 
-    const activeId = active.id as string;
-    const overId = over.id as string;
+    if (!over || !active) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
 
     if (overId === "top-level") {
-      const activeNode = findNode(tree, activeId);
+      const activeNode = findNode(localTree, activeId);
       if (activeNode && activeNode.parentId !== null) {
         await handleMoveFolder(activeId, null);
       }
       return;
     }
 
-    if (activeId === overId) return;
+    // Dropping onto itself or into its own descendant does nothing
+    if (activeId === overId || blockedDropIds.has(overId)) return;
 
-    const descendants = descendantIds(tree, activeId);
-    if (descendants.includes(overId)) return;
+    const rect = getRowRect(overId, over.rect);
+    const zone: DropZone =
+      currentDropTarget && currentDropTarget.folderId === overId
+        ? currentDropTarget.zone
+        : calculateDropZone(event.activatorEvent, event.delta.y, rect);
 
-    const activeNode = findNode(tree, activeId);
-    if (activeNode && activeNode.parentId === overId) return;
+    if (zone === "inside") {
+      const activeNode = findNode(localTree, activeId);
+      if (activeNode && activeNode.parentId === overId) return;
+      await handleMoveFolder(activeId, overId);
+      return;
+    }
 
-    await handleMoveFolder(activeId, overId);
+    // "before" or "after" sibling reordering
+    await handleReorder(activeId, overId, zone);
   };
 
-  const activeDragNode = useMemo(
-    () => (activeDragId ? findNode(tree, activeDragId) : null),
-    [activeDragId, tree],
-  );
-
-  const blockedDropIds = useMemo(() => {
-    if (!activeDragId) return new Set<string>();
-    const set = new Set(descendantIds(tree, activeDragId));
-    set.add(activeDragId);
-    return set;
-  }, [activeDragId, tree]);
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions;
+    }
+    return rectIntersection(args);
+  }, []);
 
   // Recursive tree renderer
   const renderTreeNodes = (nodes: FolderNode[], level = 1): React.ReactNode => {
@@ -457,6 +692,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
       const hasChildren = node.children.length > 0;
       const isRenaming = renamingFolderId === node.id;
       const isSubfolderCreating = creatingSubfolderParentId === node.id;
+      const rowDropZone = dropTarget?.folderId === node.id ? dropTarget.zone : null;
 
       return (
         <FolderRowItem
@@ -469,6 +705,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
           hasChildren={hasChildren}
           isRenaming={isRenaming}
           isDropDisabled={blockedDropIds.has(node.id)}
+          dropZone={rowDropZone}
           onToggle={() => toggleFolder(node.id)}
           onSelect={() => {
             setFocusedId(node.id);
@@ -507,10 +744,18 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
     });
   };
 
-  const isEmpty = tree.length === 0 && !isCreatingRoot;
+  const isEmpty = localTree.length === 0 && !isCreatingRoot;
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={collisionDetection}
+      onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
+      onDragOver={handleDragOver}
+      onDragCancel={handleDragCancel}
+      onDragEnd={handleDragEnd}
+    >
       <div className="flex flex-col w-full h-full">
         {/* Drop zone for top-level move while dragging */}
         {activeDragId !== null && <TopLevelDropZone />}
@@ -532,7 +777,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
             aria-label="Folders"
             className="flex-1 overflow-y-auto select-none outline-none"
           >
-            {renderTreeNodes(tree, 1)}
+            {renderTreeNodes(localTree, 1)}
 
             {isCreatingRoot && (
               <InlineInputRow
@@ -601,6 +846,7 @@ function FolderRowItem({
   hasChildren,
   isRenaming,
   isDropDisabled,
+  dropZone,
   onToggle,
   onSelect,
   onKeyDown,
@@ -621,6 +867,7 @@ function FolderRowItem({
   hasChildren: boolean;
   isRenaming: boolean;
   isDropDisabled: boolean;
+  dropZone: DropZone | null;
   onToggle: () => void;
   onSelect: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
@@ -643,7 +890,7 @@ function FolderRowItem({
     disabled: isRenaming,
   });
 
-  const { setNodeRef: setDropRef, isOver } = useDroppable({
+  const { setNodeRef: setDropRef } = useDroppable({
     id: node.id,
     disabled: isDropDisabled,
   });
@@ -685,11 +932,27 @@ function FolderRowItem({
             isSelected
               ? "bg-accent text-accent-foreground font-medium"
               : "text-foreground hover:bg-muted",
-            isOver && "ring-2 ring-primary bg-accent/60",
+            dropZone === "inside" && "ring-2 ring-primary bg-accent/60",
             isDragging && "opacity-40",
             "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
           )}
         >
+          {/* Drop indicator lines */}
+          {dropZone === "before" && (
+            <div
+              className="absolute top-0 right-0 h-[2px] bg-primary z-10 pointer-events-none motion-safe:transition-all"
+              style={{ left: `${(level - 1) * 16 + 8}px` }}
+              aria-hidden="true"
+            />
+          )}
+          {dropZone === "after" && (
+            <div
+              className="absolute bottom-0 right-0 h-[2px] bg-primary z-10 pointer-events-none motion-safe:transition-all"
+              style={{ left: `${(level - 1) * 16 + 8}px` }}
+              aria-hidden="true"
+            />
+          )}
+
           {/* Chevron */}
           {hasChildren ? (
             <button

@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./capture": "./src/capture.ts",
     "./server": "./src/server.ts"
   },
   "scripts": {

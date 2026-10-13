@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+out/
+dist/
+build/
+.output/
+.wxt/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Platform
+.vercel/
+.supabase/
+supabase/.temp/
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Local agent settings
+.claude/settings.local.json

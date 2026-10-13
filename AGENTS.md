@@ -7,6 +7,8 @@ Read `docs/SPEC.md` before starting. For any UI work, also read `docs/DESIGN.md`
 - Do **not** run `git commit`, `git push`, `git reset`, `git checkout` or `git stash`. The orchestrator reviews and commits.
 - Do **not** add dependencies unless your brief lists them. If you need one, finish what you can and report it.
 - Only edit files your brief says you own. Several agents work in this checkout at the same time.
+- Never disable checks to get a green build (`ignoreBuildErrors`, `eslint-disable` for whole files, `@ts-ignore`, `skipLibCheck` changes) and never add resolver aliases to paper over an import problem. Fix the cause, or stop and report it.
+- In `packages/core`, relative imports have no file extension (`./parse`, not `./parse.js`); Next.js transpiles the TypeScript source directly.
 - Never write secrets into tracked files. Real values go in `apps/web/.env.local` (gitignored); placeholders go in `apps/web/.env.example`.
 - Before reporting done, run `npm run lint`, `npm run typecheck` and `npm test` from the repo root and fix what you broke.
 - Your final report must list: files created or changed, commands run and their results, anything left unfinished, and any question for the orchestrator.

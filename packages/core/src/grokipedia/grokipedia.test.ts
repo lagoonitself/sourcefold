@@ -11,6 +11,20 @@ const fixtureUrl = new URL("../../test/fixtures/grokipedia-impact-of-ai.html", i
 const fixtureHtml = readFileSync(fixtureUrl, "utf-8");
 const articleUrl = "https://grokipedia.com/page/Impact_of_Artificial_Intelligence_on_the_Future";
 
+const shortFixtureUrl = new URL(
+  "../../test/fixtures/grokipedia-short-article.html",
+  import.meta.url,
+);
+const shortFixtureHtml = readFileSync(shortFixtureUrl, "utf-8");
+const shortArticleUrl = "https://grokipedia.com/page/Quantum_Teleportation";
+
+const tablesFixtureUrl = new URL(
+  "../../test/fixtures/grokipedia-tables-lists.html",
+  import.meta.url,
+);
+const tablesFixtureHtml = readFileSync(tablesFixtureUrl, "utf-8");
+const tablesArticleUrl = "https://grokipedia.com/page/Global_Space_Missions";
+
 describe("htmlToMarkdown", () => {
   it("converts tables to GFM tables, preserves nested lists, and keeps links", () => {
     const html = `
@@ -108,6 +122,27 @@ describe("parseGrokipediaHtml", () => {
     expect(ref69?.url).toContain("propublica.org");
     expect(ref69?.domain).toBe("propublica.org");
   });
+
+  it("parses short article without references cleanly", () => {
+    const article = parseGrokipediaHtml(shortFixtureHtml, shortArticleUrl);
+    expect(article.title).toBe("Quantum Teleportation");
+    expect(article.summary).toBe(
+      "Quantum teleportation is a technique for transferring quantum information from a sender to a receiver.",
+    );
+    expect(article.factCheckedAt).toBe("2026-10-01T12:00:00.000Z");
+    expect(article.references).toHaveLength(0);
+  });
+
+  it("parses article with tables, lists and citations accurately", () => {
+    const article = parseGrokipediaHtml(tablesFixtureHtml, tablesArticleUrl);
+    expect(article.title).toBe("Global Space Missions");
+    expect(article.factCheckedAt).toBe("2026-08-15T09:30:00.000Z");
+    expect(article.references).toHaveLength(2);
+    expect(article.references[0]?.number).toBe(1);
+    expect(article.references[0]?.domain).toBe("nasa.gov");
+    expect(article.references[1]?.number).toBe(2);
+    expect(article.references[1]?.domain).toBe("esa.int");
+  });
 });
 
 describe("grokipediaToMarkdown", () => {
@@ -178,5 +213,36 @@ describe("grokipediaToMarkdown", () => {
     mkdirSync(outputDir, { recursive: true });
     writeFileSync(join(outputDir, ".gitignore"), "*\n", "utf-8");
     writeFileSync(join(outputDir, "grokipedia-impact-of-ai.md"), markdown, "utf-8");
+  });
+
+  it("formats short articles without references properly", () => {
+    const article = parseGrokipediaHtml(shortFixtureHtml, shortArticleUrl);
+    const markdown = grokipediaToMarkdown(article, { savedAt: "2026-10-13" });
+
+    expect(markdown).toContain("# Quantum Teleportation");
+    expect(markdown).toContain("> Saved from Grokipedia");
+    expect(markdown).toContain("Quantum teleportation is a technique");
+    expect(markdown).not.toContain("## References");
+    expect(markdown).not.toContain("Fact-checked by Grok");
+  });
+
+  it("formats tables and nested lists with GFM formatting and references", () => {
+    const article = parseGrokipediaHtml(tablesFixtureHtml, tablesArticleUrl);
+    const markdown = grokipediaToMarkdown(article, { savedAt: "2026-10-13" });
+
+    expect(markdown).toContain("# Global Space Missions");
+    expect(markdown).toContain("| Mission | Destination | Launch Year | Status |");
+    expect(markdown).toContain("| Artemis III | Lunar South Pole | 2026 | Planned |");
+    expect(markdown).toMatch(/-\s+Planetary Surveying/);
+    expect(markdown).toMatch(/\s+-\s+Surface mapping and spectrometry/);
+    expect(markdown).toContain("[^1]");
+    expect(markdown).toContain("[^2]");
+    expect(markdown).toContain("## References");
+    expect(markdown).toContain(
+      "[^1]: [NASA Planetary Science Overview](https://www.nasa.gov/missions)",
+    );
+    expect(markdown).toContain(
+      "[^2]: [ESA Exploration Horizons](https://www.esa.int/space-exploration)",
+    );
   });
 });

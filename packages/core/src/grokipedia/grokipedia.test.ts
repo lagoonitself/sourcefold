@@ -151,6 +151,28 @@ describe("grokipediaToMarkdown", () => {
       expect(markdown).toContain(`[^${num}]: `);
     }
 
+    // 1. Text between "> Saved from Grokipedia" and "## Overview" contains at least 4 paragraphs separated by a blank line
+    const savedIndex = markdown.indexOf("> Saved from Grokipedia");
+    const overviewIndex = markdown.indexOf("## Overview");
+    expect(savedIndex).toBeGreaterThan(-1);
+    expect(overviewIndex).toBeGreaterThan(savedIndex);
+    const savedLineEnd = markdown.indexOf("\n", savedIndex);
+    const introSection = markdown.slice(savedLineEnd, overviewIndex).trim();
+    const introParagraphs = introSection
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    expect(introParagraphs.length).toBeGreaterThanOrEqual(4);
+
+    // 2. "Expert analyses indicate" starts a line (preceded by "\n\n")
+    expect(markdown).toContain("\n\nExpert analyses indicate");
+
+    // 3. No line in the Markdown body is longer than 3000 characters
+    const bodyLines = markdown.split("\n");
+    for (const line of bodyLines) {
+      expect(line.length).toBeLessThanOrEqual(3000);
+    }
+
     // Write full generated Markdown to packages/core/test/output/grokipedia-impact-of-ai.md
     const outputDir = join(currentDir, "../../test/output");
     mkdirSync(outputDir, { recursive: true });

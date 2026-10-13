@@ -1,3 +1,4 @@
+/// <reference path="./types/joplin-turndown-plugin-gfm.d.ts" />
 import TurndownService from "turndown";
 import { tables, strikethrough } from "@joplin/turndown-plugin-gfm";
 

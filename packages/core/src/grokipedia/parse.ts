@@ -240,6 +240,23 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
     }
   }
 
+  // 9. Replace block-styled text spans and divs with <p> elements
+  const blockTextWrappers = Array.from(
+    clone.querySelectorAll("span[data-tts-block], span.block, div.block"),
+  );
+  for (const el of blockTextWrappers) {
+    if (el.tagName.toLowerCase() === "p") continue;
+    const hasBlockChild = el.querySelector(
+      "h1, h2, h3, h4, h5, h6, ul, ol, li, table, thead, tbody, tr, th, td, p, div, nav, header, section, article",
+    );
+    if (hasBlockChild) continue;
+    const p = clone.ownerDocument.createElement("p");
+    while (el.firstChild) {
+      p.appendChild(el.firstChild);
+    }
+    el.replaceWith(p);
+  }
+
   const bodyHtml = clone.innerHTML.trim();
 
   return {

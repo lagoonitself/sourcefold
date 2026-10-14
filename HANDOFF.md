@@ -46,7 +46,7 @@ Lessons worth keeping:
 
 ## Next steps
 
-1. **Deploy projects and groups.** Apply `supabase/migrations/20261014010000_projects_and_groups.sql` to the owner's database (the MCP apply was declined on 2026-10-14; run it in the SQL editor or approve it), push to `main` so Vercel deploys, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. The owner's test data was soft-deleted on 2026-10-14; the next Save to Drive trashes its Drive copies.
+1. **Finish rolling out projects and groups.** The migration `20261014010000_projects_and_groups.sql` is applied to the owner's database and the code is pushed (2026-10-14). Check the Vercel deploy, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. The owner's test data was soft-deleted on 2026-10-14; the next Save to Drive trashes its Drive copies.
 2. **Optional cleanup on the owner's database: drop the old function overloads.** Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
 
    ```sql

@@ -59,7 +59,8 @@ Status as of 2026-10-14. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] Top-level folders are shown as projects, with a project switcher at the top of the sidebar; folders inside a project are groups.
   - [x] The sidebar, title search, Add links picker, Move dialog and the extension's picker work per project. Project pages list their groups; groups can move between projects.
   - [x] Projects are isolated; a link is unique per group, so it can sit in several groups and several projects. Sources only live in groups (database trigger).
-  - [ ] Apply the migration to the owner's database, deploy to Vercel and reload the extension.
+  - [x] Migration applied to the owner's database; pushed to `main`.
+  - [ ] Confirm the Vercel deploy and reload the extension.
 
 ## Later
 

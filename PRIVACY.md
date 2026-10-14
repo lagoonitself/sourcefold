@@ -5,10 +5,10 @@ Sourcefold is a personal, self-hosted tool. Each deployment is used by one perso
 ## What it stores
 
 - Your Google account email and name, to sign you in.
-- A Google refresh token, so the app can save files to your Google Drive when you press "Save to Drive".
-- The sources you save (titles, links, authors, dates and Markdown text), your folders and your notes.
+- A Google refresh token, so the app can save files to your Google Drive.
+- The sources you save (titles, links, authors and dates), your folders and your notes.
 
-All of this lives in the deployment owner's own Supabase database.
+All of this lives in the deployment owner's own Supabase database. The text of saved articles and your uploaded images are kept in Supabase only until they're copied to your Google Drive, usually a few seconds; after that they live only in Drive.
 
 ## Google Drive access
 

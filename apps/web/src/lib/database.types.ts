@@ -355,6 +355,14 @@ export type Database = {
         Args: { p_drive_folder_id: string; p_id: string }
         Returns: undefined
       }
+      mark_item_stored_in_drive: {
+        Args: {
+          p_drive_file_id: string
+          p_id: string
+          p_seen_updated_at: string
+        }
+        Returns: boolean
+      }
       mark_item_sync_failed: {
         Args: {
           p_give_up: boolean

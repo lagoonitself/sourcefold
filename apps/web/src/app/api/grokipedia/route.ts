@@ -3,9 +3,10 @@ import { z } from "zod";
 import { requireApiUser } from "@/lib/api";
 import { saveGrokipediaLink } from "@/features/grokipedia/save-grokipedia";
 import { GROKIPEDIA_ERROR_MESSAGES } from "@/features/grokipedia/grokipedia-errors";
+import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const saveGrokipediaSchema = z.object({
   url: z.string().trim().min(1, "URL is required"),
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
   });
 
   if (result.success) {
+    pushToDriveSoon(auth.userId);
     return NextResponse.json({ data: { item: result.item } }, { status: 201 });
   }
 

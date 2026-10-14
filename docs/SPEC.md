@@ -28,7 +28,7 @@ Later (not in scope now): a public website per video where every claim links to 
 | Platform      | Hosted web app (desktop browser) + Chrome extension                                                                                                                                                                                                                      |
 | Hosting       | Vercel Hobby (free)                                                                                                                                                                                                                                                      |
 | Backend       | Supabase free plan: Postgres, Auth (Google), Storage                                                                                                                                                                                                                     |
-| Master copy   | Supabase database                                                                                                                                                                                                                                                        |
+| Master copy   | Supabase holds links, titles, metadata, folders and notes. Article text and images live only in Drive: they wait in Supabase until their first copy reaches Drive (pushed automatically right after saving), then are cleared. See "Where content lives" in section 4.   |
 | Drive         | One-way mirror. One **Save to Drive** button (and Ctrl+S) saves everything changed. Drive never writes back.                                                                                                                                                             |
 | Organizing    | Projects, each with groups inside groups (unlimited depth). In the database both are `folders`: a project is a top-level folder, a group is any folder inside one.                                                                                                       |
 | One home      | Each item lives in exactly one group. Sources can't be saved directly in a project (enforced by the `check_item_folder` trigger).                                                                                                                                        |
@@ -123,6 +123,17 @@ All tables have `user_id uuid not null references auth.users`, `created_at`, `up
 **google_tokens**: `user_id pk`, `refresh_token text`, `updated_at`. No client-side access (no RLS select policy; server uses the service role).
 
 **drive_state**: `user_id pk`, `root_folder_id text null`, `last_saved_at timestamptz null`
+
+### Where content lives
+
+To keep the Supabase free plan small (500 MB database, 1 GB storage; a Grokipedia article is about 200 KB of Markdown), Supabase is only an index:
+
+- `items.markdown` (Grokipedia, Substack, X) and `storage_path` (images) hold content only until it reaches Drive. `mark_item_stored_in_drive` clears them in the same update that marks the item synced, and only if the item didn't change during the upload.
+- After a new source is saved, the server pushes to Drive in the background (`pushToDriveSoon`). If Drive isn't connected or another save is running, the item waits for the next save.
+- A later rename, move or note change rebuilds the file from Drive: the save downloads the `.md`, drops its front matter and "My note" section (`bodyFromDriveFile`), and writes new ones. Images are only renamed or moved.
+- Clicking an image opens its Drive copy once it has left Supabase.
+- Kept in Supabase: notes' text (you edit them in the app) and `x_posts` (needed to rebuild a thread when you add a post).
+- If you delete a file in Drive permanently, Drive held the only copy: the save reports it, and you delete the item and add it again.
 
 ### Dirty tracking
 
@@ -376,7 +387,7 @@ Each wave ends with a working, deployed app. Tasks inside a wave marked **(paral
 | X changes its page structure                                 | All selectors in one file; capture failures show a clear error.                                                                                                                            |
 | Supabase free project pauses                                 | Daily keep-alive workflow.                                                                                                                                                                 |
 | Google refresh token expires                                 | OAuth app set to "In production"; app shows "Reconnect Drive" if refresh fails.                                                                                                            |
-| Free limits (500 MB database, 1 GB storage on Supabase free) | Text is small; thousands of articles fit. Images are the only large data.                                                                                                                  |
+| Free limits (500 MB database, 1 GB storage on Supabase free) | Article text and images move to Drive after saving, so Supabase holds only links and metadata (about 1–2 KB per source). Drive free space is 15 GB, shared with Gmail and Photos.          |
 | Project folder is inside OneDrive                            | OneDrive syncing `node_modules` causes slowdowns and file locks. Move the repo outside OneDrive (for example `C:\dev\sourcefold`) before Wave 1, or exclude the folder from OneDrive sync. |
 
 ## 12. Your setup tasks (needed for Wave 1)

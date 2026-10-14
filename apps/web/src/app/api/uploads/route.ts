@@ -2,8 +2,10 @@ import { z } from "zod";
 import { jsonData, jsonError, requireUser } from "@/lib/api";
 import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
 import { invalidFolderMessage, nextPosition } from "@/features/capture/find-duplicate";
+import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
 
@@ -116,5 +118,6 @@ export async function POST(request: Request) {
     return jsonError(500, "Something went wrong. Try again.");
   }
 
+  pushToDriveSoon(user.id);
   return jsonData(item, 201);
 }

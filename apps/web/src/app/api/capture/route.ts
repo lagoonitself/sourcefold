@@ -3,8 +3,10 @@ import { z } from "zod";
 import { requireApiUser } from "@/lib/api";
 import { saveSubstack, saveSubstackUnavailable } from "@/features/capture/save-substack";
 import { saveXThread } from "@/features/capture/save-x";
+import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const substackCaptureSchema = z.object({
   url: z.string().trim().min(1, "URL is required"),
@@ -92,6 +94,7 @@ export async function POST(request: Request) {
   }
 
   if (result.success) {
+    pushToDriveSoon(auth.userId);
     const data: { item: typeof result.item; unavailable?: true } = {
       item: result.item,
     };

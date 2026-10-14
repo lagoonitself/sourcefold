@@ -1,7 +1,15 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/database.types";
-import { createFolder, getFile, updateFile, uploadFile, DriveApiError } from "@/lib/google/drive";
+import { bodyFromDriveFile } from "@sourcefold/core";
+import {
+  createFolder,
+  downloadFileText,
+  getFile,
+  updateFile,
+  uploadFile,
+  DriveApiError,
+} from "@/lib/google/drive";
 import { clearGoogleAccessToken, DriveAuthError } from "@/lib/google/oauth";
 import {
   buildItemFile,
@@ -82,6 +90,17 @@ function getFolderAndDescendantIds(
   }
 
   return result;
+}
+
+const DRIVE_COPY_GONE =
+  "Its Drive file was deleted, and Drive held the only copy. Delete this item and add it again.";
+
+async function readBodyFromDrive(accessToken: string, driveFileId: string | null): Promise<string> {
+  const text = driveFileId ? await downloadFileText(accessToken, driveFileId) : null;
+  if (text === null) {
+    throw new Error(DRIVE_COPY_GONE);
+  }
+  return bodyFromDriveFile(text);
 }
 
 function isTransientError(err: unknown): boolean {
@@ -377,93 +396,93 @@ export async function runSaveBatch(
         const siblings = await getFolderSiblings(item.folder_id);
         const siblingRefs: SiblingRef[] = siblings.filter((s) => s.id !== item.id);
 
+        const meta =
+          typeof item.meta === "object" && item.meta !== null
+            ? (item.meta as Record<string, unknown>)
+            : {};
         let fileName: string;
         let mimeType: string;
-        let body: string | Uint8Array;
+        // null: the content already lives only in Drive and hasn't changed, so only rename or move it.
+        let body: string | Uint8Array | null;
 
         if (item.kind === "image") {
-          const meta =
-            typeof item.meta === "object" && item.meta !== null
-              ? (item.meta as Record<string, unknown>)
-              : {};
           mimeType = (meta.mime_type as string) || "application/octet-stream";
-          const ext = itemExtension("image", meta);
+          fileName = driveFileName(item.title, item.id, siblingRefs, itemExtension("image", meta));
 
-          fileName = driveFileName(item.title, item.id, siblingRefs, ext);
-
-          if (!item.storage_path) {
-            throw new Error("Missing storage_path for image item");
+          if (item.storage_path) {
+            const { data: blob, error: downloadError } = await supabase.storage
+              .from("images")
+              .download(item.storage_path);
+            if (downloadError || !blob) {
+              throw new Error(downloadError?.message || "Failed to download image from storage");
+            }
+            body = new Uint8Array(await blob.arrayBuffer());
+          } else if (item.drive_file_id) {
+            body = null;
+          } else {
+            throw new Error(DRIVE_COPY_GONE);
           }
-          const { data: blob, error: downloadError } = await supabase.storage
-            .from("images")
-            .download(item.storage_path);
-          if (downloadError || !blob) {
-            throw new Error(downloadError?.message || "Failed to download image from storage");
-          }
-          const arrayBuffer = await blob.arrayBuffer();
-          body = new Uint8Array(arrayBuffer);
         } else {
           mimeType = "text/markdown";
           fileName = driveFileName(item.title, item.id, siblingRefs, "md");
           const folderPath = folderPathOf(item.folder_id, foldersById as Map<string, FolderRef>);
-          body = buildItemFile(item, folderPath);
+          let markdown = item.markdown;
+          if (markdown === null && item.kind !== "note") {
+            markdown = await readBodyFromDrive(accessToken, item.drive_file_id);
+          }
+          body = buildItemFile({ ...item, markdown }, folderPath);
         }
 
-        if (item.drive_file_id) {
-          const existing = await getFile(accessToken, item.drive_file_id);
-          if (existing && !existing.trashed) {
-            let addParents: string | undefined;
-            let removeParents: string | undefined;
-            if (!existing.parents?.includes(targetParentDriveId)) {
-              addParents = targetParentDriveId;
-              removeParents = existing.parents?.join(",");
-            }
+        const existing = item.drive_file_id ? await getFile(accessToken, item.drive_file_id) : null;
+        let driveFileId: string;
 
+        // A trashed file is restored only when Drive holds the only copy (body is null).
+        if (existing && (!existing.trashed || body === null)) {
+          const moving = !existing.parents?.includes(targetParentDriveId);
+          const addParents = moving ? targetParentDriveId : undefined;
+          const removeParents = moving ? existing.parents?.join(",") : undefined;
+
+          if (body === null) {
+            await updateFile(accessToken, existing.id, {
+              name: fileName,
+              addParents,
+              removeParents,
+              trashed: existing.trashed ? false : undefined,
+            });
+          } else {
             await uploadFile(accessToken, {
-              id: item.drive_file_id,
+              id: existing.id,
               name: fileName,
               mimeType,
               body,
               addParents,
               removeParents,
             });
-
-            await supabase.rpc("mark_item_synced", {
-              p_id: item.id,
-              p_drive_file_id: item.drive_file_id,
-            });
-            processed++;
-            remainingBudget--;
-          } else {
-            const created = await uploadFile(accessToken, {
-              name: fileName,
-              parentId: targetParentDriveId,
-              mimeType,
-              body,
-            });
-
-            await supabase.rpc("mark_item_synced", {
-              p_id: item.id,
-              p_drive_file_id: created.id,
-            });
-            processed++;
-            remainingBudget--;
           }
+          driveFileId = existing.id;
         } else {
+          if (body === null) {
+            throw new Error(DRIVE_COPY_GONE);
+          }
           const created = await uploadFile(accessToken, {
             name: fileName,
             parentId: targetParentDriveId,
             mimeType,
             body,
           });
-
-          await supabase.rpc("mark_item_synced", {
-            p_id: item.id,
-            p_drive_file_id: created.id,
-          });
-          processed++;
-          remainingBudget--;
+          driveFileId = created.id;
         }
+
+        const { data: contentCleared } = await supabase.rpc("mark_item_stored_in_drive", {
+          p_id: item.id,
+          p_drive_file_id: driveFileId,
+          p_seen_updated_at: item.updated_at,
+        });
+        if (contentCleared && item.kind === "image" && item.storage_path) {
+          await supabase.storage.from("images").remove([item.storage_path]);
+        }
+        processed++;
+        remainingBudget--;
       } catch (err) {
         if (err instanceof DriveAuthError) {
           clearGoogleAccessToken(userId);

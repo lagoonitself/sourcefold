@@ -9,6 +9,7 @@ export {
   type SourceKind,
 } from "./url";
 export { buildFrontMatter, formatDate, type FrontMatterValue } from "./front-matter";
+export { bodyFromDriveFile } from "./drive-file";
 export type {
   CaptureRequest,
   SubstackCapture,

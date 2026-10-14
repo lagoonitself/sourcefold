@@ -3,8 +3,10 @@ import { z } from "zod";
 import { canonicalizeUrl } from "@sourcefold/core";
 import { jsonData, requireApiUser } from "@/lib/api";
 import { rerenderXItem } from "@/features/capture/save-x";
+import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const addPostSchema = z.object({
   post: z.object({
@@ -206,5 +208,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     );
   }
 
+  pushToDriveSoon(auth.userId);
   return jsonData({ item_id: itemId, post_id: newPost.id }, 201);
 }

@@ -12,14 +12,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const { data: item, error } = await supabase
     .from("items")
-    .select("id, kind, storage_path")
+    .select("id, kind, storage_path, drive_file_id")
     .eq("id", id)
     .eq("user_id", user.id)
     .is("deleted_at", null)
     .maybeSingle();
 
-  if (error || !item || item.kind !== "image" || !item.storage_path) {
+  if (error || !item || item.kind !== "image") {
     return jsonError(404, "Image not found.");
+  }
+
+  // Once an image reaches Drive it's removed from Supabase, so open the Drive copy.
+  if (!item.storage_path) {
+    if (!item.drive_file_id) {
+      return jsonError(404, "Image not found.");
+    }
+    return NextResponse.redirect(
+      `https://drive.google.com/file/d/${encodeURIComponent(item.drive_file_id)}/view`,
+      302,
+    );
   }
 
   const { data: signedData, error: signError } = await supabase.storage

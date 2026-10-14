@@ -208,6 +208,32 @@ export async function getFile(
   };
 }
 
+// Returns null when the file no longer exists. Works for trashed files too.
+export async function downloadFileText(token: string, id: string): Promise<string | null> {
+  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`);
+  url.searchParams.set("alt", "media");
+
+  const res = await driveFetch(url.toString(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (res.status === 404) {
+    return null;
+  }
+
+  if (!res.ok) {
+    throw new DriveApiError(
+      res.status,
+      extractErrorMessage(res.data, `Google Drive error (${res.status})`),
+    );
+  }
+
+  return res.text;
+}
+
 export async function uploadFile(
   token: string,
   options: {

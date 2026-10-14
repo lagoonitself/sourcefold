@@ -28,9 +28,9 @@ Sourcefold doesn't show source content inside the app. Clicking an item opens th
 ## Stack
 
 - Web app: Next.js (TypeScript) on Vercel
-- Database, login and file storage: Supabase (Postgres, Auth with Google, Storage)
+- Database and login: Supabase (Postgres, Auth with Google). It keeps links, titles and folders; article text and images move to Drive
 - Browser extension: Chrome (Manifest V3), built with WXT
-- Storage mirror: Google Drive API (`drive.file` scope only)
+- Content storage: Google Drive API (`drive.file` scope only)
 
 ## What you need
 

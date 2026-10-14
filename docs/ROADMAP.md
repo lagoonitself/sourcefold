@@ -64,6 +64,13 @@ Status as of 2026-10-14. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
 - **Copy links (2026-10-14):**
   - [x] Checkboxes on a group's sources and a Copy links button (all, or only the ticked ones).
 
+- **Content lives in Drive (2026-10-14):**
+  - [x] Supabase keeps links and metadata only; article text and images are cleared once their Drive copy exists (`mark_item_stored_in_drive`).
+  - [x] New sources are pushed to Drive automatically right after saving.
+  - [x] Renames and moves rebuild the file from its Drive copy; images open from Drive.
+  - [x] Migration applied to the owner's database.
+  - [ ] Confirm on the live app (see HANDOFF.md).
+
 ## Later
 
 - [ ] Chrome Web Store listing for the extension.

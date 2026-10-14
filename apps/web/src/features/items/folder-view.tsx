@@ -4,7 +4,7 @@ import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { loadFolders, type FolderItem } from "@/features/folders/load-folders";
 import { NewGroupButton } from "@/features/projects/new-group-button";
 import { ITEM_LIST_COLUMNS } from "./item-columns";
-import { ItemList } from "./item-list";
+import { SelectableItemList } from "./selectable-item-list";
 import { AddImageButton } from "./add-image-button";
 import { NewNoteButton } from "./new-note-button";
 
@@ -125,7 +125,7 @@ export async function FolderView({ folderId }: FolderViewProps) {
       {items.length > 0 && (
         <section aria-label="Sources">
           {groups.length > 0 && <SectionLabel>Sources</SectionLabel>}
-          <ItemList items={items} />
+          <SelectableItemList items={items} />
         </section>
       )}
 

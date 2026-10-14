@@ -230,6 +230,7 @@ Front matter (`source: note`, `title`, `created`, `folder`) then your Markdown.
 
 - **Left:** project switcher (pick, create, rename, delete projects), then the open project's group tree. Create, rename, delete, drag to move or reorder groups, nest groups inside groups, or move a group to another project. Only one project is shown at a time; `/` reopens the last project (cookie `sourcefold_project`).
 - **Top bar:** title search box, **Add links** button (Grokipedia paste box), **Save to Drive** button with unsaved count and last-saved time.
+- **Copy links:** on a group page, each source with a web link has a checkbox. **Copy all links** (or **Copy N links** when some are ticked) copies the links, one per line, to the clipboard. Shift-click selects a range. Notes and uploaded images have no link and no checkbox.
 - **Main:** a project page lists its groups (and any sources saved directly in the project, under "Not in a group"). A group page lists its subgroups, then its sources. Each row: source icon, title, author (Substack/X), date, status. Click opens the source URL in a new tab. Notes open in an editor. A row menu: edit note, rename, move, delete, retry (failed items).
 
 ### Grokipedia paste box

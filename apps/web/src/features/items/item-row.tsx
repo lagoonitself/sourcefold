@@ -17,9 +17,16 @@ import type { ItemListRow } from "./item-columns";
 import { ItemMenu } from "./item-menu";
 import { cn } from "@/lib/utils";
 
+export interface ItemRowSelection {
+  checked: boolean;
+  onToggle: (shiftKey: boolean) => void;
+}
+
 export interface ItemRowProps {
   item: ItemListRow;
   subtitle?: string;
+  /** Shows a checkbox for copying links. Rows without a link pass `null` to keep columns aligned. */
+  selection?: ItemRowSelection | null;
 }
 
 interface KindConfig {
@@ -129,7 +136,7 @@ function renderStatusIcon(status: string, error: string | null) {
   }
 }
 
-export function ItemRow({ item, subtitle }: ItemRowProps) {
+export function ItemRow({ item, subtitle, selection }: ItemRowProps) {
   const [noteOpen, setNoteOpen] = useState(false);
 
   const kindConfig = KIND_CONFIG[item.kind] ?? DEFAULT_KIND_CONFIG;
@@ -204,8 +211,25 @@ export function ItemRow({ item, subtitle }: ItemRowProps) {
   return (
     <div
       role="listitem"
-      className="group flex min-h-[48px] w-full items-stretch transition-colors hover:bg-muted"
+      className={cn(
+        "group flex min-h-[48px] w-full items-stretch transition-colors hover:bg-muted",
+        selection?.checked && "bg-accent hover:bg-accent",
+      )}
     >
+      {selection !== undefined && (
+        <div className="flex w-9 shrink-0 items-center justify-center">
+          {selection && (
+            <input
+              type="checkbox"
+              checked={selection.checked}
+              onChange={() => {}}
+              onClick={(e) => selection.onToggle(e.shiftKey)}
+              aria-label={`Select ${item.title}`}
+              className="size-4 cursor-pointer accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            />
+          )}
+        </div>
+      )}
       {item.source_url ? (
         <a
           href={item.source_url}

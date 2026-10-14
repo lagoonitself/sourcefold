@@ -61,6 +61,8 @@ Status as of 2026-10-14. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] Projects are isolated; a link is unique per group, so it can sit in several groups and several projects. Sources only live in groups (database trigger).
   - [x] Migration applied to the owner's database; pushed to `main`.
   - [ ] Confirm the Vercel deploy and reload the extension.
+- **Copy links (2026-10-14):**
+  - [x] Checkboxes on a group's sources and a Copy links button (all, or only the ticked ones).
 
 ## Later
 

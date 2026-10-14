@@ -46,7 +46,8 @@ Status as of 2026-10-13. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
 - **Second audit (2026-10-14):**
   - Speed: Vercel region `sin1`, `getClaims()` auth, cached per-request client, parallel queries, loading skeletons, SQL folder counts, new indexes, no status polling, lighter client bundle.
   - Bugs fixed across core parsers, web API, UI, Drive sync and the extension (see HANDOFF.md).
-  - [ ] Apply migrations `20261013030000_audit_fixes.sql` and `20261014000000_perf_and_sync_fixes.sql`, then push and deploy.
+  - [x] Migrations applied (without the overload drops; see HANDOFF.md), pushed, deployed, CI green.
+  - [ ] Drop the four old function overloads in the SQL editor.
 
 ## Final Steps to Use
 

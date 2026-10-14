@@ -2,7 +2,7 @@
 
 Read this first in any new session. When the user says "continue", pick up at **Next steps** below. Keep this file current.
 
-Last updated: 2026-10-14, after the second bug and speed audit (not yet pushed or deployed).
+Last updated: 2026-10-14, after the second bug and speed audit, commit `94b5f89`, deployed to production.
 
 ## What we're building
 
@@ -42,9 +42,16 @@ Full detail:
 
 ## Next steps
 
-0. **Apply the two pending migrations, then push.** The code committed on 2026-10-14 needs them; deploying before they are applied breaks folder counts, Drive save and folder delete.
-   - In order: `supabase/migrations/20261013030000_audit_fixes.sql` (never applied before), then `supabase/migrations/20261014000000_perf_and_sync_fixes.sql`. Project `dhqrexvkinplupshqyma`.
-   - Then push `main`. `apps/web/vercel.json` moves Vercel functions to `sin1` (Singapore, same region as Supabase). They were in `iad1`, so every database call crossed the Pacific.
+0. **Optional cleanup: drop the old function overloads.** The second-audit SQL is live (applied 2026-10-14 through the Supabase MCP, functions run in `sin1`). The MCP refuses `drop function`, so the old signatures still exist next to the new ones. The app always passes `p_user_id`, so they are unused. Run this once in the Supabase SQL editor:
+
+   ```sql
+   drop function if exists public.soft_delete_folder(uuid);
+   drop function if exists public.drive_dirty_folders();
+   drop function if exists public.drive_dirty_items(integer);
+   drop function if exists public.drive_unsaved_count();
+   ```
+
+   Until then, any RPC call to those four functions that leaves out `p_user_id` fails as ambiguous.
 
 1. **Authorize OAuth redirect URLs:**
    - In **Google Cloud Console** (project `folder-511509`): add `https://sourcefold-eight.vercel.app` to **Authorized JavaScript origins**.

@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { jsonData, requireUser } from "@/lib/api";
-import { clearGoogleAccessToken, DriveAuthError, getGoogleAccessToken } from "@/lib/google/oauth";
+import {
+  clearGoogleAccessToken,
+  DriveAuthError,
+  DriveClientMismatchError,
+  getGoogleAccessToken,
+} from "@/lib/google/oauth";
 import { runSaveBatch } from "@/features/drive/run-save-batch";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +40,19 @@ export async function POST(request: Request) {
     try {
       accessToken = await getGoogleAccessToken(user.id);
     } catch (err) {
+      console.error("Drive token refresh failed:", err);
+      if (err instanceof DriveClientMismatchError) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "drive_client_mismatch",
+              message:
+                "Drive can't connect: the app's Google client doesn't match the one used to sign in. Reconnecting won't help.",
+            },
+          },
+          { status: 500 },
+        );
+      }
       if (err instanceof DriveAuthError) {
         clearGoogleAccessToken(user.id);
         return NextResponse.json(
@@ -76,6 +94,7 @@ export async function POST(request: Request) {
       const result = await runSaveBatch(supabase, user.id, accessToken, budget);
       return jsonData(result);
     } catch (err) {
+      console.error("Drive save failed:", err);
       if (err instanceof DriveAuthError) {
         clearGoogleAccessToken(user.id);
         return NextResponse.json(

@@ -2,7 +2,7 @@
 
 Read this first in any new session. When the user says "continue", pick up at **Next steps** below. Keep this file current.
 
-Last updated: 2026-10-14, after the second bug and speed audit, commit `94b5f89`, deployed to production.
+Last updated: 2026-10-14, after diagnosing the Drive OAuth client mismatch and adding "Move here" to the extension.
 
 ## What we're building
 
@@ -41,6 +41,13 @@ Full detail:
 **Second audit (2026-10-14):** six Gemini auditors, then six fixers, all reviewed. Speed: Vercel region moved to `sin1`, local JWT checks with `getClaims()` instead of `getUser()` network calls (one per request, cached with React `cache`), parallel page queries, `loading.tsx` skeletons, folder counts via SQL (`folder_item_counts`), no 30 s Drive status polling, dialogs mount only when open, smaller client bundle. Bugs: notes no longer wiped by refresh, Ctrl+S no longer starts a Drive sync while typing, moved folders land at the end, Drive sync items no longer stuck forever, Drive rate-limit retries, UTF-8 uploads, save lock against duplicate Drive folders, X reply duplicate check, URLs with parentheses kept intact, extension "Add to thread" attaching the wrong post, extension asked for `<all_urls>` (now removed).
 
 ## Next steps
+
+0a. **Fix Google Drive (user, in dashboards). Drive can't work until this is done.** Supabase's Google sign-in uses OAuth client `716606196974-0n90lmjh1teovlq475oev6offl5f83uc`, but the app's `GOOGLE_CLIENT_ID` (Vercel and `.env.local`) is a different client, `716606196974-l0c7qoeisg…`. A refresh token only works with the client that issued it, so Google answers `unauthorized_client` and every reconnect stores another unusable token. Verified 2026-10-14 with a direct token refresh. Fix one of two ways:
+   - **Option A (easiest):** Supabase Dashboard → Authentication → Sign In / Providers → Google: paste the Client ID and Client Secret from `apps/web/.env.local`. In Google Cloud (project `folder-511509`), make sure that `l0c7…` client lists `https://dhqrexvkinplupshqyma.supabase.co/auth/v1/callback` under Authorized redirect URIs.
+   - **Option B:** In Google Cloud, open the `0n90…` client, create a new client secret, and set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` to that client in Vercel (then redeploy) and in `.env.local`.
+   - Then in Sourcefold: Settings → **Reconnect Drive**, then **Save to Drive**.
+
+   Also learned: the extension did save the Wikipedia article (160 KB of Markdown) into `imp / akjdb`. Parent folders don't list items from subfolders, which made it look missing.
 
 0. **Optional cleanup: drop the old function overloads.** The second-audit SQL is live (applied 2026-10-14 through the Supabase MCP, functions run in `sin1`). The MCP refuses `drop function`, so the old signatures still exist next to the new ones. The app always passes `p_user_id`, so they are unused. Run this once in the Supabase SQL editor:
 

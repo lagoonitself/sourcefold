@@ -9,6 +9,7 @@ import {
   capture,
   recentXItems,
   addXPost,
+  moveItem,
   ApiError,
   type Folder,
   type RecentXItem,
@@ -42,6 +43,8 @@ export default function App() {
 
   const [isAlreadySaved, setIsAlreadySaved] = useState(false);
   const [alreadySavedFolder, setAlreadySavedFolder] = useState<string | null>(null);
+  // The saved item for this page, so it can be moved to another folder
+  const [savedItem, setSavedItem] = useState<{ id: string; folderId: string } | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -152,6 +155,7 @@ export default function App() {
         if (checkResult && checkResult.exists) {
           setIsAlreadySaved(true);
           setAlreadySavedFolder(checkResult.folder_name);
+          setSavedItem({ id: checkResult.item_id, folderId: checkResult.folder_id });
         }
       } catch (err: unknown) {
         if (err instanceof ApiError && err.status === 401) {
@@ -188,6 +192,49 @@ export default function App() {
   };
 
   const selectedFolder = folders.find((f) => f.id === selectedFolderId);
+  const canMove =
+    savedItem !== null && selectedFolderId !== "" && savedItem.folderId !== selectedFolderId;
+
+  // "Parent / Child" so a save into a subfolder is easy to find in the app
+  const folderPath = (folderId: string): string | null => {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    let current = folders.find((f) => f.id === folderId);
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      names.unshift(current.name);
+      const parentId = current.parent_id;
+      current = parentId ? folders.find((f) => f.id === parentId) : undefined;
+    }
+    return names.length > 0 ? names.join(" / ") : null;
+  };
+
+  const markSaved = (item: { id: string; folder_id: string }) => {
+    setIsAlreadySaved(true);
+    setSavedItem({ id: item.id, folderId: item.folder_id });
+  };
+
+  const handleMove = async () => {
+    if (!savedItem || !canMove || isSavingRef.current) return;
+
+    isSavingRef.current = true;
+    setIsSaving(true);
+    setErrorMessage(null);
+    setWarningMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      await moveItem(savedItem.id, selectedFolderId);
+      await setLastFolderId(selectedFolderId);
+      setSavedItem({ id: savedItem.id, folderId: selectedFolderId });
+      setSuccessMessage(`Moved to ${folderPath(selectedFolderId) ?? "folder"}`);
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : "Failed to move the page.");
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    }
+  };
 
   const handleCreateFolder = async () => {
     const trimmed = newFolderName.trim();
@@ -231,6 +278,10 @@ export default function App() {
     if (isSavingRef.current || isAddingToThreadRef.current) {
       return;
     }
+    if (canMove) {
+      await handleMove();
+      return;
+    }
     if (!tabUrl || !selectedFolderId || isAlreadySaved) {
       return;
     }
@@ -241,13 +292,13 @@ export default function App() {
     setWarningMessage(null);
     setSuccessMessage(null);
 
-    const folderName = selectedFolder?.name || "folder";
+    const folderName = folderPath(selectedFolderId) ?? "folder";
 
     try {
       if (detectedSource === "grokipedia") {
-        await saveGrokipedia(tabUrl, selectedFolderId);
+        const { item } = await saveGrokipedia(tabUrl, selectedFolderId);
         await setLastFolderId(selectedFolderId);
-        setIsAlreadySaved(true);
+        markSaved(item);
         setSuccessMessage(`Saved to ${folderName}`);
         return;
       }
@@ -283,26 +334,26 @@ export default function App() {
         }
 
         if (res.status === "paywalled") {
-          await capture({
+          const { item } = await capture({
             kind: "substack_unavailable",
             folder_id: selectedFolderId,
             url: res.url,
             title: res.title,
           });
           await setLastFolderId(selectedFolderId);
-          setIsAlreadySaved(true);
+          markSaved(item);
           setWarningMessage("Paid post, not saved");
           return;
         }
 
         if (res.status === "ok") {
-          await capture({
+          const { item } = await capture({
             kind: "substack",
             folder_id: selectedFolderId,
             capture: res.capture,
           });
           await setLastFolderId(selectedFolderId);
-          setIsAlreadySaved(true);
+          markSaved(item);
           setSuccessMessage(`Saved to ${folderName}`);
           return;
         }
@@ -316,13 +367,13 @@ export default function App() {
         }
 
         if (res.status === "ok") {
-          await capture({
+          const { item } = await capture({
             kind: "x",
             folder_id: selectedFolderId,
             posts: res.posts,
           });
           await setLastFolderId(selectedFolderId);
-          setIsAlreadySaved(true);
+          markSaved(item);
           setSuccessMessage(`Saved to ${folderName}`);
           return;
         }
@@ -330,9 +381,14 @@ export default function App() {
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.status === 409 || err.code === "duplicate") {
-          const destFolder = err.folderName || folderName;
-          setWarningMessage(`Already saved in ${destFolder}`);
           setIsAlreadySaved(true);
+          const existing = await checkUrl(tabUrl).catch(() => null);
+          if (existing?.exists) {
+            setAlreadySavedFolder(existing.folder_name);
+            setSavedItem({ id: existing.item_id, folderId: existing.folder_id });
+          } else {
+            setWarningMessage(`Already saved in ${err.folderName || folderName}`);
+          }
           return;
         }
         setErrorMessage(err.message);
@@ -580,14 +636,10 @@ export default function App() {
               className="btn-primary btn-full"
               onClick={handleSave}
               disabled={
-                isSaving ||
-                isAlreadySaved ||
-                unsupported ||
-                folderTree.length === 0 ||
-                Boolean(successMessage)
+                isSaving || (isAlreadySaved && !canMove) || unsupported || folderTree.length === 0
               }
             >
-              {isSaving ? "Saving…" : "Save"}
+              {isSaving ? (canMove ? "Moving…" : "Saving…") : canMove ? "Move here" : "Save"}
             </button>
 
             {successMessage && (
@@ -609,11 +661,15 @@ export default function App() {
               </p>
             )}
 
-            {(warningMessage || (isAlreadySaved && !warningMessage && alreadySavedFolder)) && (
-              <p className="popup-result popup-result-warning">
-                {warningMessage || `Already saved in ${alreadySavedFolder}`}
-              </p>
-            )}
+            {!successMessage &&
+              (warningMessage || (isAlreadySaved && (savedItem || alreadySavedFolder))) && (
+                <p className="popup-result popup-result-warning">
+                  {warningMessage ||
+                    `Already saved in ${
+                      (savedItem && folderPath(savedItem.folderId)) || alreadySavedFolder
+                    }`}
+                </p>
+              )}
 
             {errorMessage && <p className="popup-result popup-result-error">{errorMessage}</p>}
           </div>

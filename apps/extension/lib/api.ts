@@ -169,6 +169,13 @@ export async function capture(
   });
 }
 
+export async function moveItem(itemId: string, folder_id: string): Promise<SavedItem> {
+  return apiFetch<SavedItem>(`/api/items/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ folder_id }),
+  });
+}
+
 export async function recentXItems(): Promise<RecentXItem[]> {
   return apiFetch<RecentXItem[]>("/api/x/recent");
 }

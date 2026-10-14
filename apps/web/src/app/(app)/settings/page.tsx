@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Check } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAllowedEmails } from "@/lib/env";
 import { ReconnectDriveButton } from "@/features/settings/reconnect-drive-button";
@@ -11,13 +11,9 @@ import { SettingsAppAddress } from "./settings-app-address";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
 
-  if (error || !user) {
+  if (!user) {
     redirect("/login");
   }
 
@@ -33,7 +29,23 @@ export default async function SettingsPage() {
     redirect("/login");
   }
 
-  const [tokensResult, driveStateResult] = await Promise.all([
+  const supabase = await createClient();
+
+  let adminKeyMissing = false;
+  let googleTokenPromise: PromiseLike<{ data: { user_id: string } | null; error: unknown } | null>;
+  try {
+    const admin = createAdminClient();
+    googleTokenPromise = admin
+      .from("google_tokens")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+  } catch {
+    adminKeyMissing = true;
+    googleTokenPromise = Promise.resolve(null);
+  }
+
+  const [tokensResult, driveStateResult, googleTokenResult] = await Promise.all([
     supabase
       .from("api_tokens")
       .select("id, name, created_at, last_used_at")
@@ -45,21 +57,10 @@ export default async function SettingsPage() {
       .select("root_folder_id, last_saved_at")
       .eq("user_id", user.id)
       .maybeSingle(),
+    googleTokenPromise,
   ]);
 
-  let hasGoogleToken = false;
-  let adminKeyMissing = false;
-  try {
-    const admin = createAdminClient();
-    const { data: googleToken } = await admin
-      .from("google_tokens")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    hasGoogleToken = Boolean(googleToken);
-  } catch {
-    adminKeyMissing = true;
-  }
+  const hasGoogleToken = Boolean(googleTokenResult?.data);
 
   const lastSavedText = driveStateResult.data?.last_saved_at
     ? `Last saved ${new Intl.DateTimeFormat("en-US", {

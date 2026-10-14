@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { jsonData, jsonError, requireUser } from "@/lib/api";
 import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
+import { nextPosition } from "@/features/capture/find-duplicate";
 
 export const dynamic = "force-dynamic";
 
@@ -73,21 +74,7 @@ export async function POST(request: Request) {
     title = title.slice(0, 500);
   }
 
-  const { data: siblings, error: sibError } = await supabase
-    .from("items")
-    .select("position")
-    .eq("folder_id", folder_id)
-    .eq("user_id", user.id)
-    .is("deleted_at", null);
-
-  if (sibError) {
-    await supabase.storage.from("images").remove([storage_path]);
-    return jsonError(500, sibError.message);
-  }
-
-  const maxPosition =
-    siblings && siblings.length > 0 ? Math.max(...siblings.map((item) => item.position)) : -1;
-  const position = maxPosition + 1;
+  const position = await nextPosition(supabase, user.id, folder_id);
 
   const { data: item, error: insertError } = await supabase
     .from("items")
@@ -116,7 +103,17 @@ export async function POST(request: Request) {
     if (insertError.message.includes("invalid folder")) {
       return jsonError(400, "That folder no longer exists.");
     }
-    return jsonError(400, insertError.message);
+    if (insertError.code === "23514") {
+      return jsonError(400, "Invalid image data.");
+    }
+    if (insertError.code === "23503") {
+      return jsonError(400, "That folder no longer exists.");
+    }
+    if (insertError.code === "22P02") {
+      return jsonError(400, "Invalid ID format.");
+    }
+    console.error("Failed to save image item:", insertError);
+    return jsonError(500, "Something went wrong. Try again.");
   }
 
   return jsonData(item, 201);

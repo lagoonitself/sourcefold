@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { getAllowedEmails } from "@/lib/env";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashApiToken } from "@/lib/api-tokens";
@@ -16,7 +16,7 @@ export function jsonError(status: number, message: string) {
 
 export type AuthSuccess = {
   supabase: Awaited<ReturnType<typeof createClient>>;
-  user: User;
+  user: { id: string; email: string | null };
 };
 
 export type AuthFailure = {
@@ -26,13 +26,9 @@ export type AuthFailure = {
 export type AuthResult = AuthSuccess | AuthFailure;
 
 export async function requireUser(): Promise<AuthResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
 
-  if (error || !user) {
+  if (!user) {
     return { response: jsonError(401, "Sign in to continue.") };
   }
 
@@ -48,6 +44,7 @@ export async function requireUser(): Promise<AuthResult> {
     return { response: jsonError(403, "This account can't use Sourcefold.") };
   }
 
+  const supabase = await createClient();
   return { supabase, user };
 }
 

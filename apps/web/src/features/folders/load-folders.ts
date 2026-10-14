@@ -13,7 +13,7 @@ export async function loadFolders(
   db: SupabaseClient<Database>,
   userId: string,
 ): Promise<FolderItem[]> {
-  const [foldersResult, itemsResult] = await Promise.all([
+  const [foldersResult, countsResult] = await Promise.all([
     db
       .from("folders")
       .select("id, parent_id, name, position")
@@ -21,18 +21,21 @@ export async function loadFolders(
       .is("deleted_at", null)
       .order("position", { ascending: true })
       .order("name", { ascending: true }),
-    db.from("items").select("folder_id").eq("user_id", userId).is("deleted_at", null),
+    db.rpc("folder_item_counts", { p_user_id: userId }),
   ]);
 
   if (foldersResult.error) {
     throw new Error(foldersResult.error.message);
   }
+  if (countsResult.error) {
+    throw new Error(countsResult.error.message);
+  }
 
   const itemCounts = new Map<string, number>();
-  if (itemsResult.data) {
-    for (const item of itemsResult.data) {
-      if (item.folder_id) {
-        itemCounts.set(item.folder_id, (itemCounts.get(item.folder_id) ?? 0) + 1);
+  if (countsResult.data) {
+    for (const row of countsResult.data) {
+      if (row.folder_id) {
+        itemCounts.set(row.folder_id, Number(row.item_count) || 0);
       }
     }
   }

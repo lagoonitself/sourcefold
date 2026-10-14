@@ -1,6 +1,5 @@
 import {
   canonicalizeUrl,
-  InvalidUrlError,
   renderXThreadMarkdown,
   xThreadTitle,
   type XTreeNode,
@@ -137,14 +136,7 @@ export async function saveXThread(
   for (const post of posts) {
     try {
       canonicalUrls.push(canonicalizeUrl(post.postUrl));
-    } catch (err) {
-      if (err instanceof InvalidUrlError) {
-        return {
-          success: false,
-          status: 400,
-          error: { code: "invalid_url", message: "That isn't a valid link." },
-        };
-      }
+    } catch {
       return {
         success: false,
         status: 400,
@@ -182,7 +174,7 @@ export async function saveXThread(
     const candidateItemIds = Array.from(new Set(existingNodes.map((n) => n.item_id)));
     const { data: liveItem } = await db
       .from("items")
-      .select("id, folder_id")
+      .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
       .eq("user_id", userId)
       .in("id", candidateItemIds)
       .is("deleted_at", null)
@@ -190,20 +182,9 @@ export async function saveXThread(
       .maybeSingle();
 
     if (liveItem) {
-      let folderName = "another folder";
-      if (liveItem.folder_id) {
-        const { data: folder } = await db
-          .from("folders")
-          .select("name")
-          .eq("user_id", userId)
-          .eq("id", liveItem.folder_id)
-          .is("deleted_at", null)
-          .maybeSingle();
-
-        if (folder?.name) {
-          folderName = folder.name;
-        }
-      }
+      const folder = Array.isArray(liveItem.folders) ? liveItem.folders[0] : liveItem.folders;
+      const folderName =
+        folder && !folder.deleted_at && folder.name ? folder.name : "another folder";
 
       return {
         success: false,
@@ -221,10 +202,13 @@ export async function saveXThread(
 
   const position = await nextPosition(db, userId, folderId);
 
-  // Initial placeholder title
-  const placeholderNodes: XTreeNode[] = posts.map((p, idx) => ({
-    id: String(idx),
-    parentId: idx === 0 ? null : String(idx - 1),
+  // Pre-generate IDs for x_posts rows
+  const postIds = posts.map(() => crypto.randomUUID());
+
+  // Build tree nodes and compute final title and markdown in memory
+  const nodes: XTreeNode[] = posts.map((p, idx) => ({
+    id: postIds[idx]!,
+    parentId: idx === 0 ? null : postIds[idx - 1]!,
     position: 0,
     postUrl: p.postUrl,
     authorName: p.authorName,
@@ -233,7 +217,9 @@ export async function saveXThread(
     postedAt: p.postedAt ?? null,
     text: p.text,
   }));
-  const titlePlaceholder = xThreadTitle(placeholderNodes);
+
+  const title = xThreadTitle(nodes);
+  const markdown = renderXThreadMarkdown(nodes, title);
 
   const cleanRootHandle = posts[0]!.handle.replace(/^@/, "");
   const meta = {
@@ -250,10 +236,10 @@ export async function saveXThread(
       folder_id: folderId,
       kind: "x",
       status: "saved",
-      title: titlePlaceholder,
+      title,
       source_url: posts[0]!.postUrl,
       canonical_url: rootCanonical,
-      markdown: "",
+      markdown,
       meta,
       position,
     })
@@ -309,51 +295,46 @@ export async function saveXThread(
     };
   }
 
-  // Insert x_posts as a chain
-  let previousNodeId: string | null = null;
+  // Insert x_posts rows in ONE batch insert
+  const postRows = posts.map((post, idx) => ({
+    id: postIds[idx]!,
+    user_id: userId,
+    item_id: item.id,
+    parent_id: idx === 0 ? null : postIds[idx - 1]!,
+    post_url: post.postUrl,
+    canonical_url: canonicalUrls[idx]!,
+    author_name: post.authorName,
+    handle: post.handle.replace(/^@/, ""),
+    author_url: post.authorUrl,
+    posted_at: post.postedAt || null,
+    text: post.text,
+    position: 0,
+  }));
+
   try {
-    for (let i = 0; i < posts.length; i++) {
-      const post = posts[i]!;
-      const postCanonical = canonicalUrls[i]!;
-      const cleanPostHandle = post.handle.replace(/^@/, "");
-
-      const insertResult: {
-        data: { id: string } | null;
-        error: { message: string } | null;
-      } = await db
-        .from("x_posts")
-        .insert({
-          user_id: userId,
-          item_id: item.id,
-          parent_id: previousNodeId,
-          post_url: post.postUrl,
-          canonical_url: postCanonical,
-          author_name: post.authorName,
-          handle: cleanPostHandle,
-          author_url: post.authorUrl,
-          posted_at: post.postedAt || null,
-          text: post.text,
-          position: 0,
-        })
-        .select("id")
-        .single();
-
-      if (insertResult.error || !insertResult.data) {
-        throw new Error(insertResult.error?.message ?? "Failed to insert post");
-      }
-
-      previousNodeId = insertResult.data.id;
+    const { error: insertPostsError } = await db.from("x_posts").insert(postRows);
+    if (insertPostsError) {
+      throw new Error(insertPostsError.message);
     }
-
-    // Regenerate item markdown and title
-    await rerenderXItem(db, userId, item.id);
   } catch {
-    // If inserting x_posts fails after the item insert, soft-delete the item you just created and return 500
-    await db
+    // On failure after the item was inserted, clean up:
+    // delete the x_posts for that item (filter user_id) as well as removing the item
+    // (hard delete the item row if nothing else references it; otherwise soft-delete as now).
+    await db.from("x_posts").delete().eq("item_id", item.id).eq("user_id", userId);
+
+    const { error: hardDeleteError } = await db
       .from("items")
-      .update({ deleted_at: new Date().toISOString() })
+      .delete()
       .eq("id", item.id)
       .eq("user_id", userId);
+
+    if (hardDeleteError) {
+      await db
+        .from("items")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", item.id)
+        .eq("user_id", userId);
+    }
 
     return {
       success: false,
@@ -365,16 +346,9 @@ export async function saveXThread(
     };
   }
 
-  const { data: finalItem } = await db
-    .from("items")
-    .select("id, folder_id, kind, title, source_url, status, created_at")
-    .eq("id", item.id)
-    .eq("user_id", userId)
-    .single();
-
   return {
     success: true,
     status: 201,
-    item: finalItem ?? item,
+    item,
   };
 }

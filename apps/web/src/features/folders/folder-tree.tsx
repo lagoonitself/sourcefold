@@ -139,12 +139,14 @@ function InlineInputRow({
   level,
   initialValue = "",
   placeholder = "Folder name",
+  disabled = false,
   onSave,
   onCancel,
 }: {
   level: number;
   initialValue?: string;
   placeholder?: string;
+  disabled?: boolean;
   onSave: (val: string) => void;
   onCancel: () => void;
 }) {
@@ -157,6 +159,7 @@ function InlineInputRow({
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (disabled) return;
     if (e.key === "Enter") {
       e.preventDefault();
       const trimmed = value.trim();
@@ -172,6 +175,7 @@ function InlineInputRow({
   };
 
   const handleBlur = () => {
+    if (disabled) return;
     const trimmed = value.trim();
     if (trimmed.length === 0) {
       onCancel();
@@ -188,12 +192,13 @@ function InlineInputRow({
         ref={inputRef}
         type="text"
         value={value}
+        disabled={disabled}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
         placeholder={placeholder}
         maxLength={200}
-        className="h-6 w-full min-w-0 rounded border border-input bg-background px-1.5 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
+        className="h-6 w-full min-w-0 rounded border border-input bg-background px-1.5 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
       />
     </div>
   );
@@ -246,6 +251,13 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
 
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const isSavingRef = useRef(false);
+
+  // In-flight guard refs and state
+  const isCreatingFolderRef = useRef(false);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+
+  const isDeletingFolderRef = useRef(false);
+  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
 
   // Sensors for dnd-kit
   const sensors = useSensors(
@@ -358,17 +370,19 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
 
       try {
         isSavingRef.current = true;
-        for (const update of result.updates) {
-          const res = await fetch(`/api/folders/${update.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(update.body),
-          });
-          const json = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            throw new Error(json.error?.message ?? "Failed to reorder folders");
-          }
-        }
+        await Promise.all(
+          result.updates.map(async (update) => {
+            const res = await fetch(`/api/folders/${update.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(update.body),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(json.error?.message ?? "Failed to reorder folders");
+            }
+          }),
+        );
         router.refresh();
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Failed to reorder folders";
@@ -479,90 +493,108 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
   );
 
   // Mutations
-  const handleCreateFolder = async (name: string, parentId: string | null) => {
-    try {
-      const res = await fetch("/api/folders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, parent_id: parentId }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.error?.message ?? "Failed to create folder");
-        return;
-      }
-      toast("Folder created");
-      if (parentId) {
-        toggleFolder(parentId, true);
-      }
-      router.refresh();
-    } catch {
-      toast.error("Failed to create folder");
-    } finally {
-      setIsCreatingRoot(false);
-      setCreatingSubfolderParentId(null);
-    }
-  };
+  const handleCreateFolder = useCallback(
+    async (name: string, parentId: string | null) => {
+      if (isCreatingFolderRef.current) return;
+      isCreatingFolderRef.current = true;
+      setIsCreatingFolder(true);
 
-  const handleRenameFolder = async (folderId: string, name: string) => {
-    try {
-      const res = await fetch(`/api/folders/${folderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.error?.message ?? "Failed to rename folder");
-        return;
+      try {
+        const res = await fetch("/api/folders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, parent_id: parentId }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          toast.error(json.error?.message ?? "Failed to create folder");
+          return;
+        }
+        toast("Folder created");
+        if (parentId) {
+          toggleFolder(parentId, true);
+        }
+        router.refresh();
+      } catch {
+        toast.error("Failed to create folder");
+      } finally {
+        isCreatingFolderRef.current = false;
+        setIsCreatingFolder(false);
+        setIsCreatingRoot(false);
+        setCreatingSubfolderParentId(null);
       }
-      toast("Folder renamed");
-      router.refresh();
-    } catch {
-      toast.error("Failed to rename folder");
-    } finally {
-      setRenamingFolderId(null);
-    }
-  };
+    },
+    [router, toggleFolder],
+  );
 
-  const handleMoveFolder = async (folderId: string, parentId: string | null) => {
-    // Optimistic UI for move inside / move to top level
-    const activeNode = findNode(localTree, folderId);
-    if (activeNode) {
-      const optimistic = moveFolderInside(localTree, folderId, parentId);
-      setOptimisticTree(optimistic);
-      if (parentId) {
-        toggleFolder(parentId, true);
+  const handleRenameFolder = useCallback(
+    async (folderId: string, name: string) => {
+      try {
+        const res = await fetch(`/api/folders/${folderId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          toast.error(json.error?.message ?? "Failed to rename folder");
+          return;
+        }
+        toast("Folder renamed");
+        router.refresh();
+      } catch {
+        toast.error("Failed to rename folder");
+      } finally {
+        setRenamingFolderId(null);
       }
-    }
+    },
+    [router],
+  );
 
-    try {
-      const res = await fetch(`/api/folders/${folderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parent_id: parentId }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        toast.error(json.error?.message ?? "Failed to move folder");
+  const handleMoveFolder = useCallback(
+    async (folderId: string, parentId: string | null) => {
+      // Optimistic UI for move inside / move to top level
+      const activeNode = findNode(localTree, folderId);
+      if (activeNode) {
+        const optimistic = moveFolderInside(localTree, folderId, parentId);
+        setOptimisticTree(optimistic);
+        if (parentId) {
+          toggleFolder(parentId, true);
+        }
+      }
+
+      try {
+        const res = await fetch(`/api/folders/${folderId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parent_id: parentId }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          toast.error(json.error?.message ?? "Failed to move folder");
+          setOptimisticTree(null);
+          router.refresh();
+          return;
+        }
+        toast("Folder moved");
+        if (parentId) {
+          toggleFolder(parentId, true);
+        }
+        router.refresh();
+      } catch {
+        toast.error("Failed to move folder");
         setOptimisticTree(null);
         router.refresh();
-        return;
       }
-      toast("Folder moved");
-      if (parentId) {
-        toggleFolder(parentId, true);
-      }
-      router.refresh();
-    } catch {
-      toast.error("Failed to move folder");
-      setOptimisticTree(null);
-      router.refresh();
-    }
-  };
+    },
+    [localTree, router, toggleFolder],
+  );
 
-  const handleConfirmDelete = async () => {
-    if (!deletingFolder) return;
+  const handleConfirmDelete = useCallback(async () => {
+    if (isDeletingFolderRef.current || !deletingFolder) return;
+    isDeletingFolderRef.current = true;
+    setIsDeletingFolder(true);
+
     const folder = deletingFolder;
     try {
       const res = await fetch(`/api/folders/${folder.id}`, {
@@ -579,14 +611,72 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
         descendantIds(localTree, folder.id).includes(selectedFolderId ?? "");
       if (isSelectedDeleted) {
         router.push("/");
+      } else {
+        router.refresh();
       }
-      router.refresh();
     } catch {
       toast.error("Failed to delete folder");
     } finally {
+      isDeletingFolderRef.current = false;
+      setIsDeletingFolder(false);
       setDeletingFolder(null);
     }
-  };
+  }, [deletingFolder, localTree, router, selectedFolderId]);
+
+  // Stable callbacks for FolderRowItem
+  const handleToggle = useCallback(
+    (id: string) => {
+      toggleFolder(id);
+    },
+    [toggleFolder],
+  );
+
+  const handleSelect = useCallback(
+    (id: string) => {
+      setFocusedId(id);
+      router.push(`/?folder=${id}`);
+    },
+    [router],
+  );
+
+  const handleStartRename = useCallback((id: string) => {
+    setRenamingFolderId(id);
+  }, []);
+
+  const handleSaveRename = useCallback(
+    (id: string, newName: string) => {
+      void handleRenameFolder(id, newName);
+    },
+    [handleRenameFolder],
+  );
+
+  const handleCancelRename = useCallback(() => {
+    setRenamingFolderId(null);
+  }, []);
+
+  const handleStartCreateSubfolder = useCallback(
+    (id: string) => {
+      toggleFolder(id, true);
+      setCreatingSubfolderParentId(id);
+    },
+    [toggleFolder],
+  );
+
+  const handleMoveToTopLevel = useCallback(
+    (id: string) => {
+      void handleMoveFolder(id, null);
+    },
+    [handleMoveFolder],
+  );
+
+  const handleDelete = useCallback((node: FolderNode) => {
+    setDeletingFolder(node);
+  }, []);
+
+  const handleSetRowRef = useCallback((id: string, el: HTMLDivElement | null) => {
+    if (el) rowRefs.current.set(id, el);
+    else rowRefs.current.delete(id);
+  }, []);
 
   // DnD Handlers
   const handleDragStart = (event: DragStartEvent) => {
@@ -706,25 +796,16 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
           isRenaming={isRenaming}
           isDropDisabled={blockedDropIds.has(node.id)}
           dropZone={rowDropZone}
-          onToggle={() => toggleFolder(node.id)}
-          onSelect={() => {
-            setFocusedId(node.id);
-            router.push(`/?folder=${node.id}`);
-          }}
-          onKeyDown={(e) => handleKeyDown(e, node)}
-          onStartRename={() => setRenamingFolderId(node.id)}
-          onSaveRename={(newName) => handleRenameFolder(node.id, newName)}
-          onCancelRename={() => setRenamingFolderId(null)}
-          onStartCreateSubfolder={() => {
-            toggleFolder(node.id, true);
-            setCreatingSubfolderParentId(node.id);
-          }}
-          onMoveToTopLevel={() => handleMoveFolder(node.id, null)}
-          onDelete={() => setDeletingFolder(node)}
-          setRowRef={(el) => {
-            if (el) rowRefs.current.set(node.id, el);
-            else rowRefs.current.delete(node.id);
-          }}
+          onToggle={handleToggle}
+          onSelect={handleSelect}
+          onKeyDown={handleKeyDown}
+          onStartRename={handleStartRename}
+          onSaveRename={handleSaveRename}
+          onCancelRename={handleCancelRename}
+          onStartCreateSubfolder={handleStartCreateSubfolder}
+          onMoveToTopLevel={handleMoveToTopLevel}
+          onDelete={handleDelete}
+          setRowRef={handleSetRowRef}
         >
           {isExpanded && (
             <div>
@@ -733,6 +814,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
                 <InlineInputRow
                   level={level + 1}
                   placeholder="Subfolder name"
+                  disabled={isCreatingFolder}
                   onSave={(name) => handleCreateFolder(name, node.id)}
                   onCancel={() => setCreatingSubfolderParentId(null)}
                 />
@@ -766,7 +848,12 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
             <p className="text-sm text-muted-foreground mb-3">
               Create your first folder to start collecting sources.
             </p>
-            <Button variant="outline" size="sm" onClick={() => setIsCreatingRoot(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isCreatingFolder}
+              onClick={() => setIsCreatingRoot(true)}
+            >
               <Plus className="size-4" />
               New folder
             </Button>
@@ -783,6 +870,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
               <InlineInputRow
                 level={1}
                 placeholder="Folder name"
+                disabled={isCreatingFolder}
                 onSave={(name) => handleCreateFolder(name, null)}
                 onCancel={() => setIsCreatingRoot(false)}
               />
@@ -791,8 +879,9 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
             {!isCreatingRoot && (
               <button
                 type="button"
+                disabled={isCreatingFolder}
                 onClick={() => setIsCreatingRoot(true)}
-                className="flex h-8 w-full items-center gap-2 px-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors rounded-none outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-8 w-full items-center gap-2 px-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors rounded-none outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 <Plus className="size-4 shrink-0" />
                 <span>New folder</span>
@@ -814,7 +903,7 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
         <AlertDialog
           open={deletingFolder !== null}
           onOpenChange={(open) => {
-            if (!open) setDeletingFolder(null);
+            if (!open && !isDeletingFolder) setDeletingFolder(null);
           }}
         >
           <AlertDialogContent>
@@ -825,9 +914,18 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setDeletingFolder(null)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
-                Delete
+              <AlertDialogCancel
+                onClick={() => setDeletingFolder(null)}
+                disabled={isDeletingFolder}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingFolder}
+              >
+                {isDeletingFolder ? "Deleting\u2026" : "Delete"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -837,7 +935,30 @@ export function FolderTree({ tree }: { tree: FolderNode[] }) {
   );
 }
 
-function FolderRowItem({
+type FolderRowItemProps = {
+  node: FolderNode;
+  level: number;
+  isExpanded: boolean;
+  isSelected: boolean;
+  isFocused: boolean;
+  hasChildren: boolean;
+  isRenaming: boolean;
+  isDropDisabled: boolean;
+  dropZone: DropZone | null;
+  onToggle: (id: string) => void;
+  onSelect: (id: string) => void;
+  onKeyDown: (e: React.KeyboardEvent, node: FolderNode) => void;
+  onStartRename: (id: string) => void;
+  onSaveRename: (id: string, name: string) => void;
+  onCancelRename: () => void;
+  onStartCreateSubfolder: (id: string) => void;
+  onMoveToTopLevel: (id: string) => void;
+  onDelete: (node: FolderNode) => void;
+  setRowRef: (id: string, el: HTMLDivElement | null) => void;
+  children?: React.ReactNode;
+};
+
+const FolderRowItem = React.memo(function FolderRowItem({
   node,
   level,
   isExpanded,
@@ -858,28 +979,7 @@ function FolderRowItem({
   onDelete,
   setRowRef,
   children,
-}: {
-  node: FolderNode;
-  level: number;
-  isExpanded: boolean;
-  isSelected: boolean;
-  isFocused: boolean;
-  hasChildren: boolean;
-  isRenaming: boolean;
-  isDropDisabled: boolean;
-  dropZone: DropZone | null;
-  onToggle: () => void;
-  onSelect: () => void;
-  onKeyDown: (e: React.KeyboardEvent) => void;
-  onStartRename: () => void;
-  onSaveRename: (name: string) => void;
-  onCancelRename: () => void;
-  onStartCreateSubfolder: () => void;
-  onMoveToTopLevel: () => void;
-  onDelete: () => void;
-  setRowRef: (el: HTMLDivElement | null) => void;
-  children?: React.ReactNode;
-}) {
+}: FolderRowItemProps) {
   const {
     attributes,
     listeners,
@@ -902,7 +1002,7 @@ function FolderRowItem({
   const combinedRef = (el: HTMLDivElement | null) => {
     setDragRef(el);
     setDropRef(el);
-    setRowRef(el);
+    setRowRef(node.id, el);
   };
 
   return (
@@ -911,7 +1011,7 @@ function FolderRowItem({
         <InlineInputRow
           level={level}
           initialValue={node.name}
-          onSave={onSaveRename}
+          onSave={(newName) => onSaveRename(node.id, newName)}
           onCancel={onCancelRename}
         />
       ) : (
@@ -922,8 +1022,8 @@ function FolderRowItem({
           aria-selected={isSelected}
           aria-level={level}
           tabIndex={isFocused ? 0 : -1}
-          onClick={onSelect}
-          onKeyDown={onKeyDown}
+          onClick={() => onSelect(node.id)}
+          onKeyDown={(e) => onKeyDown(e, node)}
           {...draggableAttributes}
           {...listeners}
           style={{ paddingLeft: `${(level - 1) * 16 + 8}px` }}
@@ -960,7 +1060,7 @@ function FolderRowItem({
               tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation();
-                onToggle();
+                onToggle(node.id);
               }}
               className="flex size-4 items-center justify-center p-0 text-muted-foreground hover:text-foreground outline-none"
               aria-hidden="true"
@@ -999,7 +1099,7 @@ function FolderRowItem({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  onStartCreateSubfolder();
+                  onStartCreateSubfolder(node.id);
                 }}
               >
                 New subfolder
@@ -1007,7 +1107,7 @@ function FolderRowItem({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  onStartRename();
+                  onStartRename(node.id);
                 }}
               >
                 Rename
@@ -1016,7 +1116,7 @@ function FolderRowItem({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    onMoveToTopLevel();
+                    onMoveToTopLevel(node.id);
                   }}
                 >
                   Move to top level
@@ -1026,7 +1126,7 @@ function FolderRowItem({
                 variant="destructive"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDelete();
+                  onDelete(node);
                 }}
               >
                 Delete
@@ -1040,4 +1140,4 @@ function FolderRowItem({
       {children}
     </div>
   );
-}
+});

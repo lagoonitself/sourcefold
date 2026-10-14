@@ -10,6 +10,79 @@ export class DriveApiError extends Error {
   }
 }
 
+function isRateLimit403(errJson: unknown): boolean {
+  if (typeof errJson !== "object" || errJson === null) return false;
+  const error = (errJson as { error?: { errors?: { reason?: string }[]; message?: string } }).error;
+  if (!error) return false;
+  if (Array.isArray(error.errors)) {
+    if (
+      error.errors.some(
+        (e) => e.reason === "rateLimitExceeded" || e.reason === "userRateLimitExceeded",
+      )
+    ) {
+      return true;
+    }
+  }
+  if (typeof error.message === "string") {
+    if (
+      error.message.includes("rateLimitExceeded") ||
+      error.message.includes("userRateLimitExceeded")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function extractErrorMessage(data: unknown, fallback: string): string {
+  if (typeof data === "object" && data !== null) {
+    const err = (data as { error?: { message?: string } }).error;
+    if (err && typeof err.message === "string") {
+      return err.message;
+    }
+  }
+  return fallback;
+}
+
+async function driveFetch(
+  url: string,
+  init: RequestInit,
+): Promise<{ status: number; ok: boolean; data: unknown; text: string }> {
+  const maxRetries = 3;
+  const baseDelay = 500;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url, init);
+
+    if (res.status === 401) {
+      throw new DriveAuthError("Google Drive authorization expired or invalid.");
+    }
+
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // Non-JSON response
+    }
+
+    const is5xx = res.status >= 500 && res.status <= 599;
+    const is429 = res.status === 429;
+    const isRateLimit = res.status === 403 && isRateLimit403(data);
+
+    if ((is429 || is5xx || isRateLimit) && attempt < maxRetries) {
+      const jitter = Math.random() * baseDelay;
+      const delay = baseDelay * Math.pow(2, attempt) + jitter;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      continue;
+    }
+
+    return { status: res.status, ok: res.ok, data, text };
+  }
+
+  throw new Error("Google Drive request failed after retries.");
+}
+
 export async function createFolder(
   token: string,
   name: string,
@@ -26,7 +99,7 @@ export async function createFolder(
     body.parents = [parentId];
   }
 
-  const res = await fetch(url.toString(), {
+  const res = await driveFetch(url.toString(), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -36,20 +109,13 @@ export async function createFolder(
   });
 
   if (!res.ok) {
-    if (res.status === 401) {
-      throw new DriveAuthError("Google Drive authorization expired or invalid.");
-    }
-    let errorMsg = `Google Drive error (${res.status})`;
-    try {
-      const errJson = (await res.json()) as { error?: { message?: string } };
-      errorMsg = errJson.error?.message || errorMsg;
-    } catch {
-      // Non-JSON error
-    }
-    throw new DriveApiError(res.status, errorMsg);
+    throw new DriveApiError(
+      res.status,
+      extractErrorMessage(res.data, `Google Drive error (${res.status})`),
+    );
   }
 
-  return (await res.json()) as { id: string; parents?: string[] };
+  return res.data as { id: string; parents?: string[] };
 }
 
 export async function updateFile(
@@ -79,7 +145,7 @@ export async function updateFile(
     body.trashed = updates.trashed;
   }
 
-  const res = await fetch(url.toString(), {
+  const res = await driveFetch(url.toString(), {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -89,30 +155,28 @@ export async function updateFile(
   });
 
   if (!res.ok) {
-    if (res.status === 401) {
-      throw new DriveAuthError("Google Drive authorization expired or invalid.");
-    }
-    let errorMsg = `Google Drive error (${res.status})`;
-    try {
-      const errJson = (await res.json()) as { error?: { message?: string } };
-      errorMsg = errJson.error?.message || errorMsg;
-    } catch {
-      // Non-JSON error
-    }
-    throw new DriveApiError(res.status, errorMsg);
+    throw new DriveApiError(
+      res.status,
+      extractErrorMessage(res.data, `Google Drive error (${res.status})`),
+    );
   }
 
-  return (await res.json()) as { id: string; parents?: string[] };
+  return res.data as { id: string; parents?: string[] };
 }
 
 export async function getFile(
   token: string,
   id: string,
-): Promise<{ id: string; parents: string[]; trashed: boolean } | null> {
+): Promise<{
+  id: string;
+  parents: string[];
+  trashed: boolean;
+  explicitlyTrashed?: boolean;
+} | null> {
   const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`);
-  url.searchParams.set("fields", "id,parents,trashed");
+  url.searchParams.set("fields", "id,parents,trashed,explicitlyTrashed");
 
-  const res = await fetch(url.toString(), {
+  const res = await driveFetch(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -124,24 +188,23 @@ export async function getFile(
   }
 
   if (!res.ok) {
-    if (res.status === 401) {
-      throw new DriveAuthError("Google Drive authorization expired or invalid.");
-    }
-    let errorMsg = `Google Drive error (${res.status})`;
-    try {
-      const errJson = (await res.json()) as { error?: { message?: string } };
-      errorMsg = errJson.error?.message || errorMsg;
-    } catch {
-      // Non-JSON error
-    }
-    throw new DriveApiError(res.status, errorMsg);
+    throw new DriveApiError(
+      res.status,
+      extractErrorMessage(res.data, `Google Drive error (${res.status})`),
+    );
   }
 
-  const data = (await res.json()) as { id: string; parents?: string[]; trashed?: boolean };
+  const data = res.data as {
+    id: string;
+    parents?: string[];
+    trashed?: boolean;
+    explicitlyTrashed?: boolean;
+  };
   return {
     id: data.id,
     parents: data.parents ?? [],
-    trashed: Boolean(data.trashed),
+    trashed: Boolean(data.trashed || data.explicitlyTrashed),
+    explicitlyTrashed: Boolean(data.explicitlyTrashed),
   };
 }
 
@@ -180,9 +243,14 @@ export async function uploadFile(
     url.searchParams.set("removeParents", options.removeParents);
   }
 
+  let mediaMimeType = options.mimeType;
+  if (mediaMimeType.startsWith("text/") && !mediaMimeType.toLowerCase().includes("charset")) {
+    mediaMimeType += "; charset=UTF-8";
+  }
+
   const metadataJson = JSON.stringify(metadata);
   const part1 = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadataJson}\r\n`;
-  const part2Header = `--${boundary}\r\nContent-Type: ${options.mimeType}\r\n\r\n`;
+  const part2Header = `--${boundary}\r\nContent-Type: ${mediaMimeType}\r\n\r\n`;
   const part2Footer = `\r\n--${boundary}--\r\n`;
 
   const part1Buffer = Buffer.from(part1, "utf-8");
@@ -200,7 +268,7 @@ export async function uploadFile(
     part2FooterBuffer,
   ]);
 
-  const res = await fetch(url.toString(), {
+  const res = await driveFetch(url.toString(), {
     method: isUpdating ? "PATCH" : "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -210,18 +278,11 @@ export async function uploadFile(
   });
 
   if (!res.ok) {
-    if (res.status === 401) {
-      throw new DriveAuthError("Google Drive authorization expired or invalid.");
-    }
-    let errorMsg = `Google Drive upload error (${res.status})`;
-    try {
-      const errJson = (await res.json()) as { error?: { message?: string } };
-      errorMsg = errJson.error?.message || errorMsg;
-    } catch {
-      // Non-JSON error
-    }
-    throw new DriveApiError(res.status, errorMsg);
+    throw new DriveApiError(
+      res.status,
+      extractErrorMessage(res.data, `Google Drive upload error (${res.status})`),
+    );
   }
 
-  return (await res.json()) as { id: string; parents?: string[] };
+  return res.data as { id: string; parents?: string[] };
 }

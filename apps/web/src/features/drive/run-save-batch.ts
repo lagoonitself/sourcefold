@@ -2,8 +2,15 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/database.types";
 import { createFolder, getFile, updateFile, uploadFile, DriveApiError } from "@/lib/google/drive";
-import { DriveAuthError } from "@/lib/google/oauth";
-import { buildItemFile, driveFileName, folderPathOf, type FolderRef } from "./build-file";
+import { clearGoogleAccessToken, DriveAuthError } from "@/lib/google/oauth";
+import {
+  buildItemFile,
+  driveFileName,
+  folderPathOf,
+  itemExtension,
+  type FolderRef,
+  type SiblingRef,
+} from "./build-file";
 
 export interface SaveBatchFailedItem {
   id: string;
@@ -77,12 +84,59 @@ function getFolderAndDescendantIds(
   return result;
 }
 
+function isTransientError(err: unknown): boolean {
+  if (err instanceof TypeError) {
+    return true;
+  }
+  if (err instanceof DriveApiError) {
+    if ([429, 500, 502, 503, 504].includes(err.status)) {
+      return true;
+    }
+    if (err.status === 403) {
+      const msg = err.message || "";
+      if (msg.includes("rateLimitExceeded") || msg.includes("userRateLimitExceeded")) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function trashDriveFile(accessToken: string, fileId: string, userId: string): Promise<void> {
+  try {
+    await updateFile(accessToken, fileId, { trashed: true });
+  } catch (err) {
+    if (err instanceof DriveAuthError) {
+      clearGoogleAccessToken(userId);
+      throw err;
+    }
+    if (err instanceof DriveApiError && err.status === 401) {
+      clearGoogleAccessToken(userId);
+      throw new DriveAuthError(err.message);
+    }
+    if (
+      err instanceof DriveApiError &&
+      (err.status === 404 || err.status === 400 || err.status === 403)
+    ) {
+      const file = await getFile(accessToken, fileId);
+      if (!file || file.trashed || file.explicitlyTrashed) {
+        return;
+      }
+      throw err;
+    }
+    throw err;
+  }
+}
+
 export async function runSaveBatch(
   supabase: SupabaseClient<Database>,
   userId: string,
   accessToken: string,
   budget = 20,
 ): Promise<SaveBatchResult> {
+  const batchStartTime = Date.now();
+  const isTimeExpired = () => Date.now() - batchStartTime >= 45_000;
+
   let remainingBudget = budget;
   let processed = 0;
   const failed: SaveBatchFailedItem[] = [];
@@ -119,8 +173,16 @@ export async function runSaveBatch(
     );
     if (hadRoot) {
       // The old root was deleted in Drive, taking every folder and file with it.
-      await supabase.from("folders").update({ drive_synced_at: null }).eq("user_id", userId).is("deleted_at", null);
-      await supabase.from("items").update({ drive_synced_at: null }).eq("user_id", userId).is("deleted_at", null);
+      await supabase
+        .from("folders")
+        .update({ drive_synced_at: null })
+        .eq("user_id", userId)
+        .is("deleted_at", null);
+      await supabase
+        .from("items")
+        .update({ drive_synced_at: null })
+        .eq("user_id", userId)
+        .is("deleted_at", null);
     }
     remainingBudget--;
     processed++;
@@ -141,8 +203,10 @@ export async function runSaveBatch(
     foldersById.set(f.id, { ...f });
   }
 
-  const { data: dirtyFolders, error: dirtyFoldersError } =
-    await supabase.rpc("drive_dirty_folders");
+  const { data: dirtyFolders, error: dirtyFoldersError } = await supabase.rpc(
+    "drive_dirty_folders",
+    { p_user_id: userId },
+  );
   if (dirtyFoldersError || !dirtyFolders) {
     throw new Error(dirtyFoldersError?.message || "Failed to get dirty folders");
   }
@@ -236,19 +300,13 @@ export async function runSaveBatch(
   for (const folder of deletedDirtyFolders) {
     if (remainingBudget <= 0) break;
     if (folder.drive_folder_id) {
-      try {
-        await updateFile(accessToken, folder.drive_folder_id, { trashed: true });
-      } catch (err) {
-        if (err instanceof DriveAuthError) throw err;
-        if (err instanceof DriveApiError && err.status === 401) {
-          throw new DriveAuthError(err.message);
-        }
-        if (!(err instanceof DriveApiError && err.status === 404)) {
-          throw err;
-        }
-      }
+      await trashDriveFile(accessToken, folder.drive_folder_id, userId);
 
-      await supabase.from("folders").update({ drive_folder_id: null }).eq("id", folder.id).eq("user_id", userId);
+      await supabase
+        .from("folders")
+        .update({ drive_folder_id: null })
+        .eq("id", folder.id)
+        .eq("user_id", userId);
 
       const folderRef = foldersById.get(folder.id);
       if (folderRef) folderRef.drive_folder_id = null;
@@ -258,64 +316,66 @@ export async function runSaveBatch(
   }
 
   // 3. Items
-  if (remainingBudget > 0) {
+  if (remainingBudget > 0 && !isTimeExpired()) {
     const { data: dirtyItems, error: dirtyItemsError } = await supabase.rpc("drive_dirty_items", {
       p_limit: remainingBudget,
+      p_user_id: userId,
     });
 
     if (dirtyItemsError) {
       throw new Error(dirtyItemsError.message);
     }
 
-    const folderItemsCache = new Map<string, { id: string; title: string }[]>();
+    const folderItemsCache = new Map<
+      string,
+      Promise<{ id: string; title: string; kind: string; meta: Json }[]>
+    >();
 
-    const getFolderSiblings = async (folderId: string) => {
-      const cached = folderItemsCache.get(folderId);
-      if (cached) return cached;
-      const { data, error } = await supabase
-        .from("items")
-        .select("id, title")
-        .eq("folder_id", folderId)
-        .eq("user_id", userId)
-        .is("deleted_at", null);
-      if (error || !data) return [];
-      folderItemsCache.set(folderId, data);
-      return data;
+    const getFolderSiblings = (folderId: string) => {
+      let promise = folderItemsCache.get(folderId);
+      if (!promise) {
+        promise = (async () => {
+          const { data, error } = await supabase
+            .from("items")
+            .select("id, title, kind, meta")
+            .eq("folder_id", folderId)
+            .eq("user_id", userId)
+            .is("deleted_at", null);
+          if (error || !data) return [];
+          return data;
+        })();
+        folderItemsCache.set(folderId, promise);
+      }
+      return promise;
     };
 
-    for (const item of dirtyItems ?? []) {
-      if (remainingBudget <= 0) break;
+    const itemsToProcess = dirtyItems ?? [];
 
+    const processItem = async (item: (typeof itemsToProcess)[number]) => {
       try {
         if (item.deleted_at !== null) {
           if (item.drive_file_id) {
-            try {
-              await updateFile(accessToken, item.drive_file_id, { trashed: true });
-            } catch (err) {
-              if (err instanceof DriveAuthError) throw err;
-              if (err instanceof DriveApiError && err.status === 401) {
-                throw new DriveAuthError(err.message);
-              }
-              if (!(err instanceof DriveApiError && err.status === 404)) {
-                throw err;
-              }
-            }
+            await trashDriveFile(accessToken, item.drive_file_id, userId);
 
-            await supabase.from("items").update({ drive_file_id: null }).eq("id", item.id).eq("user_id", userId);
+            await supabase
+              .from("items")
+              .update({ drive_file_id: null })
+              .eq("id", item.id)
+              .eq("user_id", userId);
 
             processed++;
             remainingBudget--;
           }
-          continue;
+          return;
         }
 
         const targetParentDriveId = foldersById.get(item.folder_id)?.drive_folder_id;
         if (!targetParentDriveId) {
-          continue;
+          return;
         }
 
         const siblings = await getFolderSiblings(item.folder_id);
-        const siblingTitles = siblings.filter((s) => s.id !== item.id).map((s) => s.title);
+        const siblingRefs: SiblingRef[] = siblings.filter((s) => s.id !== item.id);
 
         let fileName: string;
         let mimeType: string;
@@ -327,21 +387,9 @@ export async function runSaveBatch(
               ? (item.meta as Record<string, unknown>)
               : {};
           mimeType = (meta.mime_type as string) || "application/octet-stream";
+          const ext = itemExtension("image", meta);
 
-          let ext = "";
-          if (typeof meta.file_name === "string" && meta.file_name.includes(".")) {
-            ext = meta.file_name.split(".").pop() || "";
-          }
-          if (!ext) {
-            if (mimeType === "image/jpeg") ext = "jpg";
-            else if (mimeType === "image/png") ext = "png";
-            else if (mimeType === "image/gif") ext = "gif";
-            else if (mimeType === "image/webp") ext = "webp";
-            else if (mimeType === "image/svg+xml") ext = "svg";
-            else ext = "bin";
-          }
-
-          fileName = driveFileName(item.title, item.id, siblingTitles, ext);
+          fileName = driveFileName(item.title, item.id, siblingRefs, ext);
 
           if (!item.storage_path) {
             throw new Error("Missing storage_path for image item");
@@ -356,7 +404,7 @@ export async function runSaveBatch(
           body = new Uint8Array(arrayBuffer);
         } else {
           mimeType = "text/markdown";
-          fileName = driveFileName(item.title, item.id, siblingTitles, "md");
+          fileName = driveFileName(item.title, item.id, siblingRefs, "md");
           const folderPath = folderPathOf(item.folder_id, foldersById as Map<string, FolderRef>);
           body = buildItemFile(item, folderPath);
         }
@@ -418,11 +466,14 @@ export async function runSaveBatch(
         }
       } catch (err) {
         if (err instanceof DriveAuthError) {
+          clearGoogleAccessToken(userId);
           throw err;
         }
         if (err instanceof DriveApiError && err.status === 401) {
+          clearGoogleAccessToken(userId);
           throw new DriveAuthError(err.message);
         }
+
         const errMessage = err instanceof Error ? err.message : String(err);
         failed.push({
           id: item.id,
@@ -430,12 +481,16 @@ export async function runSaveBatch(
           message: errMessage,
         });
 
-        // Record attempt in item meta to avoid wedging FIFO queue
+        const transient = isTransientError(err);
         const currentMeta =
           typeof item.meta === "object" && item.meta !== null
             ? (item.meta as Record<string, unknown>)
             : {};
-        const syncAttempts = ((currentMeta.drive_sync_attempts as number) || 0) + 1;
+        const previousAttempts =
+          typeof currentMeta.drive_sync_attempts === "number" ? currentMeta.drive_sync_attempts : 0;
+        const syncAttempts = transient ? previousAttempts : previousAttempts + 1;
+        const giveUp = !transient && syncAttempts >= 3;
+
         const updatedMeta = {
           ...currentMeta,
           drive_sync_attempts: syncAttempts,
@@ -443,27 +498,51 @@ export async function runSaveBatch(
           drive_last_attempt_at: new Date().toISOString(),
         };
 
-        const updatePayload: Database["public"]["Tables"]["items"]["Update"] = {
-          meta: updatedMeta as Json,
-        };
-        if (syncAttempts >= 3) {
-          // Advance drive_synced_at so poison pill doesn't block future batch syncs
-          updatePayload.drive_synced_at = new Date().toISOString();
-        }
-
-        await supabase
-          .from("items")
-          .update(updatePayload)
-          .eq("id", item.id)
-          .eq("user_id", userId);
+        await supabase.rpc("mark_item_sync_failed", {
+          p_item_id: item.id,
+          p_user_id: userId,
+          p_meta: updatedMeta as Json,
+          p_give_up: giveUp,
+        });
 
         remainingBudget--;
       }
+    };
+
+    let nextIndex = 0;
+    let authError: Error | null = null;
+
+    const worker = async () => {
+      while (nextIndex < itemsToProcess.length) {
+        if (authError) break;
+        if (isTimeExpired() || remainingBudget <= 0) break;
+        const item = itemsToProcess[nextIndex++];
+        try {
+          await processItem(item);
+        } catch (err) {
+          if (err instanceof DriveAuthError) {
+            authError = err;
+            break;
+          }
+        }
+      }
+    };
+
+    const poolSize = 4;
+    const workerPromises = Array.from({ length: Math.min(poolSize, itemsToProcess.length) }, () =>
+      worker(),
+    );
+    await Promise.all(workerPromises);
+
+    if (authError) {
+      throw authError;
     }
   }
 
   // 4. Remaining and final status
-  const { data: unsavedCount, error: countError } = await supabase.rpc("drive_unsaved_count");
+  const { data: unsavedCount, error: countError } = await supabase.rpc("drive_unsaved_count", {
+    p_user_id: userId,
+  });
   if (countError) {
     throw new Error(countError.message);
   }

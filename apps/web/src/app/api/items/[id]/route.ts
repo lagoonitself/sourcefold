@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
+import { nextPosition } from "@/features/capture/find-duplicate";
 
 export const dynamic = "force-dynamic";
 
@@ -125,20 +126,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (parsed.data.folder_id !== undefined) {
     updateData.folder_id = parsed.data.folder_id;
     if (parsed.data.folder_id !== existing.folder_id) {
-      const { data: siblings, error: sibError } = await auth.db
-        .from("items")
-        .select("position")
-        .eq("folder_id", parsed.data.folder_id)
-        .eq("user_id", auth.userId)
-        .is("deleted_at", null);
-
-      if (sibError) {
-        return jsonError(500, sibError.message);
-      }
-
-      const maxPosition =
-        siblings && siblings.length > 0 ? Math.max(...siblings.map((item) => item.position)) : -1;
-      updateData.position = maxPosition + 1;
+      updateData.position = await nextPosition(auth.db, auth.userId, parsed.data.folder_id);
     }
   }
 
@@ -155,7 +143,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (updateError.message.includes("invalid folder")) {
       return jsonError(400, "That folder no longer exists.");
     }
-    return jsonError(400, updateError.message);
+    if (updateError.code === "23514") {
+      return jsonError(400, "Invalid item data.");
+    }
+    if (updateError.code === "23503") {
+      return jsonError(400, "That folder no longer exists.");
+    }
+    if (updateError.code === "22P02") {
+      return jsonError(400, "Invalid ID format.");
+    }
+    console.error("Failed to update item:", updateError);
+    return jsonError(500, "Something went wrong. Try again.");
   }
 
   if (!updatedItem) {

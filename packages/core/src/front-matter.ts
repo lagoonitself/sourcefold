@@ -1,6 +1,6 @@
 export type FrontMatterValue = string | number | boolean | null | undefined | string[];
 
-const KEYWORD_TYPES = new Set(["true", "false", "yes", "no", "null", "~"]);
+const KEYWORD_TYPES = new Set(["true", "false", "yes", "no", "null", "~", "on", "off", "y", "n"]);
 
 const DISALLOWED_START_CHARS = /^[-?:,[\]{}#&*!|>'\"%@`]/;
 const NUMBER_REGEX =

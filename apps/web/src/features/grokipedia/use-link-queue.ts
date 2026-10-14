@@ -141,8 +141,7 @@ export function useLinkQueue() {
             router.refresh();
           }
         } else {
-          errorMessage =
-            json?.error?.message ?? `Saving failed (${res.status}). Try again.`;
+          errorMessage = json?.error?.message ?? `Saving failed (${res.status}). Try again.`;
           updateItem(currentItem.id, {
             status: "failed",
             message: errorMessage,

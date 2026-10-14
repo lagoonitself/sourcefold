@@ -12,7 +12,7 @@ export type CaptureContentResponse =
 const LISTENER_KEY = "__SOURCEFOLD_CAPTURE_REGISTERED__";
 
 export default defineContentScript({
-  matches: ["<all_urls>"],
+  matches: [],
   registration: "runtime",
   main() {
     const globalObj = window as unknown as Record<string, boolean>;
@@ -27,6 +27,12 @@ export default defineContentScript({
       }
 
       try {
+        if (detectSource(location.href) === "x") {
+          const xResult = extractXThread(document, location.href);
+          sendResponse({ kind: "x", result: xResult });
+          return true;
+        }
+
         let substackResult: SubstackExtractResult;
         try {
           substackResult = extractSubstack(document, location.href);
@@ -38,12 +44,6 @@ export default defineContentScript({
 
         if (substackResult.status !== "not_substack") {
           sendResponse({ kind: "substack", result: substackResult });
-          return true;
-        }
-
-        if (detectSource(location.href) === "x") {
-          const xResult = extractXThread(document, location.href);
-          sendResponse({ kind: "x", result: xResult });
           return true;
         }
 

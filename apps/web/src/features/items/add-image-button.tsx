@@ -6,7 +6,6 @@ import { ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { toSafeFileName } from "./safe-file-name";
 
 export interface AddImageButtonProps {
@@ -15,6 +14,21 @@ export interface AddImageButtonProps {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+async function runWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<void>,
+) {
+  let index = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (index < items.length) {
+      const currentIndex = index++;
+      await fn(items[currentIndex]);
+    }
+  });
+  await Promise.all(workers);
+}
 
 export function AddImageButton({ folderId }: AddImageButtonProps) {
   const router = useRouter();
@@ -30,85 +44,93 @@ export function AddImageButton({ folderId }: AddImageButtonProps) {
 
     setUploading(true);
     let successCount = 0;
+    let completedCount = 0;
+
+    setProgress({ current: 0, total: filesArray.length });
 
     try {
+      const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
       const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-      if (userError || !user) {
+      if (sessionError || !session?.user) {
         toast.error("Sign in again to upload images.");
         return;
       }
 
-      for (let i = 0; i < filesArray.length; i++) {
-        const file = filesArray[i];
-        setProgress({ current: i + 1, total: filesArray.length });
+      const userId = session.user.id;
 
-        if (file.size > MAX_FILE_SIZE) {
-          toast.error("Images can be up to 10 MB.");
-          continue;
-        }
-
-        if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-          toast.error("Upload a PNG, JPEG, GIF or WebP image.");
-          continue;
-        }
-
-        const itemId = crypto.randomUUID();
-        const safeName = toSafeFileName(file.name || "image");
-        const storagePath = `${user.id}/${itemId}/${safeName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("images")
-          .upload(storagePath, file, {
-            contentType: file.type,
-            upsert: false,
-          });
-
-        if (uploadError) {
-          toast.error(uploadError.message || "Failed to upload image.");
-          continue;
-        }
-
+      await runWithConcurrency(filesArray, 3, async (file) => {
         try {
-          const res = await fetch("/api/uploads", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              item_id: itemId,
-              folder_id: folderId,
-              storage_path: storagePath,
-              file_name: file.name,
-              mime_type: file.type,
-              size: file.size,
-            }),
-          });
-
-          if (!res.ok) {
-            let errorMessage = "Failed to upload image.";
-            try {
-              const json = await res.json();
-              if (json?.error?.message) {
-                errorMessage = json.error.message;
-              }
-            } catch {
-              // fallback
-            }
-            await supabase.storage.from("images").remove([storagePath]);
-            toast.error(errorMessage);
-          } else {
-            successCount++;
+          if (file.size > MAX_FILE_SIZE) {
+            toast.error("Images can be up to 10 MB.");
+            return;
           }
-        } catch {
-          await supabase.storage.from("images").remove([storagePath]);
-          toast.error("Failed to upload image.");
+
+          if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+            toast.error("Upload a PNG, JPEG, GIF or WebP image.");
+            return;
+          }
+
+          const itemId = crypto.randomUUID();
+          const safeName = toSafeFileName(file.name || "image");
+          const storagePath = `${userId}/${itemId}/${safeName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("images")
+            .upload(storagePath, file, {
+              contentType: file.type,
+              upsert: false,
+            });
+
+          if (uploadError) {
+            toast.error(uploadError.message || "Failed to upload image.");
+            return;
+          }
+
+          try {
+            const res = await fetch("/api/uploads", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                item_id: itemId,
+                folder_id: folderId,
+                storage_path: storagePath,
+                file_name: file.name,
+                mime_type: file.type,
+                size: file.size,
+              }),
+            });
+
+            if (!res.ok) {
+              let errorMessage = "Failed to upload image.";
+              try {
+                const json = await res.json();
+                if (json?.error?.message) {
+                  errorMessage = json.error.message;
+                }
+              } catch {
+                // fallback
+              }
+              await supabase.storage.from("images").remove([storagePath]);
+              toast.error(errorMessage);
+            } else {
+              successCount++;
+            }
+          } catch {
+            await supabase.storage.from("images").remove([storagePath]);
+            toast.error("Failed to upload image.");
+          }
+        } finally {
+          completedCount++;
+          setProgress({ current: completedCount, total: filesArray.length });
         }
-      }
+      });
     } finally {
       setUploading(false);
       setProgress(null);

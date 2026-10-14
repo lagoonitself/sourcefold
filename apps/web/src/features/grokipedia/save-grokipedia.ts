@@ -7,6 +7,7 @@ import {
 } from "@sourcefold/core/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/lib/database.types";
+import { nextPosition } from "@/features/capture/find-duplicate";
 import {
   GROKIPEDIA_ERROR_MESSAGES,
   formatDuplicateMessage,
@@ -55,7 +56,7 @@ export async function findExistingItemByCanonicalUrl(
 ): Promise<{ id: string; folder_id: string; folder_name: string } | null> {
   const { data: item, error } = await db
     .from("items")
-    .select("id, folder_id")
+    .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
     .eq("user_id", userId)
     .eq("canonical_url", canonicalUrl)
     .is("deleted_at", null)
@@ -65,19 +66,8 @@ export async function findExistingItemByCanonicalUrl(
     return null;
   }
 
-  let folderName = "Unknown";
-  if (item.folder_id) {
-    const { data: folder } = await db
-      .from("folders")
-      .select("name")
-      .eq("user_id", userId)
-      .eq("id", item.folder_id)
-      .maybeSingle();
-
-    if (folder?.name) {
-      folderName = folder.name;
-    }
-  }
+  const folder = Array.isArray(item.folders) ? item.folders[0] : item.folders;
+  const folderName = folder && !folder.deleted_at && folder.name ? folder.name : "another folder";
 
   return {
     id: item.id,
@@ -218,32 +208,18 @@ export async function saveGrokipediaLink(
   }
 
   // Step 5: Calculate next position in target folder
-  const { data: siblings, error: sibError } = await db
-    .from("items")
-    .select("position")
-    .eq("user_id", userId)
-    .eq("folder_id", folderId)
-    .is("deleted_at", null);
-
-  if (sibError) {
-    return {
-      success: false,
-      status: 500,
-      error: {
-        code: "unknown",
-        message: sibError.message,
-      },
-    };
-  }
-
-  const maxPosition =
-    siblings && siblings.length > 0 ? Math.max(...siblings.map((item) => item.position)) : -1;
-  const position = maxPosition + 1;
+  const position = await nextPosition(db, userId, folderId);
 
   // Step 6: Convert to markdown and insert item
   const markdown = grokipediaToMarkdown(article, {
     savedAt: formatDate(new Date()),
   });
+
+  const urlSlug = new URL(canonical).pathname.split("/").filter(Boolean).pop() || "grokipedia";
+  let title = article.title.trim().slice(0, 500);
+  if (!title) {
+    title = urlSlug.slice(0, 500);
+  }
 
   const { data: insertedItem, error: insertError } = await db
     .from("items")
@@ -251,7 +227,7 @@ export async function saveGrokipediaLink(
       user_id: userId,
       folder_id: folderId,
       kind: "grokipedia",
-      title: article.title,
+      title,
       source_url: canonical,
       canonical_url: canonical,
       status: "saved",

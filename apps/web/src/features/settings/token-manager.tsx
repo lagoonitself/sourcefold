@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ export function TokenManager({ initialTokens }: TokenManagerProps) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const isCreatingRef = useRef(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdToken, setCreatedToken] = useState<CreatedTokenPayload | null>(null);
   const [revokingToken, setRevokingToken] = useState<TokenItem | null>(null);
@@ -59,9 +60,11 @@ export function TokenManager({ initialTokens }: TokenManagerProps) {
 
   const handleCreateToken = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCreatingRef.current) return;
     const trimmed = name.trim();
     if (!trimmed) return;
 
+    isCreatingRef.current = true;
     setIsCreating(true);
     setCreateError(null);
 
@@ -83,6 +86,7 @@ export function TokenManager({ initialTokens }: TokenManagerProps) {
     } catch {
       setCreateError("Couldn't create the token. Try again.");
     } finally {
+      isCreatingRef.current = false;
       setIsCreating(false);
     }
   };

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
 export function ReconnectDriveButton() {
@@ -11,6 +10,7 @@ export function ReconnectDriveButton() {
   const handleReconnect = async () => {
     setPending(true);
     try {
+      const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -35,7 +35,7 @@ export function ReconnectDriveButton() {
 
   return (
     <Button variant="outline" onClick={handleReconnect} disabled={pending}>
-      {pending ? "Opening Google…" : "Reconnect Drive"}
+      {pending ? "Opening Google\u2026" : "Reconnect Drive"}
     </Button>
   );
 }

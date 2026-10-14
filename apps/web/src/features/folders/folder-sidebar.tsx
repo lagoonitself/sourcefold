@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { loadFolders, type FolderItem } from "./load-folders";
 import { buildFolderTree } from "./tree";
 import { FolderTree } from "./folder-tree";
@@ -9,9 +9,7 @@ export async function FolderSidebar() {
   const supabase = await createClient();
   let folders: FolderItem[] = [];
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getSessionUser();
     if (user) {
       folders = await loadFolders(supabase, user.id);
     }

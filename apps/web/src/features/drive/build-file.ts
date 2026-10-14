@@ -18,19 +18,67 @@ export interface ItemData {
   note?: string | null;
 }
 
+export interface SiblingItem {
+  title: string;
+  ext?: string;
+  kind?: string;
+  meta?: unknown;
+}
+
+export type SiblingRef = string | SiblingItem;
+
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+export function itemExtension(kind?: string, meta?: unknown): string {
+  if (!kind || kind !== "image") {
+    return "md";
+  }
+  const m = typeof meta === "object" && meta !== null ? (meta as Record<string, unknown>) : {};
+  if (typeof m.file_name === "string" && m.file_name.includes(".")) {
+    const ext = m.file_name.split(".").pop()?.trim();
+    if (ext) return ext;
+  }
+  const mimeType = (m.mime_type as string) || "";
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/gif") return "gif";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/svg+xml") return "svg";
+  return "bin";
+}
+
+function getSiblingFileName(sibling: SiblingRef): string {
+  if (typeof sibling === "string") {
+    if (sibling.includes(".")) {
+      const lastDot = sibling.lastIndexOf(".");
+      const namePart = sibling.slice(0, lastDot);
+      const extPart = sibling.slice(lastDot + 1).toLowerCase();
+      const slug = slugify(namePart) || "untitled";
+      return extPart ? `${slug}.${extPart}` : slug;
+    }
+    const slug = slugify(sibling) || "untitled";
+    return `${slug}.md`;
+  }
+
+  const slug = slugify(sibling.title) || "untitled";
+  const ext = (sibling.ext ?? itemExtension(sibling.kind, sibling.meta))
+    .replace(/^\./, "")
+    .toLowerCase();
+  return ext ? `${slug}.${ext}` : slug;
+}
 
 export function driveFileName(
   title: string,
   itemId: string,
-  siblingTitles: string[],
+  siblingTitles: SiblingRef[],
   ext = "md",
 ): string {
   const baseSlug = slugify(title) || "untitled";
-  const cleanExt = ext.replace(/^\./, "");
+  const cleanExt = ext.replace(/^\./, "").toLowerCase();
+  const thisFileName = cleanExt ? `${baseSlug}.${cleanExt}` : baseSlug;
 
   const hasCollision = siblingTitles.some(
-    (siblingTitle) => (slugify(siblingTitle) || "untitled") === baseSlug,
+    (sibling) => getSiblingFileName(sibling) === thisFileName,
   );
 
   const idSuffix = itemId ? itemId.slice(0, 6) : "";

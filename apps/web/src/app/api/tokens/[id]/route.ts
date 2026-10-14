@@ -1,20 +1,24 @@
+import { z } from "zod";
 import { jsonData, jsonError, requireUser } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
+
+const idSchema = z.string().uuid();
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireUser();
   if ("response" in auth) return auth.response;
 
   const { id } = await params;
-  if (!id) {
-    return jsonError(400, "Token ID is required.");
+  const parsedId = idSchema.safeParse(id);
+  if (!parsedId.success) {
+    return jsonError(400, "Invalid token ID.");
   }
 
   const { data, error } = await auth.supabase
     .from("api_tokens")
     .update({ revoked_at: new Date().toISOString() })
-    .eq("id", id)
+    .eq("id", parsedId.data)
     .eq("user_id", auth.user.id)
     .is("revoked_at", null)
     .select("id")

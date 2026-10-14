@@ -53,10 +53,57 @@ function isInsideQuotedPost(el: Element, article: Element): boolean {
   return false;
 }
 
+// Determines if an element is contained within a tweet-text container inside an article.
+function isInsideTweetText(el: Element, article: Element): boolean {
+  let current: Element | null = el.parentElement;
+  while (current && current !== article) {
+    if (matchesSelector(current, TWEET_TEXT_SELECTOR)) {
+      return true;
+    }
+    current = current.parentElement;
+  }
+  return false;
+}
+
 // Finds an element matching selector that belongs directly to the article (not inside a quoted post).
 function findOwnElement(article: Element, selector: string): Element | null {
   const elements = Array.from(article.querySelectorAll(selector));
   return elements.find((el) => !isInsideQuotedPost(el, article)) ?? null;
+}
+
+// Finds the article's own status ID from permalink anchors, excluding links inside quoted posts or tweet text.
+function findOwnStatusId(article: Element): string | null {
+  const ownTime = findOwnElement(article, TIME_SELECTOR);
+  if (ownTime) {
+    const wrappingAnchor = ownTime.closest(PERMALINK_SELECTOR);
+    if (
+      wrappingAnchor &&
+      !isInsideQuotedPost(wrappingAnchor, article) &&
+      !isInsideTweetText(wrappingAnchor, article)
+    ) {
+      const rawHref = wrappingAnchor.getAttribute(HREF_ATTR) ?? "";
+      const resolvedUrl = rawHref.startsWith("http")
+        ? rawHref
+        : new URL(rawHref, "https://x.com").href;
+      const statusId = xStatusId(resolvedUrl);
+      if (statusId) return statusId;
+    }
+  }
+
+  const allPermalinks = Array.from(article.querySelectorAll(PERMALINK_SELECTOR));
+  for (const anchor of allPermalinks) {
+    if (isInsideQuotedPost(anchor, article) || isInsideTweetText(anchor, article)) {
+      continue;
+    }
+    const rawHref = anchor.getAttribute(HREF_ATTR) ?? "";
+    const resolvedUrl = rawHref.startsWith("http")
+      ? rawHref
+      : new URL(rawHref, "https://x.com").href;
+    const statusId = xStatusId(resolvedUrl);
+    if (statusId) return statusId;
+  }
+
+  return null;
 }
 
 // Extracts username handle from a relative or absolute profile URL.
@@ -184,7 +231,7 @@ function extractAuthorName(userNameEl: Element, handle: string): string {
 
   const rawName = extractTextWithEmojis(clone);
   const collapsed = rawName
-    .replace(/^[\s·•\u00b7]+|[\s·•\u00b7]+$/g, "")
+    .replace(/^[\s·•·]+|[\s·•·]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -201,6 +248,12 @@ function extractTweetText(tweetTextEl: Element): string {
     if (node.nodeType === 1 /* Node.ELEMENT_NODE */) {
       const el = node as Element;
       const tag = el.tagName.toLowerCase();
+
+      // Skip the "Show more" button/link inside tweetText so the literal text "Show more" isn't appended.
+      // Note: The post text may be truncated if not expanded.
+      if (matchesSelector(el, SHOW_MORE_SELECTOR)) {
+        return "";
+      }
 
       if (tag === BR_TAG) {
         return "\n";
@@ -257,55 +310,83 @@ export function extractXThread(doc: Document, pageUrl: string): XExtractResult {
     }
 
     const articles = Array.from(doc.querySelectorAll(POST_CONTAINER_SELECTOR));
-    const parsedPosts: ParsedPost[] = [];
+
+    interface ArticleCandidate {
+      statusId: string | null;
+      handle: string;
+      authorName: string;
+      authorUrl: string;
+      postedAt: string | null;
+      text: string;
+      hasOwnTimeWithoutWrappingLink: boolean;
+    }
+
+    const candidates: ArticleCandidate[] = [];
 
     for (const article of articles) {
-      const ownTime = findOwnElement(article, TIME_SELECTOR);
-      let permalinkEl: Element | null = null;
-      if (ownTime) {
-        const wrappingAnchor = ownTime.closest(PERMALINK_SELECTOR);
-        if (wrappingAnchor && !isInsideQuotedPost(wrappingAnchor, article)) {
-          permalinkEl = wrappingAnchor;
-        }
-      }
-      if (!permalinkEl) {
-        permalinkEl = findOwnElement(article, PERMALINK_SELECTOR);
-      }
-
-      const rawHref = permalinkEl?.getAttribute(HREF_ATTR) ?? "";
-      const resolvedUrl = rawHref.startsWith("http")
-        ? rawHref
-        : new URL(rawHref, "https://x.com").href;
-      const statusId = xStatusId(resolvedUrl);
-
       const userNameEl = findOwnElement(article, USER_NAME_SELECTOR);
       const handle = userNameEl ? extractHandle(userNameEl) : null;
-
-      if (!statusId || !handle) {
+      if (!handle) {
         continue;
       }
 
+      const ownTime = findOwnElement(article, TIME_SELECTOR);
+      const statusId = findOwnStatusId(article);
+
+      const wrappingAnchor = ownTime?.closest(PERMALINK_SELECTOR);
+      const hasWrappingAnchor = Boolean(
+        wrappingAnchor &&
+        !isInsideQuotedPost(wrappingAnchor, article) &&
+        !isInsideTweetText(wrappingAnchor, article),
+      );
+      const hasOwnTimeWithoutWrappingLink = Boolean(ownTime && !hasWrappingAnchor);
+
       const authorName = userNameEl ? extractAuthorName(userNameEl, handle) : handle;
       const authorUrl = `https://x.com/${handle}`;
-      const postUrl = `https://x.com/${handle}/status/${statusId}`;
       const postedAt = ownTime?.getAttribute(DATETIME_ATTR) ?? null;
 
       const ownTweetText = findOwnElement(article, TWEET_TEXT_SELECTOR);
-      // If truncated with show-more, we capture the visible text as-is without clicking
-      void findOwnElement(article, SHOW_MORE_SELECTOR);
       const text = ownTweetText ? extractTweetText(ownTweetText) : "";
 
-      parsedPosts.push({
+      candidates.push({
         statusId,
-        post: {
-          postUrl,
-          authorName,
-          handle,
-          authorUrl,
-          postedAt,
-          text,
-        },
+        handle,
+        authorName,
+        authorUrl,
+        postedAt,
+        text,
+        hasOwnTimeWithoutWrappingLink,
       });
+    }
+
+    // If no own status id is found for an article and the page has exactly one such article
+    // that looks like the focal post (e.g. its own time element has no wrapping link),
+    // assign it xStatusId(pageUrl). Keep it conservative.
+    const alreadyFoundTarget = candidates.some((c) => c.statusId === targetStatusId);
+    if (!alreadyFoundTarget) {
+      const focalCandidates = candidates.filter(
+        (c) => !c.statusId && c.hasOwnTimeWithoutWrappingLink,
+      );
+      if (focalCandidates.length === 1 && focalCandidates[0]) {
+        focalCandidates[0].statusId = targetStatusId;
+      }
+    }
+
+    const parsedPosts: ParsedPost[] = [];
+    for (const c of candidates) {
+      if (c.statusId) {
+        parsedPosts.push({
+          statusId: c.statusId,
+          post: {
+            postUrl: `https://x.com/${c.handle}/status/${c.statusId}`,
+            authorName: c.authorName,
+            handle: c.handle,
+            authorUrl: c.authorUrl,
+            postedAt: c.postedAt,
+            text: c.text,
+          },
+        });
+      }
     }
 
     const targetIndex = parsedPosts.findIndex((p) => p.statusId === targetStatusId);
@@ -348,7 +429,21 @@ export function extractXThread(doc: Document, pageUrl: string): XExtractResult {
       }
     }
 
-    const posts = parsedPosts.slice(startIndex, endIndex + 1).map((p) => p.post);
+    const threadPosts = parsedPosts.slice(startIndex, endIndex + 1).map((p) => p.post);
+    const targetInThread = targetIndex - startIndex;
+
+    let posts = threadPosts;
+    if (posts.length > 50) {
+      // Cap at 50 posts (the API rejects > 50): keep the target post and take posts from the thread root forward;
+      // if that exceeds 50, take a 50-post window that includes the target.
+      if (targetInThread < 50) {
+        posts = posts.slice(0, 50);
+      } else {
+        const windowStart = Math.min(targetInThread - 49, posts.length - 50);
+        posts = posts.slice(windowStart, windowStart + 50);
+      }
+    }
+
     return { status: "ok", posts };
   } catch {
     return {

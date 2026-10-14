@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jsonData, jsonError, requireUser } from "@/lib/api";
+import { nextPosition } from "@/features/capture/find-duplicate";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return jsonError(400, parsed.error.issues[0]?.message ?? "Invalid request body");
   }
 
+  const { data: existing, error: existingError } = await auth.supabase
+    .from("folders")
+    .select("id, parent_id")
+    .eq("id", id)
+    .eq("user_id", auth.user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error("Failed to load folder:", existingError);
+    return jsonError(500, "Something went wrong. Try again.");
+  }
+
+  if (!existing) {
+    return jsonError(404, "Folder not found.");
+  }
+
   const updateData: {
     name?: string;
     parent_id?: string | null;
@@ -55,6 +73,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   if (parsed.data.parent_id !== undefined) {
     updateData.parent_id = parsed.data.parent_id;
+    if (parsed.data.position === undefined && parsed.data.parent_id !== existing.parent_id) {
+      updateData.position = await nextPosition(
+        auth.supabase,
+        auth.user.id,
+        parsed.data.parent_id,
+        "folders",
+      );
+    }
   }
   if (parsed.data.position !== undefined) {
     updateData.position = parsed.data.position;
@@ -64,6 +90,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .from("folders")
     .update(updateData)
     .eq("id", id)
+    .eq("user_id", auth.user.id)
     .is("deleted_at", null)
     .select()
     .maybeSingle();
@@ -75,7 +102,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (updateError.message.includes("invalid parent folder")) {
       return jsonError(400, "That folder no longer exists.");
     }
-    return jsonError(400, updateError.message);
+    if (updateError.code === "23514") {
+      return jsonError(400, "Folder name is invalid.");
+    }
+    if (updateError.code === "23503") {
+      return jsonError(400, "That folder no longer exists.");
+    }
+    if (updateError.code === "22P02") {
+      return jsonError(400, "Invalid folder ID format.");
+    }
+    console.error("Failed to update folder:", updateError);
+    return jsonError(500, "Something went wrong. Try again.");
   }
 
   if (!updatedFolder) {
@@ -99,11 +136,13 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     .from("folders")
     .select("id")
     .eq("id", id)
+    .eq("user_id", auth.user.id)
     .is("deleted_at", null)
     .maybeSingle();
 
   if (checkError) {
-    return jsonError(500, checkError.message);
+    console.error("Failed to load folder for delete:", checkError);
+    return jsonError(500, "Something went wrong. Try again.");
   }
 
   if (!existing) {
@@ -112,10 +151,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   const { error: rpcError } = await auth.supabase.rpc("soft_delete_folder", {
     p_folder_id: id,
+    p_user_id: auth.user.id,
   });
 
   if (rpcError) {
-    return jsonError(400, rpcError.message);
+    console.error("Failed to soft delete folder:", rpcError);
+    return jsonError(500, "Something went wrong. Try again.");
   }
 
   return jsonData({ id });

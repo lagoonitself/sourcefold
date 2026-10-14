@@ -25,9 +25,12 @@ export function grokipediaToMarkdown(
   }
 
   if (article.references.length > 0) {
-    const referenceLines = article.references.map(
-      (ref) => `[^${ref.number}]: [${ref.title}](${ref.url}) - ${ref.domain}`,
-    );
+    const referenceLines = article.references.map((ref) => {
+      const escapedTitle = ref.title.replace(/\[/g, "\\[").replace(/\]/g, "\\]");
+      const formattedUrl = /[ ()]/.test(ref.url) ? `<${ref.url}>` : ref.url;
+      const domainSuffix = ref.domain ? ` - ${ref.domain}` : "";
+      return `[^${ref.number}]: [${escapedTitle}](${formattedUrl})${domainSuffix}`;
+    });
     parts.push(`## References\n\n${referenceLines.join("\n")}`);
   }
 

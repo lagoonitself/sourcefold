@@ -9,7 +9,25 @@ export class DriveAuthError extends Error {
   }
 }
 
+interface CachedToken {
+  token: string;
+  expiresAt: number;
+}
+
+const tokenCache = new Map<string, CachedToken>();
+
+export function clearGoogleAccessToken(userId: string): void {
+  tokenCache.delete(userId);
+}
+
 export async function getGoogleAccessToken(userId: string): Promise<string> {
+  const cached = tokenCache.get(userId);
+  const now = Date.now();
+  // Reuse the token if it expires more than 5 minutes from now
+  if (cached && cached.expiresAt - now > 5 * 60 * 1000) {
+    return cached.token;
+  }
+
   const admin = createAdminClient();
   const { data: tokenRow, error } = await admin
     .from("google_tokens")
@@ -18,6 +36,7 @@ export async function getGoogleAccessToken(userId: string): Promise<string> {
     .maybeSingle();
 
   if (error || !tokenRow?.refresh_token) {
+    clearGoogleAccessToken(userId);
     throw new DriveAuthError("No Google Drive refresh token found.");
   }
 
@@ -43,10 +62,16 @@ export async function getGoogleAccessToken(userId: string): Promise<string> {
     throw new Error(err instanceof Error ? err.message : "Failed to connect to Google OAuth.");
   }
 
-  let data: { access_token?: string; error?: string; error_description?: string } = {};
+  let data: {
+    access_token?: string;
+    expires_in?: number;
+    error?: string;
+    error_description?: string;
+  } = {};
   try {
     data = (await response.json()) as {
       access_token?: string;
+      expires_in?: number;
       error?: string;
       error_description?: string;
     };
@@ -55,6 +80,7 @@ export async function getGoogleAccessToken(userId: string): Promise<string> {
   }
 
   if (response.status === 400 || response.status === 401 || data.error === "invalid_grant") {
+    clearGoogleAccessToken(userId);
     throw new DriveAuthError(
       data.error_description || data.error || "Google Drive authorization expired or invalid.",
     );
@@ -65,6 +91,10 @@ export async function getGoogleAccessToken(userId: string): Promise<string> {
       data.error_description || data.error || `Google OAuth returned status ${response.status}`,
     );
   }
+
+  const expiresIn = typeof data.expires_in === "number" ? data.expires_in : 3600;
+  const expiresAt = Date.now() + expiresIn * 1000;
+  tokenCache.set(userId, { token: data.access_token, expiresAt });
 
   return data.access_token;
 }

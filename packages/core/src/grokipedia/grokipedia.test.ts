@@ -2,9 +2,9 @@ import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { htmlToMarkdown } from "../html-to-markdown.js";
-import { parseGrokipediaHtml, GrokipediaParseError } from "./parse.js";
-import { grokipediaToMarkdown } from "./markdown.js";
+import { htmlToMarkdown } from "../html-to-markdown";
+import { parseGrokipediaHtml, GrokipediaParseError, type GrokipediaArticle } from "./parse";
+import { grokipediaToMarkdown } from "./markdown";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const fixtureUrl = new URL("../../test/fixtures/grokipedia-impact-of-ai.html", import.meta.url);
@@ -73,6 +73,13 @@ describe("htmlToMarkdown", () => {
     expect(md).not.toContain("![Test Pic]");
     expect(md).not.toContain("console.log");
   });
+
+  it("reuses converter singleton across multiple calls consistently", () => {
+    const md1 = htmlToMarkdown("<p>First call</p>");
+    const md2 = htmlToMarkdown("<p>Second call</p>");
+    expect(md1).toBe("First call\n");
+    expect(md2).toBe("Second call\n");
+  });
 });
 
 describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
@@ -80,9 +87,9 @@ describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
     expect(() => parseGrokipediaHtml("<div>No article</div>", "https://grokipedia.com")).toThrow(
       GrokipediaParseError,
     );
-    expect(() =>
-      parseGrokipediaHtml("<article>No h1</article>", "https://grokipedia.com"),
-    ).toThrow(GrokipediaParseError);
+    expect(() => parseGrokipediaHtml("<article>No h1</article>", "https://grokipedia.com")).toThrow(
+      GrokipediaParseError,
+    );
     expect(() =>
       parseGrokipediaHtml("<article><h1>   </h1></article>", "https://grokipedia.com"),
     ).toThrow(GrokipediaParseError);
@@ -94,17 +101,17 @@ describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
         <body>
           <article>
             <h1>Biotechnology and Protocols</h1>
-            <div class="protocol-guide">
-              <h2 id="gene-editing">Gene Editing Techniques</h2>
+            <div class=\"protocol-guide\">
+              <h2 id=\"gene-editing\">Gene Editing Techniques</h2>
               <p>CRISPR enables targeted edits in DNA. Energy is given by E=mc<sup>2</sup>.</p>
-              <h2 id="copyright-notice">Copyright Information</h2>
+              <h2 id=\"copyright-notice\">Copyright Information</h2>
               <p>All rights reserved.</p>
             </div>
-            <section class="references">
+            <section class=\"references\">
               <ol>
-                <li id="ref-1">
-                  <span class="ref-num">1</span>
-                  <a class="ref-link" href="https://example.com/crispr">CRISPR Review</a>
+                <li id=\"ref-1\">
+                  <span class=\"ref-num\">1</span>
+                  <a class=\"ref-link\" href=\"https://example.com/crispr\">CRISPR Review</a>
                 </li>
               </ol>
             </section>
@@ -122,6 +129,114 @@ describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
     expect(md).toContain("All rights reserved.");
     expect(article.references.length).toBe(1);
     expect(article.references[0]?.title).toBe("CRISPR Review");
+  });
+
+  it("resolves references inside article before document-level references", () => {
+    const html = `
+      <html>
+        <body>
+          <div id="references">
+            <ol><li id="ref-99"><a class="ref-link" href="https://wrong.com">Wrong</a></li></ol>
+          </div>
+          <article>
+            <h1>Test Title</h1>
+            <p>Body text</p>
+            <div id="references">
+              <ol><li id="ref-1"><a class="ref-link" href="https://correct.com">Correct</a></li></ol>
+            </div>
+          </article>
+        </body>
+      </html>
+    `;
+    const article = parseGrokipediaHtml(html, "https://grokipedia.com/page/Test");
+    expect(article.references.length).toBe(1);
+    expect(article.references[0]?.url).toBe("https://correct.com/");
+  });
+
+  it("removes standalone References headings to avoid duplicate '## References' in markdown", () => {
+    const html = `
+      <html>
+        <body>
+          <article>
+            <h1>Heading Test</h1>
+            <p>Some text</p>
+            <h2>References</h2>
+            <div id="references">
+              <ol><li id="ref-1"><a class="ref-link" href="https://example.com">Example</a></li></ol>
+            </div>
+          </article>
+        </body>
+      </html>
+    `;
+    const article = parseGrokipediaHtml(html, "https://grokipedia.com/page/Heading_Test");
+    const md = grokipediaToMarkdown(article, { savedAt: "2026-10-14" });
+    const matches = md.match(/## References/g);
+    expect(matches?.length).toBe(1);
+  });
+
+  it("removes standalone h2#references-title and h3 with id containing references", () => {
+    const html = `
+      <html>
+        <body>
+          <article>
+            <h1>Title</h1>
+            <h2 id="references-title">References</h2>
+            <h3 id="section-references">Further References</h3>
+            <p>Body</p>
+          </article>
+        </body>
+      </html>
+    `;
+    const article = parseGrokipediaHtml(html, "https://grokipedia.com/page/Test");
+    expect(article.bodyHtml).not.toContain("references-title");
+    expect(article.bodyHtml).not.toContain("section-references");
+  });
+
+  it("escapes brackets in reference titles, wraps URLs with parens/spaces in angle brackets, and handles empty domain", () => {
+    const article: GrokipediaArticle = {
+      url: "https://grokipedia.com/page/Test",
+      title: "Test Article",
+      summary: null,
+      factCheckedAt: null,
+      bodyHtml: "<p>Content [^1] [^2] [^3] [^4]</p>",
+      references: [
+        {
+          number: 1,
+          title: "Paper [2024] Title",
+          url: "https://example.com/paper",
+          domain: "example.com",
+        },
+        {
+          number: 2,
+          title: "Transformer Overview",
+          url: "https://grokipedia.com/page/Transformer_(machine_learning)",
+          domain: "grokipedia.com",
+        },
+        {
+          number: 3,
+          title: "URL With Space",
+          url: "https://example.com/foo bar",
+          domain: "",
+        },
+        {
+          number: 4,
+          title: "Standard Simple Reference",
+          url: "https://example.com/simple",
+          domain: "example.com",
+        },
+      ],
+    };
+
+    const md = grokipediaToMarkdown(article, { savedAt: "2026-10-14" });
+    expect(md).toContain("[^1]: [Paper \\[2024\\] Title](https://example.com/paper) - example.com");
+    expect(md).toContain(
+      "[^2]: [Transformer Overview](<https://grokipedia.com/page/Transformer_(machine_learning)>) - grokipedia.com",
+    );
+    expect(md).toContain("[^3]: [URL With Space](<https://example.com/foo bar>)");
+    expect(md).not.toContain("[^3]: [URL With Space](<https://example.com/foo bar>) - ");
+    expect(md).toContain(
+      "[^4]: [Standard Simple Reference](https://example.com/simple) - example.com",
+    );
   });
 
   it("extracts and formats full fixture correctly", () => {

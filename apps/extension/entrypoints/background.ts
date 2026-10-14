@@ -1,33 +1,36 @@
 import { browser } from "wxt/browser";
 import { detectSource } from "@sourcefold/core";
 import { saveGrokipedia, ApiError } from "../lib/api";
-import { getLastFolderId } from "../lib/last-folder";
+import { getLastFolderId, clearLastFolderId } from "../lib/last-folder";
 
 const SUCCESS_COLOR = "#1F5E4E";
 const ERROR_COLOR = "#B42318";
-
-let clearTimer: ReturnType<typeof setTimeout> | null = null;
+const BADGE_CLEAR_ALARM = "sourcefold-clear-badge";
 
 async function showSuccessBadge() {
-  if (clearTimer) clearTimeout(clearTimer);
   await browser.action.setBadgeBackgroundColor({ color: SUCCESS_COLOR });
-  await browser.action.setBadgeText({ text: "✓" });
+  await browser.action.setBadgeText({ text: "\u2713" });
   await browser.action.setTitle({ title: "Sourcefold" });
-
-  clearTimer = setTimeout(async () => {
-    await browser.action.setBadgeText({ text: "" });
-  }, 3000);
+  await browser.alarms.create(BADGE_CLEAR_ALARM, { when: Date.now() + 3000 });
 }
 
 async function showErrorBadge(title: string) {
-  if (clearTimer) clearTimeout(clearTimer);
   await browser.action.setBadgeBackgroundColor({ color: ERROR_COLOR });
   await browser.action.setBadgeText({ text: "!" });
   await browser.action.setTitle({ title });
+  await browser.alarms.create(BADGE_CLEAR_ALARM, { when: Date.now() + 8000 });
 }
 
 export default defineBackground(() => {
-  browser.runtime.onInstalled.addListener(() => {
+  browser.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === BADGE_CLEAR_ALARM) {
+      await browser.action.setBadgeText({ text: "" });
+      await browser.action.setTitle({ title: "Sourcefold" });
+    }
+  });
+
+  browser.runtime.onInstalled.addListener(async () => {
+    await browser.contextMenus.removeAll();
     browser.contextMenus.create({
       id: "save-link",
       title: "Save link to Sourcefold",
@@ -50,6 +53,18 @@ export default defineBackground(() => {
           await saveGrokipedia(info.linkUrl, lastFolderId);
           await showSuccessBadge();
         } catch (err: unknown) {
+          const isFolderMissing =
+            err instanceof ApiError &&
+            (err.code === "invalid_folder" ||
+              err.status === 404 ||
+              (err.status === 400 && err.message.toLowerCase().includes("folder")));
+
+          if (isFolderMissing) {
+            await clearLastFolderId();
+            await showErrorBadge("Choose a folder in the popup first");
+            return;
+          }
+
           const message =
             err instanceof ApiError
               ? err.message

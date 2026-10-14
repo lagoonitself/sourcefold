@@ -43,6 +43,11 @@ Status as of 2026-10-13. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - Set GitHub Actions `APP_URL` variable to `https://sourcefold-eight.vercel.app` and verified daily keep-alive workflow (`38417818515` success).
   - All CI tests and builds passing on GitHub Actions.
 
+- **Second audit (2026-10-14):**
+  - Speed: Vercel region `sin1`, `getClaims()` auth, cached per-request client, parallel queries, loading skeletons, SQL folder counts, new indexes, no status polling, lighter client bundle.
+  - Bugs fixed across core parsers, web API, UI, Drive sync and the extension (see HANDOFF.md).
+  - [ ] Apply migrations `20261013030000_audit_fixes.sql` and `20261014000000_perf_and_sync_fixes.sql`, then push and deploy.
+
 ## Final Steps to Use
 
 1. **Authorize OAuth redirect URLs:**

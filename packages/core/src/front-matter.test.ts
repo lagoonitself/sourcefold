@@ -68,9 +68,7 @@ describe("buildFrontMatter", () => {
       trailing: "trailing space ",
     });
 
-    expect(result).toBe(
-      '---\nleading: "  leading space"\ntrailing: "trailing space "\n---\n',
-    );
+    expect(result).toBe('---\nleading: "  leading space"\ntrailing: "trailing space "\n---\n');
   });
 
   it("quotes reserved YAML keywords", () => {
@@ -85,6 +83,23 @@ describe("buildFrontMatter", () => {
 
     expect(result).toBe(
       '---\nboolTrue: "true"\nboolFalse: "false"\nyesWord: "yes"\nnoWord: "no"\nnullWord: "null"\ntildeWord: "~"\n---\n',
+    );
+  });
+
+  it("quotes on, off, y, n keywords case-insensitively", () => {
+    const result = buildFrontMatter({
+      onVal: "on",
+      offVal: "off",
+      yVal: "y",
+      nVal: "n",
+      upperOn: "ON",
+      upperOff: "OFF",
+      upperY: "Y",
+      upperN: "N",
+    });
+
+    expect(result).toBe(
+      '---\nonVal: "on"\noffVal: "off"\nyVal: "y"\nnVal: "n"\nupperOn: "ON"\nupperOff: "OFF"\nupperY: "Y"\nupperN: "N"\n---\n',
     );
   });
 
@@ -115,12 +130,10 @@ describe("buildFrontMatter", () => {
 
   it("formats string arrays correctly", () => {
     const result = buildFrontMatter({
-      tags: ["news", "tech: update", "123"],
+      tags: ["news", "tech: update", "123", "on"],
     });
 
-    expect(result).toBe(
-      '---\ntags:\n  - news\n  - "tech: update"\n  - "123"\n---\n',
-    );
+    expect(result).toBe('---\ntags:\n  - news\n  - "tech: update"\n  - "123"\n  - "on"\n---\n');
   });
 
   it("quotes and escapes strings with newline and tab characters", () => {
@@ -138,7 +151,9 @@ describe("buildFrontMatter", () => {
       titleWithPS: "Para 1\u2029Para 2",
     });
 
-    expect(result).toBe('---\ntitleWithLS: "Line 1\\u2028Line 2"\ntitleWithPS: "Para 1\\u2029Para 2"\n---\n');
+    expect(result).toBe(
+      '---\ntitleWithLS: "Line 1\\u2028Line 2"\ntitleWithPS: "Para 1\\u2029Para 2"\n---\n',
+    );
   });
 
   it("quotes strings ending with colon", () => {

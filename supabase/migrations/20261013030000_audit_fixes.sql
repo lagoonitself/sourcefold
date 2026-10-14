@@ -1,5 +1,10 @@
 -- Audit fixes: cycle prevention, user_id scoping for background service execution, and sync safety.
 
+-- Drop the old signatures so the new ones (with a defaulted p_user_id) don't become ambiguous overloads.
+drop function if exists public.soft_delete_folder(uuid);
+drop function if exists public.drive_dirty_folders();
+drop function if exists public.drive_dirty_items(integer);
+
 create or replace function public.soft_delete_folder(p_folder_id uuid, p_user_id uuid default null)
 returns void
 language plpgsql
@@ -76,3 +81,10 @@ as $$
   order by i.created_at
   limit greatest(1, least(p_limit, 100));
 $$;
+
+revoke all on function public.soft_delete_folder(uuid, uuid) from public, anon;
+revoke all on function public.drive_dirty_folders(uuid) from public, anon;
+revoke all on function public.drive_dirty_items(integer, uuid) from public, anon;
+grant execute on function public.soft_delete_folder(uuid, uuid) to authenticated, service_role;
+grant execute on function public.drive_dirty_folders(uuid) to authenticated, service_role;
+grant execute on function public.drive_dirty_items(integer, uuid) to authenticated, service_role;

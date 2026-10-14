@@ -173,4 +173,96 @@ describe("extractSubstack", () => {
       "Couldn't find the post text on this page.",
     );
   });
+
+  it("extracts author and publisher as plain string, object, or array of either from JSON-LD", () => {
+    // 1. Plain string
+    const htmlString = `<!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="generator" content="Substack">
+        <link rel="canonical" href="https://example.substack.com/p/string-test">
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "NewsArticle",
+          "headline": "String Test",
+          "author": "Single Author",
+          "publisher": "Single Publisher"
+        }
+        </script>
+      </head>
+      <body>
+        <div class="body markup"><p>${"Content text that is long enough to meet minimum body length requirement ".repeat(3)}</p></div>
+      </body>
+    </html>`;
+
+    const docString = parseHTML(htmlString).document as unknown as Document;
+    const resString = extractSubstack(docString, "https://example.substack.com/p/string-test");
+    expect(resString.status).toBe("ok");
+    if (resString.status === "ok") {
+      expect(resString.capture.author).toBe("Single Author");
+      expect(resString.capture.publication).toBe("Single Publisher");
+    }
+
+    // 2. Array of strings
+    const htmlArray = `<!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="generator" content="Substack">
+        <link rel="canonical" href="https://example.substack.com/p/array-test">
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Article",
+          "headline": "Array Test",
+          "author": ["First Author", "Second Author"],
+          "publisher": ["First Pub", "Second Pub"]
+        }
+        </script>
+      </head>
+      <body>
+        <div class="body markup"><p>${"Content text that is long enough to meet minimum body length requirement ".repeat(3)}</p></div>
+      </body>
+    </html>`;
+
+    const docArray = parseHTML(htmlArray).document as unknown as Document;
+    const resArray = extractSubstack(docArray, "https://example.substack.com/p/array-test");
+    expect(resArray.status).toBe("ok");
+    if (resArray.status === "ok") {
+      expect(resArray.capture.author).toBe("First Author");
+      expect(resArray.capture.publication).toBe("First Pub");
+    }
+
+    // 3. Array of objects
+    const htmlObjArray = `<!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="generator" content="Substack">
+        <link rel="canonical" href="https://example.substack.com/p/obj-array-test">
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Article",
+          "headline": "Object Array Test",
+          "author": [{ "name": "Obj Author" }],
+          "publisher": [{ "name": "Obj Pub" }]
+        }
+        </script>
+      </head>
+      <body>
+        <div class="body markup"><p>${"Content text that is long enough to meet minimum body length requirement ".repeat(3)}</p></div>
+      </body>
+    </html>`;
+
+    const docObjArray = parseHTML(htmlObjArray).document as unknown as Document;
+    const resObjArray = extractSubstack(
+      docObjArray,
+      "https://example.substack.com/p/obj-array-test",
+    );
+    expect(resObjArray.status).toBe("ok");
+    if (resObjArray.status === "ok") {
+      expect(resObjArray.capture.author).toBe("Obj Author");
+      expect(resObjArray.capture.publication).toBe("Obj Pub");
+    }
+  });
 });

@@ -2,7 +2,7 @@
 
 Read this first in any new session. When the user says "continue", pick up at **Next steps** below. Keep this file current.
 
-Last updated: 2026-10-13, after commit `67d4983` and production deployment.
+Last updated: 2026-10-14, after the second bug and speed audit (not yet pushed or deployed).
 
 ## What we're building
 
@@ -36,9 +36,15 @@ Full detail:
 - **Auth:** Google OAuth configured with offline access (`drive.file` scope) and email allowlist validation (`ALLOWED_EMAIL`).
 - **Web App:** Next.js 16 (Turbopack) with folder sidebar, interactive drag reordering, Grokipedia bulk importer, item menu (rename, move, note, delete), standalone notes, direct-to-Storage image uploads, search, settings page for API token management and Drive reconnect, and Drive sync engine.
 - **Extension:** WXT + React extension with folder selection, Substack parser, X thread extractor, add-to-thread, duplicate warnings, and right-click context menu save.
-- **CI & Build:** Clean `npm run lint`, `npm run typecheck`, vitest test suite (95 tests passing), extension build, and Next.js production build. GitHub Actions CI status is green.
+- **CI & Build:** Clean `npm run lint`, `npm run typecheck`, vitest test suite (106 tests passing), extension build, and Next.js production build. GitHub Actions CI status is green.
+
+**Second audit (2026-10-14):** six Gemini auditors, then six fixers, all reviewed. Speed: Vercel region moved to `sin1`, local JWT checks with `getClaims()` instead of `getUser()` network calls (one per request, cached with React `cache`), parallel page queries, `loading.tsx` skeletons, folder counts via SQL (`folder_item_counts`), no 30 s Drive status polling, dialogs mount only when open, smaller client bundle. Bugs: notes no longer wiped by refresh, Ctrl+S no longer starts a Drive sync while typing, moved folders land at the end, Drive sync items no longer stuck forever, Drive rate-limit retries, UTF-8 uploads, save lock against duplicate Drive folders, X reply duplicate check, URLs with parentheses kept intact, extension "Add to thread" attaching the wrong post, extension asked for `<all_urls>` (now removed).
 
 ## Next steps
+
+0. **Apply the two pending migrations, then push.** The code committed on 2026-10-14 needs them; deploying before they are applied breaks folder counts, Drive save and folder delete.
+   - In order: `supabase/migrations/20261013030000_audit_fixes.sql` (never applied before), then `supabase/migrations/20261014000000_perf_and_sync_fixes.sql`. Project `dhqrexvkinplupshqyma`.
+   - Then push `main`. `apps/web/vercel.json` moves Vercel functions to `sin1` (Singapore, same region as Supabase). They were in `iad1`, so every database call crossed the Pacific.
 
 1. **Authorize OAuth redirect URLs:**
    - In **Google Cloud Console** (project `folder-511509`): add `https://sourcefold-eight.vercel.app` to **Authorized JavaScript origins**.

@@ -87,10 +87,14 @@ export function ItemMenu({ item, noteOpen, onNoteOpenChange }: ItemMenuProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <RenameItemDialog item={item} open={renameOpen} onOpenChange={setRenameOpen} />
-      <MoveItemDialog item={item} open={moveOpen} onOpenChange={setMoveOpen} />
-      <NoteDialog item={item} open={isNoteOpen} onOpenChange={handleOpenNote} />
-      <DeleteItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
+      {renameOpen && (
+        <RenameItemDialog item={item} open={renameOpen} onOpenChange={setRenameOpen} />
+      )}
+      {moveOpen && <MoveItemDialog item={item} open={moveOpen} onOpenChange={setMoveOpen} />}
+      {isNoteOpen && <NoteDialog item={item} open={isNoteOpen} onOpenChange={handleOpenNote} />}
+      {deleteOpen && (
+        <DeleteItemDialog item={item} open={deleteOpen} onOpenChange={setDeleteOpen} />
+      )}
     </>
   );
 }

@@ -1,9 +1,10 @@
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/lib/database.types";
 import { getPublicEnv } from "@/lib/env";
 
-export async function createClient() {
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
   const env = getPublicEnv();
 
@@ -28,4 +29,19 @@ export async function createClient() {
       },
     },
   );
-}
+});
+
+export const getSessionUser = cache(
+  async (): Promise<{ id: string; email: string | null } | null> => {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getClaims();
+    const claims = data?.claims;
+    if (!claims || typeof claims.sub !== "string") {
+      return null;
+    }
+    return {
+      id: claims.sub,
+      email: typeof claims.email === "string" ? claims.email : null,
+    };
+  },
+);

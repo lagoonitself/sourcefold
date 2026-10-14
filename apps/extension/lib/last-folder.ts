@@ -11,3 +11,7 @@ export async function getLastFolderId(): Promise<string | null> {
 export async function setLastFolderId(folderId: string): Promise<void> {
   await browser.storage.local.set({ [LAST_FOLDER_KEY]: folderId });
 }
+
+export async function clearLastFolderId(): Promise<void> {
+  await browser.storage.local.remove([LAST_FOLDER_KEY]);
+}

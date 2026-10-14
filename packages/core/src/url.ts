@@ -9,7 +9,47 @@ export class InvalidUrlError extends Error {
 
 const X_HOSTS = new Set(["x.com", "twitter.com", "mobile.x.com", "mobile.twitter.com"]);
 
-const TRAILING_PUNCTUATION_REGEX = /[.,;:!?\)\]\}'">]+$/;
+const ALWAYS_STRIP_PUNCTUATION = new Set([".", ",", ";", ":", "!", "?", "'", '"', ">"]);
+
+function stripTrailingPunctuation(url: string): string {
+  let current = url;
+  while (current.length > 0) {
+    const lastChar = current[current.length - 1];
+    if (!lastChar) {
+      break;
+    }
+    if (ALWAYS_STRIP_PUNCTUATION.has(lastChar)) {
+      current = current.slice(0, -1);
+    } else if (lastChar === ")") {
+      const openCount = (current.match(/\(/g) || []).length;
+      const closeCount = (current.match(/\)/g) || []).length;
+      if (closeCount > openCount) {
+        current = current.slice(0, -1);
+      } else {
+        break;
+      }
+    } else if (lastChar === "]") {
+      const openCount = (current.match(/\[/g) || []).length;
+      const closeCount = (current.match(/\]/g) || []).length;
+      if (closeCount > openCount) {
+        current = current.slice(0, -1);
+      } else {
+        break;
+      }
+    } else if (lastChar === "}") {
+      const openCount = (current.match(/\{/g) || []).length;
+      const closeCount = (current.match(/\}/g) || []).length;
+      if (closeCount > openCount) {
+        current = current.slice(0, -1);
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+  return current;
+}
 
 function normalizeHost(host: string): string {
   let normalized = host.toLowerCase();
@@ -68,10 +108,11 @@ export function canonicalizeUrl(input: string): string {
       let decodedTitle = rawTitle;
       try {
         decodedTitle = decodeURIComponent(rawTitle);
+        decodedTitle = decodedTitle.replace(/ /g, "_");
+        decodedTitle = decodedTitle.replace(/%/g, "%25").replace(/#/g, "%23").replace(/\?/g, "%3F");
       } catch {
-        decodedTitle = rawTitle;
+        decodedTitle = rawTitle.replace(/ /g, "_");
       }
-      decodedTitle = decodedTitle.replace(/ /g, "_");
       return `https://grokipedia.com/page/${decodedTitle}`;
     }
 
@@ -168,7 +209,7 @@ export function extractUrls(text: string): string[] {
   const result: string[] = [];
 
   for (const match of matches) {
-    const cleaned = match.replace(TRAILING_PUNCTUATION_REGEX, "");
+    const cleaned = stripTrailingPunctuation(match);
     if (!cleaned) {
       continue;
     }

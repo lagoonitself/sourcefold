@@ -12,10 +12,18 @@ export interface FolderViewProps {
 export async function FolderView({ folderId }: FolderViewProps) {
   const supabase = await createClient();
 
-  const { data: folders, error: foldersError } = await supabase
-    .from("folders")
-    .select("id, parent_id, name")
-    .is("deleted_at", null);
+  const [foldersResult, itemsResult] = await Promise.all([
+    supabase.from("folders").select("id, parent_id, name").is("deleted_at", null),
+    supabase
+      .from("items")
+      .select(ITEM_LIST_COLUMNS)
+      .eq("folder_id", folderId)
+      .is("deleted_at", null)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const { data: folders, error: foldersError } = foldersResult;
 
   const currentFolder = folders?.find((f) => f.id === folderId);
   if (foldersError || !currentFolder) {
@@ -31,13 +39,7 @@ export async function FolderView({ folderId }: FolderViewProps) {
   const parentPath = fullPath.slice(0, -1);
   const breadcrumb = parentPath.length > 0 ? parentPath.join(" / ") : null;
 
-  const { data: items } = await supabase
-    .from("items")
-    .select(ITEM_LIST_COLUMNS)
-    .eq("folder_id", folderId)
-    .is("deleted_at", null)
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: false });
+  const { data: items } = itemsResult;
 
   const safeItems = items ?? [];
   const countText = safeItems.length === 1 ? "1 source" : `${safeItems.length} sources`;

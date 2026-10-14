@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { browser } from "wxt/browser";
 import { detectSource, xStatusId, type SourceKind } from "@sourcefold/core";
 import {
@@ -17,6 +17,15 @@ import { buildFolderTree, formatFolderLabel, type FolderTreeItem } from "../../l
 import { getLastFolderId, setLastFolderId } from "../../lib/last-folder";
 import { capturePage } from "../../lib/capture-page";
 import { getSettings } from "../../lib/settings";
+
+const FOLDER_TREE_CACHE_KEY = "sourcefold:folderTreeCache";
+
+interface FolderTreeCache {
+  baseUrl: string;
+  timestamp: number;
+  folders: Folder[];
+  tree: FolderTreeItem[];
+}
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -38,6 +47,10 @@ export default function App() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Synchronous in-flight guards to prevent double-submit or concurrent operations
+  const isSavingRef = useRef(false);
+  const isAddingToThreadRef = useRef(false);
 
   // New folder inline state
   const [newFolderOpen, setNewFolderOpen] = useState(false);
@@ -62,10 +75,19 @@ export default function App() {
         setHasToken(tokenPresent);
 
         if (!tokenPresent) {
+          setLoading(false);
           return;
         }
 
-        const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+        const baseUrl = settings.appUrl.replace(/\/+$/, "");
+
+        // Concurrently read tabs, last folder ID, and cached folder tree
+        const [tabs, lastFolderId, cacheResult] = await Promise.all([
+          browser.tabs.query({ active: true, currentWindow: true }),
+          getLastFolderId(),
+          browser.storage.local.get([FOLDER_TREE_CACHE_KEY]),
+        ]);
+
         const activeTab = tabs[0];
         const currentUrl = activeTab?.url ?? "";
         setTabId(activeTab?.id ?? null);
@@ -75,29 +97,55 @@ export default function App() {
         const source = currentUrl ? detectSource(currentUrl) : null;
         setDetectedSource(source);
 
-        // Load folders, last used folder, and duplicate check in parallel
+        // Render cached folder tree immediately if present and matching current base URL
+        const cached = cacheResult[FOLDER_TREE_CACHE_KEY] as FolderTreeCache | undefined;
+        if (
+          cached &&
+          cached.baseUrl === baseUrl &&
+          Array.isArray(cached.folders) &&
+          Array.isArray(cached.tree) &&
+          cached.tree.length > 0
+        ) {
+          setFolders(cached.folders);
+          setFolderTree(cached.tree);
+          if (lastFolderId && cached.tree.some((item) => item.id === lastFolderId)) {
+            setSelectedFolderId(lastFolderId);
+          } else if (cached.tree[0]) {
+            setSelectedFolderId(cached.tree[0].id);
+          }
+          setLoading(false);
+        }
+
+        // Run independent API calls in parallel: refresh folder tree + duplicate check concurrently
         const foldersPromise = listFolders();
-        const lastFolderPromise = getLastFolderId();
         const checkPromise = currentUrl
           ? checkUrl(currentUrl).catch(() => null)
           : Promise.resolve(null);
 
-        const [loadedFolders, lastFolderId, checkResult] = await Promise.all([
-          foldersPromise,
-          lastFolderPromise,
-          checkPromise,
-        ]);
+        const [loadedFolders, checkResult] = await Promise.all([foldersPromise, checkPromise]);
 
         setFolders(loadedFolders);
         const tree = buildFolderTree(loadedFolders);
         setFolderTree(tree);
 
+        // Update folder tree cache
+        await browser.storage.local.set({
+          [FOLDER_TREE_CACHE_KEY]: {
+            baseUrl,
+            timestamp: Date.now(),
+            folders: loadedFolders,
+            tree,
+          },
+        });
+
+        // Set selected folder ID: if lastFolderId is in the tree, use it; otherwise fallback and persist
         if (tree.length > 0) {
           const first = tree[0];
           if (lastFolderId && tree.some((item) => item.id === lastFolderId)) {
             setSelectedFolderId(lastFolderId);
           } else if (first) {
             setSelectedFolderId(first.id);
+            await setLastFolderId(first.id);
           }
         }
 
@@ -157,6 +205,18 @@ export default function App() {
       setFolderTree(tree);
       setSelectedFolderId(created.id);
       await setLastFolderId(created.id);
+
+      const settings = await getSettings();
+      const baseUrl = settings.appUrl.replace(/\/+$/, "");
+      await browser.storage.local.set({
+        [FOLDER_TREE_CACHE_KEY]: {
+          baseUrl,
+          timestamp: Date.now(),
+          folders: updatedFolders,
+          tree,
+        },
+      });
+
       setNewFolderOpen(false);
       setNewFolderName("");
       setInsideSelected(false);
@@ -168,10 +228,14 @@ export default function App() {
   };
 
   const handleSave = async () => {
-    if (!tabUrl || !selectedFolderId || isSaving || isAlreadySaved) {
+    if (isSavingRef.current || isAddingToThreadRef.current) {
+      return;
+    }
+    if (!tabUrl || !selectedFolderId || isAlreadySaved) {
       return;
     }
 
+    isSavingRef.current = true;
     setIsSaving(true);
     setErrorMessage(null);
     setWarningMessage(null);
@@ -183,6 +247,7 @@ export default function App() {
       if (detectedSource === "grokipedia") {
         await saveGrokipedia(tabUrl, selectedFolderId);
         await setLastFolderId(selectedFolderId);
+        setIsAlreadySaved(true);
         setSuccessMessage(`Saved to ${folderName}`);
         return;
       }
@@ -225,6 +290,7 @@ export default function App() {
             title: res.title,
           });
           await setLastFolderId(selectedFolderId);
+          setIsAlreadySaved(true);
           setWarningMessage("Paid post, not saved");
           return;
         }
@@ -236,6 +302,7 @@ export default function App() {
             capture: res.capture,
           });
           await setLastFolderId(selectedFolderId);
+          setIsAlreadySaved(true);
           setSuccessMessage(`Saved to ${folderName}`);
           return;
         }
@@ -255,6 +322,7 @@ export default function App() {
             posts: res.posts,
           });
           await setLastFolderId(selectedFolderId);
+          setIsAlreadySaved(true);
           setSuccessMessage(`Saved to ${folderName}`);
           return;
         }
@@ -272,6 +340,7 @@ export default function App() {
       }
       setErrorMessage(err instanceof Error ? err.message : "Failed to save page.");
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -296,8 +365,12 @@ export default function App() {
   };
 
   const handleAddToThread = async (item: RecentXItem) => {
-    if (tabId === null || !tabUrl || addingToThreadId) return;
+    if (isSavingRef.current || isAddingToThreadRef.current) {
+      return;
+    }
+    if (tabId === null || !tabUrl) return;
 
+    isAddingToThreadRef.current = true;
     setAddingToThreadId(item.id);
     setThreadStatus(null);
 
@@ -329,18 +402,20 @@ export default function App() {
       }
 
       const tabStatus = xStatusId(tabUrl);
-      let postIndex = -1;
-      if (tabStatus) {
-        postIndex = posts.findIndex((p) => xStatusId(p.postUrl) === tabStatus);
-      }
+      const postIndex = tabStatus ? posts.findIndex((p) => xStatusId(p.postUrl) === tabStatus) : -1;
+
       if (postIndex === -1) {
-        postIndex = posts.length - 1;
+        setThreadStatus({
+          message: "Couldn't find the post on this page. Scroll to it and try again.",
+          isError: true,
+        });
+        return;
       }
 
       const post = posts[postIndex];
       if (!post) {
         setThreadStatus({
-          message: "No posts found in this thread.",
+          message: "Couldn't find the post on this page. Scroll to it and try again.",
           isError: true,
         });
         return;
@@ -373,6 +448,7 @@ export default function App() {
         isError: true,
       });
     } finally {
+      isAddingToThreadRef.current = false;
       setAddingToThreadId(null);
     }
   };
@@ -557,7 +633,7 @@ export default function App() {
                       type="button"
                       className="popup-thread-item"
                       onClick={() => handleAddToThread(item)}
-                      disabled={addingToThreadId !== null}
+                      disabled={addingToThreadId !== null || isSaving}
                     >
                       <span className="popup-thread-item-title">{item.title}</span>
                       {addingToThreadId === item.id && (

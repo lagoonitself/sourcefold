@@ -2,13 +2,16 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "@/lib/database.types";
-import { getPublicEnv } from "@/lib/env";
 
 export function createClient() {
-  const env = getPublicEnv();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-  return createBrowserClient<Database>(
-    env.NEXT_PUBLIC_SUPABASE_URL,
-    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-  );
+  if (!url || !key) {
+    throw new Error(
+      "Missing Supabase client environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be set.",
+    );
+  }
+
+  return createBrowserClient<Database>(url, key);
 }

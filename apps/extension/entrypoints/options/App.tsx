@@ -5,7 +5,7 @@ import { getSettings, saveSettings } from "../../lib/settings";
 export default function App() {
   const [appUrl, setAppUrl] = useState("http://localhost:3000");
   const [token, setToken] = useState("");
-  const [saveStatus, setSaveStatus] = useState<string>("");
+  const [saveStatus, setSaveStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [testResult, setTestResult] = useState<{ message: string; isError: boolean } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
@@ -20,30 +20,38 @@ export default function App() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaveStatus("");
+    setSaveStatus(null);
     const targetUrl = appUrl.trim().replace(/\/+$/, "");
 
     try {
       const parsed = new URL(targetUrl);
       const origin = parsed.origin;
       const hostname = parsed.hostname.toLowerCase();
-      const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+      const isLoopback =
+        hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 
       if (parsed.protocol !== "https:" && !isLoopback) {
-        setSaveStatus("Remote URLs must use HTTPS");
+        setSaveStatus({ message: "Remote URLs must use HTTPS", isError: true });
         return;
       }
 
       if (!isLoopback) {
-        await browser.permissions.request({ origins: [`${origin}/*`] });
+        const granted = await browser.permissions.request({ origins: [`${origin}/*`] });
+        if (!granted) {
+          setSaveStatus({
+            message: "Sourcefold needs permission to reach that address.",
+            isError: true,
+          });
+          return;
+        }
       }
     } catch {
-      setSaveStatus("Please enter a valid URL");
+      setSaveStatus({ message: "Please enter a valid URL", isError: true });
       return;
     }
 
     await saveSettings({ appUrl, token });
-    setSaveStatus("Saved");
+    setSaveStatus({ message: "Saved", isError: false });
   };
 
   const handleTestConnection = async () => {
@@ -122,7 +130,7 @@ export default function App() {
               value={appUrl}
               onChange={(e) => {
                 setAppUrl(e.target.value);
-                setSaveStatus("");
+                setSaveStatus(null);
               }}
               placeholder="http://localhost:3000"
             />
@@ -139,7 +147,7 @@ export default function App() {
               value={token}
               onChange={(e) => {
                 setToken(e.target.value);
-                setSaveStatus("");
+                setSaveStatus(null);
               }}
               placeholder="Paste token here"
             />
@@ -160,7 +168,13 @@ export default function App() {
             </button>
           </div>
 
-          {saveStatus && <p className="status-message status-success">{saveStatus}</p>}
+          {saveStatus && (
+            <p
+              className={`status-message ${saveStatus.isError ? "status-error" : "status-success"}`}
+            >
+              {saveStatus.message}
+            </p>
+          )}
 
           {testResult && (
             <p

@@ -3,8 +3,14 @@ import { updateSession } from "@/lib/supabase/proxy";
 import { getAllowedEmails } from "@/lib/env";
 
 export async function proxy(request: NextRequest) {
-  const { response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
+
+  const authHeader = request.headers.get("authorization");
+  if (pathname.startsWith("/api/") && authHeader && /^Bearer(\s+|$)/i.test(authHeader.trim())) {
+    return NextResponse.next();
+  }
+
+  const { response, user } = await updateSession(request);
 
   let allowedEmails: string[] = [];
   try {

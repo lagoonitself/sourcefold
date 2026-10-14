@@ -68,8 +68,7 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
   // Parse references
   const references: GrokipediaReference[] = [];
   const refSelector = "#references, .references, [aria-labelledby='references-title']";
-  const referencesEl =
-    document.querySelector(refSelector) || articleEl.querySelector(refSelector);
+  const referencesEl = articleEl.querySelector(refSelector) ?? document.querySelector(refSelector);
   if (referencesEl) {
     const liElements = referencesEl.querySelectorAll("li");
     for (const li of liElements) {
@@ -135,13 +134,29 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
 
   // Clean bodyHtml
   const clone = articleEl.cloneNode(true) as HTMLElement;
+  articleEl.replaceWith(clone);
 
-  // 1. Remove references section
-  clone
-    .querySelectorAll(refSelector)
-    .forEach((el) => {
-      el.remove();
-    });
+  // 1. Remove references section and standalone References headings
+  for (const el of Array.from(clone.querySelectorAll(refSelector))) {
+    if (!el.isConnected) continue;
+    const prev = el.previousElementSibling;
+    if (
+      prev &&
+      (prev.tagName === "H2" || prev.tagName === "H3") &&
+      prev.textContent?.trim() === "References"
+    ) {
+      prev.remove();
+    }
+    el.remove();
+  }
+
+  for (const h of Array.from(clone.querySelectorAll("h2, h3"))) {
+    if (!h.isConnected) continue;
+    const id = h.id?.toLowerCase() || "";
+    if (id === "references-title" || id.includes("references")) {
+      h.remove();
+    }
+  }
 
   // 2. Remove h1
   clone.querySelectorAll("h1").forEach((el) => {
@@ -150,6 +165,7 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
 
   // 3. Remove "Fact-checked by Grok" line/element
   for (const el of Array.from(clone.querySelectorAll("*"))) {
+    if (!el.isConnected) continue;
     if (
       el.textContent?.includes("Fact-checked by Grok") &&
       !Array.from(el.children).some((child) => child.textContent?.includes("Fact-checked by Grok"))
@@ -170,7 +186,9 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
 
   // 4. Remove table of contents / nav
   clone
-    .querySelectorAll("nav, .toc, #toc, [class~='toc'], [id~='toc'], [class*='table-of-contents'], [id*='table-of-contents'], [aria-label*='contents' i]")
+    .querySelectorAll(
+      "nav, .toc, #toc, [class~='toc'], [id~='toc'], [class*='table-of-contents'], [id*='table-of-contents'], [aria-label*='contents' i]",
+    )
     .forEach((el) => {
       el.remove();
     });
@@ -184,6 +202,7 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
 
   // 6. Remove edit / "Suggest edit" / copy UI
   for (const el of Array.from(clone.querySelectorAll("*"))) {
+    if (!el.isConnected) continue;
     const text = (el.textContent ?? "").trim();
     if (/^(?:suggest\s+edit|edit\s+history|copy\s+link|copy)$/i.test(text)) {
       el.remove();
@@ -226,7 +245,11 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
       const markerText = numbers.map((n) => `[^${n}]`).join("");
       const textNode = clone.ownerDocument.createTextNode(markerText);
       sup.replaceWith(textNode);
-    } else if (sup.classList?.contains("citation") || sup.classList?.contains("ref") || refLinks.length > 0) {
+    } else if (
+      sup.classList?.contains("citation") ||
+      sup.classList?.contains("ref") ||
+      refLinks.length > 0
+    ) {
       sup.remove();
     }
     // Otherwise, leave non-citation superscripts (e.g. math powers x^2, ordinals 1^st) intact!

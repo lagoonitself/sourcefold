@@ -39,8 +39,12 @@ export function createMarkdownConverter(): TurndownService {
   return service;
 }
 
+let converter: TurndownService | null = null;
+
 export function htmlToMarkdown(html: string): string {
-  const converter = createMarkdownConverter();
+  if (!converter) {
+    converter = createMarkdownConverter();
+  }
   const markdown = converter.turndown(html);
   const normalized = markdown
     .replace(/\r\n/g, "\n")

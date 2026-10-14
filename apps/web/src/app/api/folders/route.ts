@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { loadFolders } from "@/features/folders/load-folders";
+import { nextPosition } from "@/features/capture/find-duplicate";
 
 export const dynamic = "force-dynamic";
 
@@ -45,27 +46,7 @@ export async function POST(request: Request) {
   const name = parsed.data.name;
   const parentId = parsed.data.parent_id ?? null;
 
-  // Determine max position among siblings
-  let siblingsQuery = auth.db
-    .from("folders")
-    .select("position")
-    .eq("user_id", auth.userId)
-    .is("deleted_at", null);
-
-  if (parentId === null) {
-    siblingsQuery = siblingsQuery.is("parent_id", null);
-  } else {
-    siblingsQuery = siblingsQuery.eq("parent_id", parentId);
-  }
-
-  const { data: siblings, error: sibError } = await siblingsQuery;
-  if (sibError) {
-    return jsonError(500, sibError.message);
-  }
-
-  const maxPosition =
-    siblings && siblings.length > 0 ? Math.max(...siblings.map((s) => s.position)) : -1;
-  const position = maxPosition + 1;
+  const position = await nextPosition(auth.db, auth.userId, parentId, "folders");
 
   const { data: newFolder, error: insertError } = await auth.db
     .from("folders")
@@ -82,7 +63,17 @@ export async function POST(request: Request) {
     if (insertError.message.includes("invalid parent folder")) {
       return jsonError(400, "That folder no longer exists.");
     }
-    return jsonError(400, insertError.message);
+    if (insertError.code === "23514") {
+      return jsonError(400, "Folder name is invalid.");
+    }
+    if (insertError.code === "23503") {
+      return jsonError(400, "That folder no longer exists.");
+    }
+    if (insertError.code === "22P02") {
+      return jsonError(400, "Invalid folder ID format.");
+    }
+    console.error("Failed to insert folder:", insertError);
+    return jsonError(500, "Something went wrong. Try again.");
   }
 
   return jsonData(newFolder, 201);

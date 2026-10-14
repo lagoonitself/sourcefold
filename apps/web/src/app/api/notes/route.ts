@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
+import { nextPosition } from "@/features/capture/find-duplicate";
 
 export const dynamic = "force-dynamic";
 
@@ -34,20 +35,7 @@ export async function POST(request: Request) {
     return jsonError(400, parsed.error.issues[0]?.message ?? "Invalid request body");
   }
 
-  const { data: siblings, error: sibError } = await auth.db
-    .from("items")
-    .select("position")
-    .eq("folder_id", parsed.data.folder_id)
-    .eq("user_id", auth.userId)
-    .is("deleted_at", null);
-
-  if (sibError) {
-    return jsonError(500, sibError.message);
-  }
-
-  const maxPosition =
-    siblings && siblings.length > 0 ? Math.max(...siblings.map((item) => item.position)) : -1;
-  const position = maxPosition + 1;
+  const position = await nextPosition(auth.db, auth.userId, parsed.data.folder_id);
 
   const { data: noteItem, error: insertError } = await auth.db
     .from("items")
@@ -70,7 +58,17 @@ export async function POST(request: Request) {
     if (insertError.message.includes("invalid folder")) {
       return jsonError(400, "That folder no longer exists.");
     }
-    return jsonError(400, insertError.message);
+    if (insertError.code === "23514") {
+      return jsonError(400, "Note title or content is invalid.");
+    }
+    if (insertError.code === "23503") {
+      return jsonError(400, "That folder no longer exists.");
+    }
+    if (insertError.code === "22P02") {
+      return jsonError(400, "Invalid ID format.");
+    }
+    console.error("Failed to create note:", insertError);
+    return jsonError(500, "Something went wrong. Try again.");
   }
 
   return jsonData(noteItem, 201);

@@ -52,6 +52,7 @@ export type Database = {
           created_at: string
           last_saved_at: string | null
           root_folder_id: string | null
+          sync_lock_until: string | null
           updated_at: string
           user_id: string
         }
@@ -59,6 +60,7 @@ export type Database = {
           created_at?: string
           last_saved_at?: string | null
           root_folder_id?: string | null
+          sync_lock_until?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -66,6 +68,7 @@ export type Database = {
           created_at?: string
           last_saved_at?: string | null
           root_folder_id?: string | null
+          sync_lock_until?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -284,8 +287,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acquire_drive_sync_lock: {
+        Args: { p_seconds?: number; p_user_id: string }
+        Returns: boolean
+      }
       drive_dirty_folders: {
-        Args: never
+        Args: { p_user_id?: string }
         Returns: {
           created_at: string
           deleted_at: string | null
@@ -306,7 +313,7 @@ export type Database = {
         }
       }
       drive_dirty_items: {
-        Args: { p_limit?: number }
+        Args: { p_limit?: number; p_user_id?: string }
         Returns: {
           canonical_url: string | null
           created_at: string
@@ -335,21 +342,44 @@ export type Database = {
           isSetofReturn: true
         }
       }
-      drive_unsaved_count: { Args: never; Returns: number }
+      drive_unsaved_count: { Args: { p_user_id?: string }; Returns: number }
+      folder_item_counts: {
+        Args: { p_user_id: string }
+        Returns: {
+          folder_id: string
+          item_count: number
+        }[]
+      }
       health: { Args: never; Returns: string }
       mark_folder_synced: {
         Args: { p_drive_folder_id: string; p_id: string }
+        Returns: undefined
+      }
+      mark_item_sync_failed: {
+        Args: {
+          p_give_up: boolean
+          p_item_id: string
+          p_meta: Json
+          p_user_id: string
+        }
         Returns: undefined
       }
       mark_item_synced: {
         Args: { p_drive_file_id: string; p_id: string }
         Returns: undefined
       }
+      release_drive_sync_lock: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       save_google_refresh_token: {
         Args: { p_refresh_token: string }
         Returns: undefined
       }
-      soft_delete_folder: { Args: { p_folder_id: string }; Returns: undefined }
+      soft_delete_folder: {
+        Args: { p_folder_id: string; p_user_id?: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

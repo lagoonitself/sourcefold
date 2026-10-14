@@ -26,22 +26,16 @@ export interface MoveItemDialogProps {
 export function MoveItemDialog({ item, open, onOpenChange }: MoveItemDialogProps) {
   const router = useRouter();
   const [flatFolders, setFlatFolders] = useState<FolderInputRow[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [isMoving, setIsMoving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
 
-    let isMounted = true;
-    queueMicrotask(() => {
-      if (isMounted) {
-        setSelectedFolderId(null);
-        setIsLoading(true);
-      }
-    });
+    const controller = new AbortController();
 
-    fetch("/api/folders")
+    fetch("/api/folders", { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) {
           throw new Error("Failed to load folders");
@@ -49,23 +43,23 @@ export function MoveItemDialog({ item, open, onOpenChange }: MoveItemDialogProps
         return res.json();
       })
       .then((json) => {
-        if (isMounted) {
+        if (!controller.signal.aborted) {
           setFlatFolders(json.data ?? []);
+          setSelectedFolderId(null);
         }
       })
-      .catch(() => {
-        if (isMounted) {
-          toast.error("Couldn't load folders. Try again.");
-        }
+      .catch((err) => {
+        if (controller.signal.aborted || err?.name === "AbortError") return;
+        toast.error("Couldn't load folders. Try again.");
       })
       .finally(() => {
-        if (isMounted) {
+        if (!controller.signal.aborted) {
           setIsLoading(false);
         }
       });
 
     return () => {
-      isMounted = false;
+      controller.abort();
     };
   }, [open]);
 

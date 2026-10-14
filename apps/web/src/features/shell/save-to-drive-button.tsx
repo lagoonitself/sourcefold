@@ -6,7 +6,6 @@ import { CloudUpload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { createClient } from "@/lib/supabase/client";
 
 interface DriveStatus {
   unsaved: number;
@@ -31,6 +30,7 @@ function formatLastSaved(isoString: string | null | undefined): string {
 
 async function reconnect() {
   try {
+    const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -56,6 +56,7 @@ export function SaveToDriveButton() {
 
   const savingRef = useRef(false);
   const statusRef = useRef<DriveStatus | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
 
   useEffect(() => {
     statusRef.current = status;
@@ -72,33 +73,40 @@ export function SaveToDriveButton() {
       }
     } catch {
       // Ignore network errors during polling
+    } finally {
+      lastFetchTimeRef.current = Date.now();
     }
   }, []);
 
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
 
-    void fetch("/api/drive/status")
+    fetch("/api/drive/status")
       .then((res) => (res.ok ? res.json() : null))
       .then((json: { data?: DriveStatus } | null) => {
-        if (mounted && json?.data) {
+        if (!cancelled && json?.data) {
           setStatus(json.data);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        lastFetchTimeRef.current = Date.now();
+      });
 
-    function onFocus() {
+    function handleActive() {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastFetchTimeRef.current < 30000) return;
       void fetchStatus();
     }
-    window.addEventListener("focus", onFocus);
-    const interval = setInterval(() => {
-      void fetchStatus();
-    }, 30000);
+
+    window.addEventListener("focus", handleActive);
+    document.addEventListener("visibilitychange", handleActive);
 
     return () => {
-      mounted = false;
-      window.removeEventListener("focus", onFocus);
-      clearInterval(interval);
+      cancelled = true;
+      window.removeEventListener("focus", handleActive);
+      document.removeEventListener("visibilitychange", handleActive);
     };
   }, [fetchStatus]);
 
@@ -139,6 +147,10 @@ export function SaveToDriveButton() {
         };
 
         if (!res.ok) {
+          if (res.status === 409 || json?.error?.code === "sync_in_progress") {
+            toast(json?.error?.message || "A save is already running.");
+            break;
+          }
           if (json?.error?.code === "reconnect_drive") {
             toast.error("Reconnect Google Drive to keep saving.", {
               action: {
@@ -198,6 +210,24 @@ export function SaveToDriveButton() {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
+
+        if (document.querySelector('[role="dialog"]')) {
+          return;
+        }
+
+        const target = e.target;
+        if (target instanceof HTMLElement) {
+          const tagName = target.tagName.toLowerCase();
+          if (
+            tagName === "input" ||
+            tagName === "textarea" ||
+            tagName === "select" ||
+            target.isContentEditable
+          ) {
+            return;
+          }
+        }
+
         void handleSave();
       }
     }

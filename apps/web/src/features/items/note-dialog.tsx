@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -35,67 +35,82 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
   const [isLoadError, setIsLoadError] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const itemId = item?.id;
+  const prevOpenRef = useRef(false);
+  const prevItemIdRef = useRef<string | undefined>(undefined);
+  const itemRef = useRef(item);
+
   useEffect(() => {
+    itemRef.current = item;
+  }, [item]);
+
+  useEffect(() => {
+    const wasOpen = prevOpenRef.current;
+    const prevItemId = prevItemIdRef.current;
+    prevOpenRef.current = open;
+    prevItemIdRef.current = itemId;
+
     if (!open) return;
 
-    let isMounted = true;
+    const justOpened = !wasOpen;
+    const itemChanged = itemId !== prevItemId;
 
-    if (!isStandalone && item) {
-      queueMicrotask(() => {
-        if (isMounted) {
-          setItemNote(item.note ?? "");
-          setIsLoadError(false);
-        }
-      });
-    } else if (isEdit && item) {
-      queueMicrotask(() => {
-        if (isMounted) {
-          setTitle(item.title);
-          setMarkdown("");
-          setIsLoadingContent(true);
-          setIsLoadError(false);
-        }
-      });
+    if (!justOpened && !itemChanged) {
+      return;
+    }
 
-      fetch(`/api/items/${item.id}`)
+    const currentItem = itemRef.current;
+    const isStandaloneMode = !currentItem || currentItem.kind === "note";
+    const isEditMode = Boolean(currentItem && currentItem.kind === "note");
+
+    const controller = new AbortController();
+
+    if (!isStandaloneMode && currentItem) {
+      setItemNote(currentItem.note ?? "");
+      setIsLoadError(false);
+      setIsLoadingContent(false);
+    } else if (isEditMode && currentItem) {
+      setTitle(currentItem.title);
+      setMarkdown("");
+      setIsLoadingContent(true);
+      setIsLoadError(false);
+
+      fetch(`/api/items/${currentItem.id}`, { signal: controller.signal })
         .then(async (res) => {
           if (!res.ok) throw new Error("Failed to load note content");
           return res.json();
         })
         .then((json) => {
-          if (isMounted && json.data) {
-            setTitle(json.data.title ?? item.title);
+          if (controller.signal.aborted) return;
+          if (json.data) {
+            setTitle(json.data.title ?? currentItem.title);
             setMarkdown(json.data.markdown ?? "");
             setIsLoadError(false);
           }
         })
-        .catch(() => {
-          if (isMounted) {
-            setIsLoadError(true);
-            toast.error("Couldn't load note content. Try again.");
-          }
+        .catch((err) => {
+          if (controller.signal.aborted || err?.name === "AbortError") return;
+          setIsLoadError(true);
+          toast.error("Couldn't load note content. Try again.");
         })
         .finally(() => {
-          if (isMounted) {
+          if (!controller.signal.aborted) {
             setIsLoadingContent(false);
           }
         });
     } else {
       // Create mode
-      queueMicrotask(() => {
-        if (isMounted) {
-          setTitle("");
-          setMarkdown("");
-          setIsLoadingContent(false);
-          setIsLoadError(false);
-        }
-      });
+      setTitle("");
+      setMarkdown("");
+      setItemNote("");
+      setIsLoadingContent(false);
+      setIsLoadError(false);
     }
 
     return () => {
-      isMounted = false;
+      controller.abort();
     };
-  }, [open, isStandalone, isEdit, item]);
+  }, [open, itemId]);
 
   const handleSave = async () => {
     if (isSaving || isLoadingContent || isLoadError) return;
@@ -183,16 +198,25 @@ export function NoteDialog({ open, onOpenChange, item, folderId }: NoteDialogPro
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation?.();
+      void handleSave();
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[640px]">
+      <DialogContent className="max-w-[640px]" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>
             {!isStandalone ? "Edit note" : isEdit ? "Edit note" : "New note"}
           </DialogTitle>
           <DialogDescription>
             {!isStandalone
-              ? `Personal note on "${item?.title ?? ""}"`
+              ? `Personal note on \u201c${item?.title ?? ""}\u201d`
               : isEdit
                 ? "Edit your standalone note."
                 : "Create a standalone note."}

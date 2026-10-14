@@ -121,6 +121,42 @@ describe("canonicalizeUrl", () => {
     );
   });
 
+  it("re-encodes %, #, and ? in Grokipedia titles while remaining idempotent", () => {
+    const urls = [
+      "https://grokipedia.com/page/C%23",
+      "https://grokipedia.com/page/What_If%3F",
+      "https://grokipedia.com/page/100%25_Pure",
+    ];
+
+    expect(canonicalizeUrl("https://grokipedia.com/page/C%23")).toBe(
+      "https://grokipedia.com/page/C%23",
+    );
+    expect(canonicalizeUrl("https://grokipedia.com/page/What_If%3F")).toBe(
+      "https://grokipedia.com/page/What_If%3F",
+    );
+    expect(canonicalizeUrl("https://grokipedia.com/page/100%25_Pure")).toBe(
+      "https://grokipedia.com/page/100%25_Pure",
+    );
+
+    for (const u of urls) {
+      expect(canonicalizeUrl(canonicalizeUrl(u))).toBe(canonicalizeUrl(u));
+    }
+  });
+
+  it("preserves decoded unicode titles and replaces spaces with underscores idempotently", () => {
+    const unicodeUrl = "https://grokipedia.com/page/Émile_Zola";
+    expect(canonicalizeUrl(unicodeUrl)).toBe("https://grokipedia.com/page/Émile_Zola");
+    expect(canonicalizeUrl(canonicalizeUrl(unicodeUrl))).toBe(
+      "https://grokipedia.com/page/Émile_Zola",
+    );
+
+    const spaceUrl = "https://grokipedia.com/page/Artificial Intelligence";
+    expect(canonicalizeUrl(spaceUrl)).toBe("https://grokipedia.com/page/Artificial_Intelligence");
+    expect(canonicalizeUrl(canonicalizeUrl(spaceUrl))).toBe(
+      "https://grokipedia.com/page/Artificial_Intelligence",
+    );
+  });
+
   it("falls back to raw title on Grokipedia if decodeURIComponent throws", () => {
     expect(canonicalizeUrl("https://grokipedia.com/page/Malformed%E0%A4%A")).toBe(
       "https://grokipedia.com/page/Malformed%E0%A4%A",
@@ -226,6 +262,16 @@ describe("xStatusId", () => {
 });
 
 describe("extractUrls", () => {
+  it("preserves balanced parentheses in URLs and strips unbalanced closing parens", () => {
+    const text1 = "See https://grokipedia.com/page/Transformer_(machine_learning) for details.";
+    expect(extractUrls(text1)).toEqual([
+      "https://grokipedia.com/page/Transformer_(machine_learning)",
+    ]);
+
+    const text2 = "(see https://grokipedia.com/page/Foo).";
+    expect(extractUrls(text2)).toEqual(["https://grokipedia.com/page/Foo"]);
+  });
+
   it("extracts URLs from a messy multi-line paste with duplicates and trailing punctuation", () => {
     const text = `
       Check these out:

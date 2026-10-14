@@ -23,7 +23,9 @@ export async function GET() {
     connected = false;
   }
 
-  const { data: unsavedCount } = await supabase.rpc("drive_unsaved_count");
+  const { data: unsavedCount } = await supabase.rpc("drive_unsaved_count", {
+    p_user_id: user.id,
+  });
   const unsaved = typeof unsavedCount === "number" ? unsavedCount : 0;
 
   const { data: driveState } = await supabase

@@ -120,7 +120,9 @@ function findArticleInJson(obj: unknown): JsonLdArticle | null {
     const authorRaw = record.author;
     if (authorRaw) {
       const authorObj = Array.isArray(authorRaw) ? authorRaw[0] : authorRaw;
-      if (authorObj && typeof authorObj === "object") {
+      if (typeof authorObj === "string") {
+        authorName = authorObj;
+      } else if (authorObj && typeof authorObj === "object") {
         const aRecord = authorObj as Record<string, unknown>;
         if (typeof aRecord.name === "string") {
           authorName = aRecord.name;
@@ -136,7 +138,9 @@ function findArticleInJson(obj: unknown): JsonLdArticle | null {
     const pubRaw = record.publisher;
     if (pubRaw) {
       const pubObj = Array.isArray(pubRaw) ? pubRaw[0] : pubRaw;
-      if (pubObj && typeof pubObj === "object") {
+      if (typeof pubObj === "string") {
+        publisherName = pubObj;
+      } else if (pubObj && typeof pubObj === "object") {
         const pRecord = pubObj as Record<string, unknown>;
         if (typeof pRecord.name === "string") {
           publisherName = pRecord.name;

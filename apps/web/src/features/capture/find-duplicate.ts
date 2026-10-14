@@ -21,7 +21,7 @@ export async function findDuplicate(
 ): Promise<DuplicateInfo | null> {
   const { data: item, error } = await db
     .from("items")
-    .select("id, folder_id")
+    .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
     .eq("user_id", userId)
     .eq("canonical_url", canonicalUrl)
     .is("deleted_at", null)
@@ -31,20 +31,8 @@ export async function findDuplicate(
     return null;
   }
 
-  let folderName = "another folder";
-  if (item.folder_id) {
-    const { data: folder } = await db
-      .from("folders")
-      .select("name")
-      .eq("user_id", userId)
-      .eq("id", item.folder_id)
-      .is("deleted_at", null)
-      .maybeSingle();
-
-    if (folder?.name) {
-      folderName = folder.name;
-    }
-  }
+  const folder = Array.isArray(item.folders) ? item.folders[0] : item.folders;
+  const folderName = folder && !folder.deleted_at && folder.name ? folder.name : "another folder";
 
   return {
     item_id: item.id,
@@ -56,16 +44,44 @@ export async function findDuplicate(
 export async function nextPosition(
   db: SupabaseClient<Database>,
   userId: string,
-  folderId: string,
+  folderId: string | null,
+  table: "items" | "folders" = "items",
 ): Promise<number> {
-  const { data: siblings } = await db
+  if (table === "folders") {
+    return nextFolderPosition(db, userId, folderId);
+  }
+
+  if (!folderId) {
+    return 0;
+  }
+
+  const { data } = await db
     .from("items")
     .select("position")
     .eq("user_id", userId)
     .eq("folder_id", folderId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  const maxPosition =
-    siblings && siblings.length > 0 ? Math.max(...siblings.map((item) => item.position)) : -1;
-  return maxPosition + 1;
+  return (data?.position ?? -1) + 1;
+}
+
+export async function nextFolderPosition(
+  db: SupabaseClient<Database>,
+  userId: string,
+  parentId: string | null,
+): Promise<number> {
+  let query = db.from("folders").select("position").eq("user_id", userId).is("deleted_at", null);
+
+  if (parentId === null) {
+    query = query.is("parent_id", null);
+  } else {
+    query = query.eq("parent_id", parentId);
+  }
+
+  const { data } = await query.order("position", { ascending: false }).limit(1).maybeSingle();
+
+  return (data?.position ?? -1) + 1;
 }

@@ -100,9 +100,13 @@ export function moveFolderInside(
   }
 
   const treeWithoutActive = removeNodeFromTree(tree, activeId);
+  const targetSiblings = getSiblings(treeWithoutActive, targetParentId);
+  const nextPosition = targetSiblings.length;
+
   const updatedActive: FolderNode = {
     ...activeNode,
     parentId: targetParentId,
+    position: nextPosition,
   };
 
   if (targetParentId === null) {

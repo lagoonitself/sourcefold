@@ -140,4 +140,4 @@ Rules:
   - Project without groups: "This project has no groups yet. Create a group, for example “Engines”, then add links to it."
   - Empty folder: "Nothing here yet. Add Grokipedia links, or save a page with the Sourcefold extension."
   - No search results: "No titles match "<query>"."
-- Statuses: "Saved", "Saving", "Failed", "Paid post, not saved", "Already saved in <folder>".
+- Statuses: "Saved", "Saving", "Failed", "Paid post, not saved", "Already saved in <group>".

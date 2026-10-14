@@ -97,7 +97,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (updateError) {
     if (updateError.message.includes("a folder cannot be moved inside itself")) {
-      return jsonError(400, "You can't move a folder inside itself.");
+      return jsonError(400, "You can't move a group inside itself.");
+    }
+    if (updateError.message.includes("a group with sources cannot become a project")) {
+      return jsonError(400, "A group with sources can't become a project. Move it to a project.");
     }
     if (updateError.message.includes("invalid parent folder")) {
       return jsonError(400, "That folder no longer exists.");

@@ -6,7 +6,12 @@ import {
 } from "@sourcefold/core";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { findDuplicate, formatDuplicateMessage, nextPosition } from "./find-duplicate";
+import {
+  findDuplicate,
+  formatDuplicateMessage,
+  invalidFolderMessage,
+  nextPosition,
+} from "./find-duplicate";
 import type { SavedCaptureItem } from "./save-substack";
 
 export type SaveXSuccess = {
@@ -148,7 +153,7 @@ export async function saveXThread(
   const rootCanonical = canonicalUrls[0]!;
 
   // Duplicate check on root post URL
-  const rootExisting = await findDuplicate(db, userId, rootCanonical);
+  const rootExisting = await findDuplicate(db, userId, rootCanonical, folderId);
   if (rootExisting) {
     return {
       success: false,
@@ -163,7 +168,7 @@ export async function saveXThread(
     };
   }
 
-  // Check if ANY of the posts is already a node of an existing live X item of this user
+  // Check if ANY of the posts is already a node of a live X item in this group
   const { data: existingNodes } = await db
     .from("x_posts")
     .select("item_id, canonical_url")
@@ -177,6 +182,7 @@ export async function saveXThread(
       .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
       .eq("user_id", userId)
       .in("id", candidateItemIds)
+      .eq("folder_id", folderId)
       .is("deleted_at", null)
       .limit(1)
       .maybeSingle();
@@ -253,13 +259,13 @@ export async function saveXThread(
         status: 400,
         error: {
           code: "invalid_folder",
-          message: "That folder no longer exists.",
+          message: invalidFolderMessage(insertItemError.message),
         },
       };
     }
 
     if (insertItemError.code === "23505" || insertItemError.message.includes("duplicate key")) {
-      const raceExisting = await findDuplicate(db, userId, rootCanonical);
+      const raceExisting = await findDuplicate(db, userId, rootCanonical, folderId);
       const folderName = raceExisting?.folder_name ?? "another folder";
       return {
         success: false,

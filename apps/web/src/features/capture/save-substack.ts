@@ -1,7 +1,12 @@
 import { canonicalizeUrl, InvalidUrlError } from "@sourcefold/core";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
-import { findDuplicate, formatDuplicateMessage, nextPosition } from "./find-duplicate";
+import {
+  findDuplicate,
+  formatDuplicateMessage,
+  invalidFolderMessage,
+  nextPosition,
+} from "./find-duplicate";
 
 export type SavedCaptureItem = {
   id: string;
@@ -91,7 +96,7 @@ export async function saveSubstack(
     };
   }
 
-  const existing = await findDuplicate(db, userId, canonical);
+  const existing = await findDuplicate(db, userId, canonical, folder_id);
   if (existing) {
     return {
       success: false,
@@ -143,13 +148,13 @@ export async function saveSubstack(
         status: 400,
         error: {
           code: "invalid_folder",
-          message: "That folder no longer exists.",
+          message: invalidFolderMessage(insertError.message),
         },
       };
     }
 
     if (insertError.code === "23505" || insertError.message.includes("duplicate key")) {
-      const raceExisting = await findDuplicate(db, userId, canonical);
+      const raceExisting = await findDuplicate(db, userId, canonical, folder_id);
       const folderName = raceExisting?.folder_name ?? "another folder";
       return {
         success: false,
@@ -217,7 +222,7 @@ export async function saveSubstackUnavailable(
     };
   }
 
-  const existing = await findDuplicate(db, userId, canonical);
+  const existing = await findDuplicate(db, userId, canonical, folder_id);
   if (existing) {
     return {
       success: false,
@@ -259,13 +264,13 @@ export async function saveSubstackUnavailable(
         status: 400,
         error: {
           code: "invalid_folder",
-          message: "That folder no longer exists.",
+          message: invalidFolderMessage(insertError.message),
         },
       };
     }
 
     if (insertError.code === "23505" || insertError.message.includes("duplicate key")) {
-      const raceExisting = await findDuplicate(db, userId, canonical);
+      const raceExisting = await findDuplicate(db, userId, canonical, folder_id);
       const folderName = raceExisting?.folder_name ?? "another folder";
       return {
         success: false,

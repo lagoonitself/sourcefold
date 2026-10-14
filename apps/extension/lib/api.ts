@@ -146,10 +146,11 @@ export async function createFolder(params: {
   });
 }
 
-export async function checkUrl(url: string): Promise<CheckUrlResult> {
+/** Whether the link is already saved in this group (other groups can hold their own copy). */
+export async function checkUrl(url: string, folder_id: string): Promise<CheckUrlResult> {
   return apiFetch<CheckUrlResult>("/api/items/check", {
     method: "POST",
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, folder_id }),
   });
 }
 
@@ -169,15 +170,9 @@ export async function capture(
   });
 }
 
-export async function moveItem(itemId: string, folder_id: string): Promise<SavedItem> {
-  return apiFetch<SavedItem>(`/api/items/${itemId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ folder_id }),
-  });
-}
-
-export async function recentXItems(): Promise<RecentXItem[]> {
-  return apiFetch<RecentXItem[]>("/api/x/recent");
+/** Recent X threads in the project that holds this group. */
+export async function recentXItems(folderId: string): Promise<RecentXItem[]> {
+  return apiFetch<RecentXItem[]>(`/api/x/recent?folder=${encodeURIComponent(folderId)}`);
 }
 
 export async function addXPost(

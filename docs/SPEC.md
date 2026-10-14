@@ -20,27 +20,27 @@ Later (not in scope now): a public website per video where every claim links to 
 
 ## 2. Decisions
 
-| Topic         | Decision                                                                                                                                                                                                                                               |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Name          | Sourcefold                                                                                                                                                                                                                                             |
-| License       | MIT, public GitHub repo                                                                                                                                                                                                                                |
-| Cost          | $0. Free tiers only.                                                                                                                                                                                                                                   |
-| Platform      | Hosted web app (desktop browser) + Chrome extension                                                                                                                                                                                                    |
-| Hosting       | Vercel Hobby (free)                                                                                                                                                                                                                                    |
-| Backend       | Supabase free plan: Postgres, Auth (Google), Storage                                                                                                                                                                                                   |
-| Master copy   | Supabase database                                                                                                                                                                                                                                      |
-| Drive         | One-way mirror. One **Save to Drive** button (and Ctrl+S) saves everything changed. Drive never writes back.                                                                                                                                           |
-| Organizing    | Projects, each with groups inside groups (unlimited depth). In the database both are `folders`: a project is a top-level folder, a group is any folder inside one.                                                                                     |
-| One home      | Each item lives in exactly one folder.                                                                                                                                                                                                                 |
-| Search        | Titles only                                                                                                                                                                                                                                            |
-| Duplicates    | Warn "already saved in <folder>", do not save twice                                                                                                                                                                                                    |
-| File format   | Markdown with a YAML front-matter header                                                                                                                                                                                                               |
-| Grokipedia    | Bulk paste box in the app. Saved once, never updated. Keep tables, inline links and the references list with links.                                                                                                                                    |
-| Substack      | Captured by the extension. Free posts, plus paid posts you subscribe to (the extension reads the page while you are logged in). Paid posts you cannot access: show "paid post, not saved". Skip comments and images. Save author and publication info. |
-| X             | Captured by the extension. Text only. Keep post link, author name, handle, profile link and date. Threads and reposts stored as a tree. "Add to this thread" attaches more posts later.                                                                |
-| Notes         | A note box on every item, plus standalone notes (Markdown text) that live in folders like sources                                                                                                                                                      |
-| Own sources   | Pasted text (as notes) and uploaded images                                                                                                                                                                                                             |
-| Capture style | One click reads the page you are viewing                                                                                                                                                                                                               |
+| Topic         | Decision                                                                                                                                                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Name          | Sourcefold                                                                                                                                                                                                                                                               |
+| License       | MIT, public GitHub repo                                                                                                                                                                                                                                                  |
+| Cost          | $0. Free tiers only.                                                                                                                                                                                                                                                     |
+| Platform      | Hosted web app (desktop browser) + Chrome extension                                                                                                                                                                                                                      |
+| Hosting       | Vercel Hobby (free)                                                                                                                                                                                                                                                      |
+| Backend       | Supabase free plan: Postgres, Auth (Google), Storage                                                                                                                                                                                                                     |
+| Master copy   | Supabase database                                                                                                                                                                                                                                                        |
+| Drive         | One-way mirror. One **Save to Drive** button (and Ctrl+S) saves everything changed. Drive never writes back.                                                                                                                                                             |
+| Organizing    | Projects, each with groups inside groups (unlimited depth). In the database both are `folders`: a project is a top-level folder, a group is any folder inside one.                                                                                                       |
+| One home      | Each item lives in exactly one group. Sources can't be saved directly in a project (enforced by the `check_item_folder` trigger).                                                                                                                                        |
+| Search        | Titles only                                                                                                                                                                                                                                                              |
+| Duplicates    | A link is saved once per group: warn "Already saved in <group>" for the same group. The same link can be saved in other groups of the same project and in other projects. Projects are isolated: search, duplicate checks and "Add to this thread" never cross projects. |
+| File format   | Markdown with a YAML front-matter header                                                                                                                                                                                                                                 |
+| Grokipedia    | Bulk paste box in the app. Saved once, never updated. Keep tables, inline links and the references list with links.                                                                                                                                                      |
+| Substack      | Captured by the extension. Free posts, plus paid posts you subscribe to (the extension reads the page while you are logged in). Paid posts you cannot access: show "paid post, not saved". Skip comments and images. Save author and publication info.                   |
+| X             | Captured by the extension. Text only. Keep post link, author name, handle, profile link and date. Threads and reposts stored as a tree. "Add to this thread" attaches more posts later.                                                                                  |
+| Notes         | A note box on every item, plus standalone notes (Markdown text) that live in folders like sources                                                                                                                                                                        |
+| Own sources   | Pasted text (as notes) and uploaded images                                                                                                                                                                                                                               |
+| Capture style | One click reads the page you are viewing                                                                                                                                                                                                                                 |
 
 ## 3. Architecture
 
@@ -237,7 +237,7 @@ Front matter (`source: note`, `title`, `created`, `folder`) then your Markdown.
 1. Paste links, one per line (mixed text is fine; URLs are extracted).
 2. Pick the target group (grouped by project).
 3. The client sends links one at a time to `POST /api/grokipedia` (avoids serverless timeouts) with a short delay between requests.
-4. Each row shows saved / already saved in <folder> / failed with retry.
+4. Each row shows saved / already saved in <group> / failed with retry.
 
 ### Title search
 
@@ -264,7 +264,7 @@ Case-insensitive match on `title` within the open project (across all projects i
 
 1. Detects the page: Grokipedia article, Substack post, X post, or unsupported.
 2. Group picker, grouped by project, defaults to the last group used. "New group" inline (in the selected group's project, or inside the selected group).
-3. **Save** button. Result: saved / already saved in <folder> / paid post, not saved / failed (with reason).
+3. **Save** button. Result: saved / already saved in <group> (checked for the selected group, re-checked when the group changes) / paid post, not saved / failed (with reason).
 4. On X: **Add to this thread** lists recent X items to attach the current post to.
 
 ### Other entry points

@@ -7,7 +7,7 @@ import {
 } from "@sourcefold/core/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/lib/database.types";
-import { nextPosition } from "@/features/capture/find-duplicate";
+import { invalidFolderMessage, nextPosition } from "@/features/capture/find-duplicate";
 import {
   GROKIPEDIA_ERROR_MESSAGES,
   formatDuplicateMessage,
@@ -53,12 +53,14 @@ export async function findExistingItemByCanonicalUrl(
   db: SupabaseClient<Database>,
   userId: string,
   canonicalUrl: string,
+  folderId: string,
 ): Promise<{ id: string; folder_id: string; folder_name: string } | null> {
   const { data: item, error } = await db
     .from("items")
     .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
     .eq("user_id", userId)
     .eq("canonical_url", canonicalUrl)
+    .eq("folder_id", folderId)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -108,7 +110,7 @@ export async function saveGrokipediaLink(
   }
 
   // Step 2: Duplicate check
-  const existing = await findExistingItemByCanonicalUrl(db, userId, canonical);
+  const existing = await findExistingItemByCanonicalUrl(db, userId, canonical, folderId);
   if (existing) {
     return {
       success: false,
@@ -247,10 +249,10 @@ export async function saveGrokipediaLink(
     // Postgres unique violation (code 23505) or unique constraint clash
     if (
       insertError.code === "23505" ||
-      insertError.message.includes("items_user_canonical_url_key") ||
+      insertError.message.includes("items_folder_canonical_url_key") ||
       insertError.message.includes("duplicate key")
     ) {
-      const raceExisting = await findExistingItemByCanonicalUrl(db, userId, canonical);
+      const raceExisting = await findExistingItemByCanonicalUrl(db, userId, canonical, folderId);
       const folderName = raceExisting?.folder_name ?? "another folder";
       return {
         success: false,
@@ -272,7 +274,7 @@ export async function saveGrokipediaLink(
         status: 400,
         error: {
           code: "invalid_folder",
-          message: GROKIPEDIA_ERROR_MESSAGES.invalid_folder,
+          message: invalidFolderMessage(insertError.message),
         },
       };
     }

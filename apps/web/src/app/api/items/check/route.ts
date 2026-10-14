@@ -5,8 +5,11 @@ import { findExistingItemByCanonicalUrl } from "@/features/grokipedia/save-groki
 
 export const dynamic = "force-dynamic";
 
+// A link counts as saved only in the group it would be saved to; other groups and other
+// projects can hold their own copy.
 const checkSchema = z.object({
   url: z.string().trim().min(1, "URL is required"),
+  folder_id: z.string().uuid("Pick a group."),
 });
 
 export async function POST(request: Request) {
@@ -22,7 +25,7 @@ export async function POST(request: Request) {
 
   const parsed = checkSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(400, "URL is required");
+    return jsonError(400, parsed.error.issues[0]?.message ?? "URL is required");
   }
 
   let canonical: string;
@@ -32,7 +35,12 @@ export async function POST(request: Request) {
     return jsonError(400, "That isn't a valid link.");
   }
 
-  const existing = await findExistingItemByCanonicalUrl(auth.db, auth.userId, canonical);
+  const existing = await findExistingItemByCanonicalUrl(
+    auth.db,
+    auth.userId,
+    canonical,
+    parsed.data.folder_id,
+  );
 
   if (existing) {
     return jsonData({
@@ -58,6 +66,7 @@ export async function POST(request: Request) {
         .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
         .eq("user_id", auth.userId)
         .in("id", candidateItemIds)
+        .eq("folder_id", parsed.data.folder_id)
         .is("deleted_at", null)
         .limit(1)
         .maybeSingle();

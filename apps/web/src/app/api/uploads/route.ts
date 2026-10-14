@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { jsonData, jsonError, requireUser } from "@/lib/api";
 import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
-import { nextPosition } from "@/features/capture/find-duplicate";
+import { invalidFolderMessage, nextPosition } from "@/features/capture/find-duplicate";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
   if (insertError) {
     await supabase.storage.from("images").remove([storage_path]);
     if (insertError.message.includes("invalid folder")) {
-      return jsonError(400, "That folder no longer exists.");
+      return jsonError(400, invalidFolderMessage(insertError.message));
     }
     if (insertError.code === "23514") {
       return jsonError(400, "Invalid image data.");

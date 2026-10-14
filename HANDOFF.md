@@ -41,12 +41,12 @@ Lessons worth keeping:
 - The Google OAuth client in Supabase's Google provider must be the same client as the app's `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`. Otherwise Google refuses the token refresh with `unauthorized_client`, and reconnecting can never fix it. The app now reports this case directly.
 - A folder lists only its own items, not its subfolders' items. Users may think a save failed; the extension now shows the full folder path and offers **Move here** for pages saved elsewhere.
 - The Supabase MCP won't run `drop function`, and dropping needs the user's confirmation.
-- Projects are UI only: no schema change, so Drive mirrors `Sourcefold/<Project>/<Group>/…` as before. Duplicate links are still checked across all projects (the unique index is per user), so the same link can't be saved in two projects.
+- A project is a top-level folder and a group is a folder inside one, so Drive mirrors `Sourcefold/<Project>/<Group>/…`. Migration `20261014010000_projects_and_groups.sql` makes links unique per group (`items_folder_canonical_url_key`), rejects sources saved directly in a project, and stops a group with sources from becoming a project. Projects share nothing: search, duplicate checks and recent X threads are scoped to one project.
 - Local `npm run dev` uses the live Supabase project, so don't create or delete test data there without asking.
 
 ## Next steps
 
-1. **Deploy projects and groups.** Push to `main` so Vercel deploys, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. Old sources saved directly in a project show under "Not in a group"; move them into groups with **Move to…**.
+1. **Deploy projects and groups.** Apply `supabase/migrations/20261014010000_projects_and_groups.sql` to the owner's database (the MCP apply was declined on 2026-10-14; run it in the SQL editor or approve it), push to `main` so Vercel deploys, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. The owner's test data was soft-deleted on 2026-10-14; the next Save to Drive trashes its Drive copies.
 2. **Optional cleanup on the owner's database: drop the old function overloads.** Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
 
    ```sql

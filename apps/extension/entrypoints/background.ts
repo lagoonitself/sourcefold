@@ -45,7 +45,7 @@ export default defineBackground(() => {
       if (source === "grokipedia") {
         const lastFolderId = await getLastFolderId();
         if (!lastFolderId) {
-          await showErrorBadge("Choose a folder in the popup first");
+          await showErrorBadge("Choose a group in the popup first");
           return;
         }
 
@@ -57,11 +57,11 @@ export default defineBackground(() => {
             err instanceof ApiError &&
             (err.code === "invalid_folder" ||
               err.status === 404 ||
-              (err.status === 400 && err.message.toLowerCase().includes("folder")));
+              (err.status === 400 && err.message.toLowerCase().includes("group")));
 
           if (isFolderMissing) {
             await clearLastFolderId();
-            await showErrorBadge("Choose a folder in the popup first");
+            await showErrorBadge("Choose a group in the popup first");
             return;
           }
 

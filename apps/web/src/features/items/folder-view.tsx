@@ -55,11 +55,12 @@ export async function FolderView({ folderId }: FolderViewProps) {
   const isProject = currentFolder.parent_id === null;
   const ancestors = ancestorsOf(folders, currentFolder);
   const groups = folders.filter((f) => f.parent_id === folderId);
-  const items = itemsResult.data ?? [];
+  // Sources live only in groups; a project page lists its groups.
+  const items = isProject ? [] : (itemsResult.data ?? []);
 
   const counts = [
     groups.length > 0 || isProject ? plural(groups.length, "group", "groups") : null,
-    items.length > 0 || !isProject ? plural(items.length, "source", "sources") : null,
+    isProject ? null : plural(items.length, "source", "sources"),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -123,9 +124,7 @@ export async function FolderView({ folderId }: FolderViewProps) {
 
       {items.length > 0 && (
         <section aria-label="Sources">
-          {(groups.length > 0 || isProject) && (
-            <SectionLabel>{isProject ? "Not in a group" : "Sources"}</SectionLabel>
-          )}
+          {groups.length > 0 && <SectionLabel>Sources</SectionLabel>}
           <ItemList items={items} />
         </section>
       )}

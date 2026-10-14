@@ -9,7 +9,6 @@ import {
   capture,
   recentXItems,
   addXPost,
-  moveItem,
   ApiError,
   type Folder,
   type RecentXItem,
@@ -48,10 +47,8 @@ export default function App() {
   const [folderTree, setFolderTree] = useState<FolderTreeItem[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
 
-  const [isAlreadySaved, setIsAlreadySaved] = useState(false);
-  const [alreadySavedFolder, setAlreadySavedFolder] = useState<string | null>(null);
-  // The saved item for this page, so it can be moved to another folder
-  const [savedItem, setSavedItem] = useState<{ id: string; folderId: string } | null>(null);
+  // Groups that already hold this page. A page is saved once per group.
+  const [savedGroupIds, setSavedGroupIds] = useState<Set<string>>(() => new Set());
 
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -71,7 +68,7 @@ export default function App() {
   // X "Add to this thread" state
   const [recentThreads, setRecentThreads] = useState<RecentXItem[]>([]);
   const [loadingThreads, setLoadingThreads] = useState(false);
-  const [threadsLoaded, setThreadsLoaded] = useState(false);
+  const [threadsProjectId, setThreadsProjectId] = useState<string | null>(null);
   const [addingToThreadId, setAddingToThreadId] = useState<string | null>(null);
   const [threadStatus, setThreadStatus] = useState<{ message: string; isError: boolean } | null>(
     null,
@@ -122,13 +119,7 @@ export default function App() {
           setLoading(false);
         }
 
-        // Run independent API calls in parallel: refresh folder tree + duplicate check concurrently
-        const foldersPromise = listFolders();
-        const checkPromise = currentUrl
-          ? checkUrl(currentUrl).catch(() => null)
-          : Promise.resolve(null);
-
-        const [loadedFolders, checkResult] = await Promise.all([foldersPromise, checkPromise]);
+        const loadedFolders = await listFolders();
 
         setFolders(loadedFolders);
         const tree = buildFolderTree(loadedFolders);
@@ -150,12 +141,6 @@ export default function App() {
         if (defaultGroupId && defaultGroupId !== lastFolderId) {
           await setLastFolderId(defaultGroupId);
         }
-
-        if (checkResult && checkResult.exists) {
-          setIsAlreadySaved(true);
-          setAlreadySavedFolder(checkResult.folder_name);
-          setSavedItem({ id: checkResult.item_id, folderId: checkResult.folder_id });
-        }
       } catch (err: unknown) {
         if (err instanceof ApiError && err.status === 401) {
           setHasToken(false);
@@ -169,6 +154,24 @@ export default function App() {
 
     loadData();
   }, []);
+
+  // Check the selected group each time it changes.
+  useEffect(() => {
+    if (!hasToken || !tabUrl || !selectedFolderId) return;
+    let ignore = false;
+    checkUrl(tabUrl, selectedFolderId)
+      .then((result) => {
+        if (!ignore && result.exists) {
+          setSavedGroupIds((prev) => new Set(prev).add(selectedFolderId));
+        }
+      })
+      .catch(() => {
+        // The save itself reports duplicates, so a failed check is not shown.
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [hasToken, tabUrl, selectedFolderId]);
 
   const openSettings = () => {
     browser.runtime.openOptionsPage();
@@ -193,8 +196,7 @@ export default function App() {
   const selectedFolder = folders.find((f) => f.id === selectedFolderId);
   const projectSections = buildProjectSections(folderTree);
   const hasGroups = projectSections.some((section) => section.groups.length > 0);
-  const canMove =
-    savedItem !== null && selectedFolderId !== "" && savedItem.folderId !== selectedFolderId;
+  const isAlreadySaved = savedGroupIds.has(selectedFolderId);
 
   // "Parent / Child" so a save into a subfolder is easy to find in the app
   const folderPath = (folderId: string): string | null => {
@@ -210,31 +212,15 @@ export default function App() {
     return names.length > 0 ? names.join(" / ") : null;
   };
 
-  const markSaved = (item: { id: string; folder_id: string }) => {
-    setIsAlreadySaved(true);
-    setSavedItem({ id: item.id, folderId: item.folder_id });
+  const markSaved = (item: { folder_id: string }) => {
+    setSavedGroupIds((prev) => new Set(prev).add(item.folder_id));
   };
 
-  const handleMove = async () => {
-    if (!savedItem || !canMove || isSavingRef.current) return;
-
-    isSavingRef.current = true;
-    setIsSaving(true);
-    setErrorMessage(null);
-    setWarningMessage(null);
+  const selectGroup = (groupId: string) => {
+    setSelectedFolderId(groupId);
     setSuccessMessage(null);
-
-    try {
-      await moveItem(savedItem.id, selectedFolderId);
-      await setLastFolderId(selectedFolderId);
-      setSavedItem({ id: savedItem.id, folderId: selectedFolderId });
-      setSuccessMessage(`Moved to ${folderPath(selectedFolderId) ?? "folder"}`);
-    } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to move the page.");
-    } finally {
-      isSavingRef.current = false;
-      setIsSaving(false);
-    }
+    setWarningMessage(null);
+    setErrorMessage(null);
   };
 
   const handleCreateFolder = async () => {
@@ -256,7 +242,7 @@ export default function App() {
       setFolders(updatedFolders);
       const tree = buildFolderTree(updatedFolders);
       setFolderTree(tree);
-      setSelectedFolderId(created.id);
+      selectGroup(created.id);
       await setLastFolderId(created.id);
 
       const settings = await getSettings();
@@ -284,10 +270,6 @@ export default function App() {
     if (isSavingRef.current || isAddingToThreadRef.current) {
       return;
     }
-    if (canMove) {
-      await handleMove();
-      return;
-    }
     if (!tabUrl || !selectedFolderId || isAlreadySaved) {
       return;
     }
@@ -298,7 +280,7 @@ export default function App() {
     setWarningMessage(null);
     setSuccessMessage(null);
 
-    const folderName = folderPath(selectedFolderId) ?? "folder";
+    const folderName = folderPath(selectedFolderId) ?? "this group";
 
     try {
       if (detectedSource === "grokipedia") {
@@ -387,14 +369,7 @@ export default function App() {
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.status === 409 || err.code === "duplicate") {
-          setIsAlreadySaved(true);
-          const existing = await checkUrl(tabUrl).catch(() => null);
-          if (existing?.exists) {
-            setAlreadySavedFolder(existing.folder_name);
-            setSavedItem({ id: existing.item_id, folderId: existing.folder_id });
-          } else {
-            setWarningMessage(`Already saved in ${err.folderName || folderName}`);
-          }
+          markSaved({ folder_id: selectedFolderId });
           return;
         }
         setErrorMessage(err.message);
@@ -409,12 +384,14 @@ export default function App() {
 
   const handleDetailsToggle = async (e: React.SyntheticEvent<HTMLDetailsElement>) => {
     const details = e.currentTarget;
-    if (details.open && !threadsLoaded && !loadingThreads) {
+    // Threads come from the selected group's project, so reload when the project changes.
+    const projectId = projectIdOf(folderTree, selectedFolderId);
+    if (details.open && projectId && threadsProjectId !== projectId && !loadingThreads) {
       setLoadingThreads(true);
       try {
-        const items = await recentXItems();
+        const items = await recentXItems(selectedFolderId);
         setRecentThreads(items);
-        setThreadsLoaded(true);
+        setThreadsProjectId(projectId);
       } catch (err: unknown) {
         setThreadStatus({
           message: err instanceof Error ? err.message : "Failed to load recent threads.",
@@ -565,7 +542,7 @@ export default function App() {
             <select
               className="popup-select"
               value={selectedFolderId}
-              onChange={(e) => setSelectedFolderId(e.target.value)}
+              onChange={(e) => selectGroup(e.target.value)}
               disabled={!hasGroups || isSaving}
             >
               {!hasGroups ? (
@@ -649,11 +626,9 @@ export default function App() {
               type="button"
               className="btn-primary btn-full"
               onClick={handleSave}
-              disabled={
-                isSaving || (isAlreadySaved && !canMove) || unsupported || folderTree.length === 0
-              }
+              disabled={isSaving || isAlreadySaved || unsupported || !selectedFolderId}
             >
-              {isSaving ? (canMove ? "Moving…" : "Saving…") : canMove ? "Move here" : "Save"}
+              {isSaving ? "Saving…" : "Save"}
             </button>
 
             {successMessage && (
@@ -675,21 +650,22 @@ export default function App() {
               </p>
             )}
 
-            {!successMessage &&
-              (warningMessage || (isAlreadySaved && (savedItem || alreadySavedFolder))) && (
-                <p className="popup-result popup-result-warning">
-                  {warningMessage ||
-                    `Already saved in ${
-                      (savedItem && folderPath(savedItem.folderId)) || alreadySavedFolder
-                    }`}
-                </p>
-              )}
+            {!successMessage && (warningMessage || isAlreadySaved) && (
+              <p className="popup-result popup-result-warning">
+                {warningMessage ||
+                  `Already saved in ${folderPath(selectedFolderId) ?? "this group"}`}
+              </p>
+            )}
 
             {errorMessage && <p className="popup-result popup-result-error">{errorMessage}</p>}
           </div>
 
           {detectedSource === "x" && (
-            <details className="popup-details" onToggle={handleDetailsToggle}>
+            <details
+              key={projectIdOf(folderTree, selectedFolderId) ?? "none"}
+              className="popup-details"
+              onToggle={handleDetailsToggle}
+            >
               <summary className="popup-summary">Add to this thread</summary>
               <div className="popup-thread-list">
                 {loadingThreads && <p className="popup-thread-loading">Loading threads…</p>}

@@ -8,6 +8,10 @@ function SearchBoxContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentQ = searchParams.get("q") ?? "";
+  // Search stays inside the open project, and Escape returns to the open group.
+  const folder = searchParams.get("folder");
+  const folderQuery = folder ? `folder=${encodeURIComponent(folder)}` : "";
+  const homeHref = folderQuery ? `/?${folderQuery}` : "/";
 
   const [value, setValue] = React.useState(currentQ);
   const prevQRef = React.useRef(currentQ);
@@ -29,20 +33,20 @@ function SearchBoxContent() {
     const timer = setTimeout(() => {
       prevQRef.current = value;
       if (value) {
-        router.replace(`/?q=${encodeURIComponent(value)}`);
+        router.replace(`/?q=${encodeURIComponent(value)}${folderQuery ? `&${folderQuery}` : ""}`);
       } else {
-        router.replace("/");
+        router.replace(homeHref);
       }
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [value, router]);
+  }, [value, router, folderQuery, homeHref]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       setValue("");
       prevQRef.current = "";
-      router.replace("/");
+      router.replace(homeHref);
     }
   };
 
@@ -57,8 +61,8 @@ function SearchBoxContent() {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Search titles"
-        aria-label="Search titles"
+        placeholder={folder ? "Search this project" : "Search titles"}
+        aria-label={folder ? "Search this project" : "Search titles"}
         className="h-[36px] w-full rounded-[6px] border border-input bg-background pl-8.5 pr-3 font-sans text-sm text-foreground placeholder:text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       />
     </div>

@@ -30,7 +30,7 @@ Later (not in scope now): a public website per video where every claim links to 
 | Backend       | Supabase free plan: Postgres, Auth (Google), Storage                                                                                                                                                                                                   |
 | Master copy   | Supabase database                                                                                                                                                                                                                                      |
 | Drive         | One-way mirror. One **Save to Drive** button (and Ctrl+S) saves everything changed. Drive never writes back.                                                                                                                                           |
-| Organizing    | Folders inside folders, unlimited depth. A "project" is a top-level folder.                                                                                                                                                                            |
+| Organizing    | Projects, each with groups inside groups (unlimited depth). In the database both are `folders`: a project is a top-level folder, a group is any folder inside one.                                                                                     |
 | One home      | Each item lives in exactly one folder.                                                                                                                                                                                                                 |
 | Search        | Titles only                                                                                                                                                                                                                                            |
 | Duplicates    | Warn "already saved in <folder>", do not save twice                                                                                                                                                                                                    |
@@ -228,20 +228,20 @@ Front matter (`source: note`, `title`, `created`, `folder`) then your Markdown.
 
 ### Layout
 
-- **Left:** folder tree. Create, rename, delete, drag to move or reorder. Folders inside folders.
+- **Left:** project switcher (pick, create, rename, delete projects), then the open project's group tree. Create, rename, delete, drag to move or reorder groups, nest groups inside groups, or move a group to another project. Only one project is shown at a time; `/` reopens the last project (cookie `sourcefold_project`).
 - **Top bar:** title search box, **Add links** button (Grokipedia paste box), **Save to Drive** button with unsaved count and last-saved time.
-- **Main:** items in the selected folder. Each row: source icon, title, author (Substack/X), date, status. Click opens the source URL in a new tab. Notes open in an editor. A row menu: edit note, rename, move, delete, retry (failed items).
+- **Main:** a project page lists its groups (and any sources saved directly in the project, under "Not in a group"). A group page lists its subgroups, then its sources. Each row: source icon, title, author (Substack/X), date, status. Click opens the source URL in a new tab. Notes open in an editor. A row menu: edit note, rename, move, delete, retry (failed items).
 
 ### Grokipedia paste box
 
 1. Paste links, one per line (mixed text is fine; URLs are extracted).
-2. Pick the target folder.
+2. Pick the target group (grouped by project).
 3. The client sends links one at a time to `POST /api/grokipedia` (avoids serverless timeouts) with a short delay between requests.
 4. Each row shows saved / already saved in <folder> / failed with retry.
 
 ### Title search
 
-Case-insensitive match on `title` across all folders. Results show the folder path.
+Case-insensitive match on `title` within the open project (across all projects if none is open). Results show the group path.
 
 ### Save to Drive (Ctrl+S)
 
@@ -263,7 +263,7 @@ Case-insensitive match on `title` across all folders. Results show the folder pa
 ### Popup
 
 1. Detects the page: Grokipedia article, Substack post, X post, or unsupported.
-2. Folder picker (tree), defaults to the last folder used. "New folder" inline.
+2. Group picker, grouped by project, defaults to the last group used. "New group" inline (in the selected group's project, or inside the selected group).
 3. **Save** button. Result: saved / already saved in <folder> / paid post, not saved / failed (with reason).
 4. On X: **Add to this thread** lists recent X items to attach the current post to.
 

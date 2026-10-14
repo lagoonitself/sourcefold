@@ -90,24 +90,25 @@ Rules:
 
 ```
 +------------------------+------------------------------------------------------------+
-| Sourcefold             | [ Search titles              ]        [Add links] [Save to Drive  3] |
-|                        +------------------------------------------------------------+
-| v AI Research       16 |  AI Research / Risks                                        |
-|   > Risks           12 |  Risks                                    12 sources        |
-|   > Economics        4 |  ---------------------------------------------------------  |
-| > Space              7 |  | Impact of Artificial Intelligence on the Future   Grokipedia   Oct 13 |
+| Sourcefold             | [ Search this project        ]        [Add links] [Save to Drive  3] |
+| [ AI Research       ⇅ ]|------------------------------------------------------------+
+| Groups                 |  AI Research                                                |
+| v Risks             12 |  Risks                                    12 sources        |
+|   > Job loss         3 |  ---------------------------------------------------------  |
+| > Economics          4 |  | Impact of Artificial Intelligence on the Future   Grokipedia   Oct 13 |
 |                        |  | Thread by Jane Doe (@jane)                        X            Oct 12 |
-| + New folder           |  | The case for slower AI                            Substack     Oct 10 |
+| + New group            |  | The case for slower AI                            Substack     Oct 10 |
 |                        |                                                             |
 |------------------------|                                                             |
 | (avatar) Settings      |                                                             |
 +------------------------+------------------------------------------------------------+
 ```
 
-- Sidebar: fixed 280px wide, `--sidebar` background, right border `--border`. App name "Sourcefold" at top in sans 15px/600. Folder tree indents 16px per level. Each folder row is 32px tall: chevron (16px, rotates when open), folder name (truncate with ellipsis), item count right-aligned in metadata style. Selected folder: `--accent` background and `--accent-foreground` text.
+- Sidebar: fixed 280px wide, `--sidebar` background, right border `--border`. App name "Sourcefold" at top in sans 15px/600. Below it, the project switcher: a full-width 36px button with the project name and a `ChevronsUpDown` icon; its menu lists projects (check on the current one), then New project, Rename project, Delete project. Then a "Groups" small label and the open project's group tree. Group tree indents 16px per level. Each folder row is 32px tall: chevron (16px, rotates when open), folder name (truncate with ellipsis), item count right-aligned in metadata style. Selected folder: `--accent` background and `--accent-foreground` text.
 - Top bar: 56px tall, bottom border. Search input left (max 360px). Buttons right: "Add links" (outline), "Save to Drive" (primary, shows the unsaved count as a small number inside the button when > 0).
-- Main: padding 32px horizontal, 24px top. Breadcrumb, then folder heading, then the item count on the same baseline at the right in metadata style, then a 1px rule, then rows.
+- Main: padding 32px horizontal, 24px top. Breadcrumb ("Project" on a project page, otherwise linked ancestor names), then folder heading, then the item count on the same baseline at the right in metadata style, then a 1px rule, then rows.
 - Item rows: full width, 48px min height, no cards, no shadows. Columns: 3px source bar, title (serif, truncate to one line), source name, saved date ("Oct 13"), status icon. Separator: 1px `--border` between rows. Hover: `--muted` background. Whole row is clickable and opens the source URL in a new tab; the row menu button (three dots) appears on hover and on keyboard focus.
+- Group rows (on project and group pages, above sources): same 48px row, `Folder` icon, name in the item-title style, "2 subgroups · 12 sources" in metadata style. Clicking opens the group.
 - Everything is left-aligned. Numbers (counts, dates) right-aligned in their column.
 
 ## Shape and depth
@@ -131,11 +132,12 @@ Rules:
 
 ## Writing
 
-- Name things by what the user does: "Add links", "Save to Drive", "New folder", "Rename", "Move to...", "Delete".
+- Name things by what the user does: "Add links", "Save to Drive", "New project", "New group", "New subgroup", "Rename", "Move to...", "Delete".
 - An action keeps its name in its result: button "Save to Drive" gives the toast "Saved to Drive".
 - Errors say what happened and what to do: "Couldn't reach Grokipedia. Check the link and try again." Never apologize, never be vague.
 - Empty states invite action:
-  - No folders: "Create your first folder to start collecting sources." with a "New folder" button.
+  - No projects: "Create your first project to start collecting sources." with a "New project" button.
+  - Project without groups: "This project has no groups yet. Create a group, for example “Engines”, then add links to it."
   - Empty folder: "Nothing here yet. Add Grokipedia links, or save a page with the Sourcefold extension."
   - No search results: "No titles match "<query>"."
 - Statuses: "Saved", "Saving", "Failed", "Paid post, not saved", "Already saved in <folder>".

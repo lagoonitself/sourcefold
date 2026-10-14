@@ -42,6 +42,23 @@ export function flattenFolderOptions(nodes: FolderNode[], depth = 0): FlattenedF
   return result;
 }
 
+export type ProjectOptions = {
+  id: string;
+  name: string;
+  groups: FlattenedFolderOption[];
+};
+
+/** Links are saved into groups, so each project lists only the groups inside it. */
+export function buildProjectOptions(tree: FolderNode[]): ProjectOptions[] {
+  return tree
+    .map((project) => ({
+      id: project.id,
+      name: project.name,
+      groups: flattenFolderOptions(project.children),
+    }))
+    .filter((project) => project.groups.length > 0);
+}
+
 export interface AddLinksDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,7 +66,7 @@ export interface AddLinksDialogProps {
 
 export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
   const searchParams = useSearchParams();
-  const [folderOptions, setFolderOptions] = useState<FlattenedFolderOption[]>([]);
+  const [projectOptions, setProjectOptions] = useState<ProjectOptions[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [foldersError, setFoldersError] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
@@ -91,8 +108,9 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
         if (ignore) return;
         const rows: FolderInputRow[] = json.data ?? [];
         const tree = buildFolderTree(rows);
-        const options = flattenFolderOptions(tree);
-        setFolderOptions(options);
+        const projects = buildProjectOptions(tree);
+        const options = projects.flatMap((project) => project.groups);
+        setProjectOptions(projects);
 
         setSelectedFolderId((current) => {
           if (current && options.some((opt) => opt.id === current)) {
@@ -102,7 +120,9 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
           if (folderParam && options.some((opt) => opt.id === folderParam)) {
             return folderParam;
           }
-          return options[0]?.id ?? "";
+          // On a project page, default to that project's first group.
+          const openProject = projects.find((project) => project.id === folderParam);
+          return openProject?.groups[0]?.id ?? options[0]?.id ?? "";
         });
       } catch (err: unknown) {
         if (ignore) return;
@@ -177,7 +197,7 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
             Add Grokipedia links
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Paste links, one per line. Each article is saved as Markdown in the folder you choose.
+            Paste links, one per line. Each article is saved as Markdown in the group you choose.
           </DialogDescription>
         </DialogHeader>
 
@@ -191,27 +211,33 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
               id="folder-select"
               value={selectedFolderId}
               onChange={(e) => setSelectedFolderId(e.target.value)}
-              disabled={isRunning || foldersLoading || folderOptions.length === 0}
-              className="h-8 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30 [&>option]:bg-popover [&>option]:text-popover-foreground"
+              disabled={isRunning || foldersLoading || projectOptions.length === 0}
+              className="h-8 w-full min-w-0 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30 [&_optgroup]:bg-popover [&_optgroup]:text-popover-foreground [&_option]:bg-popover [&_option]:text-popover-foreground"
             >
               {foldersLoading ? (
                 <option value="" disabled>
-                  Loading folders...
+                  Loading groups...
                 </option>
-              ) : folderOptions.length === 0 ? (
+              ) : projectOptions.length === 0 ? (
                 <option value="" disabled>
-                  Create a folder first.
+                  Create a group first.
                 </option>
               ) : (
-                folderOptions.map((opt) => (
-                  <option key={opt.id} value={opt.id}>
-                    {opt.label}
-                  </option>
+                projectOptions.map((project) => (
+                  <optgroup key={project.id} label={project.name}>
+                    {project.groups.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))
               )}
             </select>
-            {!foldersLoading && folderOptions.length === 0 && (
-              <p className="text-xs text-muted-foreground">Create a folder first.</p>
+            {!foldersLoading && projectOptions.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Create a group inside a project first.
+              </p>
             )}
             {foldersError && <p className="text-xs text-destructive">{foldersError}</p>}
           </div>
@@ -286,7 +312,7 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
                   !selectedFolderId ||
                   isRunning ||
                   foldersLoading ||
-                  folderOptions.length === 0
+                  projectOptions.length === 0
                 }
               >
                 {n === 1 ? "Add 1 link" : `Add ${n} links`}

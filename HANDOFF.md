@@ -4,7 +4,7 @@ Read this first in any new session. When the user says "continue", pick up at **
 
 This repo is public. Don't put account emails, project IDs, client IDs or other deployment details here; keep them in the agent's private memory.
 
-Last updated: 2026-10-14, after the open-source release (v0.1.0).
+Last updated: 2026-10-14, after adding projects and groups.
 
 ## What we're building
 
@@ -12,7 +12,7 @@ Sourcefold is an open-source (MIT), self-hosted research source collector. The o
 
 - **Sources:** Grokipedia articles (bulk-paste 30–40 links), Substack posts (free posts, plus paid posts the user subscribes to), and X posts (text only, threads kept as a tree).
 - **Format:** every source is stored as clean Markdown.
-- **Organizing:** folders inside folders, unlimited depth. Each item lives in one folder. Drag-and-drop to reorder or nest.
+- **Organizing:** projects (for example "Cars", "Bikes"), each with its own groups inside groups, unlimited depth. A project is a top-level folder and a group is a folder inside one; the UI shows one project at a time. Each item lives in one group. Drag-and-drop to reorder or nest.
 - **Reading:** clicking an item opens the original page (or signed link for uploaded images). The app never shows the content itself.
 - **Drive:** one **Save to Drive** button (and Ctrl+S) mirrors the folders and `.md` files into the user's Google Drive.
 - **Chrome extension:** saves the page you're viewing into a chosen folder in one click.
@@ -41,10 +41,13 @@ Lessons worth keeping:
 - The Google OAuth client in Supabase's Google provider must be the same client as the app's `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`. Otherwise Google refuses the token refresh with `unauthorized_client`, and reconnecting can never fix it. The app now reports this case directly.
 - A folder lists only its own items, not its subfolders' items. Users may think a save failed; the extension now shows the full folder path and offers **Move here** for pages saved elsewhere.
 - The Supabase MCP won't run `drop function`, and dropping needs the user's confirmation.
+- Projects are UI only: no schema change, so Drive mirrors `Sourcefold/<Project>/<Group>/…` as before. Duplicate links are still checked across all projects (the unique index is per user), so the same link can't be saved in two projects.
+- Local `npm run dev` uses the live Supabase project, so don't create or delete test data there without asking.
 
 ## Next steps
 
-1. **Optional cleanup on the owner's database: drop the old function overloads.** Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
+1. **Deploy projects and groups.** Push to `main` so Vercel deploys, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. Old sources saved directly in a project show under "Not in a group"; move them into groups with **Move to…**.
+2. **Optional cleanup on the owner's database: drop the old function overloads.** Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
 
    ```sql
    drop function if exists public.soft_delete_folder(uuid);
@@ -53,4 +56,4 @@ Lessons worth keeping:
    drop function if exists public.drive_unsaved_count();
    ```
 
-2. **Ideas for later** (none started): Chrome Web Store listing for the extension, full-text search, more source types. Ask the owner before starting any of these.
+3. **Ideas for later** (none started): Chrome Web Store listing for the extension, full-text search, more source types. Ask the owner before starting any of these.

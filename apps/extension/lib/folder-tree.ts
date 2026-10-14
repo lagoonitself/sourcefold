@@ -85,3 +85,41 @@ export function buildFolderTree(folders: Folder[]): FolderTreeItem[] {
 export function formatFolderLabel(name: string, depth: number): string {
   return "\u00A0\u00A0".repeat(depth) + name;
 }
+
+/** Top-level folders are projects; sources are saved into the groups inside them. */
+export interface ProjectSection {
+  project: FolderTreeItem;
+  groups: FolderTreeItem[];
+}
+
+export function buildProjectSections(tree: FolderTreeItem[]): ProjectSection[] {
+  const sections: ProjectSection[] = [];
+  for (const item of tree) {
+    if (item.depth === 0) {
+      sections.push({ project: item, groups: [] });
+    } else {
+      sections[sections.length - 1]?.groups.push(item);
+    }
+  }
+  return sections;
+}
+
+export function projectIdOf(tree: FolderTreeItem[], folderId: string): string | null {
+  const byId = new Map(tree.map((item) => [item.id, item]));
+  let current = byId.get(folderId);
+  for (let steps = 0; current && steps < 1000; steps++) {
+    if (current.depth === 0) return current.id;
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  return null;
+}
+
+/** The last used group, else the first group of the last used project, else the first group. */
+export function pickDefaultGroup(tree: FolderTreeItem[], lastFolderId: string | null): string {
+  const groups = tree.filter((item) => item.depth > 0);
+  if (lastFolderId && groups.some((g) => g.id === lastFolderId)) return lastFolderId;
+  const inLastProject = lastFolderId
+    ? groups.find((g) => projectIdOf(tree, g.id) === lastFolderId)
+    : undefined;
+  return inLastProject?.id ?? groups[0]?.id ?? "";
+}

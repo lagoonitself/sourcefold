@@ -50,7 +50,7 @@ export function MoveItemDialog({ item, open, onOpenChange }: MoveItemDialogProps
       })
       .catch((err) => {
         if (controller.signal.aborted || err?.name === "AbortError") return;
-        toast.error("Couldn't load folders. Try again.");
+        toast.error("Couldn't load groups. Try again.");
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -139,9 +139,22 @@ export function MoveItemDialog({ item, open, onOpenChange }: MoveItemDialogProps
               <Skeleton className="h-7 w-2/3" />
             </div>
           ) : tree.length === 0 ? (
-            <div className="p-4 text-center text-sm text-muted-foreground">No folders found.</div>
+            <div className="p-4 text-center text-sm text-muted-foreground">No groups yet.</div>
           ) : (
-            <div className="flex flex-col py-1">{renderNodes(tree, 1)}</div>
+            <div className="flex flex-col py-1">
+              {tree.map((project) => (
+                <div key={project.id} role="group" aria-label={project.name} className="pb-1">
+                  <div className="truncate px-2 pt-2 pb-1 text-[12px] font-medium leading-4 text-muted-foreground">
+                    {project.name}
+                  </div>
+                  {project.children.length > 0 ? (
+                    renderNodes(project.children, 1)
+                  ) : (
+                    <div className="px-2 pb-1 text-[13px] text-muted-foreground">No groups</div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

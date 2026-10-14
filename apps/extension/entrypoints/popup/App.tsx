@@ -14,7 +14,14 @@ import {
   type Folder,
   type RecentXItem,
 } from "../../lib/api";
-import { buildFolderTree, formatFolderLabel, type FolderTreeItem } from "../../lib/folder-tree";
+import {
+  buildFolderTree,
+  buildProjectSections,
+  formatFolderLabel,
+  pickDefaultGroup,
+  projectIdOf,
+  type FolderTreeItem,
+} from "../../lib/folder-tree";
 import { getLastFolderId, setLastFolderId } from "../../lib/last-folder";
 import { capturePage } from "../../lib/capture-page";
 import { getSettings } from "../../lib/settings";
@@ -111,11 +118,7 @@ export default function App() {
         ) {
           setFolders(cached.folders);
           setFolderTree(cached.tree);
-          if (lastFolderId && cached.tree.some((item) => item.id === lastFolderId)) {
-            setSelectedFolderId(lastFolderId);
-          } else if (cached.tree[0]) {
-            setSelectedFolderId(cached.tree[0].id);
-          }
+          setSelectedFolderId(pickDefaultGroup(cached.tree, lastFolderId));
           setLoading(false);
         }
 
@@ -142,14 +145,10 @@ export default function App() {
         });
 
         // Set selected folder ID: if lastFolderId is in the tree, use it; otherwise fallback and persist
-        if (tree.length > 0) {
-          const first = tree[0];
-          if (lastFolderId && tree.some((item) => item.id === lastFolderId)) {
-            setSelectedFolderId(lastFolderId);
-          } else if (first) {
-            setSelectedFolderId(first.id);
-            await setLastFolderId(first.id);
-          }
+        const defaultGroupId = pickDefaultGroup(tree, lastFolderId);
+        setSelectedFolderId(defaultGroupId);
+        if (defaultGroupId && defaultGroupId !== lastFolderId) {
+          await setLastFolderId(defaultGroupId);
         }
 
         if (checkResult && checkResult.exists) {
@@ -192,6 +191,8 @@ export default function App() {
   };
 
   const selectedFolder = folders.find((f) => f.id === selectedFolderId);
+  const projectSections = buildProjectSections(folderTree);
+  const hasGroups = projectSections.some((section) => section.groups.length > 0);
   const canMove =
     savedItem !== null && selectedFolderId !== "" && savedItem.folderId !== selectedFolderId;
 
@@ -244,7 +245,12 @@ export default function App() {
     setErrorMessage(null);
 
     try {
-      const parentId = insideSelected && selectedFolderId ? selectedFolderId : null;
+      // A new group goes into the selected group's project, or inside the group if ticked.
+      const parentId =
+        insideSelected && selectedFolderId
+          ? selectedFolderId
+          : (projectIdOf(folderTree, selectedFolderId) ?? projectSections[0]?.project.id ?? null);
+      if (!parentId) return;
       const created = await createFolder({ name: trimmed, parent_id: parentId });
       const updatedFolders = await listFolders();
       setFolders(updatedFolders);
@@ -268,7 +274,7 @@ export default function App() {
       setNewFolderName("");
       setInsideSelected(false);
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to create folder.");
+      setErrorMessage(err instanceof Error ? err.message : "Failed to create group.");
     } finally {
       setIsCreatingFolder(false);
     }
@@ -560,29 +566,37 @@ export default function App() {
               className="popup-select"
               value={selectedFolderId}
               onChange={(e) => setSelectedFolderId(e.target.value)}
-              disabled={folderTree.length === 0 || isSaving}
+              disabled={!hasGroups || isSaving}
             >
-              {folderTree.length === 0 ? (
-                <option value="">No folders available</option>
+              {!hasGroups ? (
+                <option value="">No groups yet</option>
               ) : (
-                folderTree.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {formatFolderLabel(item.name, item.depth)}
-                  </option>
-                ))
+                projectSections
+                  .filter((section) => section.groups.length > 0)
+                  .map((section) => (
+                    <optgroup key={section.project.id} label={section.project.name}>
+                      {section.groups.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {formatFolderLabel(item.name, item.depth - 1)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))
               )}
             </select>
 
-            {!newFolderOpen ? (
+            {projectSections.length === 0 ? (
+              <p className="popup-detected-type">Create a project in Sourcefold first.</p>
+            ) : !newFolderOpen ? (
               <button type="button" className="btn-text" onClick={() => setNewFolderOpen(true)}>
-                New folder
+                New group
               </button>
             ) : (
               <div className="popup-new-folder">
                 <input
                   type="text"
                   className="input-field"
-                  placeholder="Folder name"
+                  placeholder="Group name"
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   onKeyDown={(e) => {

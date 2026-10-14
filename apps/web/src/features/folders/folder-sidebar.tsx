@@ -1,9 +1,11 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { loadFolders, type FolderItem } from "./load-folders";
 import { buildFolderTree } from "./tree";
-import { FolderTree } from "./folder-tree";
 import { SidebarSkeleton } from "@/features/shell/sidebar-skeleton";
+import { ProjectSidebar } from "@/features/projects/project-sidebar";
+import { PROJECT_COOKIE } from "@/features/projects/project";
 
 export async function FolderSidebar() {
   const supabase = await createClient();
@@ -18,10 +20,11 @@ export async function FolderSidebar() {
   }
 
   const tree = buildFolderTree(folders);
+  const savedProjectId = (await cookies()).get(PROJECT_COOKIE)?.value ?? null;
 
   return (
     <Suspense fallback={<SidebarSkeleton />}>
-      <FolderTree tree={tree} />
+      <ProjectSidebar tree={tree} savedProjectId={savedProjectId} />
     </Suspense>
   );
 }

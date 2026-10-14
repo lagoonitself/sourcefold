@@ -4,6 +4,8 @@ export type FolderNode = {
   name: string;
   position: number;
   itemCount: number;
+  /** True only for an archived project. */
+  archived?: boolean;
   children: FolderNode[];
 };
 
@@ -15,6 +17,7 @@ export type FolderInputRow = {
   position: number;
   item_count?: number;
   itemCount?: number;
+  archived?: boolean;
 };
 
 export function buildFolderTree(rows: FolderInputRow[]): FolderNode[] {
@@ -29,6 +32,7 @@ export function buildFolderTree(rows: FolderInputRow[]): FolderNode[] {
       name: row.name,
       position: row.position,
       itemCount,
+      archived: row.archived ?? false,
       children: [],
     });
   }

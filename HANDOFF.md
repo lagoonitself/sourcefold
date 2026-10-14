@@ -4,7 +4,7 @@ Read this first in any new session. When the user says "continue", pick up at **
 
 This repo is public. Don't put account emails, project IDs, client IDs or other deployment details here; keep them in the agent's private memory.
 
-Last updated: 2026-10-14, after moving article text and images out of Supabase into Drive.
+Last updated: 2026-10-14, after moving content to Drive and adding project archiving.
 
 ## What we're building
 
@@ -43,13 +43,15 @@ Lessons worth keeping:
 - The Supabase MCP won't run `drop function`, and dropping needs the user's confirmation.
 - A project is a top-level folder and a group is a folder inside one, so Drive mirrors `Sourcefold/<Project>/<Group>/…`. Migration `20261014010000_projects_and_groups.sql` makes links unique per group (`items_folder_canonical_url_key`), rejects sources saved directly in a project, and stops a group with sources from becoming a project. Projects share nothing: search, duplicate checks and recent X threads are scoped to one project.
 - Local `npm run dev` uses the live Supabase project, so don't create or delete test data there without asking.
+- Archiving (owner's choice, 2026-10-14) only hides a project. The owner first suggested deleting old projects from Supabase after 30 days and restoring them from Drive; we didn't, because links take about 1–2 KB each, and Drive would become the only copy of everything.
 - Content lives in Drive (owner's decision, 2026-10-14): a Grokipedia article is about 200 KB of Markdown, so keeping text in Supabase would fill the 500 MB free database at a few thousand articles. Migration `20261014020000_content_lives_in_drive.sql` adds `mark_item_stored_in_drive`, which clears `markdown`/`storage_path` once the Drive copy exists. Renames and moves rebuild the file by downloading it from Drive. Notes and `x_posts` stay in Supabase. See SPEC section 4, "Where content lives".
 
 ## Next steps
 
 1. **Check that content moves to Drive.** Migration `20261014020000_content_lives_in_drive.sql` is applied to the owner's database and the code is pushed (2026-10-14). After the Vercel deploy, press Save to Drive once: the two existing sources should upload and their text should clear from Supabase (`select count(*) from items where markdown is not null and kind <> 'note'` returns 0). Then save one new Grokipedia link and check it lands in Drive without pressing Save. Rename it and save, and check the Drive file still has its article text.
-2. **Finish rolling out projects and groups.** The migration `20261014010000_projects_and_groups.sql` is applied to the owner's database and the code is pushed (2026-10-14). Check the Vercel deploy, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. The owner's test data was soft-deleted on 2026-10-14; the next Save to Drive trashes its Drive copies.
-3. **Optional cleanup on the owner's database: drop the old function overloads.** Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
+2. **Check project archiving on the live app.** Migration `20261014030000_archive_projects.sql` is applied and the code is pushed (2026-10-14). Archive a project, check it moves under "Archived" in the switcher and is gone from Add links and the extension's picker, then unarchive it. The unsaved count shouldn't change.
+3. **Finish rolling out projects and groups.** The migration `20261014010000_projects_and_groups.sql` is applied to the owner's database and the code is pushed (2026-10-14). Check the Vercel deploy, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. The owner's test data was soft-deleted on 2026-10-14; the next Save to Drive trashes its Drive copies.
+4. **Optional cleanup on the owner's database: drop the old function overloads.** Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
 
    ```sql
    drop function if exists public.soft_delete_folder(uuid);
@@ -58,4 +60,4 @@ Lessons worth keeping:
    drop function if exists public.drive_unsaved_count();
    ```
 
-4. **Ideas for later** (none started): Chrome Web Store listing for the extension, full-text search, more source types. Ask the owner before starting any of these.
+5. **Ideas for later** (none started): Chrome Web Store listing for the extension, full-text search, more source types. Ask the owner before starting any of these.

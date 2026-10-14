@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, ChevronsUpDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -40,6 +40,43 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const createProject = useCreateProject();
+  const activeProjects = projects.filter((p) => !p.archived);
+  const archivedProjects = projects.filter((p) => p.archived);
+
+  const openProject = (projectId: string) => {
+    rememberProject(projectId);
+    router.push(`/?folder=${projectId}`);
+  };
+
+  const setArchived = async (archived: boolean) => {
+    if (!current) return;
+    try {
+      const res = await fetch(`/api/folders/${current.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error?.message ?? "Couldn't update the project. Try again.");
+        return;
+      }
+      if (archived) {
+        toast("Project archived");
+        const next = activeProjects.find((p) => p.id !== current.id);
+        if (next) {
+          openProject(next.id);
+        } else {
+          router.push("/");
+        }
+      } else {
+        toast("Project unarchived");
+      }
+      router.refresh();
+    } catch {
+      toast.error("Couldn't update the project. Try again.");
+    }
+  };
 
   const renameProject = async (name: string) => {
     if (!current) return false;
@@ -74,7 +111,7 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
         return;
       }
       toast("Project deleted");
-      const next = projects.find((p) => p.id !== current.id);
+      const next = activeProjects.find((p) => p.id !== current.id);
       if (next) {
         rememberProject(next.id);
         router.push(`/?folder=${next.id}`);
@@ -103,21 +140,32 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
         <DropdownMenuContent align="start" className="w-[248px]">
           <DropdownMenuGroup>
             <DropdownMenuLabel>Projects</DropdownMenuLabel>
-            {projects.map((project) => (
-              <DropdownMenuItem
+            {activeProjects.map((project) => (
+              <ProjectItem
                 key={project.id}
-                onClick={() => {
-                  rememberProject(project.id);
-                  router.push(`/?folder=${project.id}`);
-                }}
-              >
-                <span className="flex-1 truncate">{project.name}</span>
-                {project.id === current?.id && (
-                  <Check className="size-4 shrink-0" aria-label="Current project" />
-                )}
-              </DropdownMenuItem>
+                project={project}
+                isCurrent={project.id === current?.id}
+                onOpen={openProject}
+              />
             ))}
           </DropdownMenuGroup>
+          {archivedProjects.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Archived</DropdownMenuLabel>
+                {archivedProjects.map((project) => (
+                  <ProjectItem
+                    key={project.id}
+                    project={project}
+                    isCurrent={project.id === current?.id}
+                    onOpen={openProject}
+                    muted
+                  />
+                ))}
+              </DropdownMenuGroup>
+            </>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setIsCreating(true)}>
             <Plus className="size-4" aria-hidden="true" />
@@ -129,6 +177,17 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
                 <Pencil className="size-4" aria-hidden="true" />
                 Rename project
               </DropdownMenuItem>
+              {current.archived ? (
+                <DropdownMenuItem onClick={() => setArchived(false)}>
+                  <ArchiveRestore className="size-4" aria-hidden="true" />
+                  Unarchive project
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => setArchived(true)}>
+                  <Archive className="size-4" aria-hidden="true" />
+                  Archive project
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem variant="destructive" onClick={() => setIsConfirmingDelete(true)}>
                 <Trash2 className="size-4" aria-hidden="true" />
                 Delete project
@@ -172,6 +231,27 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function ProjectItem({
+  project,
+  isCurrent,
+  onOpen,
+  muted = false,
+}: {
+  project: FolderNode;
+  isCurrent: boolean;
+  onOpen: (projectId: string) => void;
+  muted?: boolean;
+}) {
+  return (
+    <DropdownMenuItem onClick={() => onOpen(project.id)}>
+      <span className={muted ? "flex-1 truncate text-muted-foreground" : "flex-1 truncate"}>
+        {project.name}
+      </span>
+      {isCurrent && <Check className="size-4 shrink-0" aria-label="Current project" />}
+    </DropdownMenuItem>
   );
 }
 

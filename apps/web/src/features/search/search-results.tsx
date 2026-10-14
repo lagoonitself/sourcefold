@@ -3,6 +3,7 @@ import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
 import { buildFolderPaths } from "@/features/items/folder-paths";
 import { ItemList } from "@/features/items/item-list";
 import { findProjectId, projectFolderIds } from "@/features/projects/project";
+import { archivedFolderIds } from "@/features/folders/load-folders";
 
 export interface SearchResultsProps {
   query: string;
@@ -19,7 +20,7 @@ export async function SearchResults({ query, folderId }: SearchResultsProps) {
 
   const { data: folders } = await supabase
     .from("folders")
-    .select("id, parent_id, name")
+    .select("id, parent_id, name, archived_at")
     .is("deleted_at", null);
   const safeFolders = folders ?? [];
 
@@ -33,6 +34,17 @@ export async function SearchResults({ query, folderId }: SearchResultsProps) {
     .ilike("title", `%${escapeIlike(query)}%`);
   if (projectId) {
     itemsQuery = itemsQuery.in("folder_id", projectFolderIds(safeFolders, projectId));
+  } else {
+    // Searching every project leaves out archived ones.
+    const archived = archivedFolderIds(
+      safeFolders.map((f) => ({ ...f, archived: f.parent_id === null && f.archived_at !== null })),
+    );
+    if (archived.size > 0) {
+      itemsQuery = itemsQuery.in(
+        "folder_id",
+        safeFolders.filter((f) => !archived.has(f.id)).map((f) => f.id),
+      );
+    }
   }
   const { data: items } = await itemsQuery.order("title", { ascending: true }).limit(100);
 

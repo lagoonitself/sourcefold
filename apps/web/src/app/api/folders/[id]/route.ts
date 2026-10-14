@@ -16,10 +16,14 @@ const patchFolderSchema = z
       .optional(),
     parent_id: z.string().uuid("Invalid parent folder ID").nullable().optional(),
     position: z.number().int().optional(),
+    archived: z.boolean().optional(),
   })
   .refine(
     (data) =>
-      data.name !== undefined || data.parent_id !== undefined || data.position !== undefined,
+      data.name !== undefined ||
+      data.parent_id !== undefined ||
+      data.position !== undefined ||
+      data.archived !== undefined,
     { message: "At least one field must be provided to update" },
   );
 
@@ -45,6 +49,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return jsonError(400, parsed.error.issues[0]?.message ?? "Invalid request body");
   }
 
+  if (parsed.data.archived !== undefined) {
+    const { data: changed, error: archiveError } = await auth.supabase.rpc("set_project_archived", {
+      p_id: id,
+      p_archived: parsed.data.archived,
+    });
+    if (archiveError) {
+      console.error("Failed to archive project:", archiveError);
+      return jsonError(500, "Something went wrong. Try again.");
+    }
+    if (!changed) {
+      return jsonError(400, "Only projects can be archived.");
+    }
+    return jsonData({ id, archived: parsed.data.archived });
+  }
+
   const { data: existing, error: existingError } = await auth.supabase
     .from("folders")
     .select("id, parent_id")
@@ -66,6 +85,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     name?: string;
     parent_id?: string | null;
     position?: number;
+    archived_at?: null;
   } = {};
 
   if (parsed.data.name !== undefined) {
@@ -73,6 +93,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   if (parsed.data.parent_id !== undefined) {
     updateData.parent_id = parsed.data.parent_id;
+    // A project moved inside another project becomes a group, which is never archived.
+    if (parsed.data.parent_id !== null) {
+      updateData.archived_at = null;
+    }
     if (parsed.data.position === undefined && parsed.data.parent_id !== existing.parent_id) {
       updateData.position = await nextPosition(
         auth.supabase,

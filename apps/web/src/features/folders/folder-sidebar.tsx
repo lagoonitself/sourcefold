@@ -13,7 +13,7 @@ export async function FolderSidebar() {
   try {
     const user = await getSessionUser();
     if (user) {
-      folders = await loadFolders(supabase, user.id);
+      folders = await loadFolders(supabase, user.id, { includeArchived: true });
     }
   } catch (err) {
     console.error("Failed to load folders:", err);

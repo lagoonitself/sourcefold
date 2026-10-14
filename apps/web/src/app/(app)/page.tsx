@@ -25,6 +25,7 @@ async function findProjectToOpen(): Promise<string | null> {
     .select("id")
     .is("parent_id", null)
     .is("deleted_at", null)
+    .is("archived_at", null)
     .order("position", { ascending: true })
     .order("name", { ascending: true });
 

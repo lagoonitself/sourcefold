@@ -76,6 +76,7 @@ export type Database = {
       }
       folders: {
         Row: {
+          archived_at: string | null
           created_at: string
           deleted_at: string | null
           drive_folder_id: string | null
@@ -88,6 +89,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           deleted_at?: string | null
           drive_folder_id?: string | null
@@ -100,6 +102,7 @@ export type Database = {
           user_id?: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           deleted_at?: string | null
           drive_folder_id?: string | null
@@ -294,6 +297,7 @@ export type Database = {
       drive_dirty_folders: {
         Args: { p_user_id?: string }
         Returns: {
+          archived_at: string | null
           created_at: string
           deleted_at: string | null
           drive_folder_id: string | null
@@ -379,6 +383,10 @@ export type Database = {
       release_drive_sync_lock: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      set_project_archived: {
+        Args: { p_archived: boolean; p_id: string }
+        Returns: boolean
       }
       save_google_refresh_token: {
         Args: { p_refresh_token: string }

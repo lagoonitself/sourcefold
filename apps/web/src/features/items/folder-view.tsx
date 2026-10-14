@@ -33,7 +33,9 @@ export async function FolderView({ folderId }: FolderViewProps) {
   const user = await getSessionUser();
 
   const [folders, itemsResult] = await Promise.all([
-    user ? loadFolders(supabase, user.id).catch(() => null) : Promise.resolve(null),
+    user
+      ? loadFolders(supabase, user.id, { includeArchived: true }).catch(() => null)
+      : Promise.resolve(null),
     supabase
       .from("items")
       .select(ITEM_LIST_COLUMNS)
@@ -54,6 +56,7 @@ export async function FolderView({ folderId }: FolderViewProps) {
 
   const isProject = currentFolder.parent_id === null;
   const ancestors = ancestorsOf(folders, currentFolder);
+  const isArchived = (isProject ? currentFolder : ancestors[0])?.archived ?? false;
   const groups = folders.filter((f) => f.parent_id === folderId);
   // Sources live only in groups; a project page lists its groups.
   const items = isProject ? [] : (itemsResult.data ?? []);
@@ -103,6 +106,13 @@ export async function FolderView({ folderId }: FolderViewProps) {
         </div>
       </div>
       <div className="border-b border-border" />
+
+      {isArchived && (
+        <p className="pt-3 font-sans text-[13px] leading-[18px] text-muted-foreground">
+          This project is archived, so it&rsquo;s hidden from the extension, Add links and search.
+          Unarchive it from the project menu.
+        </p>
+      )}
 
       {groups.length > 0 && (
         <section aria-label="Groups">

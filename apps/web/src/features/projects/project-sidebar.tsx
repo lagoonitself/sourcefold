@@ -18,10 +18,13 @@ export function ProjectSidebar({ tree, savedProjectId }: ProjectSidebarProps) {
   const searchParams = useSearchParams();
   const selectedFolderId = searchParams.get("folder");
 
+  const activeProjects = useMemo(() => tree.filter((p) => !p.archived), [tree]);
+
+  // An archived project opens only when you pick it; otherwise reopen an active one.
   const project =
     findProjectNode(tree, selectedFolderId) ??
-    tree.find((p) => p.id === savedProjectId) ??
-    tree[0] ??
+    activeProjects.find((p) => p.id === savedProjectId) ??
+    activeProjects[0] ??
     null;
 
   useEffect(() => {
@@ -37,12 +40,13 @@ export function ProjectSidebar({ tree, savedProjectId }: ProjectSidebarProps) {
   );
 
   const otherProjects = useMemo(
-    () => tree.filter((p) => p.id !== project?.id).map((p) => ({ id: p.id, name: p.name })),
-    [tree, project],
+    () =>
+      activeProjects.filter((p) => p.id !== project?.id).map((p) => ({ id: p.id, name: p.name })),
+    [activeProjects, project],
   );
 
   if (!project) {
-    return <NoProjects />;
+    return tree.length > 0 ? <AllArchived tree={tree} /> : <NoProjects />;
   }
 
   return (
@@ -61,6 +65,17 @@ export function ProjectSidebar({ tree, savedProjectId }: ProjectSidebarProps) {
           otherProjects={otherProjects}
         />
       </div>
+    </div>
+  );
+}
+
+function AllArchived({ tree }: { tree: FolderNode[] }) {
+  return (
+    <div className="px-2">
+      <ProjectSwitcher projects={tree} current={null} />
+      <p className="px-2 pt-3 text-sm text-muted-foreground">
+        All your projects are archived. Open one from the menu above, or create a new one.
+      </p>
     </div>
   );
 }

@@ -70,6 +70,10 @@ Status as of 2026-10-14. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] Renames and moves rebuild the file from its Drive copy; images open from Drive.
   - [x] Migration applied to the owner's database.
   - [ ] Confirm on the live app (see HANDOFF.md).
+- **Archive projects (2026-10-14):**
+  - [x] Archive and Unarchive in the project menu; archived projects are listed separately and hidden from pickers, the extension and search across projects.
+  - [x] Migration applied to the owner's database.
+  - [ ] Confirm on the live app.
 
 ## Later
 

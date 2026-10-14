@@ -19,6 +19,7 @@ function plural(count: number) {
 export function SelectableItemList({ items }: SelectableItemListProps) {
   const linkItems = useMemo(() => items.filter((item) => item.source_url), [items]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [selecting, setSelecting] = useState(false);
   const lastToggledIdRef = useRef<string | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
@@ -59,6 +60,11 @@ export function SelectableItemList({ items }: SelectableItemListProps) {
     setSelectedIds(allSelected ? new Set() : new Set(linkItems.map((item) => item.id)));
   };
 
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  };
+
   const copyLinks = async () => {
     const toCopy =
       selected.size > 0 ? linkItems.filter((item) => selected.has(item.id)) : linkItems;
@@ -66,6 +72,7 @@ export function SelectableItemList({ items }: SelectableItemListProps) {
     try {
       await navigator.clipboard.writeText(text);
       toast(`Copied ${plural(toCopy.length)}`);
+      if (selecting) stopSelecting();
     } catch {
       toast.error("Couldn't copy to the clipboard. Try again.");
     }
@@ -79,38 +86,51 @@ export function SelectableItemList({ items }: SelectableItemListProps) {
     <div>
       {linkItems.length > 0 && (
         <div className="flex h-11 items-center gap-3 border-b border-border">
-          <label className="flex w-9 shrink-0 cursor-pointer items-center justify-center">
-            <input
-              ref={selectAllRef}
-              type="checkbox"
-              checked={allSelected}
-              onChange={toggleAll}
-              aria-label="Select all links"
-              className="size-4 cursor-pointer accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            />
-          </label>
-          <span className="font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
-            {selected.size > 0 ? `${selected.size} selected` : "Select links to copy"}
-          </span>
-          {selected.size > 0 && (
-            <button
-              type="button"
-              onClick={() => setSelectedIds(new Set())}
-              className="rounded-sm font-sans text-[13px] leading-[18px] text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            >
-              Clear
-            </button>
+          {selecting && (
+            <>
+              <label className="flex w-9 shrink-0 cursor-pointer items-center justify-center">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label="Select all links"
+                  className="size-4 cursor-pointer accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                />
+              </label>
+              <span className="font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
+                {selected.size > 0 ? `${selected.size} selected` : "Tick the links to copy"}
+              </span>
+            </>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mr-2 ml-auto"
-            onClick={copyLinks}
-          >
-            <Copy className="size-4" aria-hidden="true" />
-            {selected.size > 0 ? `Copy ${plural(selected.size)}` : "Copy all links"}
-          </Button>
+          <div className="mr-2 ml-auto flex items-center gap-2">
+            {selecting ? (
+              <>
+                <Button type="button" variant="ghost" size="sm" onClick={stopSelecting}>
+                  Cancel
+                </Button>
+                <Button type="button" size="sm" disabled={selected.size === 0} onClick={copyLinks}>
+                  <Copy className="size-4" aria-hidden="true" />
+                  {selected.size > 0 ? `Copy ${plural(selected.size)}` : "Copy links"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelecting(true)}
+                >
+                  Select
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={copyLinks}>
+                  <Copy className="size-4" aria-hidden="true" />
+                  Copy all links
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       )}
       <ul role="list" className="divide-y divide-border">
@@ -119,7 +139,7 @@ export function SelectableItemList({ items }: SelectableItemListProps) {
             key={item.id}
             item={item}
             selection={
-              linkItems.length === 0
+              !selecting
                 ? undefined
                 : item.source_url
                   ? {

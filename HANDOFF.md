@@ -42,10 +42,7 @@ Full detail:
 
 ## Next steps
 
-0a. **Fix Google Drive (user, in dashboards). Drive can't work until this is done.** Supabase's Google sign-in uses OAuth client `716606196974-0n90lmjh1teovlq475oev6offl5f83uc`, but the app's `GOOGLE_CLIENT_ID` (Vercel and `.env.local`) is a different client, `716606196974-l0c7qoeisg…`. A refresh token only works with the client that issued it, so Google answers `unauthorized_client` and every reconnect stores another unusable token. Verified 2026-10-14 with a direct token refresh. Fix one of two ways:
-   - **Option A (easiest):** Supabase Dashboard → Authentication → Sign In / Providers → Google: paste the Client ID and Client Secret from `apps/web/.env.local`. In Google Cloud (project `folder-511509`), make sure that `l0c7…` client lists `https://dhqrexvkinplupshqyma.supabase.co/auth/v1/callback` under Authorized redirect URIs.
-   - **Option B:** In Google Cloud, open the `0n90…` client, create a new client secret, and set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` to that client in Vercel (then redeploy) and in `.env.local`.
-   - Then in Sourcefold: Settings → **Reconnect Drive**, then **Save to Drive**.
+0a. ~~Fix Google Drive OAuth client mismatch~~ **Done 2026-10-14.** The app's `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Vercel, all environments, and `.env.local`) now use the same client Supabase signs in with, `716606196974-0n90lmjh1teovlq475oev6offl5f83uc`. The stored refresh token was tested against Google and the Drive API after the change and works; production redeployed. If Drive ever says the client doesn't match again, these two places have drifted apart.
 
    Also learned: the extension did save the Wikipedia article (160 KB of Markdown) into `imp / akjdb`. Parent folders don't list items from subfolders, which made it look missing.
 

@@ -51,7 +51,7 @@ Status as of 2026-10-13. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
 
 - **Drive and extension fixes (2026-10-14):**
   - [x] Found why Drive always asks to reconnect: Supabase's Google provider uses OAuth client `716606196974-0n90lmjh…`, the app's `GOOGLE_CLIENT_ID` is `716606196974-l0c7qoeisg…`. Google rejects the refresh with `unauthorized_client`. The app now says so instead of "Reconnect".
-  - [ ] Make the two clients match (see HANDOFF.md step 0a), then reconnect Drive once.
+  - [x] Made the two clients match: app now uses `0n90…` on Vercel and locally; token refresh and Drive API verified; redeployed.
   - [x] Extension: a page already saved in another folder can now be moved with **Move here**; messages show the full folder path.
 
 ## Final Steps to Use

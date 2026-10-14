@@ -1,14 +1,29 @@
 # Sourcefold
 
-A personal research source collector. Save Grokipedia articles, Substack posts and X posts into folders, keep each one as clean Markdown, and push everything to Google Drive with one button so it can go straight into NotebookLM, Gemini or any other tool.
+[![CI](https://github.com/lagoonitself/sourcefold/actions/workflows/ci.yml/badge.svg)](https://github.com/lagoonitself/sourcefold/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-- **Chrome extension:** save the page you are on into any folder in one click.
-- **Bulk add:** paste 30-40 Grokipedia links at once.
-- **Markdown first:** every source is a `.md` file with a small header (source link, author, dates).
-- **Read at the source:** clicking an item opens the original page.
-- **Google Drive:** one Save button mirrors your folders and files into Drive.
+Collect research sources into folders as clean Markdown, then send them to Google Drive with one click, ready for NotebookLM, Gemini or any other AI tool.
 
-> **Status:** feature-complete and being tested. See [docs/ROADMAP.md](docs/ROADMAP.md) for what is done and what is left, and [docs/SPEC.md](docs/SPEC.md) for the full spec.
+Sourcefold is built for people who gather a lot of reading before they write or make a video. Save Grokipedia articles, Substack posts and X threads from a Chrome extension or by pasting a batch of links. Sourcefold turns each one into a tidy `.md` file, sorts it into nested folders, and mirrors those folders into a `Sourcefold` folder in your Drive.
+
+- **Chrome extension:** save the page you're on into any folder in one click, or right-click a Grokipedia link to save it without opening it.
+- **Bulk add:** paste 30-40 Grokipedia links at once and watch each one import.
+- **Markdown first:** every source becomes a `.md` file with a small header (source link, author, dates) and references kept as footnotes.
+- **Folders inside folders:** unlimited depth, with drag-and-drop to reorder and nest.
+- **Notes and images:** write Markdown notes or upload images next to your sources.
+- **Google Drive:** one **Save to Drive** button (or `Ctrl+S`) mirrors your folders and files. Sourcefold only asks for the `drive.file` scope, so it can't see anything else in your Drive.
+- **Self-hosted and free:** runs entirely on free tiers (Vercel, Supabase, Google Cloud). One deployment serves one person; nobody else can sign in.
+
+Sourcefold doesn't show source content inside the app. Clicking an item opens the original page; the Markdown is for your AI tools.
+
+## Supported sources
+
+| Source     | How to save                            | What you get                                                                      |
+| ---------- | -------------------------------------- | --------------------------------------------------------------------------------- |
+| Grokipedia | Extension, right-click, or "Add links" | Full article with tables, links and every reference as a footnote                 |
+| Substack   | Extension                              | Free posts, plus paid posts you subscribe to (locked posts are marked, not saved) |
+| X          | Extension                              | A single post or the author's whole thread, text only, replies kept as a tree     |
 
 ## Stack
 
@@ -26,10 +41,7 @@ A personal research source collector. Save Grokipedia articles, Substack posts a
 ## 1. Supabase
 
 1. Create a free project in [Supabase](https://supabase.com). Pick the region nearest to you.
-2. Apply the SQL migration files in `supabase/migrations/` in filename order. You can run them in the Supabase SQL Editor or run `supabase db push` with the Supabase CLI:
-   - `supabase/migrations/20261013000000_initial_schema.sql`
-   - `supabase/migrations/20261013010000_drive_sync.sql`
-   - `supabase/migrations/20261013020000_image_storage.sql`
+2. Apply **every** SQL file in `supabase/migrations/`, oldest first (the file names sort by date). Paste each one into the Supabase SQL Editor and run it, or run `supabase link` then `supabase db push` with the Supabase CLI.
 3. Configure authentication providers in **Authentication** → **Sign In / Providers**:
    - Enable **Google**. Paste the Google client ID and secret from step 2.
    - Disable **Email**. Do not disable "Allow new users to sign up", or your Google account will be unable to register on first sign-in.
@@ -107,14 +119,13 @@ A personal research source collector. Save Grokipedia articles, Substack posts a
 
 ## 5. Install the Chrome extension
 
-1. Build the extension package:
-   ```bash
-   npm run build -w @sourcefold/extension
-   ```
+1. Get the extension, either way:
+   - **Download:** grab `sourcefold-extension-chrome.zip` from the [latest release](https://github.com/lagoonitself/sourcefold/releases/latest) and unzip it into a folder.
+   - **Build it yourself:** run `npm run build -w @sourcefold/extension`. The output is `apps/extension/.output/chrome-mv3`.
 2. Load the unpacked extension in Chrome:
    - Open `chrome://extensions`.
    - Turn on **Developer mode** in the top-right corner.
-   - Click **Load unpacked** and select `apps/extension/.output/chrome-mv3`.
+   - Click **Load unpacked** and select the unzipped folder (or `apps/extension/.output/chrome-mv3`).
 3. Connect the extension to your app:
    - In the Sourcefold web app, open **Settings** and generate a new access token.
    - In the extension settings (right-click the extension icon and select **Options**, or click the gear icon in the popup), enter your app address (`http://localhost:3000` or `https://<app>.vercel.app`) and paste the access token.
@@ -150,13 +161,22 @@ Repository layout:
 - `packages/core`: shared library for parsing, Markdown generation, and types
 - `supabase`: SQL migrations and database configuration
 
-For contributor guidelines and agent instructions, see [AGENTS.md](AGENTS.md). For complete architecture and specifications, see [docs/](docs/).
+For how to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md). Rules for AI coding agents are in [AGENTS.md](AGENTS.md). The full product and technical spec is [docs/SPEC.md](docs/SPEC.md), the visual system is [docs/DESIGN.md](docs/DESIGN.md), and [docs/ROADMAP.md](docs/ROADMAP.md) lists what's done and what's next.
+
+### How it fits together
+
+1. The web app (Next.js on Vercel) stores folders and items in Supabase Postgres, with row-level security on every table.
+2. Grokipedia pages are fetched and converted to Markdown on the server. Substack and X pages are read by the extension in your own browser (so paid posts you subscribe to work) and sent to `/api/capture`.
+3. The extension talks to the app with a personal access token you create in Settings.
+4. Save to Drive runs in small batches: it creates the folder tree, uploads changed `.md` files and images, and moves deleted ones to Drive's trash.
 
 ## Troubleshooting
 
 - **Sign-in loops back to `/login`:** verify that your Google account email is included in `ALLOWED_EMAIL`. Check that your redirect URL (`http://localhost:3000/**` or `https://<app>.vercel.app/**`) is configured under Supabase Authentication → URL Configuration.
-- **"Reconnect Drive" keeps appearing:** check that your Google Cloud OAuth app status is set to "In production" under Audience rather than "Testing" mode. Also make sure you granted consent for the Google Drive scope (`drive.file`) during sign-in.
+- **"Reconnect Drive" keeps appearing, even right after reconnecting:** the Google client in Supabase (Authentication → Sign In / Providers → Google) must be the same one as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in your app. A Google refresh token only works with the client that issued it. If they differ, Save to Drive says the clients don't match; copy the same ID and secret into both places, redeploy, and reconnect.
+- **"Reconnect Drive" appears after about a week:** check that your Google Cloud OAuth app status is set to "In production" under Audience rather than "Testing" mode. Also make sure you granted consent for the Google Drive scope (`drive.file`) during sign-in.
 - **Supabase project paused:** free-tier Supabase projects pause after about 7 days without activity. Open your Supabase dashboard and restore the project. Ensure the `APP_URL` repository variable is set in GitHub so the daily keep-alive workflow pings `/api/health`.
+- **A saved page seems to be missing:** a folder only lists its own items, not the items in its subfolders. The extension tells you the full folder path when it saves (for example `Research / AI`). If a page is already saved elsewhere, pick a folder in the popup and click **Move here**.
 - **Extension says token invalid:** personal access tokens can be revoked or recreated. Open Settings in the web app, generate a new access token, and paste it into the extension settings.
 
 ## License

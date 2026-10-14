@@ -1,12 +1,12 @@
 # Sourcefold roadmap
 
-Status as of 2026-10-13. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`; the visual system is `docs/DESIGN.md`.
+Status as of 2026-10-14. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`; the visual system is `docs/DESIGN.md`.
 
 ## Done
 
 - **Wave 0, setup:** spec, MIT license, public repo, CI and daily keep-alive workflows, design guide, agent rules.
 - **Wave 1, foundation:**
-  - Database schema with row-level security (Supabase project `sourcefold`).
+  - Database schema with row-level security.
   - Google sign-in code with the email allow-list checked on every page.
   - App shell and design tokens.
   - Folder tree: create, rename, nest, drag to move, drag to reorder with drop indicator lines, delete, keyboard navigation (including Alt+ArrowUp/Down reordering).
@@ -39,8 +39,8 @@ Status as of 2026-10-13. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
 - **Wave 7, Polish & Production:**
   - Right-click "Save link to Sourcefold" background context menu in extension.
   - Comprehensive self-hosting guide in `README.md` covering Supabase, Google Cloud, Vercel deployment, extension setup, and troubleshooting.
-  - Deployed to Vercel production: `https://sourcefold-eight.vercel.app`.
-  - Set GitHub Actions `APP_URL` variable to `https://sourcefold-eight.vercel.app` and verified daily keep-alive workflow (`38417818515` success).
+  - Deployed to Vercel production.
+  - Daily keep-alive workflow pings `/api/health` (set the `APP_URL` repository variable).
   - All CI tests and builds passing on GitHub Actions.
 
 - **Second audit (2026-10-14):**
@@ -50,14 +50,13 @@ Status as of 2026-10-13. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [ ] Drop the four old function overloads in the SQL editor.
 
 - **Drive and extension fixes (2026-10-14):**
-  - [x] Found why Drive always asks to reconnect: Supabase's Google provider uses OAuth client `716606196974-0n90lmjh…`, the app's `GOOGLE_CLIENT_ID` is `716606196974-l0c7qoeisg…`. Google rejects the refresh with `unauthorized_client`. The app now says so instead of "Reconnect".
-  - [x] Made the two clients match: app now uses `0n90…` on Vercel and locally; token refresh and Drive API verified; redeployed.
-  - [x] Extension: a page already saved in another folder can now be moved with **Move here**; messages show the full folder path.
+  - [x] Save to Drive reports a Google OAuth client mismatch (Supabase's Google provider vs `GOOGLE_CLIENT_ID`) instead of asking to reconnect forever; Drive errors are logged.
+  - [x] Extension: a page already saved in another folder can be moved with **Move here**; messages show the full folder path.
+- **Open-source release (2026-10-14):**
+  - [x] README rewrite (all migrations, troubleshooting), CONTRIBUTING.md, personal deployment details removed from docs.
+  - [x] v0.1.0 GitHub release with the packaged extension.
 
-## Final Steps to Use
+## Later
 
-1. **Authorize OAuth redirect URLs:**
-   - **Google Cloud Console:** add `https://sourcefold-eight.vercel.app` to **Authorized JavaScript origins** and add `https://dhqrexvkinplupshqyma.supabase.co/auth/v1/callback` to **Authorized redirect URIs**.
-   - **Supabase Dashboard:** under **Authentication** → **URL Configuration**, set **Site URL** to `https://sourcefold-eight.vercel.app` and add `https://sourcefold-eight.vercel.app/**` to **Redirect URLs**.
-2. **Sign in:**
-   - Open `https://sourcefold-eight.vercel.app/login` (or `http://localhost:3000/login` locally) and click **Continue with Google** using `anilreddy2569900@gmail.com` to grant Google Drive sync access.
+- [ ] Chrome Web Store listing for the extension.
+- [ ] Full-text search (title search only today).

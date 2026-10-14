@@ -2,11 +2,13 @@
 
 Read this first in any new session. When the user says "continue", pick up at **Next steps** below. Keep this file current.
 
-Last updated: 2026-10-14, after diagnosing the Drive OAuth client mismatch and adding "Move here" to the extension.
+This repo is public. Don't put account emails, project IDs, client IDs or other deployment details here; keep them in the agent's private memory.
+
+Last updated: 2026-10-14, after the open-source release (v0.1.0).
 
 ## What we're building
 
-Sourcefold is a personal, open-source (MIT) research source collector. The user collects sources for YouTube video research and feeds them into NotebookLM, Gemini and other tools.
+Sourcefold is an open-source (MIT), self-hosted research source collector. The owner collects sources for YouTube video research and feeds them into NotebookLM, Gemini and other tools.
 
 - **Sources:** Grokipedia articles (bulk-paste 30–40 links), Substack posts (free posts, plus paid posts the user subscribes to), and X posts (text only, threads kept as a tree).
 - **Format:** every source is stored as clean Markdown.
@@ -16,10 +18,10 @@ Sourcefold is a personal, open-source (MIT) research source collector. The user 
 - **Chrome extension:** saves the page you're viewing into a chosen folder in one click.
 - **Constraints:** $0 budget (free tiers only), desktop web app, single user per deployment (`ALLOWED_EMAIL`), search by title only.
 
-Full detail:
-
 | File                             | What it holds                                                               |
 | -------------------------------- | --------------------------------------------------------------------------- |
+| `README.md`                      | What it is, self-hosting setup, troubleshooting                             |
+| `CONTRIBUTING.md`                | How to contribute                                                           |
 | `docs/SPEC.md`                   | Product and technical spec: data model, Markdown formats, API, waves        |
 | `docs/DESIGN.md`                 | Visual system (tokens, fonts, layout, copy rules); every UI task follows it |
 | `docs/ROADMAP.md`                | Checklist of done and remaining work                                        |
@@ -28,25 +30,21 @@ Full detail:
 
 ## Current state
 
-**All Core Waves (0 through 7) are fully implemented, tested, and deployed!**
+All waves (0 through 7) are built, tested and deployed. The owner's deployment works end to end: extension saves, bulk add, and Save to Drive.
 
-- **Database:** Supabase schema with row-level security (`20261013000000_initial_schema.sql`, `20261013010000_drive_sync.sql`, and `20261013020000_image_storage.sql` applied).
-- **Production Deployment:** Live on Vercel at **`https://sourcefold-eight.vercel.app`**.
-- **Keep-Alive:** Configured `APP_URL` repository variable on GitHub. Daily keep-alive workflow pings `/api/health` to keep Supabase free tier active (`38417818515` verified).
-- **Auth:** Google OAuth configured with offline access (`drive.file` scope) and email allowlist validation (`ALLOWED_EMAIL`).
-- **Web App:** Next.js 16 (Turbopack) with folder sidebar, interactive drag reordering, Grokipedia bulk importer, item menu (rename, move, note, delete), standalone notes, direct-to-Storage image uploads, search, settings page for API token management and Drive reconnect, and Drive sync engine.
-- **Extension:** WXT + React extension with folder selection, Substack parser, X thread extractor, add-to-thread, duplicate warnings, and right-click context menu save.
-- **CI & Build:** Clean `npm run lint`, `npm run typecheck`, vitest test suite (106 tests passing), extension build, and Next.js production build. GitHub Actions CI status is green.
+- **Stack:** Next.js 16 on Vercel, Supabase (Postgres with RLS, Auth with Google, Storage), WXT + React Chrome extension, Google Drive API (`drive.file` only).
+- **Checks:** `npm run format:check`, `lint`, `typecheck`, 106 Vitest tests, and the web and extension builds all pass in CI.
+- **Release:** v0.1.0 on GitHub with the packaged extension zip.
 
-**Second audit (2026-10-14):** six Gemini auditors, then six fixers, all reviewed. Speed: Vercel region moved to `sin1`, local JWT checks with `getClaims()` instead of `getUser()` network calls (one per request, cached with React `cache`), parallel page queries, `loading.tsx` skeletons, folder counts via SQL (`folder_item_counts`), no 30 s Drive status polling, dialogs mount only when open, smaller client bundle. Bugs: notes no longer wiped by refresh, Ctrl+S no longer starts a Drive sync while typing, moved folders land at the end, Drive sync items no longer stuck forever, Drive rate-limit retries, UTF-8 uploads, save lock against duplicate Drive folders, X reply duplicate check, URLs with parentheses kept intact, extension "Add to thread" attaching the wrong post, extension asked for `<all_urls>` (now removed).
+Lessons worth keeping:
+
+- The Google OAuth client in Supabase's Google provider must be the same client as the app's `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`. Otherwise Google refuses the token refresh with `unauthorized_client`, and reconnecting can never fix it. The app now reports this case directly.
+- A folder lists only its own items, not its subfolders' items. Users may think a save failed; the extension now shows the full folder path and offers **Move here** for pages saved elsewhere.
+- The Supabase MCP won't run `drop function`, and dropping needs the user's confirmation.
 
 ## Next steps
 
-0a. ~~Fix Google Drive OAuth client mismatch~~ **Done 2026-10-14.** The app's `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (Vercel, all environments, and `.env.local`) now use the same client Supabase signs in with, `716606196974-0n90lmjh1teovlq475oev6offl5f83uc`. The stored refresh token was tested against Google and the Drive API after the change and works; production redeployed. If Drive ever says the client doesn't match again, these two places have drifted apart.
-
-   Also learned: the extension did save the Wikipedia article (160 KB of Markdown) into `imp / akjdb`. Parent folders don't list items from subfolders, which made it look missing.
-
-0. **Optional cleanup: drop the old function overloads.** The second-audit SQL is live (applied 2026-10-14 through the Supabase MCP, functions run in `sin1`). The MCP refuses `drop function`, so the old signatures still exist next to the new ones. The app always passes `p_user_id`, so they are unused. Run this once in the Supabase SQL editor:
+1. **Optional cleanup on the owner's database: drop the old function overloads.** Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
 
    ```sql
    drop function if exists public.soft_delete_folder(uuid);
@@ -55,15 +53,4 @@ Full detail:
    drop function if exists public.drive_unsaved_count();
    ```
 
-   Until then, any RPC call to those four functions that leaves out `p_user_id` fails as ambiguous.
-
-1. **Authorize OAuth redirect URLs:**
-   - In **Google Cloud Console** (project `folder-511509`): add `https://sourcefold-eight.vercel.app` to **Authorized JavaScript origins**.
-   - In **Supabase Dashboard** (`dhqrexvkinplupshqyma`): under **Authentication** → **URL Configuration**, set **Site URL** to `https://sourcefold-eight.vercel.app` and add `https://sourcefold-eight.vercel.app/**` to **Redirect URLs**.
-2. **First-time sign in:**
-   - Visit `https://sourcefold-eight.vercel.app/login` (or `http://localhost:3000/login` locally) and click **Continue with Google** using `anilreddy2569900@gmail.com`.
-   - Grant the Google Drive access consent.
-3. **Install & connect Chrome extension:**
-   - Run `npm run build -w @sourcefold/extension`.
-   - In Chrome (`chrome://extensions`), turn on Developer mode and click "Load unpacked" on `apps/extension/.output/chrome-mv3`.
-   - Open Settings in Sourcefold, generate a token, and connect the extension.
+2. **Ideas for later** (none started): Chrome Web Store listing for the extension, full-text search, more source types. Ask the owner before starting any of these.

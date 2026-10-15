@@ -8,3 +8,4 @@ export {
   type GrokipediaReference,
 } from "./grokipedia/parse";
 export { grokipediaToMarkdown } from "./grokipedia/markdown";
+export { fetchWikipediaCaptureOnServer } from "./wikipedia/server";

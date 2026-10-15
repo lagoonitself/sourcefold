@@ -3,7 +3,7 @@ import { buildFrontMatter, formatDate, type FrontMatterValue } from "./front-mat
 const FRONT_MATTER = /^---\r?\n[\s\S]*?\r?\n---\r?\n/;
 const NOTE_HEADING = "\n## My note\n";
 
-export type ItemKind = "grokipedia" | "substack" | "x" | "note" | string;
+export type ItemKind = "grokipedia" | "substack" | "wikipedia" | "x" | "note" | string;
 
 export interface BuildItemInput {
   kind: ItemKind;
@@ -31,6 +31,13 @@ function tryFormatDate(val?: unknown): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+// A Wikipedia revision id is a whole number; it goes into the front matter unquoted.
+function revisionNumber(val: unknown): number | undefined {
+  if (typeof val === "number" && Number.isSafeInteger(val) && val > 0) return val;
+  if (typeof val === "string" && /^\d{1,15}$/.test(val.trim())) return Number(val.trim());
+  return undefined;
 }
 
 // Recovers the Markdown body from a file Sourcefold wrote to Drive: drops the front matter
@@ -83,6 +90,22 @@ export function buildItemFile(item: BuildItemInput, folderPath?: string): string
       summary:
         typeof meta.summary === "string" && meta.summary.trim() ? meta.summary.trim() : undefined,
       fact_checked: tryFormatDate(meta.fact_checked ?? meta.fact_checked_at),
+      saved: tryFormatDate(item.saved ?? item.created_at),
+      folder: folder || undefined,
+    };
+  } else if (item.kind === "wikipedia") {
+    fields = {
+      source: "wikipedia",
+      title: item.title,
+      url: itemUrl,
+      summary:
+        typeof meta.summary === "string" && meta.summary.trim() ? meta.summary.trim() : undefined,
+      language:
+        typeof meta.language === "string" && meta.language.trim()
+          ? meta.language.trim()
+          : undefined,
+      revision: revisionNumber(meta.revision),
+      last_edited: tryFormatDate(meta.last_edited),
       saved: tryFormatDate(item.saved ?? item.created_at),
       folder: folder || undefined,
     };
@@ -158,6 +181,9 @@ export function buildItemFile(item: BuildItemInput, folderPath?: string): string
   if (item.kind === "grokipedia") {
     const url = itemUrl || "";
     sourceLine = `> Saved from [Grokipedia](${url}) on ${savedDate}. Grokipedia articles change; check the live page for edits.`;
+  } else if (item.kind === "wikipedia") {
+    const url = itemUrl || "";
+    sourceLine = `> Saved from [Wikipedia](${url}) on ${savedDate}. Wikipedia articles change; check the live page for edits.`;
   } else if (item.kind === "substack") {
     const pub = (typeof meta.publication === "string" && meta.publication.trim()) || "Substack";
     const url = itemUrl || "";

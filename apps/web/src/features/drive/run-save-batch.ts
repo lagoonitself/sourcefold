@@ -19,6 +19,7 @@ import {
   type FolderRef,
   type SiblingRef,
 } from "./build-file";
+import { syncGoogleDoc, trashGoogleDoc } from "./google-doc-sync";
 import { syncPostImages, trashPostImages } from "./post-images";
 
 export interface SaveBatchFailedItem {
@@ -383,11 +384,9 @@ export async function runSaveBatch(
             if (item.kind !== "image") {
               const file = await getFile(accessToken, item.drive_file_id);
               if (file?.name && file.parents[0]) {
-                await trashPostImages(
-                  accessToken,
-                  { parentId: file.parents[0], fileName: file.name },
-                  groupFolderIds,
-                );
+                const spot = { parentId: file.parents[0], fileName: file.name };
+                await trashPostImages(accessToken, spot, groupFolderIds);
+                await trashGoogleDoc(accessToken, spot);
               }
             }
             await trashDriveFile(accessToken, item.drive_file_id, userId);
@@ -495,20 +494,18 @@ export async function runSaveBatch(
           driveFileId = created.id;
         }
 
-        // A copy of the post's images next to it. Before marking it saved, so a failed upload
-        // is tried again on the next save.
+        // A copy of the post's images and a Google Doc next to it. Before marking it saved, so a
+        // failed upload is tried again on the next save.
         if (typeof body === "string") {
           const previous =
             existing?.name && existing.parents?.[0]
               ? { parentId: existing.parents[0], fileName: existing.name }
               : null;
-          await syncPostImages(
-            accessToken,
-            { parentId: targetParentDriveId, fileName },
-            previous,
-            body,
-            groupFolderIds,
-          );
+          const current = { parentId: targetParentDriveId, fileName };
+          await Promise.all([
+            syncPostImages(accessToken, current, previous, body, groupFolderIds),
+            syncGoogleDoc(accessToken, current, previous, body),
+          ]);
         }
 
         const { data: contentCleared } = await supabase.rpc("mark_item_stored_in_drive", {

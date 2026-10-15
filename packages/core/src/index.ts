@@ -16,9 +16,11 @@ export type {
   CaptureRequest,
   SubstackCapture,
   SubstackExtractResult,
+  WikipediaCapture,
   XPostCapture,
   XTreeNode,
 } from "./capture-types";
+export * from "./wikipedia";
 export { renderXThreadMarkdown, xThreadTitle } from "./x/markdown";
 export {
   SubstackDiscoveryError,

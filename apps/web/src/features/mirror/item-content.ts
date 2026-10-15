@@ -2,13 +2,20 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { bodyFromDriveFile } from "@sourcefold/core";
 import type { Database } from "@/lib/database.types";
-import { downloadFileBytes, downloadFileText } from "@/lib/google/drive";
+import {
+  downloadFileBytes,
+  downloadFileText,
+  exportFile,
+  getFile,
+  listChildren,
+} from "@/lib/google/drive";
 import { getGoogleAccessToken } from "@/lib/google/oauth";
 import { buildItemFile, folderPathOf, type FolderRef } from "@/features/drive/build-file";
+import { GOOGLE_DOC_MIME, googleDocName } from "@/features/drive/google-doc-sync";
 
 export type ItemContent =
   | { ok: true; body: string | Uint8Array; mimeType: string }
-  | { ok: false; status: 404 | 409; message: string };
+  | { ok: false; status: 404 | 409; message: string; code?: "not_ready" };
 
 const NOT_FOUND: ItemContent = { ok: false, status: 404, message: "Item not found." };
 const DRIVE_COPY_GONE: ItemContent = {
@@ -76,4 +83,48 @@ export async function getItemContent(
     body: buildItemFile({ ...item, markdown }, folderPathOf(item.folder_id, foldersById)),
     mimeType: "text/markdown; charset=utf-8",
   };
+}
+
+export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+const DOCX_NOT_READY: ItemContent = {
+  ok: false,
+  status: 404,
+  message: "Its Google Doc isn't in Drive yet. Press Save to Drive, then try again.",
+  code: "not_ready",
+};
+
+/**
+ * The item's Google Doc exported as .docx. The Doc is made when the file is pushed to Drive, so
+ * until then (or if it was deleted there) the answer is `not_ready`, and the caller tries later.
+ */
+export async function getItemDocx(
+  db: SupabaseClient<Database>,
+  userId: string,
+  itemId: string,
+): Promise<ItemContent> {
+  const { data: item, error } = await db
+    .from("items")
+    .select("id, kind, status, drive_file_id")
+    .eq("id", itemId)
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!item || item.status !== "saved" || item.kind === "image") return NOT_FOUND;
+  if (!item.drive_file_id) return DOCX_NOT_READY;
+
+  const token = await getGoogleAccessToken(userId);
+  // The Doc sits next to the Markdown file and has its name without `.md`.
+  const file = await getFile(token, item.drive_file_id);
+  const parentId = file?.parents[0];
+  if (!file || file.trashed || !file.name || !parentId) return DOCX_NOT_READY;
+  const docs = await listChildren(token, parentId, {
+    name: googleDocName(file.name),
+    mimeType: GOOGLE_DOC_MIME,
+  });
+  if (docs.length === 0) return DOCX_NOT_READY;
+
+  const bytes = await exportFile(token, docs[0]!.id, DOCX_MIME);
+  return bytes ? { ok: true, body: bytes, mimeType: DOCX_MIME } : DOCX_NOT_READY;
 }

@@ -1,3 +1,5 @@
+import { canonicalWikipediaUrl } from "./wikipedia/links";
+
 export type SourceKind = "grokipedia" | "substack" | "x";
 
 export class InvalidUrlError extends Error {
@@ -117,6 +119,12 @@ export function canonicalizeUrl(input: string): string {
     }
 
     return pathname ? `https://grokipedia.com${pathname}` : "https://grokipedia.com";
+  }
+
+  // Wikipedia articles: language edition, mobile host, ?title= and #section forms become one address.
+  const wikipedia = canonicalWikipediaUrl(trimmed);
+  if (wikipedia) {
+    return wikipedia;
   }
 
   // Everything else: path kept as is (case preserved)

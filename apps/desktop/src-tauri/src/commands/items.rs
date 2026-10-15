@@ -47,6 +47,9 @@ pub async fn capture(
         CapturePayload::SubstackUnavailable { folder_id, url, title } => {
             service::save_substack_unavailable(&db, &folder_id, &url, &title)
         }
+        CapturePayload::Wikipedia { folder_id, capture } => {
+            service::save_wikipedia(&db, &folder_id, capture)
+        }
         CapturePayload::X { folder_id, posts } => service::save_x_thread(&db, &folder_id, posts),
         CapturePayload::Grokipedia { folder_id, url, html } => {
             service::save_grokipedia(&db, &url, &folder_id, html.as_deref())

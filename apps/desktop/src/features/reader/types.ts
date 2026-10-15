@@ -18,8 +18,14 @@ export interface ReaderItem {
 
 export type ReaderTypography = "serif" | "sans";
 
+/** Where loading the file's text stands. The text is the whole file, front matter included. */
+export type ReaderLoadState =
+  { status: "loading" } | { status: "ready"; text: string } | { status: "error"; message: string };
+
 export interface ReaderViewProps {
   item: ReaderItem;
+  state: ReaderLoadState;
+  onRetry?: () => void;
   onClose?: () => void;
   className?: string;
   scrollRef?: React.RefObject<HTMLDivElement | null>;

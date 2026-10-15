@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, CircleAlert, Loader2 } from "lucide-react";
-import { detectSource, extractUrls } from "@sourcefold/core";
+import { detectSource, extractUrls, isWikipediaArticleUrl } from "@sourcefold/core";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { buildFolderTree, type FolderInputRow, type FolderNode } from "@/features/folders/tree";
-import { useLinkQueue, type QueueItem } from "./use-link-queue";
+import { useLinkQueue, type QueueItem, type QueueLink } from "./use-link-queue";
 import { cn } from "@/lib/utils";
 
 export type FlattenedFolderOption = {
@@ -155,31 +155,33 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
     onOpenChange(nextOpen);
   };
 
-  const { grokipediaLinks, skippedLinks } = useMemo(() => {
+  const { links, skippedLinks } = useMemo(() => {
     if (!text.trim()) {
-      return { grokipediaLinks: [], skippedLinks: [] };
+      return { links: [], skippedLinks: [] };
     }
     const extracted = extractUrls(text);
-    const grokipediaLinks: string[] = [];
+    const links: QueueLink[] = [];
     const skippedLinks: string[] = [];
 
     for (const url of extracted) {
       if (detectSource(url) === "grokipedia") {
-        grokipediaLinks.push(url);
+        links.push({ url, source: "grokipedia" });
+      } else if (isWikipediaArticleUrl(url)) {
+        links.push({ url, source: "wikipedia" });
       } else {
         skippedLinks.push(url);
       }
     }
-    return { grokipediaLinks, skippedLinks };
+    return { links, skippedLinks };
   }, [text]);
 
-  const n = grokipediaLinks.length;
+  const n = links.length;
   const m = skippedLinks.length;
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (n === 0 || !selectedFolderId || isRunning || foldersLoading) return;
-    start(grokipediaLinks, selectedFolderId);
+    start(links, selectedFolderId);
   };
 
   const handleAddMore = () => {
@@ -193,11 +195,10 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle className="font-sans text-lg font-semibold leading-6">
-            Add Grokipedia links
-          </DialogTitle>
+          <DialogTitle className="font-sans text-lg font-semibold leading-6">Add links</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Paste links, one per line. Each article is saved as Markdown in the group you choose.
+            Paste Grokipedia or Wikipedia links, one per line. Each article is saved as Markdown in
+            the group you choose.
           </DialogDescription>
         </DialogHeader>
 
@@ -253,12 +254,12 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
                 rows={8}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="https://grokipedia.com/page/..."
+                placeholder={"https://grokipedia.com/page/...\nhttps://en.wikipedia.org/wiki/..."}
                 className="w-full min-w-0 resize-y rounded-md border border-input bg-transparent p-2.5 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30"
                 disabled={isRunning}
               />
               <div className="text-xs text-muted-foreground">
-                <span>{n === 1 ? "1 Grokipedia link found" : `${n} Grokipedia links found`}</span>
+                <span>{n === 1 ? "1 link found" : `${n} links found`}</span>
                 {m > 0 && (
                   <span>
                     {", "}

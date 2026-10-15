@@ -6,9 +6,18 @@ import { toast } from "sonner";
 
 export type QueueItemStatus = "waiting" | "saving" | "saved" | "duplicate" | "failed";
 
+/** Which endpoint saves a link: each source type has its own. */
+export type LinkSource = "grokipedia" | "wikipedia";
+
+export interface QueueLink {
+  url: string;
+  source: LinkSource;
+}
+
 export interface QueueItem {
   id: string;
   url: string;
+  source: LinkSource;
   title?: string;
   status: QueueItemStatus;
   message?: string;
@@ -79,7 +88,7 @@ export function useLinkQueue() {
         let errorMessage: string | null = null;
 
         try {
-          res = await fetch("/api/grokipedia", {
+          res = await fetch(`/api/${currentItem.source}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -178,12 +187,13 @@ export function useLinkQueue() {
   }, [router, updateItem]);
 
   const start = useCallback(
-    (urls: string[], folderId: string) => {
-      if (urls.length === 0 || !folderId) return;
+    (links: QueueLink[], folderId: string) => {
+      if (links.length === 0 || !folderId) return;
 
-      const newItems: QueueItem[] = urls.map((url, index) => ({
+      const newItems: QueueItem[] = links.map(({ url, source }, index) => ({
         id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
         url,
+        source,
         status: "waiting",
       }));
 

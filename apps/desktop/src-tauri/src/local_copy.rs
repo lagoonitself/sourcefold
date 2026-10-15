@@ -25,10 +25,33 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RemoteFile {
+    /// Unique per file: the item id, or `<id>:docx` for its Word copy. Older web apps send none,
+    /// and then the item id is the key.
+    #[serde(default)]
+    pub key: String,
+    /// The item the file belongs to.
     pub id: String,
     pub kind: String,
     pub path: String,
     pub version: String,
+    /// "file" (the item's own file) or "docx" (the Word copy of a text file).
+    #[serde(default)]
+    pub format: String,
+}
+
+impl RemoteFile {
+    /// What the file is tracked by in `local_copy_files` (the table's `item_id` column).
+    pub fn key(&self) -> &str {
+        if self.key.is_empty() {
+            &self.id
+        } else {
+            &self.key
+        }
+    }
+
+    pub fn is_docx(&self) -> bool {
+        self.format == "docx"
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -159,11 +182,28 @@ async fn fetch_manifest(client: &reqwest::Client, session: &Session) -> Result<V
         .map_err(|e| format!("The web app sent an unexpected answer: {}", e))
 }
 
-async fn fetch_content(client: &reqwest::Client, session: &Session, id: &str) -> Result<Vec<u8>, String> {
+/// True for the web app's "its Google Doc isn't in Drive yet" answer, which is not a failure.
+fn is_not_ready(status: reqwest::StatusCode, body: &str) -> bool {
+    status.as_u16() == 404
+        && serde_json::from_str::<serde_json::Value>(body)
+            .ok()
+            .and_then(|v| v.pointer("/error/code").and_then(|c| c.as_str()).map(|c| c == "not_ready"))
+            .unwrap_or(false)
+}
+
+/// The file's bytes. `Ok(None)` for a Word copy whose Google Doc isn't ready yet: skip it quietly
+/// and try again next time.
+async fn fetch_content(
+    client: &reqwest::Client,
+    session: &Session,
+    file: &RemoteFile,
+) -> Result<Option<Vec<u8>>, String> {
+    let docx = file.is_docx();
     let url = format!(
-        "{}/api/items/{}/content",
+        "{}/api/items/{}/content{}",
         session.web_url.trim_end_matches('/'),
-        id
+        file.id,
+        if docx { "?format=docx" } else { "" }
     );
     let res = client
         .get(url)
@@ -174,9 +214,12 @@ async fn fetch_content(client: &reqwest::Client, session: &Session, id: &str) ->
     let status = res.status();
     if !status.is_success() {
         let body = res.text().await.unwrap_or_default();
+        if docx && is_not_ready(status, &body) {
+            return Ok(None);
+        }
         return Err(api_error(status, &body));
     }
-    res.bytes().await.map(|b| b.to_vec()).map_err(|e| e.to_string())
+    res.bytes().await.map(|b| Some(b.to_vec())).map_err(|e| e.to_string())
 }
 
 enum Plan {
@@ -194,7 +237,7 @@ fn plan(
     let mut out = Vec::new();
     for file in remote {
         let Some(target) = local_path(root, &file.path) else { continue };
-        match tracked.get(&file.id) {
+        match tracked.get(file.key()) {
             Some((_, version)) if version == &file.version && target.is_file() => {}
             Some((path, version))
                 if file.kind == "image"
@@ -212,6 +255,18 @@ fn plan(
             None => out.push((file.clone(), Plan::Download { from: None })),
         }
     }
+    out
+}
+
+/// Tracked files whose key the web app no longer lists: `(key, path)`.
+fn stale(remote: &[RemoteFile], tracked: &HashMap<String, (String, String)>) -> Vec<(String, String)> {
+    let keys: HashSet<&str> = remote.iter().map(|f| f.key()).collect();
+    let mut out: Vec<(String, String)> = tracked
+        .iter()
+        .filter(|(key, _)| !keys.contains(key.as_str()))
+        .map(|(key, (path, _))| (key.clone(), path.clone()))
+        .collect();
+    out.sort();
     out
 }
 
@@ -267,16 +322,13 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
         .collect();
 
     // Files of items that are gone (deleted, or no longer saved) go first, so a new file can take
-    // their name.
-    let remote_ids: HashSet<&str> = remote.iter().map(|f| f.id.as_str()).collect();
+    // their name. A Word copy is tracked on its own, so it goes with its post the same way.
     // Files that belong to the library; image clean-up never deletes these.
     let keep: HashSet<PathBuf> = remote.iter().filter_map(|f| local_path(root, &f.path)).collect();
-    for (id, (path, _)) in &tracked {
-        if !remote_ids.contains(id.as_str()) {
-            remove_tracked(root, path, &keep);
-            let _ = db.remove_local_copy_file(id);
-            report.removed += 1;
-        }
+    for (key, path) in stale(&remote, &tracked) {
+        remove_tracked(root, &path, &keep);
+        let _ = db.remove_local_copy_file(&key);
+        report.removed += 1;
     }
 
     let mut downloads = Vec::new();
@@ -296,7 +348,7 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
                         if let Some(parent) = src.parent() {
                             remove_empty_parent_dirs(parent, root);
                         }
-                        let _ = db.set_local_copy_file(&file.id, &file.path, &file.version);
+                        let _ = db.set_local_copy_file(file.key(), &file.path, &file.version);
                         report.moved += 1;
                     }
                     Err(_) => downloads.push((file, Some(from))),
@@ -309,10 +361,10 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
     for chunk in downloads.chunks(CONCURRENCY) {
         let mut set = tokio::task::JoinSet::new();
         for (i, (file, _)) in chunk.iter().enumerate() {
-            let (client, session, id) = (client.clone(), session.clone(), file.id.clone());
-            set.spawn(async move { (i, fetch_content(&client, &session, &id).await) });
+            let (client, session, file) = (client.clone(), session.clone(), file.clone());
+            set.spawn(async move { (i, fetch_content(&client, &session, &file).await) });
         }
-        let mut fetched: Vec<Result<Vec<u8>, String>> =
+        let mut fetched: Vec<Result<Option<Vec<u8>>, String>> =
             (0..chunk.len()).map(|_| Err("Download stopped.".to_string())).collect();
         while let Some(joined) = set.join_next().await {
             if let Ok((i, result)) = joined {
@@ -321,7 +373,10 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
         }
         for ((file, from), bytes) in chunk.iter().zip(fetched) {
             let bytes = match bytes {
-                Ok(b) => b,
+                Ok(Some(b)) => b,
+                // A Word copy whose Google Doc isn't made yet: whatever is on disk stays, and the
+                // next run asks again.
+                Ok(None) => continue,
                 Err(message) => {
                     report.failed.push(LocalCopyFailure { path: file.path.clone(), message });
                     continue;
@@ -340,7 +395,7 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
                 }
                 move_images_dir(old, &target);
             }
-            let bytes = if file.kind == "image" {
+            let bytes = if file.kind == "image" || file.is_docx() {
                 bytes
             } else {
                 let text = String::from_utf8_lossy(&bytes).into_owned();
@@ -356,7 +411,7 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
             if let (Some(old), false) = (from.as_deref(), same_file) {
                 remove_tracked(root, old, &keep);
             }
-            let _ = db.set_local_copy_file(&file.id, &file.path, &file.version);
+            let _ = db.set_local_copy_file(file.key(), &file.path, &file.version);
             report.written += 1;
         }
     }
@@ -607,7 +662,28 @@ mod tests {
     }
 
     fn file(id: &str, kind: &str, path: &str, version: &str) -> RemoteFile {
-        RemoteFile { id: id.into(), kind: kind.into(), path: path.into(), version: version.into() }
+        RemoteFile {
+            key: String::new(),
+            id: id.into(),
+            kind: kind.into(),
+            path: path.into(),
+            version: version.into(),
+            format: String::new(),
+        }
+    }
+
+    fn docx(id: &str, kind: &str, path: &str, version: &str) -> RemoteFile {
+        RemoteFile {
+            key: format!("{}:docx", id),
+            format: "docx".into(),
+            ..file(id, kind, path, version)
+        }
+    }
+
+    fn tracked_of(rows: &[(&str, &str, &str)]) -> HashMap<String, (String, String)> {
+        rows.iter()
+            .map(|(k, p, v)| (k.to_string(), (p.to_string(), v.to_string())))
+            .collect()
     }
 
     #[test]
@@ -785,6 +861,145 @@ mod tests {
         fs::write(root.join("Cars/H/New.md"), "x").unwrap();
         remove_tracked(&root, "Cars/H/New.md", &HashSet::new());
         assert!(!root.join("Cars/H").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn manifest_entries_parse_with_or_without_keys() {
+        let old: RemoteFile = serde_json::from_str(
+            r#"{"id":"a","kind":"grokipedia","path":"Cars/G/A.md","version":"t|Cars/G/A.md"}"#,
+        )
+        .unwrap();
+        assert_eq!(old.key(), "a");
+        assert!(!old.is_docx());
+
+        let new: RemoteFile = serde_json::from_str(
+            r#"{"key":"a:docx","format":"docx","id":"a","kind":"grokipedia","path":"Cars/G/A.docx","version":"t|Cars/G/A.docx","extra":1}"#,
+        )
+        .unwrap();
+        assert_eq!(new.key(), "a:docx");
+        assert_eq!(new.id, "a");
+        assert!(new.is_docx());
+    }
+
+    #[test]
+    fn not_ready_is_only_the_404_with_that_code() {
+        use reqwest::StatusCode;
+        let body = r#"{"error":{"message":"Not in Drive yet.","code":"not_ready"}}"#;
+        assert!(is_not_ready(StatusCode::NOT_FOUND, body));
+        assert!(!is_not_ready(StatusCode::INTERNAL_SERVER_ERROR, body));
+        assert!(!is_not_ready(StatusCode::NOT_FOUND, r#"{"error":{"message":"Item not found."}}"#));
+        assert!(!is_not_ready(StatusCode::NOT_FOUND, "<html>404</html>"));
+    }
+
+    #[test]
+    fn a_post_and_its_word_copy_are_tracked_separately() {
+        let root = temp_root();
+        fs::create_dir_all(root.join("Cars/G")).unwrap();
+        fs::write(root.join("Cars/G/A.md"), "x").unwrap();
+        fs::write(root.join("Cars/G/A.docx"), "d").unwrap();
+        // Each file has its own row, so the bare id and the `:docx` key never mix up.
+        let tracked = tracked_of(&[
+            ("a", "Cars/G/A.md", "t1|Cars/G/A.md"),
+            ("a:docx", "Cars/G/A.docx", "s1|Cars/G/A.docx"),
+        ]);
+
+        let unchanged = vec![
+            file("a", "grokipedia", "Cars/G/A.md", "t1|Cars/G/A.md"),
+            docx("a", "grokipedia", "Cars/G/A.docx", "s1|Cars/G/A.docx"),
+        ];
+        assert!(plan(&root, &unchanged, &tracked).is_empty());
+
+        // Pushed to Drive again: only the Word copy changes.
+        let pushed = vec![
+            file("a", "grokipedia", "Cars/G/A.md", "t1|Cars/G/A.md"),
+            docx("a", "grokipedia", "Cars/G/A.docx", "s2|Cars/G/A.docx"),
+        ];
+        let steps = plan(&root, &pushed, &tracked);
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].0.key(), "a:docx");
+        assert!(matches!(&steps[0].1, Plan::Download { from: None }));
+
+        // Renamed: both files download at the new path and drop the old one.
+        let renamed = vec![
+            file("a", "grokipedia", "Cars/G/B.md", "t2|Cars/G/B.md"),
+            docx("a", "grokipedia", "Cars/G/B.docx", "s2|Cars/G/B.docx"),
+        ];
+        let froms: Vec<(String, Option<String>)> = plan(&root, &renamed, &tracked)
+            .into_iter()
+            .map(|(f, p)| match p {
+                Plan::Download { from } => (f.key().to_string(), from),
+                Plan::Move { from } => (f.key().to_string(), Some(from)),
+            })
+            .collect();
+        assert_eq!(
+            froms,
+            vec![
+                ("a".to_string(), Some("Cars/G/A.md".to_string())),
+                ("a:docx".to_string(), Some("Cars/G/A.docx".to_string())),
+            ]
+        );
+
+        // A Word copy that isn't on disk any more is fetched again.
+        fs::remove_file(root.join("Cars/G/A.docx")).unwrap();
+        let steps = plan(&root, &unchanged, &tracked);
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].0.key(), "a:docx");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn deleting_a_post_removes_its_word_copy_and_only_that() {
+        let root = temp_root();
+        fs::create_dir_all(root.join("Cars/G")).unwrap();
+        for name in ["A.md", "A.docx", "B.md", "B.docx", "mine.docx"] {
+            fs::write(root.join("Cars/G").join(name), "x").unwrap();
+        }
+        let tracked = tracked_of(&[
+            ("a", "Cars/G/A.md", "t|x"),
+            ("a:docx", "Cars/G/A.docx", "s|x"),
+            ("b", "Cars/G/B.md", "t|x"),
+            ("b:docx", "Cars/G/B.docx", "s|x"),
+        ]);
+
+        // A is deleted. B stays, but its Word copy is no longer listed (e.g. its Doc is gone).
+        let remote = vec![file("b", "note", "Cars/G/B.md", "t|x")];
+        let gone = stale(&remote, &tracked);
+        assert_eq!(
+            gone,
+            vec![
+                ("a".to_string(), "Cars/G/A.md".to_string()),
+                ("a:docx".to_string(), "Cars/G/A.docx".to_string()),
+                ("b:docx".to_string(), "Cars/G/B.docx".to_string()),
+            ]
+        );
+        for (_, path) in &gone {
+            remove_tracked(&root, path, &HashSet::new());
+        }
+        assert!(!root.join("Cars/G/A.md").exists());
+        assert!(!root.join("Cars/G/A.docx").exists());
+        assert!(!root.join("Cars/G/B.docx").exists());
+        assert!(root.join("Cars/G/B.md").exists());
+        // Not written by the local copy, so never touched.
+        assert!(root.join("Cars/G/mine.docx").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rows_written_before_keys_existed_still_match() {
+        let root = temp_root();
+        fs::create_dir_all(root.join("Cars/G")).unwrap();
+        fs::write(root.join("Cars/G/A.md"), "x").unwrap();
+        // Old rows are keyed by the bare item id, which is the key of the item's own file.
+        let tracked = tracked_of(&[("a", "Cars/G/A.md", "t1|Cars/G/A.md")]);
+        let remote = vec![
+            file("a", "grokipedia", "Cars/G/A.md", "t1|Cars/G/A.md"),
+            docx("a", "grokipedia", "Cars/G/A.docx", "s1|Cars/G/A.docx"),
+        ];
+        assert!(stale(&remote, &tracked).is_empty());
+        let steps = plan(&root, &remote, &tracked);
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].0.key(), "a:docx");
         let _ = fs::remove_dir_all(&root);
     }
 }

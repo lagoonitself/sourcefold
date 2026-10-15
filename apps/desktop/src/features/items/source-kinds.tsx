@@ -3,6 +3,7 @@ import {
   BookOpen,
   Check,
   CircleAlert,
+  Globe,
   Image as ImageIcon,
   Loader2,
   Lock,
@@ -18,21 +19,56 @@ export interface SourceKindConfig {
   name: string;
   /** Background class for the 3px bar on the row's left edge. */
   barClass: string;
+  /** The source color as a CSS value, for places that cannot use the class (the reader badge). */
+  colorVar: string;
   Icon: IconComponent;
 }
 
 // Same kinds, colors and icons as the web app's item rows (see docs/DESIGN.md, "Source-type marks").
 const SOURCE_KINDS: Record<string, SourceKindConfig> = {
-  grokipedia: { name: "Grokipedia", barClass: "bg-source-grokipedia", Icon: BookOpen },
-  substack: { name: "Substack", barClass: "bg-source-substack", Icon: Newspaper },
-  x: { name: "X", barClass: "bg-source-x", Icon: MessageSquareText },
-  note: { name: "Note", barClass: "bg-source-note", Icon: StickyNote },
-  image: { name: "Image", barClass: "bg-source-image", Icon: ImageIcon },
+  grokipedia: {
+    name: "Grokipedia",
+    barClass: "bg-source-grokipedia",
+    colorVar: "var(--source-grokipedia)",
+    Icon: BookOpen,
+  },
+  substack: {
+    name: "Substack",
+    barClass: "bg-source-substack",
+    colorVar: "var(--source-substack)",
+    Icon: Newspaper,
+  },
+  x: {
+    name: "X",
+    barClass: "bg-source-x",
+    colorVar: "var(--source-x)",
+    Icon: MessageSquareText,
+  },
+  note: {
+    name: "Note",
+    barClass: "bg-source-note",
+    colorVar: "var(--source-note)",
+    Icon: StickyNote,
+  },
+  image: {
+    name: "Image",
+    barClass: "bg-source-image",
+    colorVar: "var(--source-image)",
+    Icon: ImageIcon,
+  },
+  // No color of its own in docs/DESIGN.md yet, so it uses the neutral secondary-text color.
+  wikipedia: {
+    name: "Wikipedia",
+    barClass: "bg-muted-foreground",
+    colorVar: "var(--muted-foreground)",
+    Icon: Globe,
+  },
 };
 
 const FALLBACK_KIND: SourceKindConfig = {
   name: "Source",
   barClass: "bg-muted-foreground",
+  colorVar: "var(--muted-foreground)",
   Icon: BookOpen,
 };
 

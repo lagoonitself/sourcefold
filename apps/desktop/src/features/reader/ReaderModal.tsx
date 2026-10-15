@@ -1,10 +1,10 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { getItem } from "@/lib/api";
+import { loadReaderText } from "@/lib/api";
 import { registerModalLayer } from "@/components/ui/Dialog";
-import { openUrl } from "@/lib/utils";
+import { errorMessage, openUrl } from "@/lib/utils";
 import { ReaderView } from "./ReaderView";
-import type { ReaderItem, ReaderModalProps } from "./types";
+import type { ReaderLoadState, ReaderModalProps } from "./types";
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -22,20 +22,36 @@ export function ReaderModal({
   initialTypography = "serif",
 }: ReaderModalProps) {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  const [loadedItem, setLoadedItem] = React.useState<ReaderItem | null>(item);
+  const [state, setState] = React.useState<ReaderLoadState>({ status: "loading" });
+  const [attempt, setAttempt] = React.useState(0);
+
+  // The list refreshes its items often; only a different source (or Retry) reloads the text.
+  const itemRef = React.useRef(item);
+  itemRef.current = item;
+  const itemId = item?.id ?? null;
 
   React.useEffect(() => {
-    setLoadedItem(item);
-    if (open && item && !item.markdown) {
-      getItem(item.id)
-        .then((full) => {
-          if (full && full.id === item.id) {
-            setLoadedItem((prev) => (prev ? { ...prev, ...full } : full));
-          }
-        })
-        .catch(() => {});
-    }
-  }, [open, item]);
+    if (!open || !itemId) return;
+    let cancelled = false;
+    setState({ status: "loading" });
+    loadReaderText(itemId)
+      .then((text) => {
+        if (!cancelled) setState({ status: "ready", text });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // Text the list already holds (a note) beats an error.
+        const fallback = itemRef.current?.markdown;
+        if (fallback && fallback.trim()) {
+          setState({ status: "ready", text: fallback });
+        } else {
+          setState({ status: "error", message: errorMessage(err, "Couldn't load this source.") });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, itemId, attempt]);
 
   const handleClose = React.useCallback(() => {
     onOpenChange(false);
@@ -44,15 +60,15 @@ export function ReaderModal({
 
   // Focus the scroll container when the modal opens so j/k/Space shortcuts work immediately
   React.useEffect(() => {
-    if (open && loadedItem) {
+    if (open && itemId) {
       const timer = setTimeout(() => {
         scrollRef.current?.focus();
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [open, loadedItem]);
+  }, [open, itemId, state.status]);
 
-  const isShown = open && loadedItem !== null;
+  const isShown = open && item !== null;
   React.useEffect(() => {
     if (!isShown) return;
     return registerModalLayer();
@@ -65,7 +81,7 @@ export function ReaderModal({
   // - k / ArrowUp: scroll up
   // - Space / Shift+Space: page down / page up
   React.useEffect(() => {
-    if (!open || !loadedItem) return;
+    if (!open || !item) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return;
@@ -77,7 +93,7 @@ export function ReaderModal({
       }
 
       if (e.key === "o" || e.key === "O") {
-        const url = loadedItem.source_url || loadedItem.canonical_url;
+        const url = item.source_url || item.canonical_url;
         if (url) {
           e.preventDefault();
           void openUrl(url);
@@ -107,19 +123,21 @@ export function ReaderModal({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, loadedItem, handleClose]);
+  }, [open, item, handleClose]);
 
-  if (!open || !loadedItem) return null;
+  if (!open || !item) return null;
 
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`Reader: ${loadedItem.title}`}
+      aria-label={`Reader: ${item.title}`}
       className="fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in duration-150"
     >
       <ReaderView
-        item={loadedItem}
+        item={item}
+        state={state}
+        onRetry={() => setAttempt((n) => n + 1)}
         onClose={handleClose}
         scrollRef={scrollRef}
         className={className}

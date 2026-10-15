@@ -35,6 +35,7 @@ import { deleteItem, openImage, renameItem } from "@/lib/api";
 import { openUrl, cn, errorMessage } from "@/lib/utils";
 import { NoteDialog } from "./NoteDialog";
 import { MoveItemDialog } from "./MoveItemDialog";
+import { linkOfItem, openSource, opensInReader } from "../reader/open-decision";
 import { formatSavedDate, getSourceKind, StatusIcon } from "./source-kinds";
 import { onGroupAction } from "./group-actions";
 import { hasTextSelection, isMacPlatform, isTypingContext } from "../shortcuts/key-utils";
@@ -50,7 +51,7 @@ export interface ItemListProps {
 }
 
 function linkOf(item: Item): string | null {
-  return item.source_url || item.canonical_url || null;
+  return linkOfItem(item);
 }
 
 function linksLabel(count: number) {
@@ -171,18 +172,15 @@ export function ItemList({
 
   const handleOpenSource = React.useCallback(
     (item: Item, options?: { forceExternal?: boolean }) => {
-      if (item.kind === "image") {
-        void openImageItem(item);
-      } else if (!options?.forceExternal && item.markdown && item.markdown.trim() && onOpenReader) {
-        onOpenReader(item);
-      } else {
-        const url = linkOf(item);
-        if (url) {
-          openUrl(url);
-        } else if (onOpenReader) {
-          onOpenReader(item);
-        }
-      }
+      openSource(
+        item,
+        {
+          image: (image) => void openImageItem(image),
+          reader: (source) => onOpenReader?.(source),
+          browser: (url) => void openUrl(url),
+        },
+        options,
+      );
     },
     [onOpenReader],
   );
@@ -650,7 +648,7 @@ export function ItemList({
             const isSelected = selectedIds.has(item.id);
             const isFocusedRow = item.id === focusedItemId;
             const hasNote = Boolean(item.kind !== "note" && item.note && item.note.trim());
-            const hasMarkdown = Boolean(item.markdown && item.markdown.trim());
+            const canRead = opensInReader(item);
             const kind = getSourceKind(item.kind);
             const KindIcon = kind.Icon;
             const author = authorOf(item);
@@ -758,7 +756,7 @@ export function ItemList({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44">
-                      {hasMarkdown && (
+                      {canRead && (
                         <DropdownMenuItem
                           onClick={() => {
                             setFocusedItemId(item.id);

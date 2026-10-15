@@ -112,6 +112,22 @@ pub struct SubstackCapture {
     pub markdown: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WikipediaCapture {
+    pub url: String,
+    pub title: String,
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub language: Option<String>,
+    #[serde(default)]
+    pub revision: Option<String>,
+    #[serde(default, rename = "lastEdited", alias = "last_edited")]
+    pub last_edited: Option<String>,
+    #[serde(default)]
+    pub markdown: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind")]
 pub enum CapturePayload {
@@ -119,6 +135,11 @@ pub enum CapturePayload {
     Substack {
         folder_id: String,
         capture: SubstackCapture,
+    },
+    #[serde(rename = "wikipedia")]
+    Wikipedia {
+        folder_id: String,
+        capture: WikipediaCapture,
     },
     #[serde(rename = "substack_unavailable")]
     SubstackUnavailable {
@@ -738,6 +759,10 @@ pub struct ItemFileFields {
     pub access: Option<String>,
     pub summary: Option<String>,
     pub fact_checked: Option<String>,
+    pub language: Option<String>,
+    /// Wikipedia revision id. Written unquoted when it is all digits.
+    pub revision: Option<String>,
+    pub last_edited: Option<String>,
     pub posted: Option<String>,
     pub saved: Option<String>,
     pub created: Option<String>,
@@ -746,6 +771,41 @@ pub struct ItemFileFields {
 
 fn clean_date(d: Option<&str>) -> Option<String> {
     d.map(|s| s.split('T').next().unwrap_or(s).to_string())
+}
+
+fn meta_text(meta: &Value, key: &str) -> Option<String> {
+    match meta.get(key) {
+        Some(Value::String(s)) if !s.trim().is_empty() => Some(s.clone()),
+        Some(Value::Number(n)) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
+/// Front matter fields for an item that is already saved: its title and place come from the
+/// item, everything else from what was saved with it, so a rename, move or note edit keeps them.
+fn item_file_fields(item: &Item, title: String, folder: Option<String>) -> ItemFileFields {
+    let meta = &item.meta;
+    ItemFileFields {
+        title,
+        subtitle: meta_text(meta, "subtitle"),
+        url: item.source_url.clone(),
+        post_url: meta_text(meta, "post_url"),
+        author: meta_text(meta, "author"),
+        author_url: meta_text(meta, "author_url"),
+        publication: meta_text(meta, "publication"),
+        publication_url: meta_text(meta, "publication_url"),
+        published: meta_text(meta, "published"),
+        access: meta_text(meta, "access"),
+        summary: meta_text(meta, "summary"),
+        fact_checked: meta_text(meta, "fact_checked").or_else(|| meta_text(meta, "fact_checked_at")),
+        language: meta_text(meta, "language"),
+        revision: meta_text(meta, "revision"),
+        last_edited: meta_text(meta, "last_edited"),
+        posted: meta_text(meta, "posted"),
+        saved: clean_date(Some(&item.created_at)),
+        created: clean_date(Some(&item.created_at)),
+        folder,
+    }
 }
 
 pub fn clean_body_markdown(kind: &str, body: &str, subtitle: Option<&str>) -> String {
@@ -907,6 +967,35 @@ pub fn build_item_file(
                 fm.push_str(&format!("saved: {}\n", format_yaml_string(&s)));
             }
         }
+        "wikipedia" => {
+            if let Some(u) = &fields.url {
+                fm.push_str(&format!("url: {}\n", format_yaml_string(u)));
+            }
+            if let Some(s) = &fields.summary {
+                let tr = s.trim();
+                if !tr.is_empty() {
+                    fm.push_str(&format!("summary: {}\n", format_yaml_string(tr)));
+                }
+            }
+            if let Some(l) = &fields.language {
+                let tr = l.trim();
+                if !tr.is_empty() {
+                    fm.push_str(&format!("language: {}\n", format_yaml_string(tr)));
+                }
+            }
+            if let Some(r) = &fields.revision {
+                let tr = r.trim();
+                if !tr.is_empty() && tr.len() <= 15 && tr.bytes().all(|b| b.is_ascii_digit()) {
+                    fm.push_str(&format!("revision: {}\n", tr));
+                }
+            }
+            if let Some(e) = clean_date(fields.last_edited.as_deref()) {
+                fm.push_str(&format!("last_edited: {}\n", format_yaml_string(&e)));
+            }
+            if let Some(s) = clean_date(fields.saved.as_deref()) {
+                fm.push_str(&format!("saved: {}\n", format_yaml_string(&s)));
+            }
+        }
         "note" => {
             if let Some(c) = clean_date(fields.created.as_deref()) {
                 fm.push_str(&format!("created: {}\n", format_yaml_string(&c)));
@@ -935,6 +1024,11 @@ pub fn build_item_file(
             let u = fields.url.as_deref().unwrap_or("");
             let s = clean_date(fields.saved.as_deref()).unwrap_or_default();
             format!("> Saved from [Grokipedia]({}) on {}. Grokipedia articles change; check the live page for edits.", u, s)
+        }
+        "wikipedia" => {
+            let u = fields.url.as_deref().unwrap_or("");
+            let s = clean_date(fields.saved.as_deref()).unwrap_or_default();
+            format!("> Saved from [Wikipedia]({}) on {}. Wikipedia articles change; check the live page for edits.", u, s)
         }
         "substack" => {
             let pub_name = fields.publication.as_deref().map(|p| p.trim()).filter(|p| !p.is_empty()).unwrap_or("Substack");
@@ -1745,6 +1839,107 @@ pub fn save_substack(
     Ok(item)
 }
 
+fn wikipedia_fields(
+    capture: &WikipediaCapture,
+    folder: Option<String>,
+    saved: &str,
+) -> ItemFileFields {
+    ItemFileFields {
+        title: capture.title.trim().to_string(),
+        url: Some(capture.url.clone()),
+        summary: capture.summary.clone(),
+        language: capture.language.clone(),
+        revision: capture.revision.clone(),
+        last_edited: capture.last_edited.clone(),
+        saved: Some(saved.to_string()),
+        folder,
+        ..Default::default()
+    }
+}
+
+pub fn build_wikipedia_markdown(
+    capture: &WikipediaCapture,
+    folder_path_str: &str,
+    today: &str,
+) -> String {
+    let folder_opt = if folder_path_str.is_empty() { None } else { Some(folder_path_str.to_string()) };
+    let fields = wikipedia_fields(capture, folder_opt, today);
+    build_item_file("wikipedia", &fields, &capture.markdown, None)
+}
+
+/// Saves a Wikipedia article the desktop already fetched and converted (in the webview), to the
+/// local database and as a Markdown file on disk.
+pub fn save_wikipedia(
+    db: &Database,
+    folder_id: &str,
+    capture: WikipediaCapture,
+) -> Result<Item, ServiceError> {
+    let title = capture.title.trim().to_string();
+    if title.is_empty() {
+        return Err(ServiceError::bad_request("A title is required"));
+    }
+    let canonical = canonicalize_url(&capture.url).map_err(ServiceError::bad_request)?;
+    let is_wikipedia = reqwest::Url::parse(&canonical)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.ends_with(".wikipedia.org")))
+        .unwrap_or(false);
+    if !is_wikipedia {
+        return Err(ServiceError::bad_request("That isn't a Wikipedia article link."));
+    }
+
+    let check = db.check_url(&canonical, folder_id);
+    if check.exists {
+        return Err(ServiceError::duplicate(
+            format!("Already saved in {}", check.folder_name.as_deref().unwrap_or("this folder")),
+            check.item_id,
+            check.folder_id,
+            check.folder_name,
+        ));
+    }
+
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+    let (_, folder_path_str) = resolve_folder_path(db, folder_id);
+    let full_file_content = build_wikipedia_markdown(&capture, &folder_path_str, &today);
+
+    let meta = json!({
+        "summary": capture.summary,
+        "language": capture.language,
+        "revision": capture.revision,
+        "last_edited": capture.last_edited,
+    });
+
+    let save_req = SaveItemRequest {
+        folder_id: folder_id.to_string(),
+        kind: "wikipedia".to_string(),
+        title: title.clone(),
+        source_url: Some(capture.url.clone()),
+        canonical_url: Some(canonical),
+        status: "saved".to_string(),
+        error: None,
+        markdown: Some(full_file_content.clone()),
+        meta: Some(meta),
+        note: None,
+        position: None,
+    };
+
+    let mut item = db
+        .save_item(save_req)
+        .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+
+    let (_, rel_str) = write_item_file_to_disk(
+        db,
+        folder_id,
+        &item.id,
+        &title,
+        "md",
+        &item.created_at,
+        full_file_content.as_bytes(),
+    )?;
+    item.storage_path = Some(rel_str);
+
+    Ok(item)
+}
+
 pub fn save_substack_unavailable(
     db: &Database,
     folder_id: &str,
@@ -2293,13 +2488,7 @@ pub fn update_item_note(db: &Database, id: &str, note: Option<&str>) -> Result<(
             let (_, folder_path_str) = resolve_folder_path(db, &item.folder_id);
             let folder_opt = if folder_path_str.is_empty() { None } else { Some(folder_path_str) };
 
-            let fields = ItemFileFields {
-                title: item.title.clone(),
-                url: item.source_url.clone(),
-                saved: clean_date(Some(&item.created_at)),
-                folder: folder_opt,
-                ..Default::default()
-            };
+            let fields = item_file_fields(&item, item.title.clone(), folder_opt);
 
             let updated_md = build_item_file(&item.kind, &fields, &body, note);
             let _ = db.update_item_content(id, None, &updated_md);
@@ -2361,13 +2550,7 @@ pub fn rename_item(db: &Database, id: &str, new_title: &str) -> Result<(), Servi
     } else if let Some(existing_md) = &item.markdown {
         let (body, _) = extract_body_and_note(existing_md);
         let folder_opt = if folder_path_str.is_empty() { None } else { Some(folder_path_str) };
-        let fields = ItemFileFields {
-            title: safe_t.clone(),
-            url: item.source_url.clone(),
-            saved: clean_date(Some(&item.created_at)),
-            folder: folder_opt,
-            ..Default::default()
-        };
+        let fields = item_file_fields(&item, safe_t.clone(), folder_opt);
         let updated_md = build_item_file(&item.kind, &fields, &body, item.note.as_deref());
 
         if let Some(old_p) = &old_file_path {
@@ -2428,13 +2611,7 @@ pub fn move_item(db: &Database, id: &str, new_folder_id: &str) -> Result<(), Ser
     } else if let Some(existing_md) = &item.markdown {
         let (body, _) = extract_body_and_note(existing_md);
         let folder_opt = if new_folder_path_str.is_empty() { None } else { Some(new_folder_path_str) };
-        let fields = ItemFileFields {
-            title: item.title.clone(),
-            url: item.source_url.clone(),
-            saved: clean_date(Some(&item.created_at)),
-            folder: folder_opt,
-            ..Default::default()
-        };
+        let fields = item_file_fields(&item, item.title.clone(), folder_opt);
         let updated_md = build_item_file(&item.kind, &fields, &body, item.note.as_deref());
 
         if let Some(old_p) = &old_file_path {
@@ -2501,13 +2678,7 @@ fn sync_folder_items_paths(db: &Database, folder_id: &str) -> Result<(), Service
         if it.kind != "image" {
             if let Some(md) = &it.markdown {
                 let (body, _) = extract_body_and_note(md);
-                let fields = ItemFileFields {
-                    title: it.title.clone(),
-                    url: it.source_url.clone(),
-                    saved: clean_date(Some(&it.created_at)),
-                    folder: folder_opt.clone(),
-                    ..Default::default()
-                };
+                let fields = item_file_fields(&it, it.title.clone(), folder_opt.clone());
                 let updated = build_item_file(&it.kind, &fields, &body, it.note.as_deref());
                 let _ = db.update_item_content(&it.id, None, &updated);
             }
@@ -3019,6 +3190,94 @@ mod tests {
     }
 
     #[test]
+    fn test_wikipedia_markdown_generation() {
+        let capture = WikipediaCapture {
+            url: "https://en.wikipedia.org/wiki/Turbocharger".to_string(),
+            title: "Turbocharger".to_string(),
+            summary: Some("Exhaust-powered forced-induction device for engines".to_string()),
+            language: Some("en".to_string()),
+            revision: Some("1376335656".to_string()),
+            last_edited: Some("2026-09-23T14:44:34Z".to_string()),
+            markdown: "Lead.\n\n## History\n\nText.[^1]\n\n## References\n\n[^1]: Source.".to_string(),
+        };
+
+        let generated = build_wikipedia_markdown(&capture, "Cars/Engines", "2026-10-15");
+        let expected = "---\nsource: wikipedia\ntitle: Turbocharger\nurl: https://en.wikipedia.org/wiki/Turbocharger\nsummary: Exhaust-powered forced-induction device for engines\nlanguage: en\nrevision: 1376335656\nlast_edited: 2026-09-23\nsaved: 2026-10-15\nfolder: Cars/Engines\n---\n\n# Turbocharger\n\n> Saved from [Wikipedia](https://en.wikipedia.org/wiki/Turbocharger) on 2026-10-15. Wikipedia articles change; check the live page for edits.\n\nLead.\n\n## History\n\nText.[^1]\n\n## References\n\n[^1]: Source.\n";
+        assert_eq!(generated, expected);
+    }
+
+    #[test]
+    fn test_wikipedia_offline_capture_saves_a_file_and_keeps_its_front_matter() {
+        let db = Database::open_in_memory().unwrap();
+        let storage_root = std::env::temp_dir()
+            .join(format!("sourcefold-wikipedia-test-{}", uuid::Uuid::new_v4()));
+        db.set_setting("storage_dir", storage_root.to_str().unwrap()).unwrap();
+        let _ = fs::create_dir_all(&storage_root);
+        let project = db.create_folder("Cars", None).unwrap();
+        let group = db.create_folder("Engines", Some(&project.id)).unwrap();
+
+        // The same JSON the webview sends through the `capture` command.
+        let request = json!({
+            "kind": "wikipedia",
+            "folder_id": group.id,
+            "capture": {
+                "url": "https://en.wikipedia.org/wiki/Turbocharger",
+                "title": "Turbocharger",
+                "summary": "Exhaust-powered forced-induction device for engines",
+                "language": "en",
+                "revision": "1376335656",
+                "lastEdited": "2026-09-23T14:44:34Z",
+                "markdown": "Lead paragraph.\n\n## History\n\nText.\n"
+            }
+        });
+        let payload: CapturePayload = serde_json::from_value(request.clone()).unwrap();
+        let (folder_id, capture) = match payload {
+            CapturePayload::Wikipedia { folder_id, capture } => (folder_id, capture),
+            other => panic!("expected a Wikipedia capture, got {:?}", other),
+        };
+
+        let item = save_wikipedia(&db, &folder_id, capture).unwrap();
+        assert_eq!(item.kind, "wikipedia");
+        assert_eq!(item.title, "Turbocharger");
+        assert_eq!(item.canonical_url.as_deref(), Some("https://en.wikipedia.org/wiki/Turbocharger"));
+        assert_eq!(item.meta["revision"], "1376335656");
+        assert_eq!(item.storage_path.as_deref(), Some("Cars/Engines/Turbocharger.md"));
+
+        let file = storage_root.join("Cars/Engines/Turbocharger.md");
+        let text = fs::read_to_string(&file).unwrap();
+        assert!(text.starts_with("---\nsource: wikipedia\ntitle: Turbocharger\nurl: https://en.wikipedia.org/wiki/Turbocharger\nsummary: Exhaust-powered forced-induction device for engines\nlanguage: en\nrevision: 1376335656\nlast_edited: 2026-09-23\nsaved: "));
+        assert!(text.contains("\nfolder: Cars/Engines\n---\n\n# Turbocharger\n\n> Saved from [Wikipedia](https://en.wikipedia.org/wiki/Turbocharger) on "));
+        assert!(text.ends_with("Lead paragraph.\n\n## History\n\nText.\n"));
+
+        // The same link twice in one group is a duplicate.
+        let again: CapturePayload = serde_json::from_value(request).unwrap();
+        if let CapturePayload::Wikipedia { folder_id, capture } = again {
+            let err = save_wikipedia(&db, &folder_id, capture).unwrap_err();
+            assert_eq!(err.code, "duplicate");
+        }
+
+        // Renaming rebuilds the file; the Wikipedia fields must survive.
+        rename_item(&db, &item.id, "Turbo").unwrap();
+        let renamed = fs::read_to_string(storage_root.join("Cars/Engines/Turbo.md")).unwrap();
+        assert!(renamed.starts_with("---\nsource: wikipedia\ntitle: Turbo\nurl: https://en.wikipedia.org/wiki/Turbocharger\nsummary: Exhaust-powered forced-induction device for engines\nlanguage: en\nrevision: 1376335656\nlast_edited: 2026-09-23\nsaved: "));
+        assert!(!file.exists());
+
+        // Only Wikipedia addresses are accepted under this kind.
+        let bad = WikipediaCapture {
+            url: "https://example.com/wiki/Turbocharger".to_string(),
+            title: "Turbocharger".to_string(),
+            summary: None,
+            language: None,
+            revision: None,
+            last_edited: None,
+            markdown: "x".to_string(),
+        };
+        assert!(save_wikipedia(&db, &group.id, bad).is_err());
+
+        let _ = fs::remove_dir_all(&storage_root);
+    }
+
+    #[test]
     fn test_parse_nested_markup() {
         let html = r##"
         <article>
@@ -3127,6 +3386,12 @@ mod tests {
                 let meta = &v["meta"];
                 let summary = meta["summary"].as_str().map(|s| s.to_string());
                 let fact_checked = meta["fact_checked"].as_str().map(|s| s.to_string());
+                let language = meta["language"].as_str().map(|s| s.to_string());
+                let revision = meta["revision"]
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .or_else(|| meta["revision"].as_u64().map(|n| n.to_string()));
+                let last_edited = meta["last_edited"].as_str().map(|s| s.to_string());
                 let subtitle = meta["subtitle"].as_str().map(|s| s.to_string());
                 let author = meta["author"].as_str().map(|s| s.to_string());
                 let author_url = meta["author_url"].as_str().map(|s| s.to_string());
@@ -3150,6 +3415,9 @@ mod tests {
                     access,
                     summary,
                     fact_checked,
+                    language,
+                    revision,
+                    last_edited,
                     posted,
                     saved,
                     created,

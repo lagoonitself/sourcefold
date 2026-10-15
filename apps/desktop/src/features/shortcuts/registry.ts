@@ -366,8 +366,8 @@ export const SHORTCUT_COMMANDS: ReadonlyArray<ShortcutCommand> = [
   },
   {
     id: "list.open",
-    title: "Open reader / URL",
-    description: "Open reader if markdown content exists, else open URL",
+    title: "Open in reader",
+    description: "Read the saved text of a source; images open in the image viewer",
     group: "Sources",
     combos: ["Enter"],
     when: "list",
@@ -375,7 +375,7 @@ export const SHORTCUT_COMMANDS: ReadonlyArray<ShortcutCommand> = [
   {
     id: "list.open-external",
     title: "Open in browser",
-    description: "Always open original source URL in external browser",
+    description: "Open the original page in the browser (also works inside the reader)",
     group: "Sources",
     combos: ["Shift+Enter", "o"],
     when: "list",

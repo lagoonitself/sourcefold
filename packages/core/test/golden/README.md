@@ -8,7 +8,7 @@ Each input JSON file defines an item to be built into a canonical Markdown file:
 
 ```json
 {
-  "kind": "grokipedia | substack | x | note",
+  "kind": "grokipedia | substack | wikipedia | x | note",
   "title": "Item title",
   "url": "https://example.com/canonical-url",
   "folder": "Folder/Subfolder",
@@ -17,6 +17,9 @@ Each input JSON file defines an item to be built into a canonical Markdown file:
   "meta": {
     "summary": "...",
     "fact_checked": "YYYY-MM-DD",
+    "language": "en",
+    "revision": "1376335656",
+    "last_edited": "YYYY-MM-DD or ISO 8601",
     "subtitle": "...",
     "author": "...",
     "author_url": "...",
@@ -34,7 +37,7 @@ Each input JSON file defines an item to be built into a canonical Markdown file:
 
 ### Fields
 
-- `kind` (string, required): One of `"grokipedia"`, `"substack"`, `"x"`, `"note"`.
+- `kind` (string, required): One of `"grokipedia"`, `"substack"`, `"wikipedia"`, `"x"`, `"note"`.
 - `title` (string, required): Title of the item.
 - `url` (string, optional): The item's canonical URL. Omitted or null for `note`.
 - `folder` (string, optional): Relative folder path inside Drive/storage (e.g. `"Tech/AI"`).
@@ -49,6 +52,8 @@ Each input JSON file defines an item to be built into a canonical Markdown file:
 - `grokipedia.input.json` & `grokipedia.md`
 - `substack.input.json` & `substack.md`
 - `substack-minimal.input.json` & `substack-minimal.md`
+- `wikipedia.input.json` & `wikipedia.md`
+- `wikipedia-minimal.input.json` & `wikipedia-minimal.md` (a revision given as a number; `language: "no"` and a title with a colon are quoted)
 - `x-thread.input.json` & `x-thread.md`
 - `note.input.json` & `note.md`
 - `item-with-note.input.json` & `item-with-note.md`

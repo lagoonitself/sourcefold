@@ -84,3 +84,36 @@ describe("buildItemFile and round-trip stability", () => {
     );
   });
 });
+
+describe("buildItemFile for Wikipedia", () => {
+  const article: BuildItemInput = {
+    kind: "wikipedia",
+    title: "Turbocharger",
+    url: "https://en.wikipedia.org/wiki/Turbocharger",
+    created_at: "2026-10-13T10:00:00Z",
+    meta: { summary: "Forced induction device", language: "en", revision: 1376335656 },
+    markdown: "Lead.\n\n## History\n\nText.\n",
+  };
+
+  it("writes the Wikipedia fields in order, with the revision unquoted", () => {
+    const output = buildItemFile(article, "Cars/Engines");
+    expect(
+      output.startsWith(
+        "---\nsource: wikipedia\ntitle: Turbocharger\nurl: https://en.wikipedia.org/wiki/Turbocharger\nsummary: Forced induction device\nlanguage: en\nrevision: 1376335656\nsaved: 2026-10-13\nfolder: Cars/Engines\n---\n",
+      ),
+    ).toBe(true);
+    expect(output).toContain(
+      "> Saved from [Wikipedia](https://en.wikipedia.org/wiki/Turbocharger) on 2026-10-13. Wikipedia articles change; check the live page for edits.",
+    );
+  });
+
+  it("takes the revision from a string, formats last_edited, and ignores a bad revision", () => {
+    const fromString = buildItemFile(
+      { ...article, meta: { revision: "42", last_edited: "2026-09-23T23:59:59Z" } },
+      "",
+    );
+    expect(fromString).toContain("revision: 42\nlast_edited: 2026-09-23\n");
+    const bad = buildItemFile({ ...article, meta: { revision: "abc" } }, "");
+    expect(bad).not.toContain("revision:");
+  });
+});

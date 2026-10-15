@@ -141,7 +141,8 @@ export async function FolderView({ folderId }: FolderViewProps) {
 
       {!isProject && items.length === 0 && (
         <div className="py-12 font-sans text-sm text-muted-foreground">
-          Nothing here yet. Add Grokipedia links, or save a page with the Sourcefold extension.
+          Nothing here yet. Add Grokipedia or Wikipedia links, or save a page with the Sourcefold
+          extension.
         </div>
       )}
     </div>

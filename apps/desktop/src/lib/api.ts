@@ -1,4 +1,10 @@
-import { isRemoteConfigured, remoteFetch } from "./remote-client";
+import {
+  getRemoteConfig,
+  isRemoteConfigured,
+  isSessionExpiredError,
+  remoteFetch,
+  SessionExpiredError,
+} from "./remote-client";
 import type {
   AddXPostRequest,
   CaptureRequest,
@@ -29,6 +35,43 @@ async function httpFetch<T>(path: string, options: RequestInit = {}): Promise<T>
   }
   throw new Error(
     "Sourcefold requires the Tauri desktop app or a signed-in Sourcefold Web connection.",
+  );
+}
+
+/**
+ * Like `httpFetch`, for endpoints that answer with plain text (a Markdown file) instead of JSON.
+ * A 401 is handed to `remoteFetch`, which signs the session out and tells the app; this function
+ * cannot do that itself because that code is private to remote-client.ts.
+ */
+async function httpFetchText(path: string): Promise<string> {
+  if (!isRemoteConfigured()) {
+    throw new Error(
+      "Sourcefold requires the Tauri desktop app or a signed-in Sourcefold Web connection.",
+    );
+  }
+  const { remoteApiUrl, apiToken } = getRemoteConfig();
+  const endpoint = path.startsWith("/") ? `/api${path}` : `/api/${path}`;
+  const res = await fetch(`${remoteApiUrl.replace(/\/+$/, "")}${endpoint}`, {
+    headers: { Authorization: `Bearer ${apiToken}` },
+  });
+
+  if (res.ok) return await res.text();
+
+  if (res.status === 401) {
+    try {
+      await remoteFetch<unknown>(endpoint);
+    } catch (err) {
+      if (isSessionExpiredError(err)) throw err;
+    }
+    throw new SessionExpiredError();
+  }
+
+  const body = await res.json().catch(() => null);
+  const message = body?.error?.message ?? body?.message ?? body?.error;
+  throw new Error(
+    typeof message === "string" && message
+      ? message
+      : `Remote API request failed with status ${res.status}`,
   );
 }
 
@@ -171,6 +214,19 @@ export async function getItem(id: string): Promise<Item> {
     return await tauriInvoke<Item>("get_item", { id });
   }
   return httpFetch<Item>(`/items/${id}`);
+}
+
+/**
+ * The text of an item's file for the reader: front matter, title, source line, body and note
+ * (docs/FILE-FORMAT.md). Signed in it comes from the web app, which reads it back from Google
+ * Drive when needed; offline it is the copy in the local database.
+ */
+export async function loadReaderText(id: string): Promise<string> {
+  if (shouldUseTauri()) {
+    const item = await tauriInvoke<Item>("get_item", { id });
+    return item?.markdown ?? "";
+  }
+  return httpFetchText(`/items/${encodeURIComponent(id)}/content`);
 }
 
 export async function checkUrl(url: string, folderId: string): Promise<CheckUrlResult> {

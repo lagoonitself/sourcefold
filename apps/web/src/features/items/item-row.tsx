@@ -5,6 +5,7 @@ import {
   BookOpen,
   Check,
   CircleAlert,
+  Globe,
   Image as ImageIcon,
   Loader2,
   Lock,
@@ -45,6 +46,13 @@ const KIND_CONFIG: Record<string, KindConfig> = {
     name: "Substack",
     barClass: "bg-source-substack",
     Icon: Newspaper,
+  },
+  // docs/DESIGN.md has no color for Wikipedia yet, so it uses the neutral secondary-text color
+  // (the desktop app does the same).
+  wikipedia: {
+    name: "Wikipedia",
+    barClass: "bg-muted-foreground",
+    Icon: Globe,
   },
   x: {
     name: "X",

@@ -27,7 +27,9 @@ export async function GET(request: Request) {
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await db
       .from("items")
-      .select("id, folder_id, kind, title, status, meta, created_at, updated_at")
+      .select(
+        "id, folder_id, kind, title, status, meta, created_at, updated_at, drive_file_id, drive_synced_at",
+      )
       .eq("user_id", userId)
       .is("deleted_at", null)
       .order("created_at")

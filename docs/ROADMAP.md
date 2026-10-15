@@ -88,6 +88,9 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] Substack in the desktop app (method ported from sbstck-dl, MIT): paste post links or a whole publication (archive API, sitemap fallback, optional date range), paid posts with the user's `substack.sid` cookie stored on this computer only, rate limiting with Retry-After. Saves through `capture`, so signed-in saves sync to the web and Drive. The shared extractor now reads Substack's embedded post data first, which the extension also uses.
   - [x] Substack images (2026-10-15): kept as Markdown images pointing at the original upload, with captions; galleries keep every image. The page-based fallback uses the same converter. Each post's images are also saved in `<Title>_files/` next to it, in Drive and in the local copy (local links point at the saved files). [ ] Offline mode still links to the web.
   - [x] Signed-in desktop keeps a local copy of the library in the storage folder, same layout as Drive (`GET /api/mirror`, `GET /api/items/[id]/content`, `local_copy.rs`). [ ] Needs the web app deployed, then the owner's check.
+  - [x] Reader works signed in and offline for every text source (loads the file from the web app or the local DB, hides front matter, footnotes, inline images, safe links). [ ] Owner's check.
+  - [x] Wikipedia source type (web, desktop signed in and offline), migration `20261015000000_wikipedia_kind.sql`. [ ] Migration applied, owner's check.
+  - [x] Google Doc next to every Markdown file in Drive; `.docx` in the desktop's local copy. [ ] Owner's check of how Drive renders the import.
   - [ ] Owner's hands-on test of Substack saving on desktop (free post, publication import, paid post with cookie).
   - [ ] Owner's hands-on test of desktop sign-in and sync.
   - [ ] Owner's hands-on test of the desktop group view (see HANDOFF).

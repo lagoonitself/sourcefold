@@ -221,11 +221,12 @@ function queryString(value: string): string {
 export async function listChildren(
   token: string,
   parentId: string,
-  options: { name?: string; foldersOnly?: boolean } = {},
+  options: { name?: string; foldersOnly?: boolean; mimeType?: string } = {},
 ): Promise<{ id: string; name: string; mimeType: string }[]> {
   const terms = [`${queryString(parentId)} in parents`, "trashed = false"];
   if (options.name !== undefined) terms.push(`name = ${queryString(options.name)}`);
   if (options.foldersOnly) terms.push(`mimeType = '${FOLDER_MIME}'`);
+  if (options.mimeType !== undefined) terms.push(`mimeType = ${queryString(options.mimeType)}`);
 
   const files: { id: string; name: string; mimeType: string }[] = [];
   let pageToken: string | undefined;
@@ -316,6 +317,8 @@ export async function uploadFile(
     name: string;
     parentId?: string;
     mimeType: string;
+    /** Convert the upload into this Google type, e.g. HTML into a Google Doc. */
+    convertTo?: string;
     body: string | Uint8Array;
     addParents?: string;
     removeParents?: string;
@@ -328,6 +331,9 @@ export async function uploadFile(
   };
   if (!options.id && options.parentId) {
     metadata.parents = [options.parentId];
+  }
+  if (options.convertTo) {
+    metadata.mimeType = options.convertTo;
   }
 
   const isUpdating = Boolean(options.id);
@@ -386,4 +392,36 @@ export async function uploadFile(
   }
 
   return res.data as { id: string; parents?: string[] };
+}
+
+// A Google Doc (or Sheet, Slide) in another format, e.g. a .docx. Returns null when the file no
+// longer exists. Drive refuses exports over 10 MB.
+export async function exportFile(
+  token: string,
+  id: string,
+  mimeType: string,
+): Promise<Uint8Array | null> {
+  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}/export`);
+  url.searchParams.set("mimeType", mimeType);
+
+  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401) {
+    throw new DriveAuthError("Google Drive authorization expired or invalid.");
+  }
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    let data: unknown = null;
+    try {
+      data = await res.json();
+    } catch {
+      // Non-JSON response
+    }
+    throw new DriveApiError(
+      res.status,
+      extractErrorMessage(data, `Google Drive error (${res.status})`),
+    );
+  }
+  return new Uint8Array(await res.arrayBuffer());
 }

@@ -4,7 +4,7 @@ Version 1, 2026-10-13. Source of truth for what we build. Decisions here came fr
 
 ## 1. Goal
 
-A personal, open-source research tool. Save sources from Grokipedia, Substack and X into folders, keep each source as clean Markdown, and push everything to Google Drive with one button. The Markdown goes into NotebookLM, Gemini and other tools for research and YouTube video prep.
+A personal, open-source research tool. Save sources from Grokipedia, Wikipedia, Substack and X into folders, keep each source as clean Markdown, and push everything to Google Drive with one button. The Markdown goes into NotebookLM, Gemini and other tools for research and YouTube video prep.
 
 Later (not in scope now): a public website per video where every claim links to its source.
 
@@ -36,6 +36,7 @@ Later (not in scope now): a public website per video where every claim links to 
 | Duplicates    | A link is saved once per group: warn "Already saved in <group>" for the same group. The same link can be saved in other groups of the same project and in other projects. Projects are isolated: search, duplicate checks and "Add to this thread" never cross projects.                                                                                                                                                                                                                   |
 | File format   | Markdown with a YAML front-matter header                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Grokipedia    | Bulk paste box in the app. Saved once, never updated. Keep tables, inline links and the references list with links.                                                                                                                                                                                                                                                                                                                                                                        |
+| Wikipedia     | Pasted into Add links in the web app or the desktop app (signed in or offline), any language edition. Saved once, never updated. Fetched through Wikimedia's REST API, with the article's text, infobox, pictures, formulas, tables and footnoted references kept. The text is CC BY-SA 4.0: the file names the article and links to it, and that attribution stays with every copy.                                                                                                       |
 | Substack      | Captured by the extension, or pasted into the desktop app's Add links (single posts or a whole publication, with an optional date range). Free posts, plus paid posts you subscribe to (the extension reads the page while you are logged in; the desktop uses your `substack.sid` cookie, kept on your computer). Paid posts you cannot access: show "paid post, not saved". Skip comments. Keep images as links to the original upload, with captions. Save author and publication info. |
 | X             | Captured by the extension. Text only. Keep post link, author name, handle, profile link and date. Threads and reposts stored as a tree. "Add to this thread" attaches more posts later.                                                                                                                                                                                                                                                                                                    |
 | Notes         | A note box on every item, plus standalone notes (Markdown text) that live in folders like sources                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -78,11 +79,12 @@ docs/              Spec and references
 
 ### Where fetching happens
 
-| Source     | Fetched by                    | Why                                                                                                                                                              |
-| ---------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Grokipedia | Web app server or desktop app | Pages are plain HTML (tested 2026-10-13 from a home connection). Enables bulk paste. Fallback if Vercel's servers get blocked: the extension fetches it instead. |
-| Substack   | Extension                     | Uses your logged-in session for subscribed paid posts. No cookies leave your browser.                                                                            |
-| X          | Extension                     | X blocks logged-out access and its API is paid. Reading the page you are viewing avoids both.                                                                    |
+| Source     | Fetched by                                   | Why                                                                                                                                                                                                                                   |
+| ---------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Grokipedia | Web app server or desktop app                | Pages are plain HTML (tested 2026-10-13 from a home connection). Enables bulk paste. Fallback if Vercel's servers get blocked: the extension fetches it instead.                                                                      |
+| Wikipedia  | Web app server, or the desktop app's webview | Wikimedia's REST API (`/api/rest_v1/page/html/<title>` and `/page/summary/<title>`) sends CORS headers, so the desktop fetches it directly and the web app server fetches it with a descriptive `User-Agent`. Redirects are followed. |
+| Substack   | Extension                                    | Uses your logged-in session for subscribed paid posts. No cookies leave your browser.                                                                                                                                                 |
+| X          | Extension                                    | X blocks logged-out access and its API is paid. Reading the page you are viewing avoids both.                                                                                                                                         |
 
 ### Authentication
 
@@ -108,7 +110,7 @@ All tables have `user_id uuid not null references auth.users`, `created_at`, `up
 **items**
 
 - `id uuid pk`, `folder_id uuid references folders`
-- `kind text` one of `grokipedia | substack | x | note | image`
+- `kind text` one of `grokipedia | substack | wikipedia | x | note | image`
 - `title text` (the heading; this is the "description" in the list)
 - `source_url text null`, `canonical_url text null`, unique per user where `deleted_at is null`
 - `status text` one of `pending | saved | failed | unavailable` (unavailable = paid post you cannot access)
@@ -136,7 +138,7 @@ All tables have `user_id uuid not null references auth.users`, `created_at`, `up
 
 To keep the Supabase free plan small (500 MB database, 1 GB storage; a Grokipedia article is about 200 KB of Markdown), Supabase is only an index:
 
-- `items.markdown` (Grokipedia, Substack, X) and `storage_path` (images) hold content only until it reaches Drive. `mark_item_stored_in_drive` clears them in the same update that marks the item synced, and only if the item didn't change during the upload.
+- `items.markdown` (Grokipedia, Wikipedia, Substack, X) and `storage_path` (images) hold content only until it reaches Drive. `mark_item_stored_in_drive` clears them in the same update that marks the item synced, and only if the item didn't change during the upload.
 - After a new source is saved, the server pushes to Drive in the background (`pushToDriveSoon`). If Drive isn't connected or another save is running, the item waits for the next save.
 - A later rename, move or note change rebuilds the file from Drive: the save downloads the `.md`, drops its front matter and "My note" section (`bodyFromDriveFile`), and writes new ones. Images are only renamed or moved.
 - Clicking an image opens its Drive copy once it has left Supabase.
@@ -182,6 +184,50 @@ folder: AI Research/Risks
 - `summary` comes from the page's meta description (the first paragraph). Free to keep; the list shows the title only.
 - `fact_checked` comes from the page's JSON-LD `dateModified` (the "Fact-checked by Grok" date).
 - Citation markers in the body become GFM footnotes (`[^1]`), with citation runs deduped in first-seen order (`[^76][^77]`), and each reference is the matching footnote definition (with empty/URL titles wrapped in `<url>`).
+
+### Wikipedia
+
+```markdown
+---
+source: wikipedia
+title: Turbocharger
+url: https://en.wikipedia.org/wiki/Turbocharger
+summary: Exhaust-powered forced-induction device for engines
+language: en
+revision: 1376335656
+last_edited: 2026-09-23
+saved: 2026-10-15
+folder: Cars/Engines
+---
+
+# Turbocharger
+
+> Saved from [Wikipedia](https://en.wikipedia.org/wiki/Turbocharger) on 2026-10-15. Wikipedia articles change; check the live page for edits.
+
+Lead paragraph.[^1][^2]
+
+![](https://upload.wikimedia.org/wikipedia/commons/4/42/Turbocharger_Animation_by_Tyroola.gif)
+
+_A turbocharger (item 10) on a piston engine_
+
+| Field    | Value                                                           |
+| -------- | --------------------------------------------------------------- |
+| Inventor | [Alfred Büchi](https://en.wikipedia.org/wiki/Alfred_B%C3%BCchi) |
+
+## History
+
+...article body: headings start at ##, paragraphs, lists, tables, formulas, inline links...
+
+## References
+
+[^1]: Nice, Karim (4 December 2000). ["How Turbochargers Work"](http://auto.howstuffworks.com/turbo.htm). Auto.howstuffworks.com.
+```
+
+- `summary` is Wikipedia's short description; `revision` and `last_edited` identify the exact revision the text came from.
+- The Markdown comes from Wikimedia's REST page HTML, converted by `packages/core/src/wikipedia/convert.ts` (server: linkedom; desktop webview: DOMParser). It drops hatnotes, maintenance banners, "citation needed" tags, navboxes, sidebars, coordinates, edit links and the contents box. The infobox becomes a two-column `| Field | Value |` table right after the lead paragraph (preceded by its picture); infobox rows without a label are dropped, and so is an infobox with no usable row.
+- References become GFM footnotes numbered by first use, shared when one source is cited again, with runs deduped (`[^1][^2][^1]` becomes `[^1][^2]`) and listed under `## References`. Links to other articles are absolute (`https://<language>.wikipedia.org/wiki/…`).
+- Pictures and thumbnails become `![alt](full-size upload.wikimedia.org address)` followed by the caption in italics; images under 40px (flags, icons) are skipped. Formulas keep their LaTeX: `$…$` inline, `$$…$$` as their own block. Simple tables become GFM tables; tables with merged cells keep their text as one bullet per row.
+- Wikipedia's text is CC BY-SA 4.0. The `url` front matter and the "Saved from" line are the attribution; keep them if you share or republish a file.
 
 ### Substack
 
@@ -257,15 +303,15 @@ If a user attaches a note to any saved item (e.g. Grokipedia, Substack, X), it i
 ### Layout
 
 - **Left:** project switcher (pick, create, rename, delete projects), then the open project's group tree. Create, rename, delete, drag to move or reorder groups, nest groups inside groups, or move a group to another project. Only one project is shown at a time; `/` reopens the last active project (cookie `sourcefold_project`). **Archive project** hides a finished project: it moves to an "Archived" list in the switcher and disappears from the extension, Add links, the Move dialog and search across projects. Nothing is deleted, nothing changes in Drive, and **Unarchive project** brings it back. Stored as `folders.archived_at` on the project, set through `set_project_archived`.
-- **Top bar:** title search box, **Add links** button (Grokipedia paste box), **Save to Drive** button with unsaved count and last-saved time.
+- **Top bar:** title search box, **Add links** button (Grokipedia and Wikipedia paste box), **Save to Drive** button with unsaved count and last-saved time.
 - **Copy links:** on a group page, **Copy all links** copies every web link, one per line. **Select** shows checkboxes on sources with a web link; tick some and click **Copy N links**, or **Cancel**. Shift-click selects a range. Notes and uploaded images have no link and no checkbox.
 - **Main:** a project page lists its groups (and any sources saved directly in the project, under "Not in a group"). A group page lists its subgroups, then its sources. Each row: source icon, title, author (Substack/X), date, status. Click opens the source URL in a new tab. Notes open in an editor. A row menu: edit note, rename, move, delete, retry (failed items).
 
-### Grokipedia paste box
+### Grokipedia and Wikipedia paste box
 
-1. Paste links, one per line (mixed text is fine; URLs are extracted).
+1. Paste links, one per line (mixed text is fine; URLs are extracted). Grokipedia and Wikipedia links can be mixed.
 2. Pick the target group (grouped by project).
-3. The client sends links one at a time to `POST /api/grokipedia` (avoids serverless timeouts) with a short delay between requests.
+3. The client sends links one at a time to `POST /api/grokipedia` or `POST /api/wikipedia`, depending on the link (avoids serverless timeouts), with a short delay between requests.
 4. Each row shows saved / already saved in <group> / failed with retry.
 
 ### Title search
@@ -280,6 +326,7 @@ Case-insensitive match on `title` within the open project (across all projects i
 4. Mark each folder and item synced as soon as it succeeds, so an interruption resumes where it stopped.
 5. Work is batched: the client calls `POST /api/drive/save` repeatedly until it reports done.
 6. Deletions go to Drive's trash (recoverable for 30 days), never permanent delete.
+7. Every text item (any kind but image) also gets a Google Doc next to its `.md`, with the same name minus `.md`, so sources can be read laid out like the original (images where they were, captions under them). It is created, renamed, moved and trashed with the file. The signed-in desktop's local copy exports that Doc as a `.docx` beside the `.md`. See "Google Docs and Word copies" in `docs/FILE-FORMAT.md`.
 
 ### Settings
 
@@ -377,21 +424,22 @@ All routes require a Supabase session (web cookie) or a Bearer token (`Authoriza
 
 Token requests use the Supabase admin client (`createAdminClient()`), which bypasses database Row-Level Security. Every database query in token-authenticated endpoints must explicitly filter by `user_id`. Database RPCs that rely on `auth.uid()` cannot be used with token authentication; they must accept `p_user_id` as an explicit parameter.
 
-| Method            | Route                   | Purpose                                       |
-| ----------------- | ----------------------- | --------------------------------------------- |
-| GET               | `/api/health`           | Keep-alive and uptime check (no auth)         |
-| GET               | `/api/folders`          | Folder tree                                   |
-| POST/PATCH/DELETE | `/api/folders[/:id]`    | Create, rename/move/reorder, delete           |
-| GET               | `/api/items?folder=&q=` | Items in a folder, or title search            |
-| POST              | `/api/items/check`      | Duplicate check for a URL                     |
-| POST              | `/api/grokipedia`       | Fetch, convert and save one Grokipedia URL    |
-| POST              | `/api/capture`          | Save extension-captured Substack or X content |
-| POST              | `/api/x/:itemId/posts`  | Add a post to an X tree                       |
-| PATCH/DELETE      | `/api/items/:id`        | Rename, move, note, delete                    |
-| POST              | `/api/notes`            | Create a standalone note                      |
-| POST              | `/api/uploads`          | Upload an image source                        |
-| POST              | `/api/drive/save`       | Run one batch of the Drive save               |
-| POST/DELETE       | `/api/tokens[/:id]`     | Create or revoke extension tokens             |
+| Method            | Route                   | Purpose                                        |
+| ----------------- | ----------------------- | ---------------------------------------------- |
+| GET               | `/api/health`           | Keep-alive and uptime check (no auth)          |
+| GET               | `/api/folders`          | Folder tree                                    |
+| POST/PATCH/DELETE | `/api/folders[/:id]`    | Create, rename/move/reorder, delete            |
+| GET               | `/api/items?folder=&q=` | Items in a folder, or title search             |
+| POST              | `/api/items/check`      | Duplicate check for a URL                      |
+| POST              | `/api/grokipedia`       | Fetch, convert and save one Grokipedia URL     |
+| POST              | `/api/wikipedia`        | Fetch, convert and save one Wikipedia URL      |
+| POST              | `/api/capture`          | Save captured Substack, X or Wikipedia content |
+| POST              | `/api/x/:itemId/posts`  | Add a post to an X tree                        |
+| PATCH/DELETE      | `/api/items/:id`        | Rename, move, note, delete                     |
+| POST              | `/api/notes`            | Create a standalone note                       |
+| POST              | `/api/uploads`          | Upload an image source                         |
+| POST              | `/api/drive/save`       | Run one batch of the Drive save                |
+| POST/DELETE       | `/api/tokens[/:id]`     | Create or revoke extension tokens              |
 
 ## 10. URL canonicalization (duplicates)
 
@@ -399,6 +447,7 @@ Token requests use the Supabase admin client (`createAdminClient()`), which bypa
 - `twitter.com`, `mobile.twitter.com`, `mobile.x.com` become `x.com`; X status URLs reduce to `x.com/<handle>/status/<id>`, and duplicates match on the status id.
 - Substack: use the page's `<link rel="canonical">` (handles custom domains).
 - Grokipedia: `grokipedia.com/page/<Title>` with the title URL-decoded.
+- Wikipedia: `https://<language>.wikipedia.org/wiki/<Title>` with underscores for spaces and parentheses written `%28` / `%29`. The mobile host (`xx.m.wikipedia.org`), `index.php?title=<Title>` links, `#section` and other query parameters all reduce to it; links to other namespaces (`Talk:`, `File:`, `Category:`, `Special:` and so on) are not articles and are rejected. A link that redirects is also checked under the title it led to.
 
 ## 11. Build plan (waves)
 

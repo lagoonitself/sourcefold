@@ -1,129 +1,65 @@
 import * as React from "react";
 import {
-  BookOpen,
   Check,
   Copy,
   ExternalLink,
   FileText,
-  Globe,
+  Loader2,
   Maximize2,
   Minimize2,
   StickyNote,
   X,
 } from "lucide-react";
-import { marked } from "marked";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
+import { getSourceKind } from "@/features/items/source-kinds";
 import { openUrl, cn } from "@/lib/utils";
-import type { ReaderItem, ReaderTypography, ReaderViewProps } from "./types";
+import { parseReaderFile } from "./parse-file";
+import { renderMarkdown } from "./render-markdown";
+import { buildReaderHeader, calculateReadingTime } from "./reader-meta";
+import type { ReaderTypography, ReaderViewProps } from "./types";
+import "./reader.css";
 
-interface KindConfig {
-  name: string;
-  badgeBg: string;
-  badgeText: string;
-  badgeBorder: string;
-  Icon: React.ComponentType<{ className?: string }>;
-}
+export { getReaderAuthor } from "./reader-meta";
 
-const KIND_CONFIGS: Record<string, KindConfig> = {
-  article: {
-    name: "Article",
-    badgeBg: "rgba(37, 99, 235, 0.12)",
-    badgeText: "#2563EB",
-    badgeBorder: "rgba(37, 99, 235, 0.28)",
-    Icon: BookOpen,
-  },
-  grokipedia: {
-    name: "Grokipedia",
-    badgeBg: "rgba(22, 163, 74, 0.12)",
-    badgeText: "#16A34A",
-    badgeBorder: "rgba(22, 163, 74, 0.28)",
-    Icon: Globe,
-  },
-  x_thread: {
-    name: "X Thread",
-    badgeBg: "rgba(0, 0, 0, 0.08)",
-    badgeText: "#0F1419",
-    badgeBorder: "rgba(0, 0, 0, 0.22)",
-    Icon: FileText,
-  },
-  x_post: {
-    name: "X Post",
-    badgeBg: "rgba(0, 0, 0, 0.08)",
-    badgeText: "#0F1419",
-    badgeBorder: "rgba(0, 0, 0, 0.22)",
-    Icon: FileText,
-  },
-  note: {
-    name: "Note",
-    badgeBg: "rgba(245, 158, 11, 0.12)",
-    badgeText: "#F59E0B",
-    badgeBorder: "rgba(245, 158, 11, 0.28)",
-    Icon: StickyNote,
-  },
-};
-
-const DEFAULT_KIND_CONFIG: KindConfig = {
-  name: "Source",
-  badgeBg: "rgba(91, 102, 118, 0.12)",
-  badgeText: "var(--muted-foreground)",
-  badgeBorder: "rgba(91, 102, 118, 0.28)",
-  Icon: BookOpen,
-};
-
-export function getReaderAuthor(item: ReaderItem): string | null {
-  if (item.author) return item.author;
-  if (item.meta && typeof item.meta === "object") {
-    if (typeof item.meta.author === "string" && item.meta.author.trim()) {
-      return item.meta.author.trim();
-    }
-    if (typeof item.meta.byline === "string" && item.meta.byline.trim()) {
-      return item.meta.byline.trim();
-    }
-    if (typeof item.meta.author_name === "string" && item.meta.author_name.trim()) {
-      return item.meta.author_name.trim();
-    }
-    if (typeof item.meta.handle === "string" && item.meta.handle.trim()) {
-      const handle = item.meta.handle.trim();
-      return handle.startsWith("@") ? handle : `@${handle}`;
-    }
-  }
-  return null;
-}
-
-function getDomain(urlStr?: string | null): string | null {
-  if (!urlStr) return null;
-  try {
-    const url = new URL(urlStr);
-    return url.hostname.replace(/^www\./, "");
-  } catch {
-    return null;
+/** Opens links from the rendered text in the system browser; `#` links scroll to a footnote. */
+function handleContentClick(event: React.MouseEvent<HTMLElement>) {
+  const anchor = (event.target as HTMLElement).closest("a");
+  if (!anchor) return;
+  event.preventDefault();
+  const href = anchor.getAttribute("href") ?? "";
+  if (href.startsWith("#")) {
+    document.getElementById(href.slice(1))?.scrollIntoView({ block: "center" });
+  } else if (/^(https?:|mailto:)/i.test(href)) {
+    void openUrl(href);
   }
 }
 
-function formatDate(dateStr?: string | null): string | null {
-  if (!dateStr) return null;
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return null;
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(d);
-  } catch {
-    return null;
-  }
-}
-
-function calculateReadingTime(text: string): string {
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
-  const minutes = Math.max(1, Math.ceil(words / 200));
-  return `${minutes} min read`;
+function StatusMessage({
+  icon,
+  title,
+  detail,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  detail?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground font-sans">
+      {icon}
+      <p className="text-sm font-medium text-foreground">{title}</p>
+      {detail && <p className="mt-1 max-w-sm text-[13px] leading-[18px]">{detail}</p>}
+      {children && <div className="mt-4 flex items-center gap-2">{children}</div>}
+    </div>
+  );
 }
 
 export function ReaderView({
   item,
+  state,
+  onRetry,
   onClose,
   className,
   scrollRef,
@@ -147,33 +83,24 @@ export function ReaderView({
     } catch {}
   };
 
-  const kindConfig = KIND_CONFIGS[item.kind] || DEFAULT_KIND_CONFIG;
-  const KindIcon = kindConfig.Icon;
-  const author = getReaderAuthor(item);
-  const targetUrl = item.source_url || item.canonical_url;
-  const domain = getDomain(targetUrl);
-  const formattedDate = formatDate(item.created_at);
+  const kind = getSourceKind(item.kind);
+  const KindIcon = kind.Icon;
 
-  const rawMarkdown = item.markdown || item.note || "";
-  const readingTime = rawMarkdown ? calculateReadingTime(rawMarkdown) : null;
+  const text = state.status === "ready" ? state.text : null;
+  const parsed = React.useMemo(() => (text === null ? null : parseReaderFile(text)), [text]);
+  const header = buildReaderHeader(item, parsed);
+  const targetUrl = header.url;
 
-  // Render markdown to HTML safely using marked
-  const renderedHtml = React.useMemo(() => {
-    if (!rawMarkdown.trim()) return "";
-    try {
-      return marked.parse(rawMarkdown, {
-        gfm: true,
-        breaks: true,
-        async: false,
-      }) as string;
-    } catch {
-      return `<p>${rawMarkdown}</p>`;
-    }
-  }, [rawMarkdown]);
+  const body = parsed?.body ?? "";
+  const note = parsed?.note ?? null;
+  const readingTime = body ? calculateReadingTime(body) : null;
+
+  const bodyHtml = React.useMemo(() => (body.trim() ? renderMarkdown(body) : ""), [body]);
+  const noteHtml = React.useMemo(() => (note ? renderMarkdown(note) : ""), [note]);
 
   const handleCopyMarkdown = async () => {
     try {
-      await navigator.clipboard.writeText(rawMarkdown);
+      await navigator.clipboard.writeText(body);
       setCopied(true);
       toast.success("Markdown copied to clipboard");
       setTimeout(() => setCopied(false), 2000);
@@ -188,21 +115,36 @@ export function ReaderView({
     }
   };
 
+  const openInBrowserButton = targetUrl ? (
+    <Button variant="outline" size="sm" onClick={handleOpenSource}>
+      <ExternalLink className="size-3.5" aria-hidden="true" />
+      <span>Open in browser</span>
+    </Button>
+  ) : null;
+
+  const metaParts = [
+    header.author,
+    header.publication,
+    header.dateLabel,
+    header.domain,
+    readingTime,
+  ].filter((part): part is string => Boolean(part));
+
   return (
     <div className={cn("flex h-full w-full flex-col bg-background text-foreground", className)}>
       {/* Sticky Reader Toolbar */}
       <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/80 select-none">
         <div className="flex items-center gap-2 overflow-hidden mr-4">
           <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+            className="inline-flex shrink-0 items-center gap-1 rounded-[4px] px-2 py-0.5 text-xs font-medium"
             style={{
-              backgroundColor: kindConfig.badgeBg,
-              color: kindConfig.badgeText,
-              border: `1px solid ${kindConfig.badgeBorder}`,
+              color: kind.colorVar,
+              backgroundColor: `color-mix(in srgb, ${kind.colorVar} 12%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${kind.colorVar} 30%, transparent)`,
             }}
           >
-            <KindIcon className="size-3" />
-            <span>{kindConfig.name}</span>
+            <KindIcon className="size-3" aria-hidden="true" />
+            <span>{kind.name}</span>
           </span>
 
           <span className="truncate text-xs font-medium text-muted-foreground" title={item.title}>
@@ -217,7 +159,7 @@ export function ReaderView({
             <button
               type="button"
               onClick={() => handleTypographyChange("serif")}
-              title="Serif font (Elena / Georgia)"
+              title="Serif font"
               className={cn(
                 "rounded px-2 py-1 font-serif text-xs font-semibold transition-colors cursor-pointer",
                 typography === "serif"
@@ -230,7 +172,7 @@ export function ReaderView({
             <button
               type="button"
               onClick={() => handleTypographyChange("sans")}
-              title="Sans-serif font (Inter / System)"
+              title="Sans-serif font"
               className={cn(
                 "rounded px-2 py-1 font-sans text-xs font-semibold transition-colors cursor-pointer",
                 typography === "sans"
@@ -242,18 +184,19 @@ export function ReaderView({
             </button>
           </div>
 
-          {/* Copy markdown */}
+          {/* Copy markdown (the body, without the front matter) */}
           <Button
             variant="ghost"
             size="sm"
             onClick={handleCopyMarkdown}
+            disabled={!body}
             className="h-8 gap-1.5 px-2 text-xs"
             title="Copy Markdown"
           >
             {copied ? (
               <>
-                <Check className="size-3.5 text-emerald-600" />
-                <span className="hidden sm:inline text-emerald-600">Copied</span>
+                <Check className="size-3.5 text-primary" />
+                <span className="hidden sm:inline text-primary">Copied</span>
               </>
             ) : (
               <>
@@ -270,10 +213,10 @@ export function ReaderView({
               size="sm"
               onClick={handleOpenSource}
               className="h-8 gap-1.5 px-2 text-xs"
-              title="Open source in browser (o)"
+              title="Open in browser (o)"
             >
               <ExternalLink className="size-3.5" />
-              <span className="hidden sm:inline">Open source</span>
+              <span className="hidden sm:inline">Open in browser</span>
               <kbd className="hidden lg:inline text-[9px] opacity-60">o</kbd>
             </Button>
           )}
@@ -285,6 +228,7 @@ export function ReaderView({
             onClick={() => setIsFullscreen((prev) => !prev)}
             className="h-8 px-2 text-xs"
             title={isFullscreen ? "Exit full width" : "Full width"}
+            aria-label={isFullscreen ? "Exit full width" : "Full width"}
           >
             {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
           </Button>
@@ -297,6 +241,7 @@ export function ReaderView({
               onClick={onClose}
               className="h-8 px-2 text-xs ml-1"
               title="Close reader (Esc)"
+              aria-label="Close reader"
             >
               <X className="size-4" />
             </Button>
@@ -319,41 +264,39 @@ export function ReaderView({
         >
           {/* Article Header Metadata */}
           <header className="mb-8 border-b border-border/60 pb-6">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl leading-tight">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl leading-tight">
               {item.title}
             </h1>
 
-            <div className="mt-4 flex flex-wrap items-center gap-y-1.5 gap-x-3 text-xs text-muted-foreground font-sans">
-              {author && <span className="font-medium text-foreground">{author}</span>}
+            {header.subtitle && (
+              <p className="mt-3 text-lg italic leading-snug text-muted-foreground">
+                {header.subtitle}
+              </p>
+            )}
 
-              {domain && (
-                <>
-                  {author && <span>·</span>}
-                  <span>{domain}</span>
-                </>
-              )}
-
-              {formattedDate && (
-                <>
-                  <span>·</span>
-                  <span>{formattedDate}</span>
-                </>
-              )}
-
-              {readingTime && (
-                <>
-                  <span>·</span>
-                  <span>{readingTime}</span>
-                </>
-              )}
-            </div>
+            {metaParts.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-y-1.5 gap-x-2 text-[13px] text-muted-foreground font-sans">
+                {metaParts.map((part, index) => (
+                  <React.Fragment key={`${index}-${part}`}>
+                    {index > 0 && <span aria-hidden="true">·</span>}
+                    <span
+                      className={index === 0 && part === header.author ? "text-foreground" : ""}
+                    >
+                      {part}
+                    </span>
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
 
             {targetUrl && (
-              <div className="mt-2 font-mono text-[11px] text-muted-foreground truncate">
+              <div className="mt-2 text-xs text-muted-foreground truncate font-sans">
                 <a
                   href={targetUrl}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    handleOpenSource();
+                  }}
                   className="hover:underline hover:text-foreground"
                 >
                   {targetUrl}
@@ -362,43 +305,82 @@ export function ReaderView({
             )}
           </header>
 
-          {/* Note section (if attached personal note exists on a captured article) */}
-          {item.note && item.kind !== "note" && (
-            <aside className="mb-8 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 font-sans text-xs">
-              <div className="mb-1 flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-400">
-                <StickyNote className="size-3.5" />
-                <span>Personal note</span>
-              </div>
-              <p className="whitespace-pre-wrap text-foreground/90 leading-relaxed">{item.note}</p>
-            </aside>
+          {state.status === "loading" && (
+            <StatusMessage
+              icon={
+                <Loader2
+                  className="mb-3 size-8 stroke-[1.4] opacity-60 motion-safe:animate-spin"
+                  aria-hidden="true"
+                />
+              }
+              title="Loading"
+            />
           )}
 
-          {/* Rendered Content */}
-          {renderedHtml ? (
-            <div
-              className={cn(
-                "prose prose-neutral dark:prose-invert max-w-none",
-                "prose-headings:tracking-tight prose-headings:font-bold prose-headings:text-foreground",
-                "prose-p:leading-relaxed prose-p:text-foreground/90",
-                "prose-a:text-primary prose-a:underline hover:prose-a:text-primary/80",
-                "prose-blockquote:border-l-primary/60 prose-blockquote:font-normal prose-blockquote:italic",
-                "prose-code:rounded prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-[13px] prose-code:before:content-none prose-code:after:content-none",
-                "prose-pre:rounded-lg prose-pre:bg-muted/80 prose-pre:border prose-pre:border-border",
-                "prose-img:rounded-lg prose-img:shadow-sm",
-                typography === "serif"
-                  ? "text-[17px] leading-[1.75]"
-                  : "text-[15px] leading-[1.65]",
+          {state.status === "error" && (
+            <StatusMessage
+              icon={
+                <FileText className="mb-3 size-10 stroke-[1.2] opacity-40" aria-hidden="true" />
+              }
+              title="Couldn't load this source"
+              detail={state.message}
+            >
+              {onRetry && (
+                <Button variant="outline" size="sm" onClick={onRetry}>
+                  Try again
+                </Button>
               )}
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground font-sans">
-              <FileText className="size-12 stroke-[1.2] mb-3 opacity-40" />
-              <p className="text-sm font-medium">No markdown content available</p>
-              {targetUrl && (
-                <p className="mt-1 text-xs">View the original source directly in your browser.</p>
+              {openInBrowserButton}
+            </StatusMessage>
+          )}
+
+          {state.status === "ready" && (
+            <>
+              {bodyHtml ? (
+                <div
+                  className={cn(
+                    "reader-prose",
+                    typography === "serif" ? "reader-prose-serif" : "reader-prose-sans",
+                  )}
+                  onClick={handleContentClick}
+                  onAuxClick={handleContentClick}
+                  dangerouslySetInnerHTML={{ __html: bodyHtml }}
+                />
+              ) : (
+                !noteHtml && (
+                  <StatusMessage
+                    icon={
+                      <FileText
+                        className="mb-3 size-10 stroke-[1.2] opacity-40"
+                        aria-hidden="true"
+                      />
+                    }
+                    title="No saved text"
+                    detail={targetUrl ? "Open the original page in your browser." : undefined}
+                  >
+                    {openInBrowserButton}
+                  </StatusMessage>
+                )
               )}
-            </div>
+
+              {noteHtml && (
+                <section
+                  aria-label="My note"
+                  className="mt-10 rounded-[6px] border border-border bg-muted/40 p-5 font-sans"
+                >
+                  <div className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+                    <StickyNote className="size-3.5" aria-hidden="true" />
+                    <span>My note</span>
+                  </div>
+                  <div
+                    className="reader-prose reader-prose-sans reader-note"
+                    onClick={handleContentClick}
+                    onAuxClick={handleContentClick}
+                    dangerouslySetInnerHTML={{ __html: noteHtml }}
+                  />
+                </section>
+              )}
+            </>
           )}
         </article>
       </div>

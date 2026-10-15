@@ -28,14 +28,15 @@ import { SearchDialog } from "@/features/search/SearchDialog";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { NoteDialog } from "@/features/items/NoteDialog";
 import { ReaderModal } from "@/features/reader/ReaderModal";
+import { openSource, opensInReader } from "@/features/reader/open-decision";
 import { CommandPalette } from "@/features/command-palette/CommandPalette";
 import { KeyboardShortcutsDialog, useKeyboardShortcuts } from "@/features/shortcuts";
 import { isMacPlatform, matchesKeyCombo } from "@/features/shortcuts/key-utils";
 import type { Folder, Item } from "@/lib/types";
-import { archiveProject, getFolders, getItems } from "@/lib/api";
+import { archiveProject, getFolders, getItems, openImage } from "@/lib/api";
 import { isSessionExpiredError } from "@/lib/remote-client";
 import { triggerDriveSave } from "@/features/drive/drive-api";
-import { openUrl, cn } from "@/lib/utils";
+import { openUrl, cn, errorMessage } from "@/lib/utils";
 
 export function App() {
   const isMac = React.useMemo(() => isMacPlatform(), []);
@@ -642,12 +643,20 @@ export function App() {
           setFocusedFolderId(folderId);
           setActiveRegion("list");
         }}
-        onOpenItem={(item) => {
-          if (item.markdown) {
-            setReaderItem(item);
-          } else if (item.source_url) {
-            void openUrl(item.source_url);
-          }
+        onOpenItem={(item, options) => {
+          openSource(
+            item,
+            {
+              image: (image) => {
+                openImage(image).catch((err) =>
+                  toast.error(errorMessage(err, "Couldn't open that image.")),
+                );
+              },
+              reader: (source) => setReaderItem(source),
+              browser: (url) => void openUrl(url),
+            },
+            options,
+          );
         }}
         onExecuteCommand={handleExecuteCommand}
       />
@@ -662,7 +671,7 @@ export function App() {
           setFocusedFolderId(item.folder_id);
           setFocusedItemId(item.id);
           setActiveRegion("list");
-          if (item.markdown) {
+          if (opensInReader(item)) {
             setReaderItem(item);
           }
         }}

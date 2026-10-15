@@ -217,6 +217,12 @@ pub fn handle_native_request(db_mutex: &Arc<Mutex<Database>>, req: Value) -> Val
                         Err(e) => service_error_response(e),
                     }
                 }
+                CapturePayload::Wikipedia { folder_id, capture } => {
+                    match service::save_wikipedia(&db, &folder_id, capture) {
+                        Ok(item) => json!({ "item": item }),
+                        Err(e) => service_error_response(e),
+                    }
+                }
                 CapturePayload::X { folder_id, posts } => {
                     match service::save_x_thread(&db, &folder_id, posts) {
                         Ok(item) => json!({ "item": item }),

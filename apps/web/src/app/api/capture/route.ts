@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isWikipediaArticleUrl } from "@sourcefold/core";
 import { requireApiUser } from "@/lib/api";
 import { saveSubstack, saveSubstackUnavailable } from "@/features/capture/save-substack";
+import { saveWikipediaCapture } from "@/features/capture/save-wikipedia";
 import { saveXThread } from "@/features/capture/save-x";
 import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
 
@@ -21,6 +23,28 @@ const substackCaptureSchema = z.object({
   markdown: z.string().max(500000, "Markdown body is too large"),
 });
 
+const wikipediaCaptureSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .min(1, "URL is required")
+    .refine(isWikipediaArticleUrl, "That isn't a Wikipedia article link."),
+  title: z.string().trim().min(1, "Title is required").max(500, "Title is too long"),
+  summary: z.string().trim().nullable().optional(),
+  language: z.string().trim().max(32).nullable().optional(),
+  revision: z
+    .string()
+    .trim()
+    .regex(/^\d{1,15}$/, "Revision must be a number")
+    .nullable()
+    .optional(),
+  lastEdited: z.string().trim().nullable().optional(),
+  markdown: z
+    .string()
+    .min(1, "Article text is required")
+    .max(1500000, "Markdown body is too large"),
+});
+
 const xPostCaptureSchema = z.object({
   postUrl: z.string().trim().min(1, "Post URL is required"),
   authorName: z.string().trim(),
@@ -35,6 +59,11 @@ const captureRequestSchema = z.discriminatedUnion("kind", [
     kind: z.literal("substack"),
     folder_id: z.string().uuid("Invalid folder ID"),
     capture: substackCaptureSchema,
+  }),
+  z.object({
+    kind: z.literal("wikipedia"),
+    folder_id: z.string().uuid("Invalid folder ID"),
+    capture: wikipediaCaptureSchema,
   }),
   z.object({
     kind: z.literal("substack_unavailable"),
@@ -87,6 +116,13 @@ export async function POST(request: Request) {
   let result;
   if (parsed.data.kind === "substack") {
     result = await saveSubstack(auth.db, auth.userId, parsed.data);
+  } else if (parsed.data.kind === "wikipedia") {
+    result = await saveWikipediaCapture(
+      auth.db,
+      auth.userId,
+      parsed.data.folder_id,
+      parsed.data.capture,
+    );
   } else if (parsed.data.kind === "substack_unavailable") {
     result = await saveSubstackUnavailable(auth.db, auth.userId, parsed.data);
   } else {

@@ -5,6 +5,9 @@ vi.mock("server-only", () => ({}));
 
 const requireApiUser = vi.fn();
 const downloadFileText = vi.fn();
+const getFile = vi.fn();
+const listChildren = vi.fn();
+const exportFile = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   requireApiUser: (request: Request) => requireApiUser(request),
@@ -18,6 +21,9 @@ vi.mock("@/lib/google/oauth", () => ({
 vi.mock("@/lib/google/drive", () => ({
   downloadFileText: (...args: unknown[]) => downloadFileText(...args),
   downloadFileBytes: async () => null,
+  getFile: (...args: unknown[]) => getFile(...args),
+  listChildren: (...args: unknown[]) => listChildren(...args),
+  exportFile: (...args: unknown[]) => exportFile(...args),
 }));
 
 import { GET } from "./route";
@@ -53,6 +59,9 @@ function setup(item: Record<string, unknown>) {
 describe("GET /api/items/[id]/content", () => {
   beforeEach(() => {
     downloadFileText.mockReset();
+    getFile.mockReset();
+    listChildren.mockReset();
+    exportFile.mockReset();
   });
 
   it("builds the file from text still in Supabase, with the current folder path", async () => {
@@ -93,5 +102,67 @@ describe("GET /api/items/[id]/content", () => {
     setup({ kind: "substack", title: "Paid", status: "unavailable", markdown: null });
     const res = await GET(new Request("http://localhost/x"), params);
     expect(res.status).toBe(404);
+  });
+
+  describe("?format=docx", () => {
+    const docx = () => GET(new Request("http://localhost/x?format=docx"), params);
+
+    it("exports the item's Google Doc, found next to its Markdown file", async () => {
+      setup({ kind: "substack", title: "Post", markdown: null, drive_file_id: "d1" });
+      getFile.mockResolvedValue({ id: "d1", name: "Post (2).md", parents: ["g1"], trashed: false });
+      listChildren.mockResolvedValue([{ id: "doc1", name: "Post (2)", mimeType: "x" }]);
+      exportFile.mockResolvedValue(new Uint8Array([80, 75, 3, 4]));
+
+      const res = await docx();
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toBe(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      );
+      expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([80, 75, 3, 4]);
+      expect(listChildren).toHaveBeenCalledWith("google-token", "g1", {
+        name: "Post (2)",
+        mimeType: "application/vnd.google-apps.document",
+      });
+      expect(exportFile).toHaveBeenCalledWith(
+        "google-token",
+        "doc1",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      );
+      expect(downloadFileText).not.toHaveBeenCalled();
+    });
+
+    it("answers not_ready before the item is in Drive", async () => {
+      setup({ kind: "grokipedia", title: "Turbo", markdown: "x", drive_file_id: null });
+      const res = await docx();
+      expect(res.status).toBe(404);
+      expect((await res.json()).error.code).toBe("not_ready");
+      expect(getFile).not.toHaveBeenCalled();
+    });
+
+    it("answers not_ready when the Google Doc isn't there yet", async () => {
+      setup({ kind: "grokipedia", title: "Turbo", markdown: null, drive_file_id: "d1" });
+      getFile.mockResolvedValue({ id: "d1", name: "Turbo.md", parents: ["g1"], trashed: false });
+      listChildren.mockResolvedValue([]);
+      const res = await docx();
+      expect(res.status).toBe(404);
+      expect((await res.json()).error.code).toBe("not_ready");
+      expect(exportFile).not.toHaveBeenCalled();
+    });
+
+    it("answers not_ready when the Markdown file was trashed in Drive", async () => {
+      setup({ kind: "grokipedia", title: "Turbo", markdown: null, drive_file_id: "d1" });
+      getFile.mockResolvedValue({ id: "d1", name: "Turbo.md", parents: ["g1"], trashed: true });
+      const res = await docx();
+      expect((await res.json()).error.code).toBe("not_ready");
+    });
+
+    it("has no Word copy for an unsaved item or an image", async () => {
+      setup({ kind: "substack", title: "Paid", status: "unavailable", markdown: null });
+      expect((await docx()).status).toBe(404);
+      setup({ kind: "image", title: "Pic", drive_file_id: "d1" });
+      const res = await docx();
+      expect(res.status).toBe(404);
+      expect((await res.json()).error.code).toBeUndefined();
+    });
   });
 });

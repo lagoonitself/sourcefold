@@ -22,9 +22,17 @@ export interface MirrorItem {
   meta: unknown;
   created_at: string;
   updated_at: string;
+  /** Set once the file is in Drive; its Google Doc is made at the same time. */
+  drive_file_id?: string | null;
+  drive_synced_at?: string | null;
 }
 
 export interface MirrorEntry {
+  /** Unique per file: the item id, or `<id>:docx` for its Word copy. */
+  key: string;
+  /** `file` is the item's own file; `docx` is the Word copy of a text file. */
+  format: "file" | "docx";
+  /** The item the file belongs to. */
   id: string;
   kind: string;
   /** Relative to the Sourcefold folder, `/`-separated, e.g. `Cars/Engines/Title.md`. */
@@ -57,7 +65,28 @@ export function buildMirrorManifest(folders: MirrorFolder[], items: MirrorItem[]
     );
     const path = `${folderPath}/${name}`;
     // The front matter holds the folder path, so a rename up the tree changes the file too.
-    entries.push({ id: item.id, kind: item.kind, path, version: `${item.updated_at}|${path}` });
+    entries.push({
+      key: item.id,
+      format: "file",
+      id: item.id,
+      kind: item.kind,
+      path,
+      version: `${item.updated_at}|${path}`,
+    });
+
+    // Every text file that reached Drive also has a Google Doc there, exported as .docx. Its
+    // version follows the Drive save, not the edit: the Doc only changes once it is pushed.
+    if (item.kind !== "image" && item.drive_file_id) {
+      const docxPath = path.replace(/\.md$/i, ".docx");
+      entries.push({
+        key: `${item.id}:docx`,
+        format: "docx",
+        id: item.id,
+        kind: item.kind,
+        path: docxPath,
+        version: `${item.drive_synced_at ?? item.updated_at}|${docxPath}`,
+      });
+    }
   }
   return entries.sort((a, b) => a.path.localeCompare(b.path));
 }

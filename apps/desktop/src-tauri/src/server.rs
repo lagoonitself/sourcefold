@@ -545,6 +545,12 @@ pub fn handle_request(
                         Err(e) => service_error_response(e, allowed_origin),
                     }
                 }
+                CapturePayload::Wikipedia { folder_id, capture } => {
+                    match service::save_wikipedia(&db_guard, &folder_id, capture) {
+                        Ok(item) => json_response(200, json!({ "item": item }), allowed_origin),
+                        Err(e) => service_error_response(e, allowed_origin),
+                    }
+                }
                 CapturePayload::X { folder_id, posts } => {
                     match service::save_x_thread(&db_guard, &folder_id, posts) {
                         Ok(item) => json_response(200, json!({ "item": item }), allowed_origin),

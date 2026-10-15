@@ -1,6 +1,11 @@
 import * as React from "react";
 import { Check, CircleAlert, Loader2, Lock } from "lucide-react";
-import { classifySubstackLink, detectSource, extractUrls } from "@sourcefold/core";
+import {
+  classifySubstackLink,
+  detectSource,
+  extractUrls,
+  isWikipediaArticleUrl,
+} from "@sourcefold/core";
 import { Button } from "@/components/ui/Button";
 import {
   Dialog,
@@ -13,6 +18,7 @@ import {
 import type { Folder, FolderNode } from "@/lib/types";
 import { checkUrl, saveGrokipedia } from "@/lib/api";
 import { findPublicationPosts, saveSubstackPost } from "../substack/substack-client";
+import { saveWikipediaArticle } from "../wikipedia/wikipedia-client";
 import { buildFolderTree } from "../folders/tree-utils";
 import { isMacPlatform } from "../shortcuts/key-utils";
 
@@ -24,7 +30,7 @@ export interface AddLinksDialogProps {
   onFinished: () => Promise<void>;
 }
 
-type LinkSource = "grokipedia" | "substack" | "publication";
+type LinkSource = "grokipedia" | "wikipedia" | "substack" | "publication";
 
 export type QueueItemStatus =
   "waiting" | "finding" | "saving" | "saved" | "duplicate" | "paid" | "failed";
@@ -56,6 +62,7 @@ function parseLinks(text: string): ParsedLinks {
     const source = detectSource(url);
     const substack = classifySubstackLink(url);
     if (source === "grokipedia") parsed.valid.push({ url, source: "grokipedia" });
+    else if (isWikipediaArticleUrl(url)) parsed.valid.push({ url, source: "wikipedia" });
     else if (source === "x") parsed.xLinks.push(url);
     else if (substack === "post") parsed.valid.push({ url, source: "substack" });
     else if (substack === "publication") parsed.valid.push({ url, source: "publication" });
@@ -157,6 +164,20 @@ export function AddLinksDialog({
       }
       const saved = await saveGrokipedia(item.url, folderId);
       patchItem(item.id, { status: "saved", title: saved.title || item.url, message: undefined });
+      return;
+    }
+
+    if (item.source === "wikipedia") {
+      const outcome = await saveWikipediaArticle(item.url, folderId);
+      if (outcome.kind === "saved") {
+        patchItem(item.id, { status: "saved", title: outcome.title, message: undefined });
+      } else {
+        patchItem(item.id, {
+          status: "duplicate",
+          title: outcome.title ?? item.title,
+          message: outcome.message,
+        });
+      }
       return;
     }
 
@@ -306,8 +327,8 @@ export function AddLinksDialog({
         <DialogHeader>
           <DialogTitle>Add links</DialogTitle>
           <DialogDescription>
-            Paste Grokipedia or Substack links, one per line. A Substack publication link (like
-            name.substack.com) saves every post in it.
+            Paste Grokipedia, Wikipedia or Substack links, one per line. A Substack publication link
+            (like name.substack.com) saves every post in it.
           </DialogDescription>
         </DialogHeader>
 
@@ -341,7 +362,7 @@ export function AddLinksDialog({
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={
-                  "https://grokipedia.com/page/...\nhttps://name.substack.com/p/...\nhttps://name.substack.com"
+                  "https://grokipedia.com/page/...\nhttps://en.wikipedia.org/wiki/...\nhttps://name.substack.com/p/...\nhttps://name.substack.com"
                 }
                 rows={8}
                 autoFocus

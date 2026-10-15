@@ -99,6 +99,13 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [ ] Wire `uninstall_native_host` to a desktop Settings button; the function exists but nothing calls it.
   - [ ] Drop the seeded offline "Inbox" project / "General" group once the server tests stop depending on their fixed IDs.
 
+- [x] Tidy files (2026-10-15): one layout and Markdown format for Drive and desktop disk, written down in `docs/FILE-FORMAT.md`.
+  - [x] Readable names: `Sourcefold/<Project>/<Group>/<Title>.md`, real folder names, `Title (2)` on clashes, no random IDs.
+  - [x] One builder per app (`packages/core` `buildItemFile`, desktop `build_item_file`), checked against shared golden files in `packages/core/test/golden/`.
+  - [x] Desktop renames, moves and deletes now follow on disk; folder delete only removes Sourcefold's own files and empty folders.
+  - [x] Rust tests no longer write into the real `Documents/Sourcefold`.
+  - [ ] Owner checks a real Grokipedia save in Drive and in desktop offline mode.
+
 ## Later
 
 - [ ] Chrome Web Store listing for the extension.

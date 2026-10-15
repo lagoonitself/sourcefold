@@ -60,7 +60,15 @@ pub async fn add_x_post(
     db: State<'_, Database>,
     req: AddXPostRequest,
 ) -> Result<(String, String), String> {
-    db.add_x_post(req).map_err(|e| e.to_string())
+    let post = service::XPostCapture {
+        post_url: req.post_url,
+        author_name: req.author_name,
+        handle: req.handle,
+        author_url: req.author_url,
+        posted_at: req.posted_at,
+        text: req.text,
+    };
+    service::add_x_post(&db, &req.item_id, post, req.parent_post_url).map_err(|e| e.message)
 }
 
 #[tauri::command]
@@ -69,7 +77,7 @@ pub async fn rename_item(
     id: String,
     title: String,
 ) -> Result<(), String> {
-    db.rename_item(&id, &title).map_err(|e| e.to_string())
+    service::rename_item(&db, &id, &title).map_err(|e| e.message)
 }
 
 #[tauri::command]
@@ -78,12 +86,12 @@ pub async fn move_item(
     id: String,
     folder_id: String,
 ) -> Result<(), String> {
-    db.move_item(&id, &folder_id).map_err(|e| e.to_string())
+    service::move_item(&db, &id, &folder_id).map_err(|e| e.message)
 }
 
 #[tauri::command]
 pub async fn delete_item(db: State<'_, Database>, id: String) -> Result<(), String> {
-    db.delete_item(&id).map_err(|e| e.to_string())
+    service::delete_item(&db, &id).map_err(|e| e.message)
 }
 
 #[tauri::command]
@@ -92,7 +100,7 @@ pub async fn update_item_note(
     id: String,
     note: Option<String>,
 ) -> Result<(), String> {
-    db.update_item_note(&id, note.as_deref()).map_err(|e| e.to_string())
+    service::update_item_note(&db, &id, note.as_deref()).map_err(|e| e.message)
 }
 
 #[tauri::command]
@@ -102,8 +110,7 @@ pub async fn create_note(
     title: String,
     markdown: String,
 ) -> Result<Item, String> {
-    db.create_standalone_note(&folder_id, &title, &markdown)
-        .map_err(|e| e.to_string())
+    service::create_note(&db, &folder_id, &title, &markdown).map_err(|e| e.message)
 }
 
 #[tauri::command]
@@ -113,8 +120,7 @@ pub async fn update_note(
     title: Option<String>,
     markdown: String,
 ) -> Result<(), String> {
-    db.update_standalone_note(&id, title.as_deref(), &markdown)
-        .map_err(|e| e.to_string())
+    service::update_note(&db, &id, title.as_deref(), &markdown).map_err(|e| e.message)
 }
 
 #[tauri::command]
@@ -153,13 +159,18 @@ pub async fn open_item_file(
         ("image", Some(path)) => path,
         _ => return Err("This source has no file to open.".to_string()),
     };
-    let is_image_file = std::path::Path::new(&path)
+    let path_buf = if std::path::Path::new(&path).is_absolute() {
+        std::path::PathBuf::from(&path)
+    } else {
+        service::resolve_storage_dir(&db).join(&path)
+    };
+    let is_image_file = path_buf
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "gif" | "webp"))
+        .map(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp"))
         .unwrap_or(false);
-    if !is_image_file || !std::path::Path::new(&path).is_file() {
+    if !is_image_file || !path_buf.is_file() {
         return Err("The image file is missing from disk.".to_string());
     }
-    app.opener().open_path(path, None::<&str>).map_err(|e| e.to_string())
+    app.opener().open_path(path_buf.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
 }

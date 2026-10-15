@@ -199,7 +199,7 @@ Repository layout:
 - `packages/core`: shared library for parsing, Markdown generation, and types
 - `supabase`: SQL migrations and database configuration
 
-For how to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md). Rules for AI coding agents are in [AGENTS.md](AGENTS.md). The full product and technical spec is [docs/SPEC.md](docs/SPEC.md), the visual system is [docs/DESIGN.md](docs/DESIGN.md), and [docs/ROADMAP.md](docs/ROADMAP.md) lists what's done and what's next.
+For how to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md). Rules for AI coding agents are in [AGENTS.md](AGENTS.md). The full product and technical spec is [docs/SPEC.md](docs/SPEC.md), the file and folder layout format is [docs/FILE-FORMAT.md](docs/FILE-FORMAT.md), the visual system is [docs/DESIGN.md](docs/DESIGN.md), and [docs/ROADMAP.md](docs/ROADMAP.md) lists what's done and what's next.
 
 ### How it fits together
 

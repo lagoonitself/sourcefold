@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/database.types";
-import { bodyFromDriveFile } from "@sourcefold/core";
+import { bodyFromDriveFile, safeName } from "@sourcefold/core";
 import {
   createFolder,
   downloadFileText,
@@ -251,7 +251,7 @@ export async function runSaveBatch(
     }
 
     if (!folder.drive_folder_id) {
-      const created = await createFolder(accessToken, folder.name, parentDriveId);
+      const created = await createFolder(accessToken, safeName(folder.name), parentDriveId);
       const folderRef = foldersById.get(folder.id);
       if (folderRef) folderRef.drive_folder_id = created.id;
 
@@ -264,7 +264,7 @@ export async function runSaveBatch(
     } else {
       const existing = await getFile(accessToken, folder.drive_folder_id);
       if (!existing || existing.trashed) {
-        const created = await createFolder(accessToken, folder.name, parentDriveId);
+        const created = await createFolder(accessToken, safeName(folder.name), parentDriveId);
         const folderRef = foldersById.get(folder.id);
         if (folderRef) folderRef.drive_folder_id = created.id;
 
@@ -301,7 +301,7 @@ export async function runSaveBatch(
         }
 
         await updateFile(accessToken, folder.drive_folder_id, {
-          name: folder.name,
+          name: safeName(folder.name),
           addParents,
           removeParents,
         });
@@ -347,7 +347,7 @@ export async function runSaveBatch(
 
     const folderItemsCache = new Map<
       string,
-      Promise<{ id: string; title: string; kind: string; meta: Json }[]>
+      Promise<{ id: string; title: string; kind: string; meta: Json; created_at: string }[]>
     >();
 
     const getFolderSiblings = (folderId: string) => {
@@ -356,7 +356,7 @@ export async function runSaveBatch(
         promise = (async () => {
           const { data, error } = await supabase
             .from("items")
-            .select("id, title, kind, meta")
+            .select("id, title, kind, meta, created_at")
             .eq("folder_id", folderId)
             .eq("user_id", userId)
             .is("deleted_at", null);
@@ -394,7 +394,7 @@ export async function runSaveBatch(
         }
 
         const siblings = await getFolderSiblings(item.folder_id);
-        const siblingRefs: SiblingRef[] = siblings.filter((s) => s.id !== item.id);
+        const siblingRefs: SiblingRef[] = siblings;
 
         const meta =
           typeof item.meta === "object" && item.meta !== null
@@ -407,7 +407,13 @@ export async function runSaveBatch(
 
         if (item.kind === "image") {
           mimeType = (meta.mime_type as string) || "application/octet-stream";
-          fileName = driveFileName(item.title, item.id, siblingRefs, itemExtension("image", meta));
+          fileName = driveFileName(
+            item.title,
+            item.id,
+            siblingRefs,
+            itemExtension("image", meta),
+            item.created_at,
+          );
 
           if (item.storage_path) {
             const { data: blob, error: downloadError } = await supabase.storage
@@ -424,7 +430,7 @@ export async function runSaveBatch(
           }
         } else {
           mimeType = "text/markdown";
-          fileName = driveFileName(item.title, item.id, siblingRefs, "md");
+          fileName = driveFileName(item.title, item.id, siblingRefs, "md", item.created_at);
           const folderPath = folderPathOf(item.folder_id, foldersById as Map<string, FolderRef>);
           let markdown = item.markdown;
           if (markdown === null && item.kind !== "note") {

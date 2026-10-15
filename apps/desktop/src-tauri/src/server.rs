@@ -577,43 +577,20 @@ pub fn handle_request(
                 Err(p) => p.into_inner(),
             };
 
-            let save_req = crate::models::SaveItemRequest {
-                folder_id: payload.folder_id.clone(),
-                kind: payload.kind,
-                title: title.clone(),
-                source_url: payload.source_url,
-                canonical_url: canonical,
-                status: "saved".to_string(),
-                error: None,
-                markdown: payload.markdown.clone(),
-                meta: payload.meta,
-                note: payload.note,
-                position: payload.position,
-            };
-
-            match db_guard.save_item(save_req) {
-                Ok(item) => {
-                    if let Some(md) = &payload.markdown {
-                        let storage_root = service::resolve_storage_dir(&db_guard);
-                        let (rel_dir, _) = service::resolve_folder_path(&db_guard, &payload.folder_id);
-                        if let Ok(file_path) = service::save_markdown_file_to_disk(
-                            &storage_root,
-                            &rel_dir,
-                            &title,
-                            &item.id,
-                            md,
-                        ) {
-                            if let Ok(rel) = file_path.strip_prefix(&storage_root) {
-                                let _ = db_guard.update_item_storage_path(
-                                    &item.id,
-                                    &rel.to_string_lossy().replace('\\', "/"),
-                                );
-                            }
-                        }
-                    }
-                    json_response(201, json!(item), allowed_origin)
-                }
-                Err(e) => error_response(500, &format!("Database error: {}", e), "db_error", allowed_origin),
+            match service::save_generic_item(
+                &db_guard,
+                &payload.folder_id,
+                &payload.kind,
+                &title,
+                payload.source_url,
+                canonical,
+                payload.markdown.as_deref(),
+                payload.meta,
+                payload.note.as_deref(),
+                payload.position,
+            ) {
+                Ok(item) => json_response(201, json!(item), allowed_origin),
+                Err(e) => service_error_response(e, allowed_origin),
             }
         }
 
@@ -734,17 +711,17 @@ pub fn handle_request(
                         };
 
                         if let Some(fid) = payload.folder_id.as_deref() {
-                            if let Err(e) = db_guard.move_item(item_id, fid) {
-                                return error_response(400, &format!("Failed to move item: {}", e), "move_failed", allowed_origin);
+                            if let Err(e) = service::move_item(&db_guard, item_id, fid) {
+                                return error_response(400, &format!("Failed to move item: {}", e.message), "move_failed", allowed_origin);
                             }
                         }
                         if let Some(note_str) = payload.note.as_deref() {
-                            let _ = db_guard.update_item_note(item_id, Some(note_str));
+                            let _ = service::update_item_note(&db_guard, item_id, Some(note_str));
                         }
                         if let Some(md) = payload.markdown.as_deref() {
-                            let _ = db_guard.update_item_content(item_id, payload.title.as_deref(), md);
+                            let _ = service::update_note(&db_guard, item_id, payload.title.as_deref(), md);
                         } else if let Some(t) = payload.title.as_deref() {
-                            let _ = db_guard.rename_item(item_id, t);
+                            let _ = service::rename_item(&db_guard, item_id, t);
                         }
 
                         match service::get_item(&db_guard, item_id) {
@@ -789,13 +766,13 @@ pub fn handle_request(
                         };
 
                         if let Some(name) = payload.name.as_deref() {
-                            let _ = db_guard.rename_folder(folder_id, name);
+                            let _ = service::rename_folder(&db_guard, folder_id, name);
                         }
                         if payload.parent_id.is_some() || payload.position.is_some() {
                             let current_folder = db_guard.get_folder(folder_id).ok();
                             let target_parent = payload.parent_id.as_deref().or(current_folder.as_ref().and_then(|f| f.parent_id.as_deref()));
                             let target_pos = payload.position.unwrap_or_else(|| current_folder.as_ref().map(|f| f.position).unwrap_or(0));
-                            let _ = db_guard.move_folder(folder_id, target_parent, target_pos);
+                            let _ = service::move_folder(&db_guard, folder_id, target_parent, target_pos);
                         }
                         if let Some(arch) = payload.archived {
                             let _ = db_guard.archive_project(folder_id, arch);
@@ -993,6 +970,66 @@ mod tests {
     }
 
     #[test]
+    fn test_server_cors_options_preflight() {
+        let db = create_test_db();
+        let ext_origin = format!("chrome-extension://{}", native_installer::PINNED_EXTENSION_ID);
+
+        // Preflight with valid extension origin
+        let headers = vec![
+            Header::from_bytes(&b"Host"[..], &b"127.0.0.1:23456"[..]).unwrap(),
+            Header::from_bytes(&b"Origin"[..], ext_origin.as_bytes()).unwrap(),
+            Header::from_bytes(&b"Access-Control-Request-Method"[..], &b"POST"[..]).unwrap(),
+        ];
+        let resp = handle_request(&db, &Method::Options, "/api/folders", "", &[], &headers);
+        assert_eq!(resp.status_code().0, 204);
+
+        let allow_origin = resp
+            .headers()
+            .iter()
+            .find(|h| h.field.as_str().as_str().eq_ignore_ascii_case("Access-Control-Allow-Origin"))
+            .map(|h| h.value.as_str().to_string());
+        assert_eq!(allow_origin, Some(ext_origin));
+
+        // Preflight with evil origin -> 403
+        let headers_evil = vec![
+            Header::from_bytes(&b"Host"[..], &b"127.0.0.1:23456"[..]).unwrap(),
+            Header::from_bytes(&b"Origin"[..], &b"https://evil.com"[..]).unwrap(),
+        ];
+        let resp = handle_request(&db, &Method::Options, "/api/folders", "", &[], &headers_evil);
+        assert_eq!(resp.status_code().0, 403);
+    }
+
+    #[test]
+    fn test_server_folder_crud() {
+        let db = create_test_db();
+
+        // 1. List initial folders -> contains default inbox and general
+        let resp = handle_request(&db, &Method::Get, "/api/folders", "", &[], &standard_headers());
+        assert_eq!(resp.status_code().0, 200);
+        let initial_folders = read_json_response(resp);
+        assert!(initial_folders.is_array());
+        let folders_arr = initial_folders.as_array().unwrap();
+        assert!(folders_arr.iter().any(|f| f["id"] == "inbox"));
+        assert!(folders_arr.iter().any(|f| f["id"] == "general"));
+
+        // 2. Create project folder
+        let create_body = serde_json::to_vec(&json!({ "name": "AI Safety" })).unwrap();
+        let resp = handle_request(&db, &Method::Post, "/api/folders", "", &create_body, &standard_headers());
+        assert_eq!(resp.status_code().0, 201);
+        let created_folder = read_json_response(resp);
+        assert_eq!(created_folder["name"], "AI Safety");
+        let project_id = created_folder["id"].as_str().unwrap().to_string();
+
+        // 3. Create subfolder inside project
+        let sub_body = serde_json::to_vec(&json!({ "name": "Alignment", "parent_id": project_id })).unwrap();
+        let resp = handle_request(&db, &Method::Post, "/api/folders", "", &sub_body, &standard_headers());
+        assert_eq!(resp.status_code().0, 201);
+        let sub_folder = read_json_response(resp);
+        assert_eq!(sub_folder["name"], "Alignment");
+        assert_eq!(sub_folder["parent_id"], project_id);
+    }
+
+    #[test]
     fn test_server_folders_crud() {
         let db = create_test_db();
 
@@ -1037,6 +1074,68 @@ mod tests {
         // 6. Delete General folder must fail
         let resp = handle_request(&db, &Method::Delete, "/api/folders/general", "", &[], &standard_headers());
         assert_ne!(resp.status_code().0, 200);
+    }
+
+    #[test]
+    fn test_server_check_url_workflow() {
+        let db = create_test_db();
+
+        // Create folder A
+        let create_body_a = serde_json::to_vec(&json!({ "name": "Folder A", "parent_id": "inbox" })).unwrap();
+        let resp_a = handle_request(&db, &Method::Post, "/api/folders", "", &create_body_a, &standard_headers());
+        let folder_a_id = read_json_response(resp_a)["id"].as_str().unwrap().to_string();
+
+        // Create folder B
+        let create_body_b = serde_json::to_vec(&json!({ "name": "Folder B", "parent_id": "inbox" })).unwrap();
+        let resp_b = handle_request(&db, &Method::Post, "/api/folders", "", &create_body_b, &standard_headers());
+        let folder_b_id = read_json_response(resp_b)["id"].as_str().unwrap().to_string();
+
+        let article_url = "https://example.com/deep-dive";
+
+        // Check URL initially -> does not exist
+        let check_body = serde_json::to_vec(&json!({
+            "url": article_url,
+            "folder_id": folder_a_id
+        })).unwrap();
+        let resp = handle_request(&db, &Method::Post, "/api/check-url", "", &check_body, &standard_headers());
+        assert_eq!(resp.status_code().0, 200);
+        let check_res = read_json_response(resp);
+        assert_eq!(check_res["exists"], false);
+
+        // Save article in folder A
+        let cap_body = serde_json::to_vec(&json!({
+            "kind": "substack",
+            "folder_id": folder_a_id,
+            "capture": {
+                "url": article_url,
+                "title": "Deep Dive Article",
+                "markdown": "Detailed exploration."
+            }
+        })).unwrap();
+        let resp = handle_request(&db, &Method::Post, "/api/capture", "", &cap_body, &standard_headers());
+        assert_eq!(resp.status_code().0, 200);
+        let item_id = read_json_response(resp)["item"]["id"].as_str().unwrap().to_string();
+
+        // Check URL in folder A -> exists
+        let resp = handle_request(&db, &Method::Post, "/api/items/check", "", &check_body, &standard_headers());
+        assert_eq!(resp.status_code().0, 200);
+        let check_a = read_json_response(resp);
+        assert_eq!(check_a["exists"], true);
+        assert_eq!(check_a["item_id"], item_id);
+        assert_eq!(check_a["folder_id"], folder_a_id);
+
+        // Check URL from folder B -> duplicate detected, points to folder A
+        let check_body_from_b = serde_json::to_vec(&json!({
+            "url": article_url,
+            "folder_id": folder_b_id
+        })).unwrap();
+        let resp = handle_request(&db, &Method::Post, "/api/check-url", "", &check_body_from_b, &standard_headers());
+        assert_eq!(resp.status_code().0, 200);
+        let check_b = read_json_response(resp);
+        assert_eq!(check_b["exists"], true);
+        assert_eq!(check_b["item_id"], item_id);
+        assert_eq!(check_b["folder_id"], folder_a_id);
+        assert_eq!(check_b["folder_name"], "Folder A");
     }
 
     #[test]
@@ -1422,14 +1521,14 @@ mod tests {
         let resp_bad = handle_request(&db, &Method::Post, "/api/native-host/register", "", &bad_payload, &standard_headers());
         assert_eq!(resp_bad.status_code().0, 403);
 
-        // 2. Allowed extension ID in register -> 200 OK
+        // 2. Authorized extension ID in register -> 200 OK
         let good_payload = serde_json::to_vec(&json!({
             "extension_id": native_installer::PINNED_EXTENSION_ID
         })).unwrap();
         let resp_good = handle_request(&db, &Method::Post, "/api/native-host/register", "", &good_payload, &standard_headers());
         assert_eq!(resp_good.status_code().0, 200);
-        let res = read_json_response(resp_good);
-        assert_eq!(res["installed"], true);
+        let good_json = read_json_response(resp_good);
+        assert_eq!(good_json["installed"], true);
     }
 
     #[test]

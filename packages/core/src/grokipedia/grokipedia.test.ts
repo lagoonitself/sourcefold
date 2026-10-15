@@ -249,8 +249,8 @@ describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
     // contains "[^1]"
     expect(markdown).toContain("[^1]");
 
-    // contains "[^139]: ["
-    expect(markdown).toContain("[^139]: [");
+    // contains "[^139]: <" (url in angle brackets since title is empty / url-only)
+    expect(markdown).toContain("[^139]: <https://hbr.org");
 
     // does NOT contain "Fact-checked by Grok"
     expect(markdown).not.toContain("Fact-checked by Grok");
@@ -270,6 +270,10 @@ describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
     // markdown has no image syntax "!["
     expect(markdown).not.toContain("![");
 
+    // produces body-only without "# Title" or "> Saved from Grokipedia"
+    expect(markdown).not.toContain("# Impact of Artificial Intelligence on the Future\n");
+    expect(markdown).not.toContain("> Saved from Grokipedia");
+
     // every [^N] used in the body has a matching [^N]: definition
     const bodyCitations = Array.from(markdown.matchAll(/\[\^(\d+)\](?!:)/g)).map((m) =>
       parseInt(m[1]!, 10),
@@ -279,13 +283,10 @@ describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
       expect(markdown).toContain(`[^${num}]: `);
     }
 
-    // 1. Text between "> Saved from Grokipedia" and "## Overview" contains at least 4 paragraphs separated by a blank line
-    const savedIndex = markdown.indexOf("> Saved from Grokipedia");
+    // 1. Text before "## Overview" contains at least 4 paragraphs separated by a blank line
     const overviewIndex = markdown.indexOf("## Overview");
-    expect(savedIndex).toBeGreaterThan(-1);
-    expect(overviewIndex).toBeGreaterThan(savedIndex);
-    const savedLineEnd = markdown.indexOf("\n", savedIndex);
-    const introSection = markdown.slice(savedLineEnd, overviewIndex).trim();
+    expect(overviewIndex).toBeGreaterThan(0);
+    const introSection = markdown.slice(0, overviewIndex).trim();
     const introParagraphs = introSection
       .split(/\n\s*\n/)
       .map((p) => p.trim())
@@ -308,13 +309,74 @@ describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
     writeFileSync(join(outputDir, "grokipedia-impact-of-ai.md"), markdown, "utf-8");
   });
 
+  it("dedupes citation runs preserving first-seen order", () => {
+    const article: GrokipediaArticle = {
+      url: "https://grokipedia.com/page/Test",
+      title: "Test",
+      summary: null,
+      factCheckedAt: null,
+      bodyHtml: "<p>Text with multiple citations: [^76][^77][^76] and [^1] [^2] [^1].</p>",
+      references: [],
+    };
+    const md = grokipediaToMarkdown(article);
+    expect(md).toContain("citations: [^76][^77] and [^1][^2].");
+  });
+
+  it("formats references with empty title or title equal to URL with angle brackets", () => {
+    const article: GrokipediaArticle = {
+      url: "https://grokipedia.com/page/Test",
+      title: "Test",
+      summary: null,
+      factCheckedAt: null,
+      bodyHtml: "<p>Content</p>",
+      references: [
+        {
+          number: 1,
+          title: "",
+          url: "https://example.com/empty-title",
+          domain: "example.com",
+        },
+        {
+          number: 2,
+          title: "https://example.com/url-as-title",
+          url: "https://example.com/url-as-title",
+          domain: "example.com",
+        },
+        {
+          number: 3,
+          title: "Real Title",
+          url: "https://example.com/real-title",
+          domain: "example.com",
+        },
+      ],
+    };
+    const md = grokipediaToMarkdown(article);
+    expect(md).toContain("[^1]: <https://example.com/empty-title> - example.com");
+    expect(md).toContain("[^2]: <https://example.com/url-as-title> - example.com");
+    expect(md).toContain("[^3]: [Real Title](https://example.com/real-title) - example.com");
+  });
+
+  it("ensures body headings start at ## and collapses 3+ newlines to 2", () => {
+    const article: GrokipediaArticle = {
+      url: "https://grokipedia.com/page/Test",
+      title: "Test",
+      summary: null,
+      factCheckedAt: null,
+      bodyHtml: "<h1>Top Level</h1>\n\n\n\n<p>Paragraph</p>",
+      references: [],
+    };
+    const md = grokipediaToMarkdown(article);
+    expect(md).toContain("## Top Level\n\nParagraph");
+    expect(md).not.toContain("\n\n\n");
+  });
+
   it("formats short articles without references properly", () => {
     const article = parseGrokipediaHtml(shortFixtureHtml, shortArticleUrl);
     const markdown = grokipediaToMarkdown(article, { savedAt: "2026-10-13" });
 
-    expect(markdown).toContain("# Quantum Teleportation");
-    expect(markdown).toContain("> Saved from Grokipedia");
     expect(markdown).toContain("Quantum teleportation is a technique");
+    expect(markdown).not.toContain("# Quantum Teleportation");
+    expect(markdown).not.toContain("> Saved from Grokipedia");
     expect(markdown).not.toContain("## References");
     expect(markdown).not.toContain("Fact-checked by Grok");
   });
@@ -323,7 +385,7 @@ describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
     const article = parseGrokipediaHtml(tablesFixtureHtml, tablesArticleUrl);
     const markdown = grokipediaToMarkdown(article, { savedAt: "2026-10-13" });
 
-    expect(markdown).toContain("# Global Space Missions");
+    expect(markdown).not.toContain("# Global Space Missions");
     expect(markdown).toContain("| Mission | Destination | Launch Year | Status |");
     expect(markdown).toContain("| Artemis III | Lunar South Pole | 2026 | Planned |");
     expect(markdown).toMatch(/-\s+Planetary Surveying/);

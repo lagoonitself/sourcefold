@@ -1,6 +1,7 @@
 use tauri::State;
 use crate::db::Database;
 use crate::models::Folder;
+use crate::service;
 
 #[tauri::command]
 pub async fn get_folders(
@@ -21,8 +22,7 @@ pub async fn create_folder(
     name: String,
     parent_id: Option<String>,
 ) -> Result<Folder, String> {
-    db.create_folder(&name, parent_id.as_deref())
-        .map_err(|e| e.to_string())
+    service::create_folder(&db, &name, parent_id.as_deref()).map_err(|e| e.message)
 }
 
 #[tauri::command]
@@ -31,7 +31,7 @@ pub async fn rename_folder(
     id: String,
     name: String,
 ) -> Result<(), String> {
-    db.rename_folder(&id, &name).map_err(|e| e.to_string())
+    service::rename_folder(&db, &id, &name).map_err(|e| e.message)
 }
 
 #[tauri::command]
@@ -41,13 +41,12 @@ pub async fn move_folder(
     parent_id: Option<String>,
     position: i64,
 ) -> Result<(), String> {
-    db.move_folder(&id, parent_id.as_deref(), position as i32)
-        .map_err(|e| e.to_string())
+    service::move_folder(&db, &id, parent_id.as_deref(), position as i32).map_err(|e| e.message)
 }
 
 #[tauri::command]
 pub async fn delete_folder(db: State<'_, Database>, id: String) -> Result<(), String> {
-    db.delete_folder(&id).map_err(|e| e.to_string())
+    service::delete_folder(&db, &id).map_err(|e| e.message)
 }
 
 #[tauri::command]

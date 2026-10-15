@@ -62,9 +62,13 @@ Lessons worth keeping:
 
 - Substack in the desktop app (2026-10-15) uses the method of [sbstck-dl](https://github.com/alexferrari88/sbstck-dl) (MIT), ported to TypeScript, not the Go binary. Every Substack post page embeds the full post as `window._preloads = JSON.parse("…")`, so a plain fetch gets the whole body: `post.body_html`, plus metadata. A locked paid post has `audience: "only_paid"` and an empty body, or a preview ending at the `PaywallToDOM` marker. Publications are listed via `/api/v1/archive?sort=new&offset=N&limit=50` (titles, dates, paid/free), falling back to `/sitemap.xml`. Code: `packages/core/src/substack/` (`preloads`, `post`, `body`, `discover`, `fetcher`, `links`). `extractSubstack` tries the preloads first, so the extension benefits too. The desktop fetches pages in Rust (`src-tauri/src/substack.rs`, command `substack_fetch`), runs the extractor in the webview (`src/features/substack/substack-client.ts`) and saves through the normal `capture` path: to the web account when signed in, to disk offline. Owner's choice: only the desktop fetches Substack; the web app doesn't.
 - The Substack login cookie (for paid posts) is stored only in `%LOCALAPPDATA%\Sourcefold\substack_cookie.json` (macOS: the app data dir) and is never returned to the UI. Rust attaches it only over https to `substack.com`, `*.substack.com`, or a custom domain that already served a Substack page this session, and it follows redirects by hand so the check runs on every hop.
+- Every file Sourcefold writes follows `docs/FILE-FORMAT.md` (2026-10-15). The web builder (`packages/core/src/drive-file.ts`) and the desktop builder (`build_item_file` in `service.rs`) are both tested byte for byte against `packages/core/test/golden/`. Change the doc, both builders and the golden files together. Prettier ignores the golden folder (it would rewrite `*italic*`).
+- Rust tests must never write to the real `Documents/Sourcefold`: `resolve_storage_dir` returns a temp dir under `cfg(test)`. Before this fix, every `cargo test` run dumped about 200 fake files there.
+- Subagents have twice "simplified" files they were only asked to touch lightly (an old copy of `run-save-batch.ts`; deleted security tests in `server.rs`). Diff every delegated change against HEAD for removed functions and tests before accepting it.
 
 ## Next steps
 
+1. **Owner checks the new file layout.** Save a Grokipedia link and a Substack post on the web, press Save to Drive, and open `Sourcefold/<Project>/<Group>/` in Drive: files are named after the title and start with front matter, `# Title` and one "Saved from" line. Existing Drive files are renamed the next time they are saved. In the desktop app (offline mode) save the same link and check `Documents/Sourcefold/<Project>/<Group>/`; rename and delete it in the app and check the file follows.
 1. **Owner tests the desktop app end to end.**
    - Substack (new): open **Add links**. Paste a free post link (e.g. `https://www.astralcodexten.com/p/open-thread-455`) and check it saves with its title. Open the file and check the body is clean: no images, no subscribe boxes, footnotes as `[^1]`. Then paste a publication address (e.g. `https://name.substack.com`) with a narrow date range ("Published after" a date a few weeks back), and check one row per post appears and each saves. A paid post without a cookie shows "Paid, not saved" with a hint. Then in Settings → **Substack**, paste your `substack.sid` cookie (Chrome DevTools → Application → Cookies → https://substack.com) and save a paid post from a publication you subscribe to: it should save with `access: paid`. Signed in, check the posts appear on the web and reach Drive. Pasting an X link now says to use the extension; before, it falsely showed "Saved".
    - Group view: open a group. Check the header shows the project / group breadcrumb, the group title in serif and "N sources". Click **New subgroup**, name it, and check it appears under "Subgroups" and in the sidebar tree. Click **New note** (or press `c`) and save one. Press `s` or click **Select**: checkboxes appear; tick a few (Shift-click for a range), then try **Copy links**, **Move** and **Delete**; `Esc` leaves select mode. Click **Copy all links** (or `Shift+Y`): the button shows "Copied" and the clipboard holds every link, one per line. Check each row's left bar color per type (Grokipedia indigo, Substack orange, X dark, Note purple, Image teal), the right-hand source name, date and check mark.
@@ -78,15 +82,15 @@ Lessons worth keeping:
    - Try keyboard shortcuts: press `?` to open the shortcuts cheat sheet; try tree navigation (`j`/`k`, `h`/`l`, `[`/`]`), list navigation, command palette (`Mod+K`), and search (`/`).
    - Test offline mode: switch to offline mode in desktop Settings, create an offline group and source, and check that files write to `Documents/Sourcefold/` and `%LOCALAPPDATA%\Sourcefold\sourcefold.db`.
    - Check extension target line: open extension popup in Auto mode with desktop signed in (should show "Saving to your account (via desktop app)"), then with desktop in offline mode (should show "Saving to this computer (desktop app, offline)").
-2. **Push and check the macOS CI run.**
+1. **Push and check the macOS CI run.**
    - Push the branch to GitHub and confirm the GitHub Actions workflow builds the desktop app on macOS.
-3. **Check that content moves to Drive.**
+1. **Check that content moves to Drive.**
    - Migration `20261014020000_content_lives_in_drive.sql` is applied to the owner's database and the code is pushed (2026-10-14). After the Vercel deploy, press Save to Drive once: the two existing sources should upload and their text should clear from Supabase (`select count(*) from items where markdown is not null and kind <> 'note'` returns 0). Then save one new Grokipedia link and check it lands in Drive without pressing Save. Rename it and save, and check the Drive file still has its article text.
-4. **Check project archiving on the live app.**
+1. **Check project archiving on the live app.**
    - Migration `20261014030000_archive_projects.sql` is applied and the code is pushed (2026-10-14). Archive a project, check it moves under "Archived" in the switcher and is gone from Add links and the extension's picker, then unarchive it. The unsaved count shouldn't change.
-5. **Finish rolling out projects and groups.**
+1. **Finish rolling out projects and groups.**
    - The migration `20261014010000_projects_and_groups.sql` is applied to the owner's database and the code is pushed (2026-10-14). Check the Vercel deploy, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. The owner's test data was soft-deleted on 2026-10-14; the next Save to Drive trashes its Drive copies.
-6. **Optional cleanup on the owner's database: drop the old function overloads.**
+1. **Optional cleanup on the owner's database: drop the old function overloads.**
    - Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
 
    ```sql
@@ -96,7 +100,7 @@ Lessons worth keeping:
    drop function if exists public.drive_unsaved_count();
    ```
 
-7. **Ideas for later** (none started):
+1. **Ideas for later** (none started):
    - Chrome Web Store listing for the extension.
    - Full-text search (title search only today).
    - Item reordering in desktop app (no API yet).

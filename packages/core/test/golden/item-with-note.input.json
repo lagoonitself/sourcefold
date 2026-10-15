@@ -1,0 +1,13 @@
+{
+  "kind": "grokipedia",
+  "title": "Quantum Teleportation",
+  "url": "https://grokipedia.com/page/Quantum_Teleportation",
+  "folder": "Science/Physics",
+  "saved": "2026-10-15",
+  "meta": {
+    "summary": "Summary of quantum teleportation.",
+    "fact_checked": "2026-10-13"
+  },
+  "body": "Quantum teleportation is a technique for transferring quantum information.",
+  "note": "Remember to compare with quantum entanglement."
+}

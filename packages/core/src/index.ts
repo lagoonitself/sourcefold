@@ -1,4 +1,5 @@
 // Browser-safe helpers. Server-only parsers live in ./server.
+export { safeName, uniqueNames, type UniqueNameEntry } from "./file-name";
 export { slugify } from "./slugify";
 export {
   InvalidUrlError,
@@ -9,7 +10,7 @@ export {
   type SourceKind,
 } from "./url";
 export { buildFrontMatter, formatDate, type FrontMatterValue } from "./front-matter";
-export { bodyFromDriveFile } from "./drive-file";
+export { bodyFromDriveFile, buildItemFile, type BuildItemInput, type ItemKind } from "./drive-file";
 export type {
   CaptureRequest,
   SubstackCapture,

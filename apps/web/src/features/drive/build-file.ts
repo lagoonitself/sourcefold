@@ -1,4 +1,9 @@
-import { buildFrontMatter, formatDate, slugify } from "@sourcefold/core";
+import {
+  buildItemFile as buildItemFileCore,
+  safeName,
+  uniqueNames,
+  type BuildItemInput,
+} from "@sourcefold/core";
 
 export interface FolderRef {
   id: string;
@@ -19,15 +24,15 @@ export interface ItemData {
 }
 
 export interface SiblingItem {
+  id?: string;
   title: string;
   ext?: string;
   kind?: string;
   meta?: unknown;
+  created_at?: string | Date;
 }
 
 export type SiblingRef = string | SiblingItem;
-
-const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
 export function itemExtension(kind?: string, meta?: unknown): string {
   if (!kind || kind !== "image") {
@@ -47,24 +52,31 @@ export function itemExtension(kind?: string, meta?: unknown): string {
   return "bin";
 }
 
-function getSiblingFileName(sibling: SiblingRef): string {
+function parseSibling(sibling: SiblingRef): {
+  id?: string;
+  name: string;
+  ext: string;
+  createdAt?: string | Date;
+} {
   if (typeof sibling === "string") {
     if (sibling.includes(".")) {
       const lastDot = sibling.lastIndexOf(".");
       const namePart = sibling.slice(0, lastDot);
       const extPart = sibling.slice(lastDot + 1).toLowerCase();
-      const slug = slugify(namePart) || "untitled";
-      return extPart ? `${slug}.${extPart}` : slug;
+      return { name: safeName(namePart), ext: extPart };
     }
-    const slug = slugify(sibling) || "untitled";
-    return `${slug}.md`;
+    return { name: safeName(sibling), ext: "md" };
   }
 
-  const slug = slugify(sibling.title) || "untitled";
   const ext = (sibling.ext ?? itemExtension(sibling.kind, sibling.meta))
     .replace(/^\./, "")
     .toLowerCase();
-  return ext ? `${slug}.${ext}` : slug;
+  return {
+    id: sibling.id,
+    name: safeName(sibling.title),
+    ext,
+    createdAt: sibling.created_at,
+  };
 }
 
 export function driveFileName(
@@ -72,23 +84,50 @@ export function driveFileName(
   itemId: string,
   siblingTitles: SiblingRef[],
   ext = "md",
+  createdAt?: string | Date,
 ): string {
-  const baseSlug = slugify(title) || "untitled";
   const cleanExt = ext.replace(/^\./, "").toLowerCase();
-  const thisFileName = cleanExt ? `${baseSlug}.${cleanExt}` : baseSlug;
+  const currentSafeName = safeName(title);
 
-  const hasCollision = siblingTitles.some(
-    (sibling) => getSiblingFileName(sibling) === thisFileName,
-  );
+  const collidingEntries: { id: string; name: string; createdAt: string | Date | number }[] = [];
+  let currentFound = false;
 
-  const idSuffix = itemId ? itemId.slice(0, 6) : "";
-  let finalSlug = hasCollision && idSuffix ? `${baseSlug}-${idSuffix}` : baseSlug;
-
-  if (WINDOWS_RESERVED.test(finalSlug)) {
-    finalSlug = `${finalSlug}-${idSuffix || "file"}`;
+  for (let i = 0; i < siblingTitles.length; i++) {
+    const parsed = parseSibling(siblingTitles[i]!);
+    if (parsed.ext === cleanExt && parsed.name.toLowerCase() === currentSafeName.toLowerCase()) {
+      const id = parsed.id || `sibling-${i}`;
+      if (id === itemId) {
+        currentFound = true;
+        collidingEntries.push({
+          id: itemId,
+          name: currentSafeName,
+          createdAt: createdAt ?? parsed.createdAt ?? 0,
+        });
+      } else {
+        collidingEntries.push({
+          id,
+          name: parsed.name,
+          createdAt: parsed.createdAt ?? 0,
+        });
+      }
+    }
   }
 
-  return cleanExt ? `${finalSlug}.${cleanExt}` : finalSlug;
+  if (!currentFound) {
+    collidingEntries.push({
+      id: itemId,
+      name: currentSafeName,
+      createdAt: createdAt ?? 0,
+    });
+  }
+
+  if (collidingEntries.length === 1) {
+    return cleanExt ? `${currentSafeName}.${cleanExt}` : currentSafeName;
+  }
+
+  const resolved = uniqueNames(collidingEntries);
+  const finalName = resolved.get(itemId) ?? currentSafeName;
+  return cleanExt ? `${finalName}.${cleanExt}` : finalName;
 }
 
 export function folderPathOf(
@@ -109,120 +148,13 @@ export function folderPathOf(
     if (!folder) {
       break;
     }
-    parts.unshift(folder.name);
+    parts.unshift(safeName(folder.name));
     currentId = folder.parent_id;
   }
 
   return parts.join("/");
 }
 
-function tryFormatDate(value: unknown): string | undefined {
-  if (value === null || value === undefined || value === "") {
-    return undefined;
-  }
-  try {
-    return formatDate(value as string | Date);
-  } catch {
-    return undefined;
-  }
-}
-
 export function buildItemFile(item: ItemData, folderPath: string): string {
-  const meta =
-    typeof item.meta === "object" && item.meta !== null
-      ? (item.meta as Record<string, unknown>)
-      : {};
-
-  let fields: Record<string, unknown> = {};
-
-  if (item.kind === "grokipedia") {
-    fields = {
-      source: "grokipedia",
-      title: item.title,
-      url: item.source_url ?? undefined,
-      summary: typeof meta.summary === "string" ? meta.summary : undefined,
-      fact_checked: tryFormatDate(meta.fact_checked_at),
-      saved: tryFormatDate(item.created_at),
-      folder: folderPath || undefined,
-    };
-  } else if (item.kind === "substack") {
-    fields = {
-      source: "substack",
-      title: item.title,
-      subtitle: typeof meta.subtitle === "string" ? meta.subtitle : undefined,
-      url:
-        (typeof item.canonical_url === "string" && item.canonical_url.length > 0
-          ? item.canonical_url
-          : item.source_url) ?? undefined,
-      author: typeof meta.author === "string" ? meta.author : undefined,
-      author_url: typeof meta.author_url === "string" ? meta.author_url : undefined,
-      publication: typeof meta.publication === "string" ? meta.publication : undefined,
-      publication_url: typeof meta.publication_url === "string" ? meta.publication_url : undefined,
-      published: tryFormatDate(meta.published),
-      access: typeof meta.access === "string" ? meta.access : undefined,
-      saved: tryFormatDate(item.created_at),
-      folder: folderPath || undefined,
-    };
-  } else if (item.kind === "x") {
-    fields = {
-      source: "x",
-      title: item.title,
-      url:
-        (typeof meta.post_url === "string" && meta.post_url.length > 0
-          ? meta.post_url
-          : item.source_url) ?? undefined,
-      author: typeof meta.author === "string" ? meta.author : undefined,
-      author_url: typeof meta.author_url === "string" ? meta.author_url : undefined,
-      posted: tryFormatDate(meta.posted),
-      saved: tryFormatDate(item.created_at),
-      folder: folderPath || undefined,
-    };
-  } else if (item.kind === "note") {
-    fields = {
-      source: "note",
-      title: item.title,
-      created: tryFormatDate(item.created_at),
-      folder: folderPath || undefined,
-    };
-  } else {
-    fields = {
-      source: item.kind,
-      title: item.title,
-      url: item.source_url ?? undefined,
-      saved: tryFormatDate(item.created_at),
-      folder: folderPath || undefined,
-    };
-  }
-
-  const rawMarkdown = item.markdown ?? "";
-  let body: string;
-
-  const newlineIdx = rawMarkdown.indexOf("\n");
-  if (newlineIdx === -1) {
-    if (rawMarkdown.startsWith("# ")) {
-      body = `# ${item.title}`;
-    } else if (rawMarkdown.length > 0) {
-      body = `# ${item.title}\n\n${rawMarkdown}`;
-    } else {
-      body = `# ${item.title}\n\n`;
-    }
-  } else {
-    const firstLine = rawMarkdown.slice(0, newlineIdx).replace(/\r$/, "");
-    if (firstLine.startsWith("# ")) {
-      body = `# ${item.title}${rawMarkdown.slice(newlineIdx)}`;
-    } else {
-      body = `# ${item.title}\n\n${rawMarkdown}`;
-    }
-  }
-
-  if (item.note && item.note.trim() !== "" && item.kind !== "note") {
-    if (!body.endsWith("\n")) {
-      body += "\n";
-    }
-    body += `\n## My note\n\n${item.note.trim()}\n`;
-  }
-
-  const frontMatter = buildFrontMatter(fields as Parameters<typeof buildFrontMatter>[0]);
-  const combined = `${frontMatter}\n${body}`.trimEnd() + "\n";
-  return combined;
+  return buildItemFileCore(item as unknown as BuildItemInput, folderPath);
 }

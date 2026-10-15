@@ -1,0 +1,13 @@
+{
+  "kind": "x",
+  "title": "Thread by Alice (@alice)",
+  "url": "https://x.com/alice/status/1001",
+  "folder": "Social/X",
+  "saved": "2026-10-15",
+  "meta": {
+    "author": "Alice",
+    "author_url": "https://x.com/alice",
+    "posted": "2026-10-14"
+  },
+  "body": "**Alice** (@alice) · 2026-10-14 · [link](https://x.com/alice/status/1001)\n\nFirst post in the thread.\n\n> **Bob** (@bob) · 2026-10-14 · [link](https://x.com/bob/status/1002)\n>\n> Replying to Alice with interesting point.\n\n**Alice** (@alice) · 2026-10-14 · [link](https://x.com/alice/status/1003)\n\nThird post concluding the thread."
+}

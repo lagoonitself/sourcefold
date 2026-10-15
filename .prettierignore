@@ -11,3 +11,4 @@ apps/desktop/releases
 apps/desktop/dist
 apps/desktop/src-tauri/target
 apps/desktop/src-tauri/gen
+packages/core/test/golden/

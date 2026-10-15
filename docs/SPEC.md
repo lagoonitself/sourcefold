@@ -149,7 +149,9 @@ An item or folder needs saving when `drive_synced_at is null` or `updated_at > d
 
 ## 5. Markdown formats
 
-All files start with front matter. Fields that do not apply are omitted.
+The canonical, cross-platform contract for file naming, folder naming, front matter schema, and body layout is specified in [FILE-FORMAT.md](./FILE-FORMAT.md).
+
+All files start with YAML front matter. Fields that do not apply are omitted. Below is an overview of the canonical formats:
 
 ### Grokipedia
 
@@ -166,20 +168,20 @@ folder: AI Research/Risks
 
 # Impact of Artificial Intelligence on the Future
 
-> Saved from Grokipedia on 2026-10-13. Grokipedia articles change; see the live page and its edit history: <url>
+> Saved from [Grokipedia](https://grokipedia.com/page/Impact_of_Artificial_Intelligence_on_the_Future) on 2026-10-13. Grokipedia articles change; check the live page for edits.
 
-...article body: headings, paragraphs, tables, inline links...
+...article body: headings start at ##, paragraphs, tables, inline links...
 
 ## References
 
 [^1]: [Artificial Intelligence and the Future of Humans | Pew Research Center](https://...) - pewresearch.org
 
-[^2]: ...
+[^2]: <https://example.com/no-title-link> - example.com
 ```
 
 - `summary` comes from the page's meta description (the first paragraph). Free to keep; the list shows the title only.
 - `fact_checked` comes from the page's JSON-LD `dateModified` (the "Fact-checked by Grok" date).
-- Citation markers in the body become GFM footnotes (`[^1]`), and each reference is the matching footnote definition, so the citations stay readable as plain text in NotebookLM and other tools.
+- Citation markers in the body become GFM footnotes (`[^1]`), with citation runs deduped in first-seen order (`[^76][^77]`), and each reference is the matching footnote definition (with empty/URL titles wrapped in `<url>`).
 
 ### Substack
 
@@ -187,16 +189,23 @@ folder: AI Research/Risks
 ---
 source: substack
 title: Why Decentralized AI Matters
+subtitle: An analysis of decentralized networks
 url: https://example.substack.com/p/why-decentralized-ai-matters
 author: Jane Doe
+author_url: https://substack.com/@janedoe
 publication: The AI Dispatch
+publication_url: https://example.substack.com
+published: 2026-10-10
+access: free
 saved: 2026-10-13
 folder: AI Research/Decentralized
 ---
 
 # Why Decentralized AI Matters
 
-> Saved from Substack on 2026-10-13: <url>
+_An analysis of decentralized networks_
+
+> Saved from [The AI Dispatch](https://example.substack.com/p/why-decentralized-ai-matters) on 2026-10-13. By Jane Doe. Published 2026-10-10.
 
 ...article body converted to clean Markdown...
 ```
@@ -206,13 +215,18 @@ folder: AI Research/Decentralized
 ```markdown
 ---
 source: x
+title: Post by Jack Dorsey (@jack)
 url: https://x.com/jack/status/20
-author: Jack Dorsey (@jack)
+author: Jack Dorsey
+author_url: https://x.com/jack
+posted: 2006-03-21
 saved: 2026-10-13
 folder: Archive/Social
 ---
 
-# Post by @jack
+# Post by Jack Dorsey (@jack)
+
+> Saved from [X](https://x.com/jack/status/20) on 2026-10-13.
 
 > just setting up my twttr
 ```
@@ -225,7 +239,7 @@ Threads render with nested blockquotes to show parent and reply relationships.
 ---
 source: note
 title: Meeting Notes
-saved: 2026-10-13
+created: 2026-10-13
 folder: Projects/Alpha
 ---
 
@@ -233,6 +247,10 @@ folder: Projects/Alpha
 
 Body of your note...
 ```
+
+### Notes on saved items
+
+If a user attaches a note to any saved item (e.g. Grokipedia, Substack, X), it is appended at the end of the file under a `## My note` section.
 
 ## 6. Web app
 
@@ -398,67 +416,3 @@ Each wave ends with a working, deployed app. Tasks inside a wave marked **(paral
 - Folder tree CRUD (create, rename, nest, move, delete) and empty item list.
 - Title search.
 - `/api/health` + GitHub Actions keep-alive.
-- Deploy to Vercel.
-- **Done when:** you can sign in on the live URL and build a nested folder tree.
-
-### Wave 2: Grokipedia (parallel with Wave 3)
-
-- `packages/core`: HTML-to-Markdown (Turndown + GFM tables), front matter, canonical URLs, file-name slugs.
-- `POST /api/grokipedia`: fetch, extract title, summary, fact-checked date, body, references.
-- Paste box UI with per-link status, duplicate warning, retry.
-- Test from Vercel that Grokipedia is reachable; if blocked, route through the extension.
-- **Done when:** 40 pasted links become 40 saved items with correct references.
-
-### Wave 3: Extension + Substack (parallel with Wave 2)
-
-- WXT extension scaffold, settings page, token auth, `/api/tokens`.
-- Popup: page detection, folder picker with last-used default, save, status messages.
-- Substack capture: free and subscribed paid posts, paywall detection, author and publication metadata.
-- `POST /api/capture`.
-- **Done when:** saving a free post, a subscribed paid post and an inaccessible paid post each gives the right result.
-
-### Wave 4: X
-
-- X capture: single post, author thread, tree building.
-- "Add to this thread".
-- X Markdown renderer.
-- **Done when:** a thread, a quote/repost and a later-added reply render as one correct tree file.
-
-### Wave 5: Save to Drive (parallel with Wave 4)
-
-- Google `drive.file` consent and refresh-token storage.
-- Folder mirroring, file create/update/move/rename/trash, resumable batches, Ctrl+S, unsaved count.
-- **Done when:** renaming, moving and deleting in the app shows up correctly in Drive after one Save.
-
-### Wave 6: Notes and own sources
-
-- Note box on items, standalone notes with a Markdown editor, image uploads to Supabase Storage (copied to Drive on Save).
-
-### Wave 7: Polish
-
-- Right-click save, keyboard shortcut, error states, empty states.
-- Self-hosting guide in README (Supabase, Google Cloud, Vercel setup).
-
-### Wave 8: Desktop app
-
-- Tauri v2 app for Windows and macOS (`apps/desktop`).
-- Dual mode: signed-in via web API token, or offline via local SQLite and local Markdown files.
-- Chrome Native Messaging host and local HTTP server on port 23456.
-- Extension Auto target resolution.
-
-## 12. Risks and checks
-
-| Risk                                                         | Plan                                                                                                                                                                                       |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Grokipedia blocks Vercel's servers                           | Test in Wave 2. Fallback: extension fetches the page.                                                                                                                                      |
-| X changes its page structure                                 | All selectors in one file; capture failures show a clear error.                                                                                                                            |
-| Supabase free project pauses                                 | Daily keep-alive workflow.                                                                                                                                                                 |
-| Google refresh token expires                                 | OAuth app set to "In production"; app shows "Reconnect Drive" if refresh fails.                                                                                                            |
-| Free limits (500 MB database, 1 GB storage on Supabase free) | Article text and images move to Drive after saving, so Supabase holds only links and metadata (about 1–2 KB per source). Drive free space is 15 GB, shared with Gmail and Photos.          |
-| Project folder is inside OneDrive                            | OneDrive syncing `node_modules` causes slowdowns and file locks. Move the repo outside OneDrive (for example `C:\dev\sourcefold`) before Wave 1, or exclude the folder from OneDrive sync. |
-
-## 13. Your setup tasks (needed for Wave 1)
-
-1. **Google Cloud:** create a project, an OAuth client (Web), enable the Google Drive API, set the consent screen to In production. Wave 1 will give exact step-by-step instructions and redirect URLs.
-2. **Supabase:** a new free project for Sourcefold (can be created through the Supabase MCP).
-3. **Vercel:** sign in with GitHub and import the repo.

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { jsonError, requireApiUser } from "@/lib/api";
+import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +9,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { db, userId } = auth;
 
   const { id } = await params;
+  // Clients that can't follow a redirect into a browser (the desktop app) ask for the URL itself.
+  const wantsJson =
+    new URL(request.url).searchParams.get("format") === "json" ||
+    (request.headers.get("accept") ?? "").includes("application/json");
 
   const { data: item, error } = await db
     .from("items")
@@ -27,10 +31,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!item.drive_file_id) {
       return jsonError(404, "Image not found.");
     }
-    return NextResponse.redirect(
-      `https://drive.google.com/file/d/${encodeURIComponent(item.drive_file_id)}/view`,
-      302,
-    );
+    const driveUrl = `https://drive.google.com/file/d/${encodeURIComponent(item.drive_file_id)}/view`;
+    return wantsJson ? jsonData({ url: driveUrl }) : NextResponse.redirect(driveUrl, 302);
   }
 
   const { data: signedData, error: signError } = await db.storage
@@ -46,5 +48,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       ? signedData.signedUrl
       : new URL(signedData.signedUrl, request.url).toString();
 
-  return NextResponse.redirect(redirectUrl, 302);
+  return wantsJson ? jsonData({ url: redirectUrl }) : NextResponse.redirect(redirectUrl, 302);
 }

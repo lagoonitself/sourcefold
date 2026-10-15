@@ -312,34 +312,88 @@ export async function updateStandaloneNote(
   });
 }
 
-/** Images can be stored on this computer (offline mode). Signed-in image upload needs the web app. */
-export function canAddImages(): boolean {
-  return shouldUseTauri();
+function readAsBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Couldn't read that file."));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
-export async function addImage(
-  folderId: string,
-  fileName: string,
-  mimeType: string,
-  dataBase64: string,
-): Promise<Item> {
+async function storageErrorMessage(res: Response): Promise<string> {
+  const body = await res.json().catch(() => null);
+  const message = body?.message ?? body?.error?.message ?? body?.error;
+  return typeof message === "string" && message
+    ? message
+    : `The upload failed with status ${res.status}.`;
+}
+
+/**
+ * Adds an image to a group. Offline it is saved on this computer. Signed in it is uploaded in
+ * three steps, like the web app does: ask the server for a signed upload URL, send the file to
+ * Supabase Storage, then tell the server to create the item.
+ */
+export async function addImage(folderId: string, file: File): Promise<Item> {
   if (shouldUseTauri()) {
+    const dataBase64 = await readAsBase64(file);
     return await tauriInvoke<Item>("add_image", {
       folderId,
-      fileName,
-      mimeType,
+      fileName: file.name || "image",
+      mimeType: file.type,
       dataBase64,
     });
   }
-  throw new Error("Adding images isn't available while signed in yet. Use the web app.");
+
+  const fileName = file.name || "image";
+  const signed = await httpFetch<{
+    item_id: string;
+    storage_path: string;
+    signed_url: string;
+    apikey?: string | null;
+  }>("/uploads/sign", {
+    method: "POST",
+    body: JSON.stringify({
+      folder_id: folderId,
+      file_name: fileName,
+      mime_type: file.type,
+      size: file.size,
+    }),
+  });
+
+  // The same request supabase-js makes for uploadToSignedUrl with a Blob.
+  const form = new FormData();
+  form.append("cacheControl", "3600");
+  form.append("", file);
+  const headers: Record<string, string> = { "x-upsert": "false" };
+  if (signed.apikey) headers.apikey = signed.apikey;
+  const put = await fetch(signed.signed_url, { method: "PUT", headers, body: form });
+  if (!put.ok) throw new Error(await storageErrorMessage(put));
+
+  return httpFetch<Item>("/uploads", {
+    method: "POST",
+    body: JSON.stringify({
+      item_id: signed.item_id,
+      folder_id: folderId,
+      storage_path: signed.storage_path,
+      file_name: fileName,
+      mime_type: file.type,
+      size: file.size,
+    }),
+  });
 }
 
-/** Opens an offline image with the system's image viewer. */
-export async function openItemFile(id: string): Promise<void> {
+/** Opens an image: offline in the system image viewer, signed in in the browser. */
+export async function openImage(item: Pick<Item, "id">): Promise<void> {
   if (shouldUseTauri()) {
-    return await tauriInvoke<void>("open_item_file", { id });
+    return await tauriInvoke<void>("open_item_file", { id: item.id });
   }
-  throw new Error("This image is stored in your account. Open it from the web app.");
+  const { url } = await httpFetch<{ url: string }>(`/items/${item.id}/file?format=json`);
+  const { openUrl } = await import("./utils");
+  await openUrl(url);
 }
 
 export async function searchItems(query: string, projectId?: string | null): Promise<Item[]> {

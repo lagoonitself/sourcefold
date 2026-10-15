@@ -31,8 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/DropdownMenu";
 import type { Folder, Item } from "@/lib/types";
-import { deleteItem, openItemFile, renameItem, shouldUseTauri } from "@/lib/api";
-import { getRemoteConfig } from "@/lib/remote-client";
+import { deleteItem, openImage, renameItem } from "@/lib/api";
 import { openUrl, cn, errorMessage } from "@/lib/utils";
 import { NoteDialog } from "./NoteDialog";
 import { MoveItemDialog } from "./MoveItemDialog";
@@ -64,23 +63,12 @@ function authorOf(item: Item): string | null {
   return typeof author === "string" && author.trim() ? author : null;
 }
 
-/** Images have no web page: offline they open in the system viewer, signed in on the web app. */
-async function openImage(item: Item) {
-  if (shouldUseTauri()) {
-    try {
-      await openItemFile(item.id);
-    } catch (err) {
-      toast.error(errorMessage(err, "Couldn't open that image."));
-    }
-    return;
+async function openImageItem(item: Item) {
+  try {
+    await openImage(item);
+  } catch (err) {
+    toast.error(errorMessage(err, "Couldn't open that image."));
   }
-  const base = getRemoteConfig().remoteApiUrl.replace(/\/+$/, "");
-  if (!base) {
-    toast.error("Couldn't open that image.");
-    return;
-  }
-  toast.info("Opening this group in the web app to view the image");
-  await openUrl(`${base}/?folder=${encodeURIComponent(item.folder_id)}`);
 }
 
 export function ItemList({
@@ -184,7 +172,7 @@ export function ItemList({
   const handleOpenSource = React.useCallback(
     (item: Item, options?: { forceExternal?: boolean }) => {
       if (item.kind === "image") {
-        void openImage(item);
+        void openImageItem(item);
       } else if (!options?.forceExternal && item.markdown && item.markdown.trim() && onOpenReader) {
         onOpenReader(item);
       } else {

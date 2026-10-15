@@ -455,7 +455,7 @@ export const SHORTCUT_COMMANDS: ReadonlyArray<ShortcutCommand> = [
   {
     id: "list.add-image",
     title: "Add image",
-    description: "Add images to the open group (offline mode)",
+    description: "Add images to the open group",
     group: "Sources",
     combos: ["i"],
     when: "list",

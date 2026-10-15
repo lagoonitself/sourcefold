@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/api";
 import { validateConnectParams } from "@/features/desktop-connect/validation";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { connectDesktopAction } from "./actions";
 
 export const metadata: Metadata = {
   title: "Connect desktop",
@@ -14,6 +13,7 @@ interface ConnectPageProps {
   searchParams: Promise<{
     callback?: string;
     state?: string;
+    error?: string;
   }>;
 }
 
@@ -23,7 +23,7 @@ export default async function DesktopConnectPage({ searchParams }: ConnectPagePr
     redirect("/login");
   }
 
-  const { callback, state } = await searchParams;
+  const { callback, state, error } = await searchParams;
   const validation = validateConnectParams(callback, state);
 
   return (
@@ -46,9 +46,14 @@ export default async function DesktopConnectPage({ searchParams }: ConnectPagePr
         </div>
 
         {validation.valid ? (
-          <form action={connectDesktopAction} className="flex flex-col gap-4">
+          <form method="post" action="/desktop/connect/approve" className="flex flex-col gap-4">
             <input type="hidden" name="callback" value={validation.callbackUrl} />
             <input type="hidden" name="state" value={validation.state} />
+            {error === "failed" ? (
+              <p className="text-sm text-destructive" role="alert">
+                We couldn&apos;t connect the desktop app. Try again.
+              </p>
+            ) : null}
 
             <div className="flex items-center justify-end gap-3 pt-2">
               <Link href="/" className={buttonVariants({ variant: "outline" })}>

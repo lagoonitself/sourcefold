@@ -29,6 +29,7 @@ import {
   type Session,
 } from "@/lib/remote-client";
 import { cn } from "@/lib/utils";
+import { SubstackCookieSettings } from "../substack/SubstackCookieSettings";
 
 export interface SettingsDialogProps {
   open: boolean;
@@ -46,7 +47,7 @@ export function SettingsDialog({
   currentTheme,
   onThemeChange,
 }: SettingsDialogProps) {
-  const [activeTab, setActiveTab] = React.useState<"general" | "account">("general");
+  const [activeTab, setActiveTab] = React.useState<"general" | "account" | "substack">("general");
   const [settings, setSettings] = React.useState<Settings | null>(null);
   const [storagePath, setStoragePath] = React.useState("");
   const [hostStatus, setHostStatus] = React.useState<NativeHostStatus | null>(null);
@@ -186,7 +187,7 @@ export function SettingsDialog({
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Configure storage, appearance, browser extension, and your Sourcefold account.
+            Configure storage, appearance, browser extension, your Sourcefold account and Substack.
           </DialogDescription>
         </DialogHeader>
 
@@ -216,6 +217,18 @@ export function SettingsDialog({
           >
             <User className="size-3.5" />
             <span>Account</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("substack")}
+            className={cn(
+              "pb-2 px-3 border-b-2 font-medium transition-colors cursor-pointer",
+              activeTab === "substack"
+                ? "border-primary text-foreground font-semibold"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Substack
           </button>
         </div>
 
@@ -343,6 +356,8 @@ export function SettingsDialog({
               </div>
             </div>
           </div>
+        ) : activeTab === "substack" ? (
+          <SubstackCookieSettings open={open} />
         ) : (
           <div className="flex flex-col gap-4 py-2">
             {session ? (

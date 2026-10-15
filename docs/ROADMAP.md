@@ -85,6 +85,8 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] Keyboard-first desktop UI with single shortcut registry, command palette (`Mod+K`), reader view (`Enter`), and shortcuts cheat sheet (`?`).
   - [x] Web API routes accept Bearer token via `requireApiUser` with admin client and explicit `user_id` filtering.
   - [x] Desktop group view matches the web's: header (breadcrumb, serif title, source count, New subgroup / Add image / New note), Select mode and Copy all links, subgroup rows, and source rows with a colored type bar, type icon, source name, saved date and status check. Add image works offline (`add_image`) and signed in (`POST /api/uploads/sign`, signed Storage upload, `POST /api/uploads`); signed-in images open via `GET /api/items/[id]/file?format=json`. [ ] Not yet tried against the live Supabase Storage.
+  - [x] Substack in the desktop app (method ported from sbstck-dl, MIT): paste post links or a whole publication (archive API, sitemap fallback, optional date range), paid posts with the user's `substack.sid` cookie stored on this computer only, rate limiting with Retry-After. Saves through `capture`, so signed-in saves sync to the web and Drive. The shared extractor now reads Substack's embedded post data first, which the extension also uses.
+  - [ ] Owner's hands-on test of Substack saving on desktop (free post, publication import, paid post with cookie).
   - [ ] Owner's hands-on test of desktop sign-in and sync.
   - [ ] Owner's hands-on test of the desktop group view (see HANDOFF).
   - [ ] Extension test against desktop signed-in and offline modes.

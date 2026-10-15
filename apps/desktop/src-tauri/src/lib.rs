@@ -6,5 +6,6 @@ pub mod native_installer;
 pub mod server;
 pub mod service;
 pub mod session;
+pub mod substack;
 
 pub use db::Database;

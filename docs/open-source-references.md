@@ -14,7 +14,7 @@ Projects to study or borrow from while building the source collector. Check each
 - [Substack2Markdown (nateProjects fork)](https://github.com/nateProjects/Substack2Markdown) - fork of the above.
 - [KitSubStack](https://github.com/kitmodule/kitsubstack-js) - JavaScript, MIT, no dependencies. Fetches posts and converts to Markdown with front matter.
 - [Substack Clipper](https://community.obsidian.md/plugins/substack-clipper) - Obsidian plugin, MIT. Saves public posts as Markdown.
-- [sbstck-dl](https://repos.ecosyste.ms/topics/substack) - Go CLI for archiving newsletters.
+- [sbstck-dl](https://github.com/alexferrari88/sbstck-dl) - Go CLI, MIT. **Used:** its method is ported to TypeScript in `packages/core/src/substack/` (post data from `window._preloads`, publication listing from the archive API and sitemap, cookie for paid posts, rate limiting).
 - [substackdownloader.com](https://substackdownloader.com) - free web tool, not confirmed open source. Paid posts work by pasting your browser session cookie. Outputs Markdown, DOCX, PDF. Our extension avoids the cookie step because it reads the page while you are logged in.
 
 ## X (Twitter)

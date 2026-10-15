@@ -118,6 +118,10 @@ fn main() {
             commands::set_offline_mode,
             commands::start_sign_in,
             commands::cancel_sign_in,
+            commands::substack_fetch,
+            commands::get_substack_cookie,
+            commands::set_substack_cookie,
+            commands::clear_substack_cookie,
         ])
         .run(tauri::generate_context!())
         .expect("error while running sourcefold desktop application");

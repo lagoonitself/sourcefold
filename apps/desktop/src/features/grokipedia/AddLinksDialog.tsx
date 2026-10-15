@@ -1,7 +1,6 @@
 import * as React from "react";
-import { Check, CircleAlert, Loader2 } from "lucide-react";
-import { detectSource, extractUrls } from "@sourcefold/core";
-import { toast } from "sonner";
+import { Check, CircleAlert, Loader2, Lock } from "lucide-react";
+import { classifySubstackLink, detectSource, extractUrls } from "@sourcefold/core";
 import { Button } from "@/components/ui/Button";
 import {
   Dialog,
@@ -13,9 +12,9 @@ import {
 } from "@/components/ui/Dialog";
 import type { Folder, FolderNode } from "@/lib/types";
 import { checkUrl, saveGrokipedia } from "@/lib/api";
+import { findPublicationPosts, saveSubstackPost } from "../substack/substack-client";
 import { buildFolderTree } from "../folders/tree-utils";
 import { isMacPlatform } from "../shortcuts/key-utils";
-import { cn } from "@/lib/utils";
 
 export interface AddLinksDialogProps {
   open: boolean;
@@ -25,15 +24,54 @@ export interface AddLinksDialogProps {
   onFinished: () => Promise<void>;
 }
 
-export type QueueItemStatus = "waiting" | "saving" | "saved" | "duplicate" | "failed";
+type LinkSource = "grokipedia" | "substack" | "publication";
+
+export type QueueItemStatus =
+  "waiting" | "finding" | "saving" | "saved" | "duplicate" | "paid" | "failed";
 
 export interface QueueItem {
   id: string;
   url: string;
-  source: string;
+  source: LinkSource;
   status: QueueItemStatus;
   title?: string;
-  error?: string;
+  message?: string;
+}
+
+interface ParsedLinks {
+  valid: { url: string; source: LinkSource }[];
+  xLinks: string[];
+  skipped: string[];
+}
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseLinks(text: string): ParsedLinks {
+  const parsed: ParsedLinks = { valid: [], xLinks: [], skipped: [] };
+  if (!text.trim()) return parsed;
+  const seen = new Set<string>();
+  for (const url of extractUrls(text)) {
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const source = detectSource(url);
+    const substack = classifySubstackLink(url);
+    if (source === "grokipedia") parsed.valid.push({ url, source: "grokipedia" });
+    else if (source === "x") parsed.xLinks.push(url);
+    else if (substack === "post") parsed.valid.push({ url, source: "substack" });
+    else if (substack === "publication") parsed.valid.push({ url, source: "publication" });
+    else parsed.skipped.push(url);
+  }
+  return parsed;
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+let nextId = 0;
+function newId(): string {
+  nextId += 1;
+  return `link-${Date.now()}-${nextId}`;
 }
 
 export function AddLinksDialog({
@@ -45,14 +83,17 @@ export function AddLinksDialog({
 }: AddLinksDialogProps) {
   const [selectedFolderId, setSelectedFolderId] = React.useState<string>("");
   const [text, setText] = React.useState("");
+  const [after, setAfter] = React.useState("");
+  const [before, setBefore] = React.useState("");
   const isMac = React.useMemo(() => isMacPlatform(), []);
 
   const [queue, setQueue] = React.useState<QueueItem[]>([]);
   const [isRunning, setIsRunning] = React.useState(false);
   const [isFinished, setIsFinished] = React.useState(false);
+  const queueRef = React.useRef<QueueItem[]>([]);
   const stopRequestedRef = React.useRef(false);
+  const abortRef = React.useRef<AbortController | null>(null);
 
-  // Build tree & flat group options grouped by project
   const projectTree = React.useMemo(() => {
     return buildFolderTree(folders.filter((f) => !f.deleted_at && !f.archived_at));
   }, [folders]);
@@ -86,83 +127,121 @@ export function AddLinksDialog({
     }
   }, [open, defaultFolderId, groupOptions]);
 
-  // Parse extracted links
-  const { validLinks, skippedLinks } = React.useMemo(() => {
-    if (!text.trim()) return { validLinks: [], skippedLinks: [] };
-    const urls = extractUrls(text);
-    const valid: { url: string; source: string }[] = [];
-    const skipped: string[] = [];
+  const links = React.useMemo(() => parseLinks(text), [text]);
+  const hasPublication = links.valid.some((l) => l.source === "publication");
+  const dateError =
+    (after && !DATE_PATTERN.test(after)) || (before && !DATE_PATTERN.test(before))
+      ? "Use dates like 2026-01-31."
+      : after && before && after >= before
+        ? "The start date must be before the end date."
+        : null;
 
-    for (const url of urls) {
-      const src = detectSource(url);
-      if (src === "grokipedia" || src === "substack" || src === "x") {
-        valid.push({ url, source: src });
-      } else {
-        skipped.push(url);
+  const setItems = (items: QueueItem[]) => {
+    queueRef.current = items;
+    setQueue(items);
+  };
+
+  const patchItem = (id: string, patch: Partial<QueueItem>) => {
+    setItems(queueRef.current.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  };
+
+  const saveOne = async (item: QueueItem, folderId: string) => {
+    if (item.source === "grokipedia") {
+      const check = await checkUrl(item.url, folderId);
+      if (check.exists) {
+        patchItem(item.id, {
+          status: "duplicate",
+          message: `Already saved in ${check.folder_name || "this group"}`,
+        });
+        return;
       }
+      const saved = await saveGrokipedia(item.url, folderId);
+      patchItem(item.id, { status: "saved", title: saved.title || item.url, message: undefined });
+      return;
     }
-    return { validLinks: valid, skippedLinks: skipped };
-  }, [text]);
 
-  const startQueue = async () => {
-    if (validLinks.length === 0 || !selectedFolderId || isRunning) return;
+    const outcome = await saveSubstackPost(item.url, folderId);
+    if (outcome.kind === "saved") {
+      patchItem(item.id, {
+        status: "saved",
+        title: outcome.title,
+        message: outcome.paid ? "Paid post" : undefined,
+      });
+    } else if (outcome.kind === "paid_locked") {
+      patchItem(item.id, { status: "paid", title: outcome.title, message: outcome.reason });
+    } else {
+      patchItem(item.id, {
+        status: "duplicate",
+        title: outcome.title ?? item.title,
+        message: outcome.message,
+      });
+    }
+  };
 
-    const initialQueue: QueueItem[] = validLinks.map((item, index) => ({
-      id: `item-${Date.now()}-${index}`,
-      url: item.url,
-      source: item.source,
-      status: "waiting",
-    }));
+  // Replaces a publication row with one row per post, in place.
+  const expandPublication = async (item: QueueItem) => {
+    patchItem(item.id, { status: "finding", message: "Finding posts…" });
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const posts = await findPublicationPosts(item.url, {
+        after: after || null,
+        before: before || null,
+        signal: controller.signal,
+        onProgress: (found) => patchItem(item.id, { message: `Finding posts… ${found} so far` }),
+      });
+      if (posts.length === 0) {
+        patchItem(item.id, {
+          status: "failed",
+          message: after || before ? "No posts in that date range." : "No posts found.",
+        });
+        return;
+      }
+      const rows: QueueItem[] = posts.map((p) => ({
+        id: newId(),
+        url: p.url,
+        source: "substack",
+        status: "waiting",
+        title: p.title ?? undefined,
+        message: p.access === "paid" ? "Paid post" : undefined,
+      }));
+      const index = queueRef.current.findIndex((q) => q.id === item.id);
+      const next = [...queueRef.current];
+      next.splice(index, 1, ...rows);
+      setItems(next);
+    } catch (err) {
+      if (controller.signal.aborted) {
+        patchItem(item.id, { status: "waiting", message: undefined });
+      } else {
+        patchItem(item.id, {
+          status: "failed",
+          message: errorMessage(err, "Couldn't list posts."),
+        });
+      }
+    } finally {
+      abortRef.current = null;
+    }
+  };
 
-    setQueue(initialQueue);
+  const runQueue = async (folderId: string) => {
     setIsRunning(true);
     setIsFinished(false);
     stopRequestedRef.current = false;
 
-    for (let i = 0; i < initialQueue.length; i++) {
-      if (stopRequestedRef.current) break;
+    while (!stopRequestedRef.current) {
+      const item = queueRef.current.find((q) => q.status === "waiting");
+      if (!item) break;
 
-      // Update current item to saving
-      setQueue((prev) => prev.map((q, idx) => (idx === i ? { ...q, status: "saving" } : q)));
+      if (item.source === "publication") {
+        await expandPublication(item);
+        continue;
+      }
 
-      const target = initialQueue[i];
+      patchItem(item.id, { status: "saving" });
       try {
-        // Check if already saved in this folder
-        const check = await checkUrl(target.url, selectedFolderId);
-        if (check.exists) {
-          setQueue((prev) =>
-            prev.map((q, idx) =>
-              idx === i
-                ? {
-                    ...q,
-                    status: "duplicate",
-                    error: `Already saved in ${check.folder_name || "this group"}`,
-                  }
-                : q,
-            ),
-          );
-          continue;
-        }
-
-        if (target.source === "grokipedia") {
-          const saved = await saveGrokipedia(target.url, selectedFolderId);
-          setQueue((prev) =>
-            prev.map((q, idx) =>
-              idx === i ? { ...q, status: "saved", title: saved.title || target.url } : q,
-            ),
-          );
-        } else {
-          // For Substack / X fallback simulation or capture
-          setQueue((prev) =>
-            prev.map((q, idx) => (idx === i ? { ...q, status: "saved", title: target.url } : q)),
-          );
-        }
-      } catch (err: any) {
-        setQueue((prev) =>
-          prev.map((q, idx) =>
-            idx === i ? { ...q, status: "failed", error: err.message || "Failed to save" } : q,
-          ),
-        );
+        await saveOne(item, folderId);
+      } catch (err) {
+        patchItem(item.id, { status: "failed", message: errorMessage(err, "Failed to save") });
       }
     }
 
@@ -171,46 +250,40 @@ export function AddLinksDialog({
     await onFinished();
   };
 
-  const handleRetryItem = async (itemId: string) => {
-    const item = queue.find((q) => q.id === itemId);
-    if (!item) return;
-
-    setQueue((prev) =>
-      prev.map((q) => (q.id === itemId ? { ...q, status: "saving", error: undefined } : q)),
+  const startQueue = async () => {
+    if (links.valid.length === 0 || !selectedFolderId || isRunning || dateError) return;
+    setItems(
+      links.valid.map((link) => ({
+        id: newId(),
+        url: link.url,
+        source: link.source,
+        status: "waiting",
+      })),
     );
+    await runQueue(selectedFolderId);
+  };
 
-    try {
-      if (item.source === "grokipedia") {
-        const saved = await saveGrokipedia(item.url, selectedFolderId);
-        setQueue((prev) =>
-          prev.map((q) =>
-            q.id === itemId ? { ...q, status: "saved", title: saved.title || item.url } : q,
-          ),
-        );
-      } else {
-        setQueue((prev) => prev.map((q) => (q.id === itemId ? { ...q, status: "saved" } : q)));
-      }
-      await onFinished();
-    } catch (err: any) {
-      setQueue((prev) =>
-        prev.map((q) =>
-          q.id === itemId ? { ...q, status: "failed", error: err.message || "Retry failed" } : q,
-        ),
-      );
-    }
+  const handleRetryItem = async (itemId: string) => {
+    if (isRunning) return;
+    patchItem(itemId, { status: "waiting", message: undefined });
+    await runQueue(selectedFolderId);
+  };
+
+  const handleStop = () => {
+    stopRequestedRef.current = true;
+    abortRef.current?.abort();
   };
 
   const savedCount = queue.filter((q) => q.status === "saved").length;
+  const postCount = queue.filter((q) => q.source !== "publication").length;
 
   const handleClose = () => {
-    if (isRunning) {
-      stopRequestedRef.current = true;
-    }
+    if (isRunning) handleStop();
     onOpenChange(false);
   };
 
   const handleReset = () => {
-    setQueue([]);
+    setItems([]);
     setIsFinished(false);
     setText("");
   };
@@ -218,26 +291,27 @@ export function AddLinksDialog({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
-      if (!isRunning && !isFinished && validLinks.length > 0 && selectedFolderId) {
+      if (!isRunning && !isFinished && links.valid.length > 0 && selectedFolderId) {
         void startQueue();
       }
     }
   };
 
   const importHint = isMac ? "⌘Enter to add" : "Ctrl+Enter to add";
+  const ignoredCount = links.skipped.length + links.xLinks.length;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[560px]" onKeyDown={handleKeyDown}>
+      <DialogContent className="max-w-[600px]" onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>Add links</DialogTitle>
           <DialogDescription>
-            Bulk paste Grokipedia, Substack, or X links (one per line). ({importHint})
+            Paste Grokipedia or Substack links, one per line. A Substack publication link (like
+            name.substack.com) saves every post in it.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-2">
-          {/* Target Group Selector */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-foreground">Save to group</label>
             <select
@@ -261,91 +335,140 @@ export function AddLinksDialog({
           </div>
 
           {!isRunning && !isFinished ? (
-            /* Input View */
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-foreground">Links</label>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="https://grokipedia.org/page/...&#10;https://x.com/...&#10;https://...substack.com/p/..."
+                placeholder={
+                  "https://grokipedia.com/page/...\nhttps://name.substack.com/p/...\nhttps://name.substack.com"
+                }
                 rows={8}
                 autoFocus
                 className="w-full resize-y rounded-[6px] border border-input bg-transparent p-2.5 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
               />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                  {validLinks.length === 1
+                  {links.valid.length === 1
                     ? "1 link detected"
-                    : `${validLinks.length} links detected`}
+                    : `${links.valid.length} links detected`}
                 </span>
-                {skippedLinks.length > 0 && (
+                {ignoredCount > 0 && (
                   <span>
-                    ({skippedLinks.length} unsupported{" "}
-                    {skippedLinks.length === 1 ? "link" : "links"} will be skipped)
+                    {ignoredCount} {ignoredCount === 1 ? "link" : "links"} will be skipped
                   </span>
                 )}
               </div>
+              {links.xLinks.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  X posts are saved from the Chrome extension: open the post and click Save.
+                </p>
+              )}
+
+              {hasPublication && (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-foreground">
+                    Publication posts (optional date range)
+                  </label>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>Published after</span>
+                    <input
+                      type="date"
+                      value={after}
+                      onChange={(e) => setAfter(e.target.value)}
+                      className="h-8 rounded-[6px] border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    <span>and before</span>
+                    <input
+                      type="date"
+                      value={before}
+                      onChange={(e) => setBefore(e.target.value)}
+                      className="h-8 rounded-[6px] border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                  {dateError ? (
+                    <p className="text-xs text-destructive">{dateError}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Leave empty to save every post. Paid posts need your Substack cookie in
+                      Settings.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
-            /* Queue Progress View */
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span className="font-medium">
-                  {savedCount} of {queue.length} saved
+                  {savedCount} of {postCount} saved
                 </span>
                 {isRunning && (
                   <span className="flex items-center gap-1.5 text-primary">
                     <Loader2 className="size-3.5 animate-spin" />
-                    <span>Processing queue...</span>
+                    <span>Saving…</span>
                   </span>
                 )}
               </div>
 
-              <div className="max-h-64 overflow-y-auto divide-y divide-border rounded-[6px] border border-border">
+              <div className="max-h-72 overflow-y-auto divide-y divide-border rounded-[6px] border border-border">
                 {queue.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-3 px-3 py-2 text-xs"
-                  >
-                    <span className="truncate flex-1 font-sans text-foreground" title={item.url}>
-                      {item.title || item.url}
-                    </span>
-
-                    <div className="shrink-0 flex items-center">
-                      {item.status === "waiting" && (
-                        <span className="text-muted-foreground">Waiting</span>
-                      )}
-                      {item.status === "saving" && (
-                        <span className="flex items-center gap-1 text-primary">
-                          <Loader2 className="size-3.5 animate-spin" />
-                          <span>Saving</span>
-                        </span>
-                      )}
-                      {item.status === "saved" && (
-                        <span className="flex items-center gap-1 text-primary font-medium">
-                          <Check className="size-3.5" />
-                          <span>Saved</span>
-                        </span>
-                      )}
-                      {item.status === "duplicate" && (
-                        <span className="text-muted-foreground" title={item.error}>
-                          Duplicate
-                        </span>
-                      )}
-                      {item.status === "failed" && (
-                        <div className="flex items-center gap-1.5 text-destructive">
-                          <CircleAlert className="size-3.5" />
-                          <span title={item.error}>Failed</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRetryItem(item.id)}
-                            className="ml-1 text-xs text-primary hover:underline cursor-pointer"
-                          >
-                            Retry
-                          </button>
-                        </div>
-                      )}
+                  <div key={item.id} className="flex flex-col gap-0.5 px-3 py-2 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate flex-1 font-sans text-foreground" title={item.url}>
+                        {item.title || item.url}
+                      </span>
+                      <div className="shrink-0 flex items-center">
+                        {item.status === "waiting" && (
+                          <span className="text-muted-foreground">Waiting</span>
+                        )}
+                        {(item.status === "saving" || item.status === "finding") && (
+                          <span className="flex items-center gap-1 text-primary">
+                            <Loader2 className="size-3.5 animate-spin" />
+                            <span>{item.status === "finding" ? "Finding posts" : "Saving"}</span>
+                          </span>
+                        )}
+                        {item.status === "saved" && (
+                          <span className="flex items-center gap-1 text-primary font-medium">
+                            <Check className="size-3.5" />
+                            <span>Saved</span>
+                          </span>
+                        )}
+                        {item.status === "duplicate" && (
+                          <span className="text-muted-foreground">Already saved</span>
+                        )}
+                        {item.status === "paid" && (
+                          <span className="flex items-center gap-1 text-muted-foreground">
+                            <Lock className="size-3.5" />
+                            <span>Paid, not saved</span>
+                          </span>
+                        )}
+                        {item.status === "failed" && (
+                          <div className="flex items-center gap-1.5 text-destructive">
+                            <CircleAlert className="size-3.5" />
+                            <span>Failed</span>
+                            {!isRunning && (
+                              <button
+                                type="button"
+                                onClick={() => handleRetryItem(item.id)}
+                                className="ml-1 text-xs text-primary hover:underline cursor-pointer"
+                              >
+                                Retry
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
+                    {item.message && item.status !== "waiting" && item.status !== "saving" && (
+                      <span
+                        className={
+                          item.status === "failed" ? "text-destructive" : "text-muted-foreground"
+                        }
+                      >
+                        {item.message}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -365,18 +488,13 @@ export function AddLinksDialog({
                 </Button>
                 <Button
                   onClick={startQueue}
-                  disabled={validLinks.length === 0 || !selectedFolderId}
+                  disabled={links.valid.length === 0 || !selectedFolderId || Boolean(dateError)}
                 >
-                  {validLinks.length <= 1 ? "Add link" : `Add ${validLinks.length} links`}
+                  {links.valid.length <= 1 ? "Add link" : `Add ${links.valid.length} links`}
                 </Button>
               </>
             ) : isRunning ? (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  stopRequestedRef.current = true;
-                }}
-              >
+              <Button variant="outline" onClick={handleStop}>
                 Stop
               </Button>
             ) : (

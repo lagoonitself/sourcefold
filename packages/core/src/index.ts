@@ -18,3 +18,24 @@ export type {
   XTreeNode,
 } from "./capture-types";
 export { renderXThreadMarkdown, xThreadTitle } from "./x/markdown";
+export {
+  SubstackDiscoveryError,
+  discoverSubstackPosts,
+  substackPublicationRoot,
+  type DiscoverOptions,
+  type DiscoveredPost,
+  type SubstackFetch,
+  type SubstackFetchResponse,
+} from "./substack/discover";
+export {
+  SubstackRateLimitError,
+  createRateLimitedFetch,
+  type RateLimitOptions,
+} from "./substack/fetcher";
+export {
+  classifySubstackLink,
+  isSubstackHost,
+  normalizeSubstackPostUrl,
+  type SubstackLinkKind,
+} from "./substack/links";
+export { parseSubstackPreloads, type SubstackPreloads } from "./substack/preloads";

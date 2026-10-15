@@ -1,6 +1,8 @@
 import { Readability } from "@mozilla/readability";
 import type { SubstackCapture, SubstackExtractResult } from "../capture-types";
 import { htmlToMarkdown } from "../html-to-markdown";
+import { substackPostFromPreloads } from "./post";
+import { findSubstackPreloads } from "./preloads";
 
 interface JsonLdArticle {
   headline?: string;
@@ -235,6 +237,13 @@ function stripTitleHeading(markdown: string, title: string): string {
 }
 
 export function extractSubstack(doc: Document, pageUrl: string): SubstackExtractResult {
+  // The post data Substack embeds in the page is the most reliable source; the DOM is the fallback.
+  const preloads = findSubstackPreloads(doc);
+  if (preloads) {
+    const fromPreloads = substackPostFromPreloads(preloads, pageUrl, doc);
+    if (fromPreloads) return fromPreloads;
+  }
+
   const jsonLd = findJsonLdArticle(doc);
 
   const hasPostBody = Boolean(

@@ -12,6 +12,7 @@ Sourcefold/
       Why Decentralized AI Matters.md
       Thread by Jack Dorsey (@jack).md
       Turbo diagram.png
+      Why Decentralized AI Matters_files/  images of that post (see "Post images")
     Engines/Diesel/                       groups nest to any depth
   Unsorted/                               desktop only: items with no group
 ```
@@ -81,13 +82,22 @@ Substack only: if there is a subtitle, it goes on its own line between the title
 ### Body
 
 - Clean CommonMark plus GFM tables and footnotes. No raw HTML, scripts, buttons, share widgets, subscribe boxes or "like/comment" chrome.
-- Substack images stay where they were in the post, as a Markdown image linking to the original upload (`substack-post-media.s3.amazonaws.com`, not a resized CDN copy), with the caption in italics as its own paragraph below: `![<alt>](<url>)` then `*<caption>*`. Galleries list each image, then the caption. The image files themselves aren't copied; they stay on Substack's servers.
+- Substack images stay where they were in the post, as a Markdown image linking to the original upload (`substack-post-media.s3.amazonaws.com`, not a resized CDN copy), with the caption in italics as its own paragraph below: `![<alt>](<url>)` then `*<caption>*`. Galleries list each image, then the caption. The image files are also saved next to the post; see "Post images".
 - Headings inside the body start at `##`. The body never repeats the `# Title`.
 - One blank line between blocks; never two or more in a row.
 - Grokipedia citations are GFM footnotes `[^n]`. A run of markers lists each number once, in first-seen order: `[^76][^77][^76]` becomes `[^76][^77]`.
 - Grokipedia references go under `## References`, one per line:
   `[^n]: [<title>](<url>) - <domain>`. If the title is empty or is just the URL, write `[^n]: <<url>> - <domain>`.
 - X threads: one block per post, nested blockquotes for replies, each post starting with `**<name>** (@<handle>) · <date> · [link](<post url>)`. This is the existing `renderXThreadMarkdown` output in `packages/core/src/x/markdown.ts`.
+
+## Post images
+
+A post with images (any `![…](https://…)` in its Markdown) gets a folder next to its file named `<file name without .md>_files`, like a browser's "Save page as". It holds one copy of each image:
+
+- File name: the image's own name on the web (for Substack's CDN, the original inside the `/image/fetch/…/` address), made safe with the "Names" rules, with its extension (`jpg` when it has none we know). Clashes get ` (2)`, ` (3)`; an image with no usable name is `image-<n>`. Same code in both apps: `postImageFileNames` in `packages/core/src/post-images.ts` and `image_file_names` in `apps/desktop/src-tauri/src/local_copy.rs`, tested on the same cases.
+- In Drive the Markdown keeps the web links (Drive doesn't show Markdown images anyway); the folder is the saved copy. On this computer (the desktop's local copy) each saved image's link points at its copy, `![](Title_files/name.png)`, so it shows without a connection in Obsidian, VS Code and other Markdown readers. An image that couldn't be downloaded keeps its web link.
+- The folder follows its post when it's renamed or moved, and goes when the post is deleted or has no images left. Only image files are ever removed from it, and a group that happens to be called `<title>_files` is never treated as one.
+- Offline mode doesn't save images yet; its files keep the web links.
 
 ## Shared tests
 

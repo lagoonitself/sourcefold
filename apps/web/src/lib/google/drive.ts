@@ -169,12 +169,13 @@ export async function getFile(
   id: string,
 ): Promise<{
   id: string;
+  name?: string;
   parents: string[];
   trashed: boolean;
   explicitlyTrashed?: boolean;
 } | null> {
   const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`);
-  url.searchParams.set("fields", "id,parents,trashed,explicitlyTrashed");
+  url.searchParams.set("fields", "id,name,parents,trashed,explicitlyTrashed");
 
   const res = await driveFetch(url.toString(), {
     method: "GET",
@@ -196,16 +197,63 @@ export async function getFile(
 
   const data = res.data as {
     id: string;
+    name?: string;
     parents?: string[];
     trashed?: boolean;
     explicitlyTrashed?: boolean;
   };
   return {
     id: data.id,
+    name: data.name,
     parents: data.parents ?? [],
     trashed: Boolean(data.trashed || data.explicitlyTrashed),
     explicitlyTrashed: Boolean(data.explicitlyTrashed),
   };
+}
+
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+
+function queryString(value: string): string {
+  return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+}
+
+/** Files (not trashed) directly inside a folder, optionally only those with one exact name. */
+export async function listChildren(
+  token: string,
+  parentId: string,
+  options: { name?: string; foldersOnly?: boolean } = {},
+): Promise<{ id: string; name: string; mimeType: string }[]> {
+  const terms = [`${queryString(parentId)} in parents`, "trashed = false"];
+  if (options.name !== undefined) terms.push(`name = ${queryString(options.name)}`);
+  if (options.foldersOnly) terms.push(`mimeType = '${FOLDER_MIME}'`);
+
+  const files: { id: string; name: string; mimeType: string }[] = [];
+  let pageToken: string | undefined;
+  do {
+    const url = new URL("https://www.googleapis.com/drive/v3/files");
+    url.searchParams.set("q", terms.join(" and "));
+    url.searchParams.set("fields", "nextPageToken,files(id,name,mimeType)");
+    url.searchParams.set("pageSize", "1000");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const res = await driveFetch(url.toString(), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      throw new DriveApiError(
+        res.status,
+        extractErrorMessage(res.data, `Google Drive error (${res.status})`),
+      );
+    }
+    const data = res.data as {
+      nextPageToken?: string;
+      files?: { id: string; name: string; mimeType: string }[];
+    };
+    files.push(...(data.files ?? []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return files;
 }
 
 // Returns null when the file no longer exists. Works for trashed files too.

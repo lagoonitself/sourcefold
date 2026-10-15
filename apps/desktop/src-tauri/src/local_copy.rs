@@ -104,10 +104,13 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     })
 }
 
-fn remove_tracked(root: &Path, rel: &str) {
+fn remove_tracked(root: &Path, rel: &str, keep: &HashSet<PathBuf>) {
     if let Some(path) = local_path(root, rel) {
         if path.is_file() && is_safe_to_delete(&path, root) {
             let _ = fs::remove_file(&path);
+        }
+        if let Some(dir) = images_dir(&path) {
+            clean_images_dir(&dir, root, &HashSet::new(), keep);
         }
         if let Some(parent) = path.parent() {
             remove_empty_parent_dirs(parent, root);
@@ -266,9 +269,11 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
     // Files of items that are gone (deleted, or no longer saved) go first, so a new file can take
     // their name.
     let remote_ids: HashSet<&str> = remote.iter().map(|f| f.id.as_str()).collect();
+    // Files that belong to the library; image clean-up never deletes these.
+    let keep: HashSet<PathBuf> = remote.iter().filter_map(|f| local_path(root, &f.path)).collect();
     for (id, (path, _)) in &tracked {
         if !remote_ids.contains(id.as_str()) {
-            remove_tracked(root, path);
+            remove_tracked(root, path, &keep);
             let _ = db.remove_local_copy_file(id);
             report.removed += 1;
         }
@@ -328,11 +333,19 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
             let same_file = from
                 .as_deref()
                 .is_some_and(|f| f.eq_ignore_ascii_case(&file.path));
-            if same_file {
-                if let Some(old) = from.as_deref().and_then(|f| local_path(root, f)) {
-                    let _ = fs::rename(&old, &target);
+            let old_path = from.as_deref().and_then(|f| local_path(root, f));
+            if let Some(old) = &old_path {
+                if same_file {
+                    let _ = fs::rename(old, &target);
                 }
+                move_images_dir(old, &target);
             }
+            let bytes = if file.kind == "image" {
+                bytes
+            } else {
+                let text = String::from_utf8_lossy(&bytes).into_owned();
+                localize_images(&client, root, &target, &text, &keep).await.into_bytes()
+            };
             if let Err(e) = write_atomic(&target, &bytes) {
                 report.failed.push(LocalCopyFailure {
                     path: file.path.clone(),
@@ -341,13 +354,246 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
                 continue;
             }
             if let (Some(old), false) = (from.as_deref(), same_file) {
-                remove_tracked(root, old);
+                remove_tracked(root, old, &keep);
             }
             let _ = db.set_local_copy_file(&file.id, &file.path, &file.version);
             report.written += 1;
         }
     }
     Ok(())
+}
+
+// -----------------------------------------------------------------------------
+// Post images: a copy of each image in `<file name>_files/` next to the post, with the post's
+// links pointed at those copies so they show without a connection (docs/FILE-FORMAT.md).
+// -----------------------------------------------------------------------------
+
+const MAX_IMAGE_BYTES: usize = 25 * 1024 * 1024;
+const IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "webp", "avif", "svg"];
+
+fn image_link_regex() -> &'static regex::Regex {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    RE.get_or_init(|| regex::Regex::new(r"!\[(?:[^\]\\]|\\.)*\]\((https?://[^\s)]+)\)").unwrap())
+}
+
+/// The web image links in a Markdown body, each once, in order.
+pub fn image_urls(markdown: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    image_link_regex()
+        .captures_iter(markdown)
+        .map(|c| c[1].to_string())
+        .filter(|u| seen.insert(u.clone()))
+        .collect()
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn last_segment(path: &str) -> String {
+    path.split('/')
+        .filter(|s| !s.is_empty())
+        .last()
+        .map(percent_decode)
+        .unwrap_or_default()
+}
+
+// Substack's CDN wraps the original: /image/fetch/<options>/https%3A%2F%2F…/name.jpeg
+fn original_name(url: &str) -> String {
+    let Ok(parsed) = reqwest::Url::parse(url) else { return String::new() };
+    let segment = last_segment(parsed.path());
+    if segment.starts_with("https://") || segment.starts_with("http://") {
+        if let Ok(inner) = reqwest::Url::parse(&segment) {
+            return last_segment(inner.path());
+        }
+    }
+    segment
+}
+
+/// File names for a post's images, the same as `postImageFileNames` in packages/core.
+pub fn image_file_names(urls: &[String]) -> Vec<String> {
+    let mut used: HashSet<String> = HashSet::new();
+    urls.iter()
+        .enumerate()
+        .map(|(index, url)| {
+            let name = original_name(url);
+            let (stem, ext) = match name.rfind('.') {
+                Some(dot) if dot > 0 => (&name[..dot], name[dot + 1..].to_ascii_lowercase()),
+                _ => (name.as_str(), String::new()),
+            };
+            let known = IMAGE_EXTENSIONS.contains(&ext.as_str());
+            let mut base = crate::service::safe_name(if known { stem } else { &name });
+            if name.is_empty() || base == "Untitled" {
+                base = format!("image-{}", index + 1);
+            }
+            let extension = if known { ext } else { "jpg".to_string() };
+            let mut candidate = format!("{}.{}", base, extension);
+            let mut n = 2;
+            while used.contains(&candidate.to_lowercase()) {
+                candidate = format!("{} ({}).{}", base, n, extension);
+                n += 1;
+            }
+            used.insert(candidate.to_lowercase());
+            candidate
+        })
+        .collect()
+}
+
+/// `Cars/G/Title.md` → `Cars/G/Title_files`. None for files that aren't posts.
+fn images_dir(md_path: &Path) -> Option<PathBuf> {
+    let is_md = md_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("md"));
+    let stem = md_path.file_stem()?.to_str()?;
+    is_md.then(|| md_path.with_file_name(format!("{}_files", stem)))
+}
+
+fn link_part(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '%' => out.push_str("%25"),
+            ' ' => out.push_str("%20"),
+            '(' => out.push_str("%28"),
+            ')' => out.push_str("%29"),
+            '#' => out.push_str("%23"),
+            '?' => out.push_str("%3F"),
+            '<' => out.push_str("%3C"),
+            '>' => out.push_str("%3E"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+fn is_image_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| IMAGE_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// Removes image files the post no longer uses, then the folder if it's empty. Never touches
+/// folders, other kinds of files, or files that are themselves part of the library (`keep`), in
+/// case a group happens to be called `<title>_files`.
+fn clean_images_dir(dir: &Path, root: &Path, wanted: &HashSet<String>, keep: &HashSet<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_lowercase();
+        if path.is_file()
+            && is_image_file(&path)
+            && !wanted.contains(&name)
+            && !keep.contains(&path)
+            && is_safe_to_delete(&path, root)
+        {
+            let _ = fs::remove_file(&path);
+        }
+    }
+    let empty = fs::read_dir(dir).map(|mut e| e.next().is_none()).unwrap_or(false);
+    if empty && is_safe_to_delete(dir, root) {
+        let _ = fs::remove_dir(dir);
+    }
+}
+
+// Only public web addresses: never a bare IP or a local name.
+fn is_fetchable(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else { return false };
+    let host = parsed.host_str().unwrap_or("");
+    parsed.scheme() == "https"
+        && host.contains('.')
+        && !host.starts_with('[')
+        && host.parse::<std::net::IpAddr>().is_err()
+        && !host.ends_with(".local")
+        && !host.ends_with(".internal")
+}
+
+async fn download_image(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
+    if !is_fetchable(url) {
+        return None;
+    }
+    let res = client.get(url).send().await.ok()?;
+    if !res.status().is_success() {
+        return None;
+    }
+    let kind = res
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !kind.is_empty() && !kind.starts_with("image/") && !kind.starts_with("application/octet-stream") {
+        return None;
+    }
+    if res.content_length().unwrap_or(0) as usize > MAX_IMAGE_BYTES {
+        return None;
+    }
+    let bytes = res.bytes().await.ok()?;
+    (!bytes.is_empty() && bytes.len() <= MAX_IMAGE_BYTES).then(|| bytes.to_vec())
+}
+
+/// Saves the post's images next to it (reusing ones already there) and returns the Markdown with
+/// each saved image's link pointing at its copy. Images that can't be downloaded keep their web
+/// link.
+async fn localize_images(
+    client: &reqwest::Client,
+    root: &Path,
+    md_path: &Path,
+    markdown: &str,
+    keep: &HashSet<PathBuf>,
+) -> String {
+    let Some(dir) = images_dir(md_path) else { return markdown.to_string() };
+    let dir_name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let urls = image_urls(markdown);
+    let names = image_file_names(&urls);
+
+    let mut out = markdown.to_string();
+    for (url, name) in urls.iter().zip(&names) {
+        let dest = dir.join(name);
+        let saved = dest.is_file()
+            || match download_image(client, url).await {
+                Some(bytes) => write_atomic(&dest, &bytes).is_ok(),
+                None => false,
+            };
+        if saved {
+            out = out.replace(
+                &format!("]({})", url),
+                &format!("]({}/{})", link_part(&dir_name), link_part(name)),
+            );
+        }
+    }
+    let wanted: HashSet<String> = names.iter().map(|n| n.to_lowercase()).collect();
+    clean_images_dir(&dir, root, &wanted, keep);
+    out
+}
+
+/// Moves a post's image folder along with the post (rename or move).
+fn move_images_dir(old_md: &Path, new_md: &Path) {
+    let (Some(old_dir), Some(new_dir)) = (images_dir(old_md), images_dir(new_md)) else { return };
+    let case_only = old_dir.to_string_lossy().eq_ignore_ascii_case(&new_dir.to_string_lossy());
+    if old_dir.is_dir() && (case_only || !new_dir.exists()) {
+        if let Some(parent) = new_dir.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = fs::rename(&old_dir, &new_dir);
+    }
 }
 
 #[cfg(test)]
@@ -434,7 +680,7 @@ mod tests {
         fs::create_dir_all(root.join("Cars/G")).unwrap();
         fs::write(root.join("Cars/G/A.md"), "x").unwrap();
         fs::write(root.join("Cars/keep.txt"), "mine").unwrap();
-        remove_tracked(&root, "Cars/G/A.md");
+        remove_tracked(&root, "Cars/G/A.md", &HashSet::new());
         assert!(!root.join("Cars/G").exists());
         assert!(root.join("Cars/keep.txt").exists());
         let _ = fs::remove_dir_all(&root);
@@ -448,6 +694,97 @@ mod tests {
         write_atomic(&path, b"two").unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), "two");
         assert_eq!(fs::read_dir(root.join("Cars/G")).unwrap().count(), 1);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn image_urls_finds_web_images_once_in_order() {
+        let md = "![Chart \\[GDP\\]](https://cdn.example/a.png)\n\n[page](https://example.com/p)\n\n![](https://cdn.example/b.jpeg)\n\n![x](https://cdn.example/a.png)\n\n![l](Title_files/c.png)";
+        assert_eq!(image_urls(md), vec!["https://cdn.example/a.png", "https://cdn.example/b.jpeg"]);
+    }
+
+    // Same cases as packages/core/src/post-images.test.ts: both apps name images alike.
+    #[test]
+    fn image_file_names_match_the_web_app() {
+        let urls: Vec<String> = [
+            "https://substack-post-media.s3.amazonaws.com/public/images/9a0a_1630x1630.jpeg",
+            "https://substackcdn.com/image/fetch/w_1456,c_limit/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd46a_1320x450.png",
+            "https://a.example/x/chart.PNG",
+            "https://b.example/y/chart.png",
+            "https://c.example/",
+            "https://d.example/photo?id=1",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        assert_eq!(
+            image_file_names(&urls),
+            vec!["9a0a_1630x1630.jpeg", "d46a_1320x450.png", "chart.png", "chart (2).png", "image-5.jpg", "photo.jpg"]
+        );
+    }
+
+    #[test]
+    fn images_dir_sits_next_to_posts_only() {
+        assert_eq!(
+            images_dir(Path::new("/r/Cars/G/Why AI.md")),
+            Some(PathBuf::from("/r/Cars/G/Why AI_files"))
+        );
+        assert_eq!(images_dir(Path::new("/r/Cars/G/photo.png")), None);
+        assert_eq!(link_part("Why AI (2)_files"), "Why%20AI%20%282%29_files");
+    }
+
+    #[test]
+    fn is_fetchable_refuses_private_addresses() {
+        assert!(is_fetchable("https://substack-post-media.s3.amazonaws.com/a.png"));
+        assert!(!is_fetchable("http://cdn.example/a.png"));
+        assert!(!is_fetchable("https://169.254.169.254/latest"));
+        assert!(!is_fetchable("https://[::1]/a.png"));
+        assert!(!is_fetchable("https://localhost/a.png"));
+        assert!(!is_fetchable("https://printer.local/a.png"));
+    }
+
+    #[tokio::test]
+    async fn localize_images_points_links_at_saved_copies_and_cleans_up() {
+        let root = temp_root();
+        let md_path = root.join("Cars/G/Post.md");
+        let dir = root.join("Cars/G/Post_files");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("a.png"), "png").unwrap(); // already saved: no download needed
+        fs::write(dir.join("old.png"), "png").unwrap(); // no longer used: removed
+        fs::write(dir.join("notes.txt"), "mine").unwrap(); // not an image: kept
+        let kept_library_file = dir.join("lib.png");
+        fs::write(&kept_library_file, "png").unwrap(); // part of the library: kept
+
+        let md = "Intro\n\n![A](https://cdn.example/a.png)\n\n*Cap*\n\n![](http://insecure.example/b.png)\n";
+        let client = reqwest::Client::new();
+        let keep: HashSet<PathBuf> = [kept_library_file.clone()].into_iter().collect();
+        let out = localize_images(&client, &root, &md_path, md, &keep).await;
+
+        assert_eq!(
+            out,
+            "Intro\n\n![A](Post_files/a.png)\n\n*Cap*\n\n![](http://insecure.example/b.png)\n"
+        );
+        assert!(dir.join("a.png").exists());
+        assert!(!dir.join("old.png").exists());
+        assert!(dir.join("notes.txt").exists());
+        assert!(kept_library_file.exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn images_follow_a_rename_and_go_with_a_delete() {
+        let root = temp_root();
+        fs::create_dir_all(root.join("Cars/G/Old_files")).unwrap();
+        fs::write(root.join("Cars/G/Old.md"), "x").unwrap();
+        fs::write(root.join("Cars/G/Old_files/a.png"), "png").unwrap();
+
+        move_images_dir(&root.join("Cars/G/Old.md"), &root.join("Cars/H/New.md"));
+        assert!(root.join("Cars/H/New_files/a.png").exists());
+        assert!(!root.join("Cars/G/Old_files").exists());
+
+        fs::write(root.join("Cars/H/New.md"), "x").unwrap();
+        remove_tracked(&root, "Cars/H/New.md", &HashSet::new());
+        assert!(!root.join("Cars/H").exists());
         let _ = fs::remove_dir_all(&root);
     }
 }

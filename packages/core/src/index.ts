@@ -11,6 +11,7 @@ export {
 } from "./url";
 export { buildFrontMatter, formatDate, type FrontMatterValue } from "./front-matter";
 export { bodyFromDriveFile, buildItemFile, type BuildItemInput, type ItemKind } from "./drive-file";
+export { markdownImageUrls, postImageFileNames, postImagesFolderName } from "./post-images";
 export type {
   CaptureRequest,
   SubstackCapture,

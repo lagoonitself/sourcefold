@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonData, jsonError, requireUser } from "@/lib/api";
+import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
 import { invalidFolderMessage, nextPosition } from "@/features/capture/find-duplicate";
 import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
@@ -20,9 +20,9 @@ const uploadSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const auth = await requireUser();
+  const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
-  const { supabase, user } = auth;
+  const { db, userId } = auth;
 
   let body: unknown;
   try {
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     title: titleInput,
   } = parsed.data;
 
-  const expectedPrefix = `${user.id}/${item_id}/`;
+  const expectedPrefix = `${userId}/${item_id}/`;
   if (!storage_path.startsWith(expectedPrefix) || storage_path.includes("..")) {
     return jsonError(400, "Invalid upload path.");
   }
@@ -56,9 +56,9 @@ export async function POST(request: Request) {
     return jsonError(400, "Invalid upload path.");
   }
 
-  const { data: files, error: listError } = await supabase.storage
+  const { data: files, error: listError } = await db.storage
     .from("images")
-    .list(`${user.id}/${item_id}`);
+    .list(`${userId}/${item_id}`);
 
   if (listError || !files || !files.some((f) => f.name === lastSegment)) {
     return jsonError(400, "Upload the image first.");
@@ -76,13 +76,13 @@ export async function POST(request: Request) {
     title = title.slice(0, 500);
   }
 
-  const position = await nextPosition(supabase, user.id, folder_id);
+  const position = await nextPosition(db, userId, folder_id);
 
-  const { data: item, error: insertError } = await supabase
+  const { data: item, error: insertError } = await db
     .from("items")
     .insert({
       id: item_id,
-      user_id: user.id,
+      user_id: userId,
       folder_id,
       kind: "image",
       title,
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError) {
-    await supabase.storage.from("images").remove([storage_path]);
+    await db.storage.from("images").remove([storage_path]);
     if (insertError.message.includes("invalid folder")) {
       return jsonError(400, invalidFolderMessage(insertError.message));
     }
@@ -118,6 +118,6 @@ export async function POST(request: Request) {
     return jsonError(500, "Something went wrong. Try again.");
   }
 
-  pushToDriveSoon(user.id);
+  pushToDriveSoon(userId);
   return jsonData(item, 201);
 }

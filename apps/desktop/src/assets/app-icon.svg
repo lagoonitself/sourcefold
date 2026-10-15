@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="sourcefold-bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#236B59" />
+      <stop offset="100%" stop-color="#1A5345" />
+    </linearGradient>
+  </defs>
+  <!-- macOS squircle background with ~10% safe margin -->
+  <rect x="100" y="100" width="824" height="824" rx="184" fill="url(#sourcefold-bg)" />
+  <!-- Sourcefold accordion S-fold glyph -->
+  <path
+    d="M 292 268 H 732 A 32 32 0 0 1 764 300 V 340 A 32 32 0 0 1 732 372 H 380 A 16 16 0 0 0 364 388 V 444 A 16 16 0 0 0 380 460 H 732 A 32 32 0 0 1 764 492 V 724 A 32 32 0 0 1 732 756 H 292 A 32 32 0 0 1 260 724 V 684 A 32 32 0 0 1 292 652 H 644 A 16 16 0 0 0 660 636 V 580 A 16 16 0 0 0 644 564 H 292 A 32 32 0 0 1 260 532 V 300 A 32 32 0 0 1 292 268 Z"
+    fill="#FFFFFF"
+  />
+</svg>

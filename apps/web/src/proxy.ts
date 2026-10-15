@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 import { getAllowedEmails } from "@/lib/env";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -60,16 +61,23 @@ export async function proxy(request: NextRequest) {
     !pathname.startsWith("/auth") &&
     !pathname.startsWith("/api")
   ) {
-    const redirectResponse = NextResponse.redirect(new URL("/login", request.url));
+    const loginUrl = new URL("/login", request.url);
+    const returnPath = request.nextUrl.pathname + request.nextUrl.search;
+    if (returnPath && returnPath !== "/") {
+      loginUrl.searchParams.set("next", returnPath);
+    }
+    const redirectResponse = NextResponse.redirect(loginUrl);
     response.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie);
     });
     return redirectResponse;
   }
 
-  // User present and path is /login -> redirect to /
+  // User present and path is /login -> redirect to next or /
   if (user && isAllowed && pathname === "/login") {
-    const redirectResponse = NextResponse.redirect(new URL("/", request.url));
+    const rawNext = request.nextUrl.searchParams.get("next");
+    const nextPath = safeRedirectPath(rawNext, "/");
+    const redirectResponse = NextResponse.redirect(new URL(nextPath, request.url));
     response.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie);
     });

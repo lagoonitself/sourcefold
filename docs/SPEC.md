@@ -10,7 +10,7 @@ Later (not in scope now): a public website per video where every claim links to 
 
 ### Non-goals (v1)
 
-- Reading sources inside the app. Clicking an item opens the original page.
+- Reading sources inside the web app. Clicking an item opens the original page. (The desktop app includes an integrated Markdown reader for saved sources that have markdown content, while still offering opening the source URL in the browser with `Shift+Enter` or `o`).
 - Search beyond titles. No full-text or embedding search.
 - Mobile apps or phone capture.
 - Images or video from X.
@@ -20,49 +20,56 @@ Later (not in scope now): a public website per video where every claim links to 
 
 ## 2. Decisions
 
-| Topic         | Decision                                                                                                                                                                                                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Name          | Sourcefold                                                                                                                                                                                                                                                               |
-| License       | MIT, public GitHub repo                                                                                                                                                                                                                                                  |
-| Cost          | $0. Free tiers only.                                                                                                                                                                                                                                                     |
-| Platform      | Hosted web app (desktop browser) + Chrome extension                                                                                                                                                                                                                      |
-| Hosting       | Vercel Hobby (free)                                                                                                                                                                                                                                                      |
-| Backend       | Supabase free plan: Postgres, Auth (Google), Storage                                                                                                                                                                                                                     |
-| Master copy   | Supabase holds links, titles, metadata, folders and notes. Article text and images live only in Drive: they wait in Supabase until their first copy reaches Drive (pushed automatically right after saving), then are cleared. See "Where content lives" in section 4.   |
-| Drive         | One-way mirror. One **Save to Drive** button (and Ctrl+S) saves everything changed. Drive never writes back.                                                                                                                                                             |
-| Organizing    | Projects, each with groups inside groups (unlimited depth). In the database both are `folders`: a project is a top-level folder, a group is any folder inside one.                                                                                                       |
-| One home      | Each item lives in exactly one group. Sources can't be saved directly in a project (enforced by the `check_item_folder` trigger).                                                                                                                                        |
-| Search        | Titles only                                                                                                                                                                                                                                                              |
-| Duplicates    | A link is saved once per group: warn "Already saved in <group>" for the same group. The same link can be saved in other groups of the same project and in other projects. Projects are isolated: search, duplicate checks and "Add to this thread" never cross projects. |
-| File format   | Markdown with a YAML front-matter header                                                                                                                                                                                                                                 |
-| Grokipedia    | Bulk paste box in the app. Saved once, never updated. Keep tables, inline links and the references list with links.                                                                                                                                                      |
-| Substack      | Captured by the extension. Free posts, plus paid posts you subscribe to (the extension reads the page while you are logged in). Paid posts you cannot access: show "paid post, not saved". Skip comments and images. Save author and publication info.                   |
-| X             | Captured by the extension. Text only. Keep post link, author name, handle, profile link and date. Threads and reposts stored as a tree. "Add to this thread" attaches more posts later.                                                                                  |
-| Notes         | A note box on every item, plus standalone notes (Markdown text) that live in folders like sources                                                                                                                                                                        |
-| Own sources   | Pasted text (as notes) and uploaded images                                                                                                                                                                                                                               |
-| Capture style | One click reads the page you are viewing                                                                                                                                                                                                                                 |
+| Topic         | Decision                                                                                                                                                                                                                                                                                                                                            |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name          | Sourcefold                                                                                                                                                                                                                                                                                                                                          |
+| License       | MIT, public GitHub repo                                                                                                                                                                                                                                                                                                                             |
+| Cost          | $0. Free tiers only (desktop app binaries are unsigned for personal use with no developer program fees).                                                                                                                                                                                                                                            |
+| Platform      | Hosted web app (desktop browser), desktop app (Windows and macOS), and Chrome extension                                                                                                                                                                                                                                                             |
+| Hosting       | Vercel Hobby (free)                                                                                                                                                                                                                                                                                                                                 |
+| Backend       | Supabase free plan: Postgres, Auth (Google), Storage                                                                                                                                                                                                                                                                                                |
+| Master copy   | In signed-in mode (web and desktop), Supabase holds links, titles, metadata, folders, and notes. Article text and images live only in Drive (pushed automatically right after saving, then cleared from Supabase; see "Where content lives" in section 4). In offline desktop mode, an embedded SQLite database and local disk files hold all data. |
+| Drive         | One-way mirror. One **Save to Drive** button (and Ctrl+S) saves everything changed. Drive never writes back. Available in the web app and signed-in desktop mode; not available in offline desktop mode.                                                                                                                                            |
+| Organizing    | Projects, each with groups inside groups (unlimited depth). In the database both are `folders`: a project is a top-level folder, a group is any folder inside one.                                                                                                                                                                                  |
+| One home      | Each item lives in exactly one group. Sources can't be saved directly in a project (enforced by the `check_item_folder` trigger).                                                                                                                                                                                                                   |
+| Search        | Titles only                                                                                                                                                                                                                                                                                                                                         |
+| Duplicates    | A link is saved once per group: warn "Already saved in <group>" for the same group. The same link can be saved in other groups of the same project and in other projects. Projects are isolated: search, duplicate checks and "Add to this thread" never cross projects.                                                                            |
+| File format   | Markdown with a YAML front-matter header                                                                                                                                                                                                                                                                                                            |
+| Grokipedia    | Bulk paste box in the app. Saved once, never updated. Keep tables, inline links and the references list with links.                                                                                                                                                                                                                                 |
+| Substack      | Captured by the extension. Free posts, plus paid posts you subscribe to (the extension reads the page while you are logged in). Paid posts you cannot access: show "paid post, not saved". Skip comments and images. Save author and publication info.                                                                                              |
+| X             | Captured by the extension. Text only. Keep post link, author name, handle, profile link and date. Threads and reposts stored as a tree. "Add to this thread" attaches more posts later.                                                                                                                                                             |
+| Notes         | A note box on every item, plus standalone notes (Markdown text) that live in folders like sources                                                                                                                                                                                                                                                   |
+| Own sources   | Pasted text (as notes) and uploaded images                                                                                                                                                                                                                                                                                                          |
+| Capture style | One click reads the page you are viewing                                                                                                                                                                                                                                                                                                            |
 
 ## 3. Architecture
 
-```
-Chrome extension (WXT, MV3)            Web app (Next.js on Vercel)
- - reads X / Substack pages      --->   - API routes (/api/*)
- - folder picker, save button    token  - UI: folder tree, item list, paste box
- - "add to this thread"                 - Grokipedia fetch + Markdown conversion
-                                        - Save to Drive
-                                              |
-                          +-------------------+------------------+
-                          v                                      v
-                 Supabase (free)                         Google Drive API
-                 - Postgres (master data)                (drive.file scope)
-                 - Auth (Google sign-in)                 Sourcefold/<folders>/<file>.md
-                 - Storage (uploaded images)
+```text
+                            Chrome extension (WXT, MV3)
+                            - reads X / Substack pages
+                            - folder picker, save button
+                            - Auto target: desktop app or web
+                                  /             \
+                native / loopback/               \ bearer token
+                                v                 v
+Desktop app (Tauri v2)   <--------------->  Web app (Next.js on Vercel)
+- UI: folders, items, reader                - API routes (/api/*)
+- SQLite db: sourcefold.db   session token  - Grokipedia fetch & conversion
+- Markdown files on disk                    - Save to Drive
+- Local HTTP (23456) & Native host                |
+                                    +-------------+-------------+
+                                    v                           v
+                           Supabase (free)               Google Drive API
+                           - Postgres (master data)      (drive.file scope)
+                           - Auth (Google sign-in)       Sourcefold/<folders>/<file>.md
+                           - Storage (uploaded images)
 ```
 
 ### Repo layout (npm workspaces)
 
-```
+```text
 apps/web/          Next.js app (UI + API routes)
+apps/desktop/      Desktop app (Tauri v2: React 19 + Rust + SQLite)
 apps/extension/    Chrome extension (WXT)
 packages/core/     Shared types, URL canonicalization, Markdown builders, front matter
 supabase/          SQL migrations
@@ -71,18 +78,19 @@ docs/              Spec and references
 
 ### Where fetching happens
 
-| Source     | Fetched by     | Why                                                                                                                                                              |
-| ---------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Grokipedia | Web app server | Pages are plain HTML (tested 2026-10-13 from a home connection). Enables bulk paste. Fallback if Vercel's servers get blocked: the extension fetches it instead. |
-| Substack   | Extension      | Uses your logged-in session for subscribed paid posts. No cookies leave your browser.                                                                            |
-| X          | Extension      | X blocks logged-out access and its API is paid. Reading the page you are viewing avoids both.                                                                    |
+| Source     | Fetched by                    | Why                                                                                                                                                              |
+| ---------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Grokipedia | Web app server or desktop app | Pages are plain HTML (tested 2026-10-13 from a home connection). Enables bulk paste. Fallback if Vercel's servers get blocked: the extension fetches it instead. |
+| Substack   | Extension                     | Uses your logged-in session for subscribed paid posts. No cookies leave your browser.                                                                            |
+| X          | Extension                     | X blocks logged-out access and its API is paid. Reading the page you are viewing avoids both.                                                                    |
 
 ### Authentication
 
 - **Web app:** Supabase Auth with Google. Sign-in is restricted to `ALLOWED_EMAIL` (env var). Row-level security on every table, keyed by `user_id`.
 - **Google Drive:** request scope `https://www.googleapis.com/auth/drive.file` (the app only sees files it created) with `access_type=offline` and `prompt=consent`. Supabase returns `provider_refresh_token` only at sign-in, so the app stores it in `google_tokens` (server-only access) and refreshes access tokens with Google directly.
 - **Google OAuth app:** set the consent screen to **In production**. In "Testing" mode Google expires refresh tokens after 7 days, which would silently break Save to Drive.
-- **Extension:** a personal access token created in the app's Settings page and pasted into the extension once. Stored hashed in `api_tokens`. Sent as `Authorization: Bearer <token>`.
+- **Desktop app:** connects to the web app with a personal access token created through a browser loopback sign-in flow (`/desktop/connect`). Stored locally in `session.json`. Web API routes authenticate token requests via `requireApiUser`.
+- **Extension:** a personal access token created in the app's Settings page, or obtained automatically from the desktop app via native messaging or local HTTP. Stored hashed in `api_tokens`. Sent as `Authorization: Bearer <token>`.
 
 ### Keep-alive
 
@@ -178,22 +186,19 @@ folder: AI Research/Risks
 ```markdown
 ---
 source: substack
-title: <post title>
-subtitle: <post subtitle>
-url: <canonical post url>
-author: <name>
-author_url: <profile url>
-publication: <publication name>
-publication_url: <publication home>
-published: 2026-09-20
-access: free | paid
+title: Why Decentralized AI Matters
+url: https://example.substack.com/p/why-decentralized-ai-matters
+author: Jane Doe
+publication: The AI Dispatch
 saved: 2026-10-13
-folder: ...
+folder: AI Research/Decentralized
 ---
 
-# <post title>
+# Why Decentralized AI Matters
 
-...post body, links and tables kept, images removed...
+> Saved from Substack on 2026-10-13: <url>
+
+...article body converted to clean Markdown...
 ```
 
 ### X
@@ -201,39 +206,33 @@ folder: ...
 ```markdown
 ---
 source: x
-title: Thread by Jane Doe (@jane)
-url: https://x.com/jane/status/123
-author: Jane Doe (@jane)
-author_url: https://x.com/jane
-posted: 2026-10-01
+url: https://x.com/jack/status/20
+author: Jack Dorsey (@jack)
 saved: 2026-10-13
-folder: ...
+folder: Archive/Social
 ---
 
-# Thread by Jane Doe (@jane)
+# Post by @jack
 
-**Jane Doe** (@jane) · 2026-10-01 · [link](https://x.com/jane/status/123)
-
-First post text.
-
-> **Jane Doe** (@jane) · 2026-10-01 · [link](https://x.com/jane/status/124)
->
-> Second post in the thread.
->
-> > **Sam Lee** (@sam) · 2026-10-02 · [link](https://x.com/sam/status/200)
-> >
-> > A reply or repost added later with "Add to this thread".
+> just setting up my twttr
 ```
 
-Each level of the tree is one more `>`. The item title is "Thread by <name> (@handle)" for threads and "Post by <name> (@handle)" for single posts; you can rename it.
+Threads render with nested blockquotes to show parent and reply relationships.
 
 ### Notes
 
-Front matter (`source: note`, `title`, `created`, `folder`) then your Markdown.
+```markdown
+---
+source: note
+title: Meeting Notes
+saved: 2026-10-13
+folder: Projects/Alpha
+---
 
-### File names in Drive
+# Meeting Notes
 
-`<title-slug>.md`. If two files in one folder would clash, append the first 6 characters of the item id: `ai-risks-3f80c7.md`.
+Body of your note...
+```
 
 ## 6. Web app
 
@@ -272,6 +271,20 @@ Case-insensitive match on `title` within the open project (across all projects i
 
 ## 7. Chrome extension
 
+### Target resolution
+
+The extension offers three connection modes in Options: **Auto** (default), **Desktop app only**, and **Web app only**.
+
+In **Auto** mode:
+
+1. Queries the desktop app for an active session (`get_session` via Native Messaging, falling back to `GET http://127.0.0.1:23456/api/session`).
+2. If the desktop app is running and signed in: saves directly to the user's account using the web app API (`session.webUrl` with `session.token`).
+3. If the desktop app is running but offline: saves to the desktop app's local SQLite library over Native Messaging or local HTTP.
+4. If the desktop app is unreachable: falls back to the web app URL and access token configured in extension options.
+5. If neither target is configured or reachable: prompts the user to open the desktop app or enter settings.
+
+The extension popup shows where saves will land (for example, "Saving to your account (via desktop app)", "Saving to this computer (desktop app, offline)", or "Saving to <host>").
+
 ### Popup
 
 1. Detects the page: Grokipedia article, Substack post, X post, or unsupported.
@@ -292,12 +305,59 @@ Case-insensitive match on `title` within the open project (across all projects i
 
 ### Settings page
 
-- App URL and access token
-- Test connection button
+- Connection mode selector: Auto (default), Desktop app only, or Web app only.
+- Web app URL and access token for web fallback.
+- Test connection button.
 
-## 8. API (web app)
+## 8. Desktop app
 
-All routes require a Supabase session (web) or a Bearer token (extension).
+A native desktop application for Windows and macOS built with Tauri v2, React 19, Tailwind CSS v4, and Rust.
+
+### Modes
+
+- **Signed in:** connects to your Sourcefold web deployment with an API token. Desktop and web share the same projects, groups, and sources. Article text and images live in Google Drive as configured on your web backend. The desktop view reloads automatically on window focus and every 30 seconds while visible.
+- **Offline:** a local library on this computer using embedded SQLite (`sourcefold.db`). Markdown files with YAML front matter are saved directly to disk (`Documents/Sourcefold/` by default). Works without network access or cloud accounts.
+
+### Sign-in flow
+
+1. Open desktop Settings and enter your Sourcefold web address (for example `http://localhost:3000` or `https://<app>.vercel.app`).
+2. Click **Sign in with browser**.
+3. The desktop app starts a temporary loopback HTTP server on a random port (`127.0.0.1:<random port>`) and opens your browser to `/desktop/connect?callback=...&state=...`.
+4. While signed in to your web deployment, click **Connect**.
+5. The web app generates a personal API token named "Sourcefold Desktop" in `api_tokens` and redirects back to the loopback callback.
+6. The desktop app stores the session in `session.json` next to `sourcefold.db` and brings the window to front.
+7. Click **Sign out** in desktop Settings to clear `session.json`, or revoke the token from the web app's Settings page.
+
+### Data location
+
+- **SQLite database:** `%LOCALAPPDATA%\Sourcefold\sourcefold.db` on Windows, `~/Library/Application Support/Sourcefold/sourcefold.db` on macOS.
+- **Session file:** `session.json` in the same directory as `sourcefold.db`.
+- **Markdown files (offline mode):** `Documents/Sourcefold/` (or custom directory set in Settings), organized by project and group.
+
+### Local integration surface and security rules
+
+The desktop app exposes two communication channels for the Chrome extension:
+
+- **Chrome Native Messaging:** host name `com.sourcefold.native`, communicating over stdin and stdout.
+- **Local HTTP loopback:** server on `http://127.0.0.1:23456`.
+
+Security rules on the local HTTP server:
+
+- **Host validation:** only requests with `Host: localhost` or `Host: 127.0.0.1` (with optional port) are accepted. All other Host headers return 403 Forbidden.
+- **Origin validation:** only allowed origins (`chrome-extension://...`, `tauri://localhost`, `http://tauri.localhost`, `https://tauri.localhost`, and in debug `localhost:5173`) are accepted. Other origins return 403 Forbidden. Requests without an Origin header return 403 Forbidden, except unauthenticated `GET /api/health` and `GET /api/status`.
+- **No CORS wildcard:** the server never sends `Access-Control-Allow-Origin: *`. It reflects the verified allowed origin alongside `Vary: Origin`.
+- **Session endpoint protection:** `GET /api/session` strictly requires an origin starting with `chrome-extension://`.
+
+### What's not supported offline
+
+- **Google Drive sync:** Drive sync requires the web backend and Google OAuth credentials; offline libraries stay local on disk and in SQLite.
+- **Multi-device sync:** offline libraries do not sync between devices.
+
+## 9. API (web app)
+
+All routes require a Supabase session (web cookie) or a Bearer token (`Authorization: Bearer <token>`), verified by `requireApiUser`.
+
+Token requests use the Supabase admin client (`createAdminClient()`), which bypasses database Row-Level Security. Every database query in token-authenticated endpoints must explicitly filter by `user_id`. Database RPCs that rely on `auth.uid()` cannot be used with token authentication; they must accept `p_user_id` as an explicit parameter.
 
 | Method            | Route                   | Purpose                                       |
 | ----------------- | ----------------------- | --------------------------------------------- |
@@ -315,14 +375,14 @@ All routes require a Supabase session (web) or a Bearer token (extension).
 | POST              | `/api/drive/save`       | Run one batch of the Drive save               |
 | POST/DELETE       | `/api/tokens[/:id]`     | Create or revoke extension tokens             |
 
-## 9. URL canonicalization (duplicates)
+## 10. URL canonicalization (duplicates)
 
 - Lowercase host, drop `www.`, drop query string and fragment, drop trailing slash.
 - `twitter.com`, `mobile.twitter.com`, `mobile.x.com` become `x.com`; X status URLs reduce to `x.com/<handle>/status/<id>`, and duplicates match on the status id.
 - Substack: use the page's `<link rel="canonical">` (handles custom domains).
 - Grokipedia: `grokipedia.com/page/<Title>` with the title URL-decoded.
 
-## 10. Build plan (waves)
+## 11. Build plan (waves)
 
 Each wave ends with a working, deployed app. Tasks inside a wave marked **(parallel)** can go to separate subagents.
 
@@ -379,7 +439,14 @@ Each wave ends with a working, deployed app. Tasks inside a wave marked **(paral
 - Right-click save, keyboard shortcut, error states, empty states.
 - Self-hosting guide in README (Supabase, Google Cloud, Vercel setup).
 
-## 11. Risks and checks
+### Wave 8: Desktop app
+
+- Tauri v2 app for Windows and macOS (`apps/desktop`).
+- Dual mode: signed-in via web API token, or offline via local SQLite and local Markdown files.
+- Chrome Native Messaging host and local HTTP server on port 23456.
+- Extension Auto target resolution.
+
+## 12. Risks and checks
 
 | Risk                                                         | Plan                                                                                                                                                                                       |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -390,7 +457,7 @@ Each wave ends with a working, deployed app. Tasks inside a wave marked **(paral
 | Free limits (500 MB database, 1 GB storage on Supabase free) | Article text and images move to Drive after saving, so Supabase holds only links and metadata (about 1–2 KB per source). Drive free space is 15 GB, shared with Gmail and Photos.          |
 | Project folder is inside OneDrive                            | OneDrive syncing `node_modules` causes slowdowns and file locks. Move the repo outside OneDrive (for example `C:\dev\sourcefold`) before Wave 1, or exclude the folder from OneDrive sync. |
 
-## 12. Your setup tasks (needed for Wave 1)
+## 13. Your setup tasks (needed for Wave 1)
 
 1. **Google Cloud:** create a project, an OAuth client (Web), enable the Google Drive API, set the consent screen to In production. Wave 1 will give exact step-by-step instructions and redirect URLs.
 2. **Supabase:** a new free project for Sourcefold (can be created through the Supabase MCP).

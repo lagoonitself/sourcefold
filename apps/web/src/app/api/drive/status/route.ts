@@ -1,14 +1,14 @@
-import { jsonData, requireUser } from "@/lib/api";
+import { jsonData, requireApiUser } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const auth = await requireUser();
+export async function GET(request: Request) {
+  const auth = await requireApiUser(request);
   if ("response" in auth) {
     return auth.response;
   }
-  const { supabase, user } = auth;
+  const { db, userId } = auth;
 
   let connected = false;
   try {
@@ -16,22 +16,22 @@ export async function GET() {
     const { data: tokenRow } = await admin
       .from("google_tokens")
       .select("refresh_token")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
     connected = Boolean(tokenRow?.refresh_token);
   } catch {
     connected = false;
   }
 
-  const { data: unsavedCount } = await supabase.rpc("drive_unsaved_count", {
-    p_user_id: user.id,
+  const { data: unsavedCount } = await db.rpc("drive_unsaved_count", {
+    p_user_id: userId,
   });
   const unsaved = typeof unsavedCount === "number" ? unsavedCount : 0;
 
-  const { data: driveState } = await supabase
+  const { data: driveState } = await db
     .from("drive_state")
     .select("last_saved_at, root_folder_id")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
 
   return jsonData({

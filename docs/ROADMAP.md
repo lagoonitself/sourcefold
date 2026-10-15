@@ -1,6 +1,6 @@
 # Sourcefold roadmap
 
-Status as of 2026-10-14. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`; the visual system is `docs/DESIGN.md`.
+Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`; the visual system is `docs/DESIGN.md`.
 
 ## Done
 
@@ -24,8 +24,7 @@ Status as of 2026-10-14. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - Substack capture: paywall detection ("Paid post, not saved" on locked content), Readability + HTML-to-Markdown, author and publication metadata extraction.
   - `POST /api/capture` endpoint handling Substack and X captures.
 - **Wave 4, X:**
-  - Isolated X selectors in `apps/extension/lib/x/selectors.ts` and capture extractor in `extract.ts`.
-  - Capture single posts or the author's connected thread.
+  - Isolated X selectors in `apps/extension/lib/x/selectors.ts` and capture extractor in `extract.ts`.\n - Capture single posts or the author's connected thread.
   - Tree storage in `x_posts`, "Add to this thread" in popup, `POST /api/x/:itemId/posts`.
   - Core X Markdown renderer with nested blockquotes per thread depth.
 - **Wave 5, Save to Drive:**
@@ -74,6 +73,27 @@ Status as of 2026-10-14. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] Archive and Unarchive in the project menu; archived projects are listed separately and hidden from pickers, the extension and search across projects.
   - [x] Migration applied to the owner's database.
   - [ ] Confirm on the live app.
+
+- **Desktop app (Wave 8, 2026-10-15):**
+  - [x] Tauri v2 desktop application scaffold with React 19, Tailwind CSS v4, and Rust backend (`apps/desktop`) for Windows and macOS.
+  - [x] Dual-mode architecture: signed-in mode (web API token) and offline mode (embedded SQLite `sourcefold.db`).
+  - [x] Browser loopback sign-in flow (`/desktop/connect` on web, temporary loopback listener on desktop, session stored in `session.json`).
+  - [x] Background sync on window focus and every 30 seconds in signed-in mode.
+  - [x] Local integration surface: HTTP loopback server on `127.0.0.1:23456` and Chrome Native Messaging host (`com.sourcefold.native`).
+  - [x] Local security controls: Host and Origin checks, no CORS wildcard, `/api/session` restricted to extension.
+  - [x] Extension auto-target resolution (desktop signed in -> web API, desktop offline -> local SQLite, fallback -> configured web app).
+  - [x] Keyboard-first desktop UI with single shortcut registry, command palette (`Mod+K`), reader view (`Enter`), and shortcuts cheat sheet (`?`).
+  - [x] Web API routes accept Bearer token via `requireApiUser` with admin client and explicit `user_id` filtering.
+  - [ ] Owner's hands-on test of desktop sign-in and sync.
+  - [ ] Extension test against desktop signed-in and offline modes.
+  - [ ] First macOS CI run.
+  - [ ] First desktop release.
+  - [ ] Code signing (not planned, $0 budget).
+  - [ ] Optional: import an offline library into the account.
+  - [ ] Item reordering in desktop (no API yet).
+  - [ ] Offline duplicate check per group: offline `check_url` still treats a link as a duplicate across all groups; the spec says once per group.
+  - [ ] Wire `uninstall_native_host` to a desktop Settings button; the function exists but nothing calls it.
+  - [ ] Drop the seeded offline "Inbox" project / "General" group once the server tests stop depending on their fixed IDs.
 
 ## Later
 

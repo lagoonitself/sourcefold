@@ -18,8 +18,11 @@ export async function GET(request: Request) {
   const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
 
+  const url = new URL(request.url);
+  const includeArchived = url.searchParams.get("includeArchived") === "true";
+
   try {
-    const folders = await loadFolders(auth.db, auth.userId);
+    const folders = await loadFolders(auth.db, auth.userId, { includeArchived });
     return jsonData(folders);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Failed to load folders";

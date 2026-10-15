@@ -7,7 +7,8 @@ Collect research sources into folders as clean Markdown, then send them to Googl
 
 Sourcefold is built for people who gather a lot of reading before they write or make a video. Save Grokipedia articles, Substack posts and X threads from a Chrome extension or by pasting a batch of links. Sourcefold turns each one into a tidy `.md` file, sorts it into nested folders, and mirrors those folders into a `Sourcefold` folder in your Drive.
 
-- **Chrome extension:** save the page you're on into any folder in one click, or right-click a Grokipedia link to save it without opening it.
+- **Desktop app:** fast native app for Windows and macOS (Tauri v2 + React 19 + Rust). Works signed in (connected to your web account) or offline (local SQLite library on disk).
+- **Chrome extension:** save the page you're on into any folder in one click. Auto mode routes saves to your web account or local desktop app. Right-click a Grokipedia link to save it without opening it.
 - **Bulk add:** paste 30-40 Grokipedia links at once and watch each one import.
 - **Markdown first:** every source becomes a `.md` file with a small header (source link, author, dates) and references kept as footnotes.
 - **Folders inside folders:** unlimited depth, with drag-and-drop to reorder and nest.
@@ -28,8 +29,9 @@ Sourcefold doesn't show source content inside the app. Clicking an item opens th
 ## Stack
 
 - Web app: Next.js (TypeScript) on Vercel
+- Desktop app: Tauri v2 (React 19 + Rust + SQLite)
 - Database and login: Supabase (Postgres, Auth with Google). It keeps links, titles and folders; article text and images move to Drive
-- Browser extension: Chrome (Manifest V3), built with WXT
+- Browser extension: Chrome (Manifest V3), built with WXT and React
 - Content storage: Google Drive API (`drive.file` scope only)
 
 ## What you need
@@ -62,7 +64,7 @@ Sourcefold doesn't show source content inside the app. Clicking an item opens th
    - In **Audience**, select **External**.
    - In **Data access**, click **Add or remove scopes** and add `https://www.googleapis.com/auth/drive.file`.
 4. Create web application OAuth client credentials:
-   - Go to **Clients** (or **Credentials** → **Create Credentials** → **OAuth client ID**).
+   - Choose **Clients** (or **Credentials** → **Create Credentials** → **OAuth client ID**).
    - Choose **Web application** as the application type.
    - Under **Authorized JavaScript origins**, add `http://localhost:3000` (and add your deployed Vercel URL later).
    - Under **Authorized redirect URIs**, add `https://<your-project-ref>.supabase.co/auth/v1/callback` (replace `<your-project-ref>` with your Supabase project reference).
@@ -126,13 +128,47 @@ Sourcefold doesn't show source content inside the app. Clicking an item opens th
    - Open `chrome://extensions`.
    - Turn on **Developer mode** in the top-right corner.
    - Click **Load unpacked** and select the unzipped folder (or `apps/extension/.output/chrome-mv3`).
-3. Connect the extension to your app:
+3. Connection modes:
+   - **Auto (default):** the extension talks to the desktop app over Chrome Native Messaging or local HTTP (`127.0.0.1:23456`). If the desktop app is signed in, saves go to your account through the web API. If the desktop app is offline, saves go to your local SQLite library. If the desktop app is closed, saves fall back to your configured web app address and access token.
+   - **Desktop app only:** saves only to the desktop app (account or offline library).
+   - **Web app only:** saves directly to the web app address and access token configured in extension options.
+4. Set up web app fallback:
    - In the Sourcefold web app, open **Settings** and generate a new access token.
-   - In the extension settings (right-click the extension icon and select **Options**, or click the gear icon in the popup), enter your app address (`http://localhost:3000` or `https://<app>.vercel.app`) and paste the access token.
+   - In extension options (right-click the extension icon and select **Options**, or click the gear icon in the popup), enter your web address (`http://localhost:3000` or `https://<app>.vercel.app`) and paste the access token.
    - Click **Test connection** to verify connectivity.
-4. Shortcuts and actions:
-   - Press `Alt+Shift+S` to open the extension popup and save the current tab.
+5. Shortcuts and actions:
+   - Press `Alt+Shift+S` to open the extension popup and save the current tab. The popup shows where saves will land.
    - Right-click any Grokipedia link and select **Save link to Sourcefold** to queue the article without opening it.
+
+## 6. Desktop app
+
+Sourcefold includes a native desktop application for Windows and macOS built with Tauri v2, React 19, Tailwind CSS v4, and Rust.
+
+The desktop app runs in two modes:
+
+- **Signed in:** connects to your web deployment with a personal API token. Desktop and web share the same projects, groups, and sources. Article text and images live in Google Drive. Data refreshes on window focus and every 30 seconds.
+- **Offline:** stores all data locally in embedded SQLite (`%LOCALAPPDATA%\Sourcefold\sourcefold.db` on Windows, `~/Library/Application Support/Sourcefold/sourcefold.db` on macOS) and saves Markdown files to disk (`Documents/Sourcefold/`). Works with zero cloud dependencies.
+
+To run the desktop app in development:
+
+```bash
+npm run tauri dev -w @sourcefold/desktop
+```
+
+Or from `apps/desktop`:
+
+```bash
+npm run tauri dev
+```
+
+To sign in from the desktop app:
+
+1. Open desktop Settings (`Mod+,`).
+2. Enter your web app address (`http://localhost:3000` or `https://<app>.vercel.app`).
+3. Click **Sign in with browser**.
+4. In the browser tab that opens, click **Connect**. The web app creates a personal access token named "Sourcefold Desktop" and redirects back to the desktop app.
+
+See [apps/desktop/README.md](apps/desktop/README.md) for full details, architecture, keyboard shortcuts, and packaging instructions.
 
 ## Using it
 
@@ -151,12 +187,14 @@ npm run dev                         # web app on http://localhost:3000
 npm run lint && npm run typecheck && npm test
 NEXT_PUBLIC_SUPABASE_URL=https://example.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=placeholder npm run build -w @sourcefold/web
 npm run build -w @sourcefold/extension   # load apps/extension/.output/chrome-mv3 as an unpacked extension
+npm run tauri dev -w @sourcefold/desktop # desktop app development
 npm run format                      # Prettier; CI runs format:check
 ```
 
 Repository layout:
 
 - `apps/web`: Next.js web application and API routes
+- `apps/desktop`: Tauri v2 desktop application (React 19 + Rust + SQLite)
 - `apps/extension`: Chrome extension (Manifest V3) built with WXT and React
 - `packages/core`: shared library for parsing, Markdown generation, and types
 - `supabase`: SQL migrations and database configuration
@@ -166,9 +204,10 @@ For how to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md). Rules for AI codi
 ### How it fits together
 
 1. The web app (Next.js on Vercel) stores folders and items in Supabase Postgres, with row-level security on every table.
-2. Grokipedia pages are fetched and converted to Markdown on the server. Substack and X pages are read by the extension in your own browser (so paid posts you subscribe to work) and sent to `/api/capture`.
-3. The extension talks to the app with a personal access token you create in Settings.
-4. Save to Drive runs in small batches: it creates the folder tree, uploads changed `.md` files and images, and moves deleted ones to Drive's trash.
+2. The desktop app (Tauri v2) connects to the web app's API with an access token, or works offline using local SQLite and local files on disk.
+3. Grokipedia pages are fetched and converted to Markdown on the server or in the desktop app. Substack and X pages are read by the extension in your own browser (so paid posts you subscribe to work) and sent to `/api/capture`.
+4. The extension communicates with the desktop app via Chrome Native Messaging or local HTTP (`127.0.0.1:23456`), or directly with the web app using a personal access token.
+5. Save to Drive runs in small batches: it creates the folder tree, uploads changed `.md` files and images, and moves deleted ones to Drive's trash.
 
 ## Troubleshooting
 

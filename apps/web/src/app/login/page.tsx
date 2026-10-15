@@ -5,8 +5,15 @@ export const metadata: Metadata = {
   title: "Sign in",
 };
 
-export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  const { error } = await searchParams;
+interface LoginPageProps {
+  searchParams: Promise<{
+    error?: string;
+    next?: string;
+  }>;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { error, next } = await searchParams;
 
   let errorMessage: string | null = null;
   if (error === "not_allowed") {
@@ -27,7 +34,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             Collect research sources as Markdown, organized in folders.
           </p>
         </div>
-        <SignInButton />
+        <SignInButton next={next} />
         {errorMessage && (
           <p className="text-sm text-destructive" role="alert">
             {errorMessage}

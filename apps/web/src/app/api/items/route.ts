@@ -25,7 +25,9 @@ export async function GET(request: Request) {
 
     const { data: items, error } = await auth.db
       .from("items")
-      .select("id, folder_id, kind, title, source_url, status, created_at, meta")
+      .select(
+        "id, folder_id, kind, title, source_url, canonical_url, status, created_at, meta, note",
+      )
       .eq("user_id", auth.userId)
       .eq("folder_id", folder)
       .is("deleted_at", null)
@@ -44,7 +46,9 @@ export async function GET(request: Request) {
 
     const { data: items, error } = await auth.db
       .from("items")
-      .select("id, folder_id, kind, title, source_url, status, created_at, meta")
+      .select(
+        "id, folder_id, kind, title, source_url, canonical_url, status, created_at, meta, note",
+      )
       .eq("user_id", auth.userId)
       .is("deleted_at", null)
       .ilike("title", `%${escaped}%`)

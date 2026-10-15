@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-source-grokipedia: var(--source-grokipedia);
+  --color-source-substack: var(--source-substack);
+  --color-source-x: var(--source-x);
+  --color-source-note: var(--source-note);
+  --color-source-image: var(--source-image);
+
+  --font-sans:
+    "Schibsted Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Source Serif 4", Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-heading: "Source Serif 4", Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:root {
+  --background: #fbfcfd;
+  --foreground: #1c2533;
+  --card: #fbfcfd;
+  --card-foreground: #1c2533;
+  --popover: #fbfcfd;
+  --popover-foreground: #1c2533;
+  --primary: #1f5e4e;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f4;
+  --secondary-foreground: #1c2533;
+  --muted: #eef1f4;
+  --muted-foreground: #5b6676;
+  --accent: #e3efea;
+  --accent-foreground: #1f5e4e;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --warning: #b54708;
+  --border: #d5dbe3;
+  --input: #d5dbe3;
+  --ring: #1f5e4e;
+  --radius: 6px;
+  --sidebar: #eef1f4;
+  --sidebar-foreground: #1c2533;
+  --sidebar-primary: #1f5e4e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e3efea;
+  --sidebar-accent-foreground: #1f5e4e;
+  --sidebar-border: #d5dbe3;
+  --sidebar-ring: #1f5e4e;
+  --source-grokipedia: #e05d38;
+  --source-substack: #ff6719;
+  --source-x: #1d9bf0;
+  --source-note: #f59e0b;
+  --source-image: #10b981;
+}
+
+.dark {
+  --background: #12161c;
+  --foreground: #e6eaf0;
+  --card: #12161c;
+  --card-foreground: #e6eaf0;
+  --popover: #12161c;
+  --popover-foreground: #e6eaf0;
+  --primary: #5fb39c;
+  --primary-foreground: #0e1217;
+  --secondary: #1a2029;
+  --secondary-foreground: #e6eaf0;
+  --muted: #1a2029;
+  --muted-foreground: #9aa4b2;
+  --accent: #173129;
+  --accent-foreground: #8fd3bf;
+  --destructive: #f0857a;
+  --destructive-foreground: #0e1217;
+  --warning: #f2a65a;
+  --border: #2a323d;
+  --input: #2a323d;
+  --ring: #5fb39c;
+  --sidebar: #0e1217;
+  --sidebar-foreground: #e6eaf0;
+  --sidebar-primary: #5fb39c;
+  --sidebar-primary-foreground: #0e1217;
+  --sidebar-accent: #173129;
+  --sidebar-accent-foreground: #8fd3bf;
+  --sidebar-border: #2a323d;
+  --sidebar-ring: #5fb39c;
+  /* Keep source marks vivid in dark mode (brand colors are mode-independent) */
+  --source-grokipedia: #e05d38;
+  --source-substack: #ff6719;
+  --source-x: #1d9bf0;
+  --source-note: #f59e0b;
+  --source-image: #10b981;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+.shadow-float {
+  box-shadow: 0 8px 24px rgba(28, 37, 51, 0.12);
+}
+
+.dark .shadow-float {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}

@@ -92,6 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
     .from("x_posts")
     .select("id")
     .eq("item_id", itemId)
+    .eq("user_id", auth.userId)
     .eq("canonical_url", postCanonical)
     .maybeSingle();
 

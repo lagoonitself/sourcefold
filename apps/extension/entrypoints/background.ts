@@ -2,6 +2,8 @@ import { browser } from "wxt/browser";
 import { detectSource } from "@sourcefold/core";
 import { saveGrokipedia, ApiError } from "../lib/api";
 import { getLastFolderId, clearLastFolderId } from "../lib/last-folder";
+import { resolveTarget } from "../lib/target";
+import { missingHostPermissionMessage } from "../lib/permissions";
 
 const SUCCESS_COLOR = "#1F5E4E";
 const ERROR_COLOR = "#B42318";
@@ -46,6 +48,18 @@ export default defineBackground(() => {
         const lastFolderId = await getLastFolderId();
         if (!lastFolderId) {
           await showErrorBadge("Choose a group in the popup first");
+          return;
+        }
+
+        const target = await resolveTarget();
+        if (target.type === "unconfigured" || target.type === "error") {
+          await showErrorBadge(target.displayLabel);
+          return;
+        }
+
+        const missingPermission = await missingHostPermissionMessage(target);
+        if (missingPermission) {
+          await showErrorBadge(missingPermission);
           return;
         }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { jsonData, requireUser } from "@/lib/api";
+import { jsonData, requireApiUser } from "@/lib/api";
 import {
   clearGoogleAccessToken,
   DriveAuthError,
@@ -13,14 +13,14 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const auth = await requireUser();
+  const auth = await requireApiUser(request);
   if ("response" in auth) {
     return auth.response;
   }
-  const { supabase, user } = auth;
+  const { db, userId } = auth;
 
-  const { data: lockAcquired, error: lockError } = await supabase.rpc("acquire_drive_sync_lock", {
-    p_user_id: user.id,
+  const { data: lockAcquired, error: lockError } = await db.rpc("acquire_drive_sync_lock", {
+    p_user_id: userId,
   });
 
   if (lockError || !lockAcquired) {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   try {
     let accessToken: string;
     try {
-      accessToken = await getGoogleAccessToken(user.id);
+      accessToken = await getGoogleAccessToken(userId);
     } catch (err) {
       console.error("Drive token refresh failed:", err);
       if (err instanceof DriveClientMismatchError) {
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
         );
       }
       if (err instanceof DriveAuthError) {
-        clearGoogleAccessToken(user.id);
+        clearGoogleAccessToken(userId);
         return NextResponse.json(
           {
             error: {
@@ -91,12 +91,12 @@ export async function POST(request: Request) {
     }
 
     try {
-      const result = await runSaveBatch(supabase, user.id, accessToken, budget);
+      const result = await runSaveBatch(db, userId, accessToken, budget);
       return jsonData(result);
     } catch (err) {
       console.error("Drive save failed:", err);
       if (err instanceof DriveAuthError) {
-        clearGoogleAccessToken(user.id);
+        clearGoogleAccessToken(userId);
         return NextResponse.json(
           {
             error: {
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
     }
   } finally {
     try {
-      await supabase.rpc("release_drive_sync_lock", { p_user_id: user.id });
+      await db.rpc("release_drive_sync_lock", { p_user_id: userId });
     } catch {
       // Ignore lock release errors
     }

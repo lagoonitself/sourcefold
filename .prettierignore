@@ -7,3 +7,7 @@ build
 package-lock.json
 apps/web/src/lib/database.types.ts
 apps/web/src/components/ui
+apps/desktop/releases
+apps/desktop/dist
+apps/desktop/src-tauri/target
+apps/desktop/src-tauri/gen

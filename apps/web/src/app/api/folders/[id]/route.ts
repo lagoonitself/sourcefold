@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonData, jsonError, requireUser } from "@/lib/api";
+import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { nextPosition } from "@/features/capture/find-duplicate";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ const patchFolderSchema = z
   );
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
 
   const { id } = await params;
@@ -50,7 +50,45 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   if (parsed.data.archived !== undefined) {
-    const { data: changed, error: archiveError } = await auth.supabase.rpc("set_project_archived", {
+    if (auth.via === "token") {
+      const { data: existingProject, error: checkError } = await auth.db
+        .from("folders")
+        .select("id, updated_at, drive_synced_at, parent_id")
+        .eq("id", id)
+        .eq("user_id", auth.userId)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (checkError) {
+        console.error("Failed to load folder for archive:", checkError);
+        return jsonError(500, "Something went wrong. Try again.");
+      }
+      if (!existingProject || existingProject.parent_id !== null) {
+        return jsonError(400, "Only projects can be archived.");
+      }
+
+      const now = new Date().toISOString();
+      const shouldKeepSynced =
+        existingProject.drive_synced_at &&
+        existingProject.drive_synced_at >= existingProject.updated_at;
+
+      const { error: archiveError } = await auth.db
+        .from("folders")
+        .update({
+          archived_at: parsed.data.archived ? now : null,
+          ...(shouldKeepSynced ? { drive_synced_at: now } : {}),
+        })
+        .eq("id", id)
+        .eq("user_id", auth.userId);
+
+      if (archiveError) {
+        console.error("Failed to archive project:", archiveError);
+        return jsonError(500, "Something went wrong. Try again.");
+      }
+      return jsonData({ id, archived: parsed.data.archived });
+    }
+
+    const { data: changed, error: archiveError } = await auth.db.rpc("set_project_archived", {
       p_id: id,
       p_archived: parsed.data.archived,
     });
@@ -64,11 +102,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return jsonData({ id, archived: parsed.data.archived });
   }
 
-  const { data: existing, error: existingError } = await auth.supabase
+  const { data: existing, error: existingError } = await auth.db
     .from("folders")
     .select("id, parent_id")
     .eq("id", id)
-    .eq("user_id", auth.user.id)
+    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -99,8 +137,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (parsed.data.position === undefined && parsed.data.parent_id !== existing.parent_id) {
       updateData.position = await nextPosition(
-        auth.supabase,
-        auth.user.id,
+        auth.db,
+        auth.userId,
         parsed.data.parent_id,
         "folders",
       );
@@ -110,11 +148,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     updateData.position = parsed.data.position;
   }
 
-  const { data: updatedFolder, error: updateError } = await auth.supabase
+  const { data: updatedFolder, error: updateError } = await auth.db
     .from("folders")
     .update(updateData)
     .eq("id", id)
-    .eq("user_id", auth.user.id)
+    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .select()
     .maybeSingle();
@@ -149,8 +187,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return jsonData(updatedFolder);
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
 
   const { id } = await params;
@@ -159,11 +197,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return jsonError(400, "Invalid folder ID");
   }
 
-  const { data: existing, error: checkError } = await auth.supabase
+  const { data: existing, error: checkError } = await auth.db
     .from("folders")
     .select("id")
     .eq("id", id)
-    .eq("user_id", auth.user.id)
+    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -176,9 +214,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return jsonError(404, "Folder not found.");
   }
 
-  const { error: rpcError } = await auth.supabase.rpc("soft_delete_folder", {
+  const { error: rpcError } = await auth.db.rpc("soft_delete_folder", {
     p_folder_id: id,
-    p_user_id: auth.user.id,
+    p_user_id: auth.userId,
   });
 
   if (rpcError) {

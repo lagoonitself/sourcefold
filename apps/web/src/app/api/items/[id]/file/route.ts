@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
-import { jsonError, requireUser } from "@/lib/api";
+import { jsonError, requireApiUser } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireUser();
+  const auth = await requireApiUser(request);
   if ("response" in auth) return auth.response;
-  const { supabase, user } = auth;
+  const { db, userId } = auth;
 
   const { id } = await params;
 
-  const { data: item, error } = await supabase
+  const { data: item, error } = await db
     .from("items")
     .select("id, kind, storage_path, drive_file_id")
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -33,7 +33,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     );
   }
 
-  const { data: signedData, error: signError } = await supabase.storage
+  const { data: signedData, error: signError } = await db.storage
     .from("images")
     .createSignedUrl(item.storage_path, 300);
 

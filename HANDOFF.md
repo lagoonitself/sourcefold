@@ -4,7 +4,7 @@ Read this first in any new session. When the user says "continue", pick up at **
 
 This repo is public. Don't put account emails, project IDs, client IDs or other deployment details here; keep them in the agent's private memory.
 
-Last updated: 2026-10-14, after moving content to Drive and adding project archiving.
+Last updated: 2026-10-15, after adding the Tauri desktop app and extension auto-target mode.
 
 ## What we're building
 
@@ -13,33 +13,44 @@ Sourcefold is an open-source (MIT), self-hosted research source collector. The o
 - **Sources:** Grokipedia articles (bulk-paste 30–40 links), Substack posts (free posts, plus paid posts the user subscribes to), and X posts (text only, threads kept as a tree).
 - **Format:** every source is stored as clean Markdown.
 - **Organizing:** projects (for example "Cars", "Bikes"), each with its own groups inside groups, unlimited depth. A project is a top-level folder and a group is a folder inside one; the UI shows one project at a time. Each item lives in one group. Drag-and-drop to reorder or nest.
-- **Reading:** clicking an item opens the original page (or signed link for uploaded images). The app never shows the content itself.
+- **Reading:** clicking an item opens the original page (or signed link for uploaded images). The desktop app also includes an integrated Markdown reader for items with saved markdown text.
 - **Drive:** holds the content. Supabase keeps only links, titles, metadata, folders and notes; article text and images are pushed to Drive right after saving and then cleared from Supabase. The **Save to Drive** button (and Ctrl+S) still pushes folder changes, renames, moves and deletes.
-- **Chrome extension:** saves the page you're viewing into a chosen folder in one click.
-- **Constraints:** $0 budget (free tiers only), desktop web app, single user per deployment (`ALLOWED_EMAIL`), search by title only.
+- **Desktop app:** fast native app for Windows and macOS. Runs signed in (mirrors web account data, content lives in Google Drive) or offline (local SQLite database and Markdown files on disk).
+- **Chrome extension:** saves the page you're viewing into a chosen folder in one click. Auto mode routes saves to the desktop app when running, or directly to the web app.
+- **Constraints:** $0 budget (free tiers only), desktop web app and desktop app (Windows, macOS), single user per deployment (`ALLOWED_EMAIL`), search by title only.
 
-| File                             | What it holds                                                               |
-| -------------------------------- | --------------------------------------------------------------------------- |
-| `README.md`                      | What it is, self-hosting setup, troubleshooting                             |
-| `CONTRIBUTING.md`                | How to contribute                                                           |
-| `docs/SPEC.md`                   | Product and technical spec: data model, Markdown formats, API, waves        |
-| `docs/DESIGN.md`                 | Visual system (tokens, fonts, layout, copy rules); every UI task follows it |
-| `docs/ROADMAP.md`                | Checklist of done and remaining work                                        |
-| `AGENTS.md`                      | Rules every coding agent follows                                            |
-| `docs/open-source-references.md` | Projects to borrow from (Substack and X capture)                            |
+| File | What it holds |
+| -------------------------------- | --------------------------------------------------------------------------- |\
+| `README.md` | What it is, self-hosting setup, troubleshooting |\
+| `CONTRIBUTING.md` | How to contribute |\
+| `docs/SPEC.md` | Product and technical spec: data model, Markdown formats, API, waves |\
+| `docs/DESIGN.md` | Visual system (tokens, fonts, layout, copy rules); every UI task follows it |\
+| `docs/ROADMAP.md` | Checklist of done and remaining work |\
+| `AGENTS.md` | Rules every coding agent follows |\
+| `docs/open-source-references.md` | Projects to borrow from (Substack and X capture) |\
 
 ## Current state
 
-All waves (0 through 7) are built, tested and deployed. The owner's deployment works end to end: extension saves, bulk add, and Save to Drive.
+Waves 0 through 7 are deployed and working. Wave 8 (desktop app) is implemented across `apps/desktop` (Tauri v2 + React 19 + Rust + SQLite), `apps/extension` (Auto target resolution), and `apps/web` (`/desktop/connect` browser sign-in and token-auth routes).
 
-- **Stack:** Next.js 16 on Vercel, Supabase (Postgres with RLS, Auth with Google, Storage), WXT + React Chrome extension, Google Drive API (`drive.file` only).
-- **Checks:** `npm run format:check`, `lint`, `typecheck`, 106 Vitest tests, and the web and extension builds all pass in CI.
-- **Release:** v0.1.0 on GitHub with the packaged extension zip.
+- **Stack:**
+  - Web app: Next.js 16 on Vercel.
+  - Desktop app: Tauri v2 (React 19, Tailwind CSS v4, Rust, embedded SQLite via `rusqlite`).
+  - Extension: Chrome (Manifest V3) built with WXT and React.
+  - Backend: Supabase (Postgres with RLS, Auth with Google, Storage).
+  - Storage: Google Drive API (`drive.file` only) for cloud content; local disk (`Documents/Sourcefold/`) for desktop offline content.
+- **Local integration surface:** desktop app provides Chrome Native Messaging (`com.sourcefold.native`) and local HTTP loopback (`http://127.0.0.1:23456`).
+- **Checks:** `npm run format:check`, `lint`, `typecheck`, Vitest test suites, and desktop Rust tests (`cargo test`) pass.
 
 Lessons worth keeping:
 
-- The Google OAuth client in Supabase's Google provider must be the same client as the app's `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`. Otherwise Google refuses the token refresh with `unauthorized_client`, and reconnecting can never fix it. The app now reports this case directly.
-- A folder lists only its own items, not its subfolders' items. Users may think a save failed; the extension now shows the full folder path and offers **Move here** for pages saved elsewhere.
+- Vite must ignore `src-tauri/**` in `server.watch.ignored`, or `tauri dev` crashes on Windows with `EBUSY` when the Rust compiler locks binary and target files during compilation.
+- The local loopback HTTP server on port 23456 must never send `Access-Control-Allow-Origin: *`. It strictly validates `Host` (`localhost` or `127.0.0.1`) and `Origin` (`chrome-extension://...`, `tauri://localhost`, etc.), responds with `Vary: Origin`, and restricts `/api/session` to extension origins. Only the pinned Sourcefold extension ID (`ccgpcafkpkdfndhamegkcafmhfpkajml`, from the `key` in `apps/extension/wxt.config.ts`, plus any in `SOURCEFOLD_EXTENSION_IDS`) is accepted. Any other installed extension could otherwise read the user's token. The extension also sends `X-Sourcefold-Extension: <its id>` on every local request.
+- The desktop frontend and its Rust commands were first written by two separate agents, and their IPC contract didn't match (sign-in could never succeed). `apps/desktop/src/lib/__tests__/ipc-contract.test.ts` now checks every `tauriInvoke` call against `main.rs` and `commands/*.rs`. Keep it passing when adding commands.
+- A Rust test once did a real native-host install and pointed Chrome's host at a test binary. Tests must never touch the real registry or manifest folders; the desktop app re-registers the host on startup.
+- Token-authenticated API routes use `requireApiUser` with the Supabase admin client (`createAdminClient()`), which bypasses database RLS. Every query in those endpoints must explicitly filter by `user_id`. Database RPCs that rely on `auth.uid()` don't work with tokens and must receive `p_user_id` as an explicit parameter.
+- The Google OAuth client in Supabase's Google provider must be the same client as the app's `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`. Otherwise Google refuses the token refresh with `unauthorized_client`, and reconnecting can never fix it. The app reports this case directly.
+- A folder lists only its own items, not its subfolders' items. Users may think a save failed; the extension shows the full folder path and offers **Move here** for pages saved elsewhere.
 - The Supabase MCP won't run `drop function`, and dropping needs the user's confirmation.
 - A project is a top-level folder and a group is a folder inside one, so Drive mirrors `Sourcefold/<Project>/<Group>/…`. Migration `20261014010000_projects_and_groups.sql` makes links unique per group (`items_folder_canonical_url_key`), rejects sources saved directly in a project, and stops a group with sources from becoming a project. Projects share nothing: search, duplicate checks and recent X threads are scoped to one project.
 - Local `npm run dev` uses the live Supabase project, so don't create or delete test data there without asking.
@@ -48,10 +59,26 @@ Lessons worth keeping:
 
 ## Next steps
 
-1. **Check that content moves to Drive.** Migration `20261014020000_content_lives_in_drive.sql` is applied to the owner's database and the code is pushed (2026-10-14). After the Vercel deploy, press Save to Drive once: the two existing sources should upload and their text should clear from Supabase (`select count(*) from items where markdown is not null and kind <> 'note'` returns 0). Then save one new Grokipedia link and check it lands in Drive without pressing Save. Rename it and save, and check the Drive file still has its article text.
-2. **Check project archiving on the live app.** Migration `20261014030000_archive_projects.sql` is applied and the code is pushed (2026-10-14). Archive a project, check it moves under "Archived" in the switcher and is gone from Add links and the extension's picker, then unarchive it. The unsaved count shouldn't change.
-3. **Finish rolling out projects and groups.** The migration `20261014010000_projects_and_groups.sql` is applied to the owner's database and the code is pushed (2026-10-14). Check the Vercel deploy, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. The owner's test data was soft-deleted on 2026-10-14; the next Save to Drive trashes its Drive copies.
-4. **Optional cleanup on the owner's database: drop the old function overloads.** Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
+1. **Owner tests the desktop app end to end.**
+   - The web app needs the new `/desktop/connect` page. Either push so Vercel deploys it, or run the web app locally with `npm run dev` and use `http://localhost:3000` as the address. Local dev uses the live Supabase project.
+   - Rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. Its ID changed to the pinned one, so Chrome treats it as new: remove the old unpacked copy, load `apps/extension/.output/chrome-mv3`, and re-enter its settings.
+   - Start the desktop app in development: `npm run tauri dev -w @sourcefold/desktop` (or `cd apps/desktop && npx tauri dev`).
+   - Sign in: open desktop Settings (`Mod+,`), enter your web app URL (e.g. `http://localhost:3000` or your deployed URL), click **Sign in with browser**, verify the web connect page opens at `/desktop/connect`, and click **Connect**. Confirm the desktop app saves the session to `session.json` and updates its header.
+   - See web data: check that existing projects, groups, and sources load from the web account.
+   - Two-way sync: create a group on desktop and verify it appears on web; create a group on web and verify it appears on desktop (after window focus or 30 seconds).
+   - Try keyboard shortcuts: press `?` to open the shortcuts cheat sheet; try tree navigation (`j`/`k`, `h`/`l`, `[`/`]`), list navigation, command palette (`Mod+K`), and search (`/`).
+   - Test offline mode: switch to offline mode in desktop Settings, create an offline group and source, and check that files write to `Documents/Sourcefold/` and `%LOCALAPPDATA%\Sourcefold\sourcefold.db`.
+   - Check extension target line: open extension popup in Auto mode with desktop signed in (should show "Saving to your account (via desktop app)"), then with desktop in offline mode (should show "Saving to this computer (desktop app, offline)").
+2. **Push and check the macOS CI run.**
+   - Push the branch to GitHub and confirm the GitHub Actions workflow builds the desktop app on macOS.
+3. **Check that content moves to Drive.**
+   - Migration `20261014020000_content_lives_in_drive.sql` is applied to the owner's database and the code is pushed (2026-10-14). After the Vercel deploy, press Save to Drive once: the two existing sources should upload and their text should clear from Supabase (`select count(*) from items where markdown is not null and kind <> 'note'` returns 0). Then save one new Grokipedia link and check it lands in Drive without pressing Save. Rename it and save, and check the Drive file still has its article text.
+4. **Check project archiving on the live app.**
+   - Migration `20261014030000_archive_projects.sql` is applied and the code is pushed (2026-10-14). Archive a project, check it moves under "Archived" in the switcher and is gone from Add links and the extension's picker, then unarchive it. The unsaved count shouldn't change.
+5. **Finish rolling out projects and groups.**
+   - The migration `20261014010000_projects_and_groups.sql` is applied to the owner's database and the code is pushed (2026-10-14). Check the Vercel deploy, then rebuild the extension (`npm run build -w @sourcefold/extension`) and reload it in Chrome. The owner's test data was soft-deleted on 2026-10-14; the next Save to Drive trashes its Drive copies.
+6. **Optional cleanup on the owner's database: drop the old function overloads.**
+   - Older migrations were applied through the MCP, which couldn't drop the old signatures, so they still exist next to the new ones. The app always passes `p_user_id`, so they're unused. Fresh installs from `supabase/migrations/` don't have this problem. Run once in the Supabase SQL editor:
 
    ```sql
    drop function if exists public.soft_delete_folder(uuid);
@@ -60,4 +87,8 @@ Lessons worth keeping:
    drop function if exists public.drive_unsaved_count();
    ```
 
-5. **Ideas for later** (none started): Chrome Web Store listing for the extension, full-text search, more source types. Ask the owner before starting any of these.
+7. **Ideas for later** (none started):
+   - Chrome Web Store listing for the extension.
+   - Full-text search (title search only today).
+   - Item reordering in desktop app (no API yet).
+   - Import an offline desktop library into the account.

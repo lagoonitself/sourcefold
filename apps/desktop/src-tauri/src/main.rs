@@ -105,6 +105,8 @@ fn main() {
             commands::delete_item,
             commands::update_item_note,
             commands::create_note,
+            commands::add_image,
+            commands::open_item_file,
             commands::update_note,
             commands::search_items,
             commands::get_settings,

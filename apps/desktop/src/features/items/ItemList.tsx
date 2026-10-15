@@ -9,7 +9,6 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
@@ -23,6 +22,7 @@ import {
   isAnyDialogOpen,
 } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
+import { Kbd } from "@/components/ui/Kbd";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,10 +31,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/DropdownMenu";
 import type { Folder, Item } from "@/lib/types";
-import { deleteItem, moveItem, renameItem } from "@/lib/api";
-import { openUrl, cn } from "@/lib/utils";
+import { deleteItem, openItemFile, renameItem, shouldUseTauri } from "@/lib/api";
+import { getRemoteConfig } from "@/lib/remote-client";
+import { openUrl, cn, errorMessage } from "@/lib/utils";
 import { NoteDialog } from "./NoteDialog";
 import { MoveItemDialog } from "./MoveItemDialog";
+import { formatSavedDate, getSourceKind, StatusIcon } from "./source-kinds";
+import { onGroupAction } from "./group-actions";
 import { hasTextSelection, isMacPlatform, isTypingContext } from "../shortcuts/key-utils";
 
 export interface ItemListProps {
@@ -47,6 +50,39 @@ export interface ItemListProps {
   onOpenReader?: (item: Item) => void;
 }
 
+function linkOf(item: Item): string | null {
+  return item.source_url || item.canonical_url || null;
+}
+
+function linksLabel(count: number) {
+  return count === 1 ? "1 link" : `${count} links`;
+}
+
+function authorOf(item: Item): string | null {
+  if ((item.kind !== "substack" && item.kind !== "x") || !item.meta) return null;
+  const author = (item.meta as Record<string, unknown>).author;
+  return typeof author === "string" && author.trim() ? author : null;
+}
+
+/** Images have no web page: offline they open in the system viewer, signed in on the web app. */
+async function openImage(item: Item) {
+  if (shouldUseTauri()) {
+    try {
+      await openItemFile(item.id);
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't open that image."));
+    }
+    return;
+  }
+  const base = getRemoteConfig().remoteApiUrl.replace(/\/+$/, "");
+  if (!base) {
+    toast.error("Couldn't open that image.");
+    return;
+  }
+  toast.info("Opening this group in the web app to view the image");
+  await openUrl(`${base}/?folder=${encodeURIComponent(item.folder_id)}`);
+}
+
 export function ItemList({
   items,
   folders,
@@ -57,6 +93,8 @@ export function ItemList({
   onOpenReader,
 }: ItemListProps) {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [selecting, setSelecting] = React.useState(false);
+  const [copiedAll, setCopiedAll] = React.useState(false);
   const [internalFocusedId, setInternalFocusedId] = React.useState<string | null>(null);
 
   const focusedItemId = externalFocusedId ?? internalFocusedId ?? (items[0]?.id || null);
@@ -79,8 +117,32 @@ export function ItemList({
   const [isRenaming, setIsRenaming] = React.useState(false);
 
   const lastGTimeRef = React.useRef<number>(0);
+  const lastToggledIdRef = React.useRef<string | null>(null);
+  const copiedTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectAllRef = React.useRef<HTMLInputElement>(null);
   const isMac = React.useMemo(() => isMacPlatform(), []);
   const listContainerRef = React.useRef<HTMLDivElement>(null);
+
+  const selectionMode = selecting || selectedIds.size > 0;
+  const linkItems = React.useMemo(() => items.filter((i) => linkOf(i)), [items]);
+  const selectedItems = React.useMemo(
+    () => items.filter((i) => selectedIds.has(i.id)),
+    [items, selectedIds],
+  );
+  const allSelected = items.length > 0 && selectedItems.length === items.length;
+
+  React.useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selectedItems.length > 0 && !allSelected;
+    }
+  }, [selectedItems.length, allSelected, selectionMode]);
+
+  React.useEffect(
+    () => () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    },
+    [],
+  );
 
   // Keep focused row valid when items change
   React.useEffect(() => {
@@ -90,6 +152,16 @@ export function ItemList({
       setFocusedItemId(items[0].id);
     }
   }, [items, focusedItemId, setFocusedItemId]);
+
+  // Drop selections for sources that left the list (moved, deleted, or another group opened).
+  React.useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const ids = new Set(items.map((i) => i.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [items]);
 
   // Scroll focused row into view
   React.useEffect(() => {
@@ -106,12 +178,17 @@ export function ItemList({
     return items.find((i) => i.id === focusedItemId) || null;
   }, [items, focusedItemId]);
 
+  // What bulk actions apply to: the selection, else the focused row.
+  const actionTargets = selectedItems.length > 0 ? selectedItems : focusedItem ? [focusedItem] : [];
+
   const handleOpenSource = React.useCallback(
     (item: Item, options?: { forceExternal?: boolean }) => {
-      if (!options?.forceExternal && item.markdown && item.markdown.trim() && onOpenReader) {
+      if (item.kind === "image") {
+        void openImage(item);
+      } else if (!options?.forceExternal && item.markdown && item.markdown.trim() && onOpenReader) {
         onOpenReader(item);
       } else {
-        const url = item.source_url || item.canonical_url;
+        const url = linkOf(item);
         if (url) {
           openUrl(url);
         } else if (onOpenReader) {
@@ -122,34 +199,85 @@ export function ItemList({
     [onOpenReader],
   );
 
+  /** Copies the links of `targets` (one per line). Returns whether anything was copied. */
+  const copyLinks = React.useCallback(async (targets: Item[]): Promise<boolean> => {
+    const urls = targets.map(linkOf).filter((url): url is string => Boolean(url));
+
+    if (urls.length === 0) {
+      toast.info("No links to copy");
+      return false;
+    }
+
+    try {
+      await navigator.clipboard.writeText(urls.join("\n"));
+      toast.success(urls.length === 1 ? "Link copied" : `Copied ${linksLabel(urls.length)}`);
+      return true;
+    } catch {
+      toast.error("Couldn't copy to the clipboard. Try again.");
+      return false;
+    }
+  }, []);
+
   const handleCopyLinks = React.useCallback(
-    async (itemsToCopy?: Item[]) => {
-      const targets =
-        itemsToCopy && itemsToCopy.length > 0
-          ? itemsToCopy
-          : selectedIds.size > 0
-            ? items.filter((i) => selectedIds.has(i.id))
-            : focusedItem
-              ? [focusedItem]
-              : [];
+    (itemsToCopy?: Item[]) =>
+      copyLinks(itemsToCopy && itemsToCopy.length > 0 ? itemsToCopy : actionTargets),
+    [actionTargets, copyLinks],
+  );
 
-      const urls = targets
-        .map((i) => i.source_url || i.canonical_url)
-        .filter((url): url is string => Boolean(url));
+  const handleCopyAll = React.useCallback(async () => {
+    if (!(await copyLinks(linkItems))) return;
+    setCopiedAll(true);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopiedAll(false), 2000);
+  }, [copyLinks, linkItems]);
 
-      if (urls.length === 0) {
-        toast.info("No URLs found to copy");
-        return;
-      }
+  const stopSelecting = React.useCallback(() => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  }, []);
 
-      try {
-        await navigator.clipboard.writeText(urls.join("\n"));
-        toast.success(urls.length === 1 ? "Link copied" : `${urls.length} links copied`);
-      } catch {
-        toast.error("Failed to copy links");
-      }
+  const toggleSelecting = React.useCallback(() => {
+    if (selectionMode) stopSelecting();
+    else setSelecting(true);
+  }, [selectionMode, stopSelecting]);
+
+  const toggleSelected = React.useCallback(
+    (id: string, shiftKey = false) => {
+      const lastId = lastToggledIdRef.current;
+      lastToggledIdRef.current = id;
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        const select = !next.has(id);
+        if (shiftKey && lastId) {
+          const from = items.findIndex((i) => i.id === lastId);
+          const to = items.findIndex((i) => i.id === id);
+          if (from !== -1 && to !== -1) {
+            for (const item of items.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+              if (select) next.add(item.id);
+              else next.delete(item.id);
+            }
+          }
+        }
+        if (select) next.add(id);
+        else next.delete(id);
+        return next;
+      });
     },
-    [focusedItem, items, selectedIds],
+    [items],
+  );
+
+  const toggleAll = () => {
+    setSelectedIds(allSelected ? new Set() : new Set(items.map((i) => i.id)));
+  };
+
+  // Palette entries for this list
+  React.useEffect(
+    () =>
+      onGroupAction((action) => {
+        if (action === "select-mode") toggleSelecting();
+        else if (action === "copy-all-links") void handleCopyAll();
+      }),
+    [toggleSelecting, handleCopyAll],
   );
 
   // Range selection helper
@@ -284,13 +412,22 @@ export function ItemList({
       ) {
         e.preventDefault();
         if (focusedItem) {
-          setSelectedIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(focusedItem.id)) next.delete(focusedItem.id);
-            else next.add(focusedItem.id);
-            return next;
-          });
+          toggleSelected(focusedItem.id);
         }
+        return;
+      }
+
+      // Selection mode on/off: s
+      if (e.key === "s" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        toggleSelecting();
+        return;
+      }
+
+      // Copy every link in the group: Shift+Y
+      if (e.key === "Y" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        void handleCopyAll();
         return;
       }
 
@@ -303,10 +440,10 @@ export function ItemList({
         return;
       }
 
-      // Esc: clear selection
-      if (e.key === "Escape" && selectedIds.size > 0) {
+      // Esc: clear selection and leave selection mode
+      if (e.key === "Escape" && selectionMode) {
         e.preventDefault();
-        setSelectedIds(new Set());
+        stopSelecting();
         return;
       }
 
@@ -325,7 +462,7 @@ export function ItemList({
       // Move to group: m
       if (e.key === "m" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();
-        if (focusedItem || selectedIds.size > 0) {
+        if (actionTargets.length > 0) {
           setMoveOpen(true);
         }
         return;
@@ -356,7 +493,7 @@ export function ItemList({
       // Delete: Delete
       if (e.key === "Delete" && !e.altKey) {
         e.preventDefault();
-        if (focusedItem || selectedIds.size > 0) {
+        if (actionTargets.length > 0) {
           setDeleteConfirmOpen(true);
         }
         return;
@@ -370,24 +507,28 @@ export function ItemList({
     items,
     focusedItemId,
     focusedItem,
-    selectedIds,
+    selectionMode,
+    actionTargets,
     handleOpenSource,
     handleCopyLinks,
+    handleCopyAll,
     extendSelectionTo,
     setFocusedItemId,
+    stopSelecting,
+    toggleSelected,
+    toggleSelecting,
   ]);
 
   const handleDeleteConfirmed = async () => {
     setIsDeleting(true);
-    const idsToDelete =
-      selectedIds.size > 0 ? Array.from(selectedIds) : focusedItem ? [focusedItem.id] : [];
+    const idsToDelete = actionTargets.map((i) => i.id);
 
     try {
       await Promise.all(idsToDelete.map((id) => deleteItem(id)));
       toast.success(
         idsToDelete.length === 1 ? "Source deleted" : `${idsToDelete.length} sources deleted`,
       );
-      setSelectedIds(new Set());
+      stopSelecting();
       setDeleteConfirmOpen(false);
       await onRefresh();
     } catch {
@@ -416,78 +557,115 @@ export function ItemList({
     }
   };
 
+  const selectedLinkCount = selectedItems.filter((i) => linkOf(i)).length;
+
   return (
-    <div
-      ref={listContainerRef}
-      className={cn(
-        "flex flex-col flex-1 min-h-0 select-none rounded-[6px] transition-colors",
-        isFocusedRegion && "ring-1 ring-primary/40",
-      )}
-    >
-      {/* Batch toolbar when items are selected */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-2 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-foreground">{selectedIds.size} selected</span>
-            <span className="text-[11px] text-muted-foreground">(Esc to clear)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => void handleCopyLinks()}
-              title="Copy links (y / Mod+C)"
-            >
-              <Copy className="mr-1.5 size-3" />
-              <span>Copy links</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setMoveOpen(true)}
-              title="Move to group (m)"
-            >
-              <FolderIcon className="mr-1.5 size-3" />
-              <span>Move</span>
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setDeleteConfirmOpen(true)}
-              title="Delete (Delete)"
-            >
-              <Trash2 className="mr-1.5 size-3" />
-              <span>Delete</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setSelectedIds(new Set())}
-            >
-              <X className="size-3" />
-            </Button>
-          </div>
+    <div ref={listContainerRef} className="flex flex-col flex-1 min-h-0 select-none">
+      {/* List toolbar: Select and Copy all links, or the bulk actions in selection mode */}
+      {items.length > 0 && (
+        <div className="flex h-11 shrink-0 items-center gap-3 border-b border-border">
+          {selectionMode ? (
+            <>
+              <label className="ml-[3px] flex w-9 shrink-0 cursor-pointer items-center justify-center">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label="Select all sources"
+                  className="size-4 cursor-pointer accent-primary"
+                />
+              </label>
+              <span className="font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
+                {selectedItems.length > 0 ? `${selectedItems.length} selected` : "Select sources"}
+              </span>
+              <div className="mr-2 ml-auto flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={selectedLinkCount === 0}
+                  onClick={() => void handleCopyLinks(selectedItems)}
+                  title="Copy links (y)"
+                >
+                  <Copy className="size-3.5" aria-hidden="true" />
+                  <span>
+                    {selectedLinkCount > 0 ? `Copy ${linksLabel(selectedLinkCount)}` : "Copy links"}
+                  </span>
+                  <Kbd>y</Kbd>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={selectedItems.length === 0}
+                  onClick={() => setMoveOpen(true)}
+                  title="Move to group (m)"
+                >
+                  <FolderIcon className="size-3.5" aria-hidden="true" />
+                  <span>Move</span>
+                  <Kbd>m</Kbd>
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={selectedItems.length === 0}
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  title="Delete (Delete)"
+                >
+                  <Trash2 className="size-3.5" aria-hidden="true" />
+                  <span>Delete</span>
+                </Button>
+                <Button variant="ghost" size="sm" onClick={stopSelecting} title="Cancel (Esc)">
+                  <span>Cancel</span>
+                  <Kbd>Esc</Kbd>
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="mr-2 ml-auto flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={toggleSelecting} title="Select (s)">
+                <span>Select</span>
+                <Kbd>s</Kbd>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={linkItems.length === 0}
+                onClick={() => void handleCopyAll()}
+                title={
+                  linkItems.length === 0
+                    ? "No sources in this group have a link"
+                    : "Copy all links (Shift+Y)"
+                }
+              >
+                {copiedAll ? (
+                  <Check className="size-3.5 text-primary" aria-hidden="true" />
+                ) : (
+                  <Copy className="size-3.5" aria-hidden="true" />
+                )}
+                <span>{copiedAll ? "Copied" : "Copy all links"}</span>
+                {!copiedAll && <Kbd>⇧Y</Kbd>}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
       {/* Item rows */}
       <div className="divide-y divide-border overflow-y-auto flex-1">
         {items.length === 0 ? (
-          <div className="p-12 text-center text-xs text-muted-foreground">
-            No sources in this group. Press <kbd className="font-semibold text-foreground">a</kbd>{" "}
-            to add links.
+          <div className="py-12 font-sans text-sm text-muted-foreground">
+            Nothing here yet. Add Grokipedia links, or save a page with the Sourcefold extension.
+            Press <Kbd className="text-[11px]">a</Kbd> to add links.
           </div>
         ) : (
           items.map((item) => {
             const isSelected = selectedIds.has(item.id);
             const isFocusedRow = item.id === focusedItemId;
-            const hasNote = Boolean(item.note && item.note.trim());
+            const hasNote = Boolean(item.kind !== "note" && item.note && item.note.trim());
             const hasMarkdown = Boolean(item.markdown && item.markdown.trim());
-            const displayUrl = item.source_url || item.canonical_url;
+            const kind = getSourceKind(item.kind);
+            const KindIcon = kind.Icon;
+            const author = authorOf(item);
 
             return (
               <div
@@ -495,69 +673,77 @@ export function ItemList({
                 data-item-id={item.id}
                 onClick={() => {
                   setFocusedItemId(item.id);
-                  handleOpenSource(item);
+                  if (selectionMode) toggleSelected(item.id);
+                  else handleOpenSource(item);
                 }}
                 className={cn(
-                  "group relative flex items-start gap-3 p-3 transition-colors cursor-pointer",
-                  isSelected ? "bg-accent/40" : "hover:bg-muted/40",
+                  "group relative flex min-h-[48px] items-stretch transition-colors cursor-pointer",
+                  isSelected ? "bg-accent" : "hover:bg-muted",
+                  isFocusedRow && !isSelected && !isFocusedRegion && "bg-muted",
                   isFocusedRow && isFocusedRegion && "ring-2 ring-primary ring-inset",
-                  isFocusedRow && !isFocusedRegion && "border-l-2 border-primary/50",
                 )}
               >
-                {/* Selection Checkbox */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFocusedItemId(item.id);
-                    setSelectedIds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(item.id)) next.delete(item.id);
-                      else next.add(item.id);
-                      return next;
-                    });
-                  }}
-                  className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-input bg-background transition-colors hover:border-ring cursor-pointer"
-                >
-                  {isSelected && <Check className="size-3 text-primary font-bold" />}
-                </button>
+                <span
+                  className={cn("w-[3px] shrink-0 self-stretch", kind.barClass)}
+                  aria-hidden="true"
+                />
 
-                {/* Main Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {hasMarkdown && (
-                        <span
-                          title="Reader available (Enter to view)"
-                          className="inline-flex items-center"
-                        >
-                          <BookOpen className="size-3.5 shrink-0 text-primary" />
-                        </span>
-                      )}
-                      <h4 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                        {item.title}
-                      </h4>
-                    </div>
-                    <span className="text-[11px] text-muted-foreground shrink-0 uppercase tracking-wider font-mono">
-                      {item.kind}
-                    </span>
+                {selectionMode && (
+                  <div className="flex w-9 shrink-0 items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {}}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFocusedItemId(item.id);
+                        toggleSelected(item.id, e.shiftKey);
+                      }}
+                      aria-label={`Select ${item.title}`}
+                      className="size-4 cursor-pointer accent-primary"
+                    />
                   </div>
+                )}
 
-                  {displayUrl && (
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{displayUrl}</p>
-                  )}
-
-                  {hasNote && (
-                    <div className="mt-2 flex items-start gap-1.5 rounded-[4px] bg-muted/60 p-2 text-xs text-muted-foreground">
-                      <MessageSquare className="size-3.5 shrink-0 mt-0.5" />
-                      <p className="line-clamp-2 italic">{item.note}</p>
-                    </div>
-                  )}
+                <div className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-3 pr-2">
+                  <KindIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <div className="flex min-w-0 flex-1 items-baseline gap-2">
+                    <span className="truncate font-serif text-[15px] font-medium leading-[22px] text-foreground">
+                      {item.title}
+                    </span>
+                    {hasNote && (
+                      <span
+                        role="img"
+                        aria-label="Has a note"
+                        title={item.note ?? "Has a note"}
+                        className="inline-flex shrink-0 self-center text-muted-foreground"
+                      >
+                        <MessageSquare className="size-3.5" aria-hidden="true" />
+                      </span>
+                    )}
+                    {author && (
+                      <span className="shrink-0 font-sans text-[13px] leading-[18px] text-muted-foreground">
+                        {author}
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-24 shrink-0 text-right font-sans text-[13px] leading-[18px] text-muted-foreground">
+                    {kind.name}
+                  </div>
+                  <div className="w-16 shrink-0 text-right font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
+                    {formatSavedDate(item.created_at)}
+                  </div>
+                  <div className="flex w-5 shrink-0 items-center justify-end">
+                    <StatusIcon status={item.status} error={item.error} />
+                  </div>
                 </div>
 
-                {/* Row actions */}
+                {/* Row actions: on hover, on keyboard focus, and on the keyboard-focused row */}
                 <div
-                  className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className={cn(
+                    "flex w-[60px] shrink-0 items-center justify-end gap-1 pr-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                    isFocusedRow && isFocusedRegion && "opacity-100",
+                  )}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -567,7 +753,7 @@ export function ItemList({
                       setNoteItem(item);
                     }}
                     aria-label="Add or edit note"
-                    className="flex size-7 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                    className="flex size-7 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-background hover:text-foreground cursor-pointer"
                     title="Note (n)"
                   >
                     <MessageSquare className="size-3.5" />
@@ -578,7 +764,7 @@ export function ItemList({
                       <button
                         type="button"
                         aria-label="Item menu"
-                        className="flex size-7 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                        className="flex size-7 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-background hover:text-foreground cursor-pointer"
                       >
                         <MoreVertical className="size-3.5" />
                       </button>
@@ -609,7 +795,7 @@ export function ItemList({
                       >
                         <div className="flex items-center">
                           <ExternalLink className="mr-2 size-3.5" />
-                          <span>Open in browser</span>
+                          <span>{item.kind === "image" ? "Open image" : "Open in browser"}</span>
                         </div>
                         <kbd className="text-[9px] font-mono text-muted-foreground">⇧↵ / o</kbd>
                       </DropdownMenuItem>
@@ -699,12 +885,12 @@ export function ItemList({
 
       {/* Move Dialog */}
       <MoveItemDialog
-        item={focusedItem}
+        items={actionTargets}
         folders={folders}
         open={moveOpen}
         onOpenChange={setMoveOpen}
         onMoved={async () => {
-          setSelectedIds(new Set());
+          stopSelecting();
           await onRefresh();
         }}
       />
@@ -762,12 +948,14 @@ export function ItemList({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {selectedIds.size > 1 ? `Delete ${selectedIds.size} sources` : "Delete source"}
+              {actionTargets.length > 1
+                ? `Delete ${actionTargets.length} sources`
+                : "Delete source"}
             </DialogTitle>
             <DialogDescription>
-              {selectedIds.size > 1
-                ? `Are you sure you want to delete these ${selectedIds.size} sources? This action cannot be undone.`
-                : `Are you sure you want to delete "${focusedItem?.title || "this source"}"?`}
+              {actionTargets.length > 1
+                ? `Are you sure you want to delete these ${actionTargets.length} sources? This action cannot be undone.`
+                : `Are you sure you want to delete "${actionTargets[0]?.title || "this source"}"?`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

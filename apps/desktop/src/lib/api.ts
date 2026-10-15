@@ -312,6 +312,36 @@ export async function updateStandaloneNote(
   });
 }
 
+/** Images can be stored on this computer (offline mode). Signed-in image upload needs the web app. */
+export function canAddImages(): boolean {
+  return shouldUseTauri();
+}
+
+export async function addImage(
+  folderId: string,
+  fileName: string,
+  mimeType: string,
+  dataBase64: string,
+): Promise<Item> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Item>("add_image", {
+      folderId,
+      fileName,
+      mimeType,
+      dataBase64,
+    });
+  }
+  throw new Error("Adding images isn't available while signed in yet. Use the web app.");
+}
+
+/** Opens an offline image with the system's image viewer. */
+export async function openItemFile(id: string): Promise<void> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<void>("open_item_file", { id });
+  }
+  throw new Error("This image is stored in your account. Open it from the web app.");
+}
+
 export async function searchItems(query: string, projectId?: string | null): Promise<Item[]> {
   if (shouldUseTauri()) {
     return await tauriInvoke<Item[]>("search_items", {

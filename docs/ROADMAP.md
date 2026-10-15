@@ -84,7 +84,9 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] Extension auto-target resolution (desktop signed in -> web API, desktop offline -> local SQLite, fallback -> configured web app).
   - [x] Keyboard-first desktop UI with single shortcut registry, command palette (`Mod+K`), reader view (`Enter`), and shortcuts cheat sheet (`?`).
   - [x] Web API routes accept Bearer token via `requireApiUser` with admin client and explicit `user_id` filtering.
+  - [x] Desktop group view matches the web's: header (breadcrumb, serif title, source count, New subgroup / Add image / New note), Select mode and Copy all links, subgroup rows, and source rows with a colored type bar, type icon, source name, saved date and status check. Offline mode can add images (`add_image`); signed-in image upload needs a web API route that accepts a token (not built).
   - [ ] Owner's hands-on test of desktop sign-in and sync.
+  - [ ] Owner's hands-on test of the desktop group view (see HANDOFF).
   - [ ] Extension test against desktop signed-in and offline modes.
   - [ ] First macOS CI run.
   - [ ] First desktop release.

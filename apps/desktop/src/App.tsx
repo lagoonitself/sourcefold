@@ -21,6 +21,8 @@ import {
 import { ProjectSwitcher } from "@/features/projects/ProjectSwitcher";
 import { FolderTree } from "@/features/folders/FolderTree";
 import { ItemList } from "@/features/items/ItemList";
+import { GroupHeader, SubgroupList } from "@/features/items/GroupHeader";
+import { dispatchGroupAction, groupActionForCommand } from "@/features/items/group-actions";
 import { AddLinksDialog } from "@/features/grokipedia/AddLinksDialog";
 import { SearchDialog } from "@/features/search/SearchDialog";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
@@ -373,8 +375,17 @@ export function App() {
         case "nav.next-group":
           handleNextGroup();
           break;
-        default:
+        default: {
+          const groupAction = groupActionForCommand(cmdId);
+          if (!groupAction) break;
+          if (activeFolderId) {
+            setActiveRegion("list");
+            dispatchGroupAction(groupAction);
+          } else {
+            toast.info("Select a group first");
+          }
           break;
+        }
       }
     },
     [
@@ -554,15 +565,38 @@ export function App() {
         onClick={() => setActiveRegion("list")}
       >
         {activeFolderId ? (
-          <ItemList
-            items={items}
-            folders={folders}
-            isFocusedRegion={activeRegion === "list"}
-            focusedItemId={focusedItemId}
-            onFocusedItemChange={setFocusedItemId}
-            onRefresh={refreshItems}
-            onOpenReader={(item) => setReaderItem(item)}
-          />
+          <div className="flex min-h-0 flex-1 flex-col px-8 pt-6">
+            <GroupHeader
+              folders={folders}
+              folderId={activeFolderId}
+              sourceCount={items.length}
+              isFocusedRegion={activeRegion === "list"}
+              onSelectGroup={(id) => {
+                setActiveFolderId(id);
+                setFocusedFolderId(id);
+              }}
+              onNewNote={() => setNewNoteOpen(true)}
+              onRefresh={handleRefresh}
+            />
+            <SubgroupList
+              folders={folders}
+              folderId={activeFolderId}
+              onSelectGroup={(id) => {
+                setActiveFolderId(id);
+                setFocusedFolderId(id);
+              }}
+            />
+            <ItemList
+              key={activeFolderId}
+              items={items}
+              folders={folders}
+              isFocusedRegion={activeRegion === "list"}
+              focusedItemId={focusedItemId}
+              onFocusedItemChange={setFocusedItemId}
+              onRefresh={refreshItems}
+              onOpenReader={(item) => setReaderItem(item)}
+            />
+          </div>
         ) : hasProjects && isProjectWithNoGroups ? (
           <div className="flex h-full flex-col items-center justify-center p-8 text-center">
             <div className="size-12 rounded-xl bg-muted/60 flex items-center justify-center text-muted-foreground mb-3">

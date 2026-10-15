@@ -1,4 +1,5 @@
 use tauri::State;
+use tauri_plugin_opener::OpenerExt;
 use crate::db::Database;
 use crate::models::{AddXPostRequest, CheckUrlResult, Item};
 use crate::service::{self, CapturePayload};
@@ -123,4 +124,42 @@ pub async fn search_items(
     project_id: Option<String>,
 ) -> Result<Vec<Item>, String> {
     db.search_items(&query, project_id.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn add_image(
+    db: State<'_, Database>,
+    folder_id: String,
+    file_name: String,
+    mime_type: String,
+    data_base64: String,
+) -> Result<Item, String> {
+    let bytes = service::decode_base64(&data_base64)?;
+    service::save_image(&db, &folder_id, &file_name, &mime_type, &bytes).map_err(|e| e.message)
+}
+
+/// Opens an offline image with the system's default viewer.
+#[tauri::command]
+pub async fn open_item_file(
+    app: tauri::AppHandle,
+    db: State<'_, Database>,
+    id: String,
+) -> Result<(), String> {
+    let item = db.get_item(&id).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => "Source not found".to_string(),
+        other => other.to_string(),
+    })?;
+    let path = match (item.kind.as_str(), item.storage_path) {
+        ("image", Some(path)) => path,
+        _ => return Err("This source has no file to open.".to_string()),
+    };
+    let is_image_file = std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "gif" | "webp"))
+        .unwrap_or(false);
+    if !is_image_file || !std::path::Path::new(&path).is_file() {
+        return Err("The image file is missing from disk.".to_string());
+    }
+    app.opener().open_path(path, None::<&str>).map_err(|e| e.to_string())
 }

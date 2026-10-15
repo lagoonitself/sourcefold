@@ -1,0 +1,26 @@
+/** Actions the group view's header and list can run from the command palette. */
+export type GroupAction = "new-subgroup" | "add-image" | "select-mode" | "copy-all-links";
+
+export const GROUP_ACTION_EVENT = "sourcefold:group-action";
+
+const COMMAND_ACTIONS: Record<string, GroupAction> = {
+  "list.new-subgroup": "new-subgroup",
+  "list.add-image": "add-image",
+  "list.select-mode": "select-mode",
+  "list.copy-all-links": "copy-all-links",
+};
+
+export function groupActionForCommand(commandId: string): GroupAction | null {
+  return COMMAND_ACTIONS[commandId] ?? null;
+}
+
+export function dispatchGroupAction(action: GroupAction): void {
+  window.dispatchEvent(new CustomEvent<GroupAction>(GROUP_ACTION_EVENT, { detail: action }));
+}
+
+/** Calls `handler` whenever the palette (or anything else) dispatches a group action. */
+export function onGroupAction(handler: (action: GroupAction) => void): () => void {
+  const listener = (event: Event) => handler((event as CustomEvent<GroupAction>).detail);
+  window.addEventListener(GROUP_ACTION_EVENT, listener);
+  return () => window.removeEventListener(GROUP_ACTION_EVENT, listener);
+}

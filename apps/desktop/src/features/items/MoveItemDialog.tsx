@@ -16,7 +16,8 @@ import { filterFuzzy } from "../command-palette/fuzzy";
 import { cn } from "@/lib/utils";
 
 export interface MoveItemDialogProps {
-  item: Item | null;
+  /** The sources to move; all of them live in the group being viewed. */
+  items: Item[];
   folders: Folder[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,7 +33,7 @@ interface FlatGroupOption {
 }
 
 export function MoveItemDialog({
-  item,
+  items,
   folders,
   open,
   onOpenChange,
@@ -42,6 +43,7 @@ export function MoveItemDialog({
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [isMoving, setIsMoving] = React.useState(false);
   const listRef = React.useRef<HTMLDivElement>(null);
+  const currentFolderId = items[0]?.folder_id;
 
   React.useEffect(() => {
     if (open) {
@@ -68,7 +70,7 @@ export function MoveItemDialog({
           name: node.name,
           fullPath,
           projectName,
-          isCurrent: item?.folder_id === node.id,
+          isCurrent: currentFolderId === node.id,
         });
         if (node.children && node.children.length > 0) {
           collect(node.children, fullPath, projectName);
@@ -81,7 +83,7 @@ export function MoveItemDialog({
     }
 
     return list;
-  }, [tree, item?.folder_id]);
+  }, [tree, currentFolderId]);
 
   const filteredGroups = React.useMemo(() => {
     if (!filterQuery.trim()) {
@@ -108,15 +110,19 @@ export function MoveItemDialog({
   }, [selectedIndex]);
 
   const handleMoveTo = async (targetFolderId: string) => {
-    if (!item || !targetFolderId || targetFolderId === item.folder_id || isMoving) {
+    if (items.length === 0 || !targetFolderId || targetFolderId === currentFolderId || isMoving) {
       return;
     }
 
     setIsMoving(true);
     try {
-      await moveItem(item.id, targetFolderId);
+      await Promise.all(items.map((item) => moveItem(item.id, targetFolderId)));
       const targetFolder = folders.find((f) => f.id === targetFolderId);
-      toast.success(`Moved to ${targetFolder?.name || "group"}`);
+      toast.success(
+        items.length === 1
+          ? `Moved to ${targetFolder?.name || "group"}`
+          : `Moved ${items.length} sources to ${targetFolder?.name || "group"}`,
+      );
       onOpenChange(false);
       if (onMoved) await onMoved();
     } catch (err: any) {
@@ -154,7 +160,9 @@ export function MoveItemDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[460px] p-0 overflow-hidden" onKeyDown={handleKeyDown}>
         <DialogHeader className="p-4 pb-2 mb-0">
-          <DialogTitle>Move source to group</DialogTitle>
+          <DialogTitle>
+            {items.length > 1 ? `Move ${items.length} sources to group` : "Move source to group"}
+          </DialogTitle>
         </DialogHeader>
 
         {/* Type-to-filter input */}

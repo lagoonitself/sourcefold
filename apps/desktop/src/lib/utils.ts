@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Tauri commands reject with a plain string, fetch/Error with an Error. */
+export function errorMessage(err: unknown, fallback: string): string {
+  if (typeof err === "string" && err.trim()) return err;
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
+
 export async function openUrl(url: string) {
   if (typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__)) {
     try {

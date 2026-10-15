@@ -1186,6 +1186,126 @@ pub fn recent_x_items(db: &Database, folder_id: &str) -> Result<Vec<RecentXItem>
         .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))
 }
 
+// -----------------------------------------------------------------------------
+// Images (offline mode)
+// -----------------------------------------------------------------------------
+
+pub const MAX_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
+/// File extension for the image types the web app accepts too.
+pub fn image_extension(mime_type: &str) -> Option<&'static str> {
+    match mime_type {
+        "image/png" => Some("png"),
+        "image/jpeg" => Some("jpg"),
+        "image/gif" => Some("gif"),
+        "image/webp" => Some("webp"),
+        _ => None,
+    }
+}
+
+/// Decodes standard base64 (padding optional, whitespace ignored).
+pub fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
+    let mut out = Vec::with_capacity(input.len() / 4 * 3);
+    let mut buffer: u32 = 0;
+    let mut bits: u32 = 0;
+    for byte in input.bytes() {
+        let value = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' => break,
+            b' ' | b'\n' | b'\r' | b'\t' => continue,
+            _ => return Err("The image data isn't valid base64.".to_string()),
+        };
+        buffer = (buffer << 6) | u32::from(value);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+            buffer &= (1 << bits) - 1;
+        }
+    }
+    Ok(out)
+}
+
+/// Stores an image on disk next to the group's Markdown files and adds it to the group.
+pub fn save_image(
+    db: &Database,
+    folder_id: &str,
+    file_name: &str,
+    mime_type: &str,
+    bytes: &[u8],
+) -> Result<Item, ServiceError> {
+    let extension = image_extension(mime_type)
+        .ok_or_else(|| ServiceError::bad_request("Upload a PNG, JPEG, GIF or WebP image."))?;
+    if bytes.is_empty() {
+        return Err(ServiceError::bad_request("That image file is empty."));
+    }
+    if bytes.len() > MAX_IMAGE_BYTES {
+        return Err(ServiceError::bad_request("Images can be up to 10 MB."));
+    }
+
+    let trimmed_name = file_name.trim();
+    let base_name = match trimmed_name.rfind('.') {
+        Some(index) if index > 0 => trimmed_name[..index].trim(),
+        _ => trimmed_name,
+    };
+    let title: String = if base_name.is_empty() {
+        "Untitled image".to_string()
+    } else {
+        base_name.chars().take(500).collect()
+    };
+
+    let storage_root = resolve_storage_dir(db);
+    let (rel_dir, _) = resolve_folder_path(db, folder_id);
+    let target_dir = storage_root.join(rel_dir);
+    fs::create_dir_all(&target_dir).map_err(|e| {
+        ServiceError::internal(format!("Couldn't create the folder for the image: {}", e), "io_error")
+    })?;
+
+    let short_id: String = uuid::Uuid::new_v4().to_string().chars().take(8).collect();
+    let file_path = target_dir.join(format!("{}-{}.{}", slugify(&title, 50), short_id, extension));
+    fs::write(&file_path, bytes).map_err(|e| {
+        ServiceError::internal(format!("Couldn't save the image file: {}", e), "io_error")
+    })?;
+
+    let request = SaveItemRequest {
+        folder_id: folder_id.to_string(),
+        kind: "image".to_string(),
+        title,
+        source_url: None,
+        canonical_url: None,
+        status: "saved".to_string(),
+        error: None,
+        markdown: None,
+        meta: Some(json!({
+            "mime_type": mime_type,
+            "file_name": file_name,
+            "size": bytes.len(),
+        })),
+        note: None,
+        position: None,
+    };
+    let mut item = match db.save_item(request) {
+        Ok(item) => item,
+        Err(e) => {
+            let _ = fs::remove_file(&file_path);
+            return Err(ServiceError::internal(format!("Database error: {}", e), "db_error"));
+        }
+    };
+
+    let path_string = file_path.to_string_lossy().to_string();
+    if let Err(e) = db.update_item_storage_path(&item.id, &path_string) {
+        let _ = db.delete_item(&item.id);
+        let _ = fs::remove_file(&file_path);
+        return Err(ServiceError::internal(format!("Database error: {}", e), "db_error"));
+    }
+    item.storage_path = Some(path_string);
+    Ok(item)
+}
+
 pub fn list_folders(db: &Database) -> Result<Vec<Folder>, ServiceError> {
     Ok(db.get_folders(false))
 }
@@ -1464,5 +1584,54 @@ mod tests {
         assert!(!article.body_markdown.contains("Nested TOC item"));
         assert!(!article.body_markdown.contains("Table of contents"));
         assert_eq!(article.references.len(), 1);
+    }
+
+    #[test]
+    fn test_decode_base64() {
+        assert_eq!(decode_base64("aGVsbG8=").unwrap(), b"hello");
+        assert_eq!(decode_base64("aGVsbG8").unwrap(), b"hello");
+        assert_eq!(decode_base64("aGVs\nbG8=").unwrap(), b"hello");
+        assert_eq!(decode_base64("").unwrap(), Vec::<u8>::new());
+        assert!(decode_base64("a*b").is_err());
+    }
+
+    #[test]
+    fn test_save_image_writes_file_and_item() {
+        let db = Database::open_in_memory().unwrap();
+        let root = std::env::temp_dir().join(format!("sourcefold-image-test-{}", uuid::Uuid::new_v4()));
+        db.set_setting("storage_dir", root.to_str().unwrap()).unwrap();
+        let project = db.create_folder("Cars", None).unwrap();
+        let group = db.create_folder("Engines", Some(&project.id)).unwrap();
+
+        let item = save_image(&db, &group.id, "My Photo.PNG", "image/png", b"not really a png").unwrap();
+        assert_eq!(item.kind, "image");
+        assert_eq!(item.title, "My Photo");
+        assert_eq!(item.meta["size"], 16);
+        let path = item.storage_path.clone().unwrap();
+        assert!(path.ends_with(".png"));
+        assert_eq!(fs::read(&path).unwrap(), b"not really a png");
+        assert_eq!(db.get_item(&item.id).unwrap().storage_path.as_deref(), Some(path.as_str()));
+        assert_eq!(db.get_items(&group.id).len(), 1);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_save_image_rejects_bad_input() {
+        let db = Database::open_in_memory().unwrap();
+        let root = std::env::temp_dir().join(format!("sourcefold-image-test-{}", uuid::Uuid::new_v4()));
+        db.set_setting("storage_dir", root.to_str().unwrap()).unwrap();
+        let project = db.create_folder("Cars", None).unwrap();
+        let group = db.create_folder("Engines", Some(&project.id)).unwrap();
+
+        assert!(save_image(&db, &group.id, "a.svg", "image/svg+xml", b"x").is_err());
+        assert!(save_image(&db, &group.id, "a.png", "image/png", b"").is_err());
+        let too_big = vec![0u8; MAX_IMAGE_BYTES + 1];
+        assert!(save_image(&db, &group.id, "a.png", "image/png", &too_big).is_err());
+        // Images can't be saved straight into a project.
+        assert!(save_image(&db, &project.id, "a.png", "image/png", b"x").is_err());
+        assert!(db.get_items(&group.id).is_empty());
+
+        let _ = fs::remove_dir_all(&root);
     }
 }

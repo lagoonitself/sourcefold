@@ -2,13 +2,23 @@ import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 import { getAllowedEmails } from "@/lib/env";
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { desktopCorsHeaders } from "@/lib/desktop-cors";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const cors = pathname.startsWith("/api/")
+    ? desktopCorsHeaders(request.headers.get("origin"))
+    : null;
+  if (cors && request.method === "OPTIONS") {
+    return new NextResponse(null, { status: 204, headers: cors });
+  }
+
   const authHeader = request.headers.get("authorization");
   if (pathname.startsWith("/api/") && authHeader && /^Bearer(\s+|$)/i.test(authHeader.trim())) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    for (const [name, value] of Object.entries(cors ?? {})) response.headers.set(name, value);
+    return response;
   }
 
   const { response, user } = await updateSession(request);

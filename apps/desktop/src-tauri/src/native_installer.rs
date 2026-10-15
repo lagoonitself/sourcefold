@@ -5,6 +5,18 @@ use serde_json::json;
 
 pub const HOST_NAME: &str = "com.sourcefold.native";
 
+/// `reg.exe` without a console window; otherwise every call flashes a terminal on screen.
+fn reg_command() -> Command {
+    let mut command = Command::new("reg");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
 /// The pinned Sourcefold browser extension ID derived from the extension's stable public key
 /// (`key` in `apps/extension/wxt.config.ts`).
 pub const PINNED_EXTENSION_ID: &str = "ccgpcafkpkdfndhamegkcafmhfpkajml";
@@ -279,7 +291,7 @@ pub fn install_native_host(requested_extension_ids: &[String]) -> Result<String,
     if cfg!(windows) {
         let manifest_path_str = manifest_path.to_string_lossy().to_string();
         for key in windows_registry_keys() {
-            let status = Command::new("reg")
+            let status = reg_command()
                 .args(["add", &key, "/ve", "/t", "REG_SZ", "/d", &manifest_path_str, "/f"])
                 .status();
 
@@ -312,7 +324,7 @@ pub fn is_native_host_installed() -> bool {
     if cfg!(windows) {
         // Query the Chrome registry key to confirm it points to an existing manifest
         let chrome_key = windows_registry_keys().into_iter().next().unwrap_or_default();
-        Command::new("reg")
+        reg_command()
             .args(["query", &chrome_key, "/ve"])
             .output()
             .map(|out| out.status.success())
@@ -352,7 +364,7 @@ pub fn uninstall_native_host() -> Result<(), String> {
 
     if cfg!(windows) {
         for key in windows_registry_keys() {
-            let _ = Command::new("reg").args(["delete", &key, "/f"]).status();
+            let _ = reg_command().args(["delete", &key, "/f"]).status();
         }
     }
 

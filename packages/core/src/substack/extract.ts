@@ -1,6 +1,7 @@
 import { Readability } from "@mozilla/readability";
 import type { SubstackCapture, SubstackExtractResult } from "../capture-types";
 import { htmlToMarkdown } from "../html-to-markdown";
+import { substackBodyToMarkdown } from "./body";
 import { substackPostFromPreloads } from "./post";
 import { findSubstackPreloads } from "./preloads";
 
@@ -344,10 +345,8 @@ export function extractSubstack(doc: Document, pageUrl: string): SubstackExtract
     doc.querySelector(".available-content .body.markup") ?? doc.querySelector(".body.markup");
 
   if (bodyEl) {
-    const clone = bodyEl.cloneNode(true) as Element;
-    cleanElement(clone);
-    const rawMd = htmlToMarkdown(clone.innerHTML);
-    const candidate = stripTitleHeading(rawMd, title);
+    // Same cleanup as the embedded post data: images kept, widgets dropped, footnotes as [^n].
+    const candidate = substackBodyToMarkdown(bodyEl.innerHTML, title, doc);
     if (candidate.trim()) {
       markdown = candidate;
     }

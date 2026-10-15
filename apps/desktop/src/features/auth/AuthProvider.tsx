@@ -1,6 +1,7 @@
 import * as React from "react";
 import { CircleAlert } from "lucide-react";
 import { isTauri } from "@/lib/api";
+import { syncLocalCopy } from "../local-copy/local-copy";
 import { getSessionStatus, sessionFromStatus, type Session } from "@/lib/remote-client";
 import { WelcomeScreen } from "./WelcomeScreen";
 
@@ -60,6 +61,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
       window.removeEventListener("sourcefold:session-expired", onAuthChanged);
     };
   }, [refresh]);
+
+  // Signed in, every reload also brings the copy on this computer up to date (it skips itself
+  // when turned off, and never runs twice at once).
+  React.useEffect(() => {
+    if (!signedIn || offlineMode) return;
+    const sync = () => {
+      syncLocalCopy().catch((e) => console.error("Local copy failed", e));
+    };
+    sync();
+    window.addEventListener("sourcefold:refresh", sync);
+    return () => window.removeEventListener("sourcefold:refresh", sync);
+  }, [signedIn, offlineMode]);
 
   // Signed-in views reload on window focus and every 30 s while visible. Nothing runs once the
   // session is gone (sign-out, or a 401 that cleared it).

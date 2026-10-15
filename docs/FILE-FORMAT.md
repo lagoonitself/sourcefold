@@ -81,6 +81,7 @@ Substack only: if there is a subtitle, it goes on its own line between the title
 ### Body
 
 - Clean CommonMark plus GFM tables and footnotes. No raw HTML, scripts, buttons, share widgets, subscribe boxes or "like/comment" chrome.
+- Substack images stay where they were in the post, as a Markdown image linking to the original upload (`substack-post-media.s3.amazonaws.com`, not a resized CDN copy), with the caption in italics as its own paragraph below: `![<alt>](<url>)` then `*<caption>*`. Galleries list each image, then the caption. The image files themselves aren't copied; they stay on Substack's servers.
 - Headings inside the body start at `##`. The body never repeats the `# Title`.
 - One blank line between blocks; never two or more in a row.
 - Grokipedia citations are GFM footnotes `[^n]`. A run of markers lists each number once, in first-seen order: `[^76][^77][^76]` becomes `[^76][^77]`.

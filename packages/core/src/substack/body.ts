@@ -1,7 +1,8 @@
 import { htmlToMarkdown } from "../html-to-markdown";
 
 // Turns a Substack `body_html` into a clean Markdown body (see docs/FILE-FORMAT.md):
-// no images, widgets or share chrome, headings start at ##, footnotes as GFM footnotes.
+// images as Markdown image links with their captions, no widgets or share chrome, headings start
+// at ##, footnotes as GFM footnotes.
 
 const REMOVE_SELECTORS = [
   ".captioned-image-container",
@@ -31,6 +32,9 @@ const REMOVE_SELECTORS = [
   '[data-component-name="CaptionedButtonToDOM"]',
   '[data-component-name="InstallSubstackAppToDOM"]',
 ];
+
+const IMAGE_TOKEN = (n: number) => `SFIMAGE${n}SFEND`;
+const IMAGE_TOKEN_PATTERN = /SFIMAGE(\d+)SFEND/g;
 
 const FOOTNOTE_REF = (n: string) => `SFFOOTNOTEREF${n}SFEND`;
 const FOOTNOTE_REF_PATTERN = /SFFOOTNOTEREF([A-Za-z0-9-]+)SFEND/g;
@@ -88,6 +92,89 @@ function replaceEmbeds(root: Element, doc: Document): void {
   )) {
     el.remove();
   }
+}
+
+function webUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    // Keep the link intact inside Markdown's (…).
+    return url
+      .toString()
+      .replace(
+        /[()\s<>]/g,
+        (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
+      );
+  } catch {
+    return null;
+  }
+}
+
+function escapeAlt(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/([\\[\]])/g, "\\$1");
+}
+
+// The original upload (data-attrs `src`) rather than a resized CDN copy, like sbstck-dl.
+function imageFrom(img: Element): string | null {
+  const attrs = readDataAttrs(img);
+  const alt = stringAttr(attrs, "alt") ?? img.getAttribute("alt")?.trim() ?? "";
+  const url = webUrl(stringAttr(attrs, "src")) ?? webUrl(img.getAttribute("src"));
+  return url ? `![${escapeAlt(alt)}](${url})` : null;
+}
+
+function captionOf(el: Element): string {
+  const caption = el.querySelector("figcaption");
+  if (!caption) return "";
+  const text = oneLine(htmlToMarkdown(caption.innerHTML));
+  return text ? `*${text}*` : "";
+}
+
+// Images become a token paragraph (the converter drops <img>), filled in after conversion so the
+// converter can't escape the link.
+function replaceImages(root: Element, doc: Document): string[] {
+  const blocks: string[] = [];
+  const swap = (el: Element, lines: string[]) => {
+    const kept = lines.filter(Boolean);
+    if (kept.length === 0) {
+      el.remove();
+      return;
+    }
+    const p = doc.createElement("p");
+    p.textContent = IMAGE_TOKEN(blocks.length);
+    blocks.push(kept.join("\n\n"));
+    el.replaceWith(p);
+  };
+
+  for (const el of Array.from(root.querySelectorAll(".image-gallery-embed"))) {
+    const gallery = readDataAttrs(el)?.gallery as
+      { images?: { src?: unknown }[]; caption?: unknown } | undefined;
+    const images = (gallery?.images ?? [])
+      .map((image) => webUrl(typeof image.src === "string" ? image.src : null))
+      .map((url) => (url ? `![](${url})` : ""));
+    const caption = typeof gallery?.caption === "string" ? gallery.caption.trim() : "";
+    swap(el, [...images, caption ? `*${caption.replace(/\s+/g, " ")}*` : ""]);
+  }
+  for (const el of Array.from(root.querySelectorAll(".captioned-image-container, figure"))) {
+    if (!root.contains(el)) continue;
+    const images = Array.from(el.querySelectorAll("img")).map(imageFrom);
+    swap(el, [...images.map((i) => i ?? ""), captionOf(el)]);
+  }
+  for (const img of Array.from(root.querySelectorAll("img"))) {
+    if (!root.contains(img)) continue;
+    // Tracking pixels and icons aren't content.
+    const width = Number(img.getAttribute("width"));
+    if (width > 0 && width < 32) {
+      img.remove();
+      continue;
+    }
+    const target = img.closest("a.image-link, picture") ?? img;
+    swap(target, [imageFrom(img) ?? ""]);
+  }
+  return blocks;
 }
 
 function renameHeading(el: Element, level: number, doc: Document): void {
@@ -159,6 +246,7 @@ export function substackBodyToMarkdown(bodyHtml: string, title: string, doc: Doc
   const root = doc.createElement("div");
   root.innerHTML = bodyHtml;
 
+  const images = replaceImages(root, doc);
   for (const selector of REMOVE_SELECTORS) {
     for (const el of Array.from(root.querySelectorAll(selector))) el.remove();
   }
@@ -168,10 +256,9 @@ export function substackBodyToMarkdown(bodyHtml: string, title: string, doc: Doc
   removeLeadingTitle(root, title);
   demoteHeadings(root, doc);
 
-  let body = tidy(htmlToMarkdown(root.innerHTML)).replace(
-    FOOTNOTE_REF_PATTERN,
-    (_m, n: string) => `[^${n}]`,
-  );
+  let body = tidy(htmlToMarkdown(root.innerHTML))
+    .replace(FOOTNOTE_REF_PATTERN, (_m, n: string) => `[^${n}]`)
+    .replace(IMAGE_TOKEN_PATTERN, (_m, n: string) => images[Number(n)] ?? "");
   if (definitions.length > 0) {
     body = `${body}\n\n${definitions.join("\n")}`;
   }

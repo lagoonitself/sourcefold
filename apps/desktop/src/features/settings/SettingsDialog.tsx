@@ -30,6 +30,7 @@ import {
 } from "@/lib/remote-client";
 import { cn } from "@/lib/utils";
 import { SubstackCookieSettings } from "../substack/SubstackCookieSettings";
+import { LocalCopySettings } from "../local-copy/LocalCopySettings";
 
 export interface SettingsDialogProps {
   open: boolean;
@@ -253,7 +254,7 @@ export function SettingsDialog({
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-foreground">Storage Directory</label>
               <p className="text-[11px] text-muted-foreground">
-                Local directory where markdown articles, notes, and metadata are saved.
+                Folder on this computer where your sources are saved as Markdown files.
               </p>
               <div className="flex gap-2">
                 <Input
@@ -264,6 +265,8 @@ export function SettingsDialog({
                 />
               </div>
             </div>
+
+            <LocalCopySettings open={open} signedIn={Boolean(session) && !isOffline} />
 
             {/* Native Messaging Host Installer */}
             <div className="flex flex-col gap-2 rounded-[6px] border border-border p-3 bg-muted/20">

@@ -122,6 +122,10 @@ fn main() {
             commands::get_substack_cookie,
             commands::set_substack_cookie,
             commands::clear_substack_cookie,
+            commands::sync_local_copy,
+            commands::get_local_copy_enabled,
+            commands::set_local_copy_enabled,
+            commands::open_storage_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running sourcefold desktop application");

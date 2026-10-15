@@ -234,6 +234,33 @@ export async function downloadFileText(token: string, id: string): Promise<strin
   return res.text;
 }
 
+// Binary-safe download (images). Returns null when the file no longer exists.
+export async function downloadFileBytes(token: string, id: string): Promise<Uint8Array | null> {
+  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`);
+  url.searchParams.set("alt", "media");
+
+  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401) {
+    throw new DriveAuthError("Google Drive authorization expired or invalid.");
+  }
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    let data: unknown = null;
+    try {
+      data = await res.json();
+    } catch {
+      // Non-JSON response
+    }
+    throw new DriveApiError(
+      res.status,
+      extractErrorMessage(data, `Google Drive error (${res.status})`),
+    );
+  }
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 export async function uploadFile(
   token: string,
   options: {

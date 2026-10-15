@@ -82,7 +82,47 @@ describe("extractSubstack with preloads", () => {
     expect(markdown).toBe("Hello world.\n");
   });
 
-  it("drops images, widgets and the repeated title, and keeps embeds as links", () => {
+  it("keeps images as Markdown images with their captions, using the original upload", () => {
+    const attrs = JSON.stringify({
+      src: "https://substack-post-media.s3.amazonaws.com/public/images/abc_1630x1630.jpeg",
+      alt: "Chart [GDP]",
+    }).replace(/"/g, "&quot;");
+    const body = [
+      "<p>Intro.</p>",
+      `<div class="captioned-image-container"><figure><a class="image-link image2" href="https://substackcdn.com/image/fetch/x"><div class="image2-inset"><picture><source srcset="https://substackcdn.com/a.webp 424w"><img src="https://substackcdn.com/image/fetch/w_1456/a.jpeg" width="724" data-attrs="${attrs}"></picture></div></a><figcaption class="image-caption">Source: <a href="https://fred.stlouisfed.org/">FRED</a></figcaption></figure></div>`,
+      '<p><img src="https://example.com/plain(1).png" alt="Plain"></p>',
+      '<p><img src="https://example.com/pixel.gif" width="1" height="1"></p>',
+      "<p>Outro.</p>",
+    ].join("");
+    const result = extract(postPage({ bodyHtml: body }));
+    if (result.status !== "ok") throw new Error(result.status);
+    expect(result.capture.markdown).toBe(
+      [
+        "Intro.",
+        "![Chart \\[GDP\\]](https://substack-post-media.s3.amazonaws.com/public/images/abc_1630x1630.jpeg)",
+        "*Source: [FRED](https://fred.stlouisfed.org/)*",
+        "![Plain](https://example.com/plain%281%29.png)",
+        "Outro.",
+      ].join("\n\n") + "\n",
+    );
+  });
+
+  it("keeps every image of a gallery", () => {
+    const attrs = JSON.stringify({
+      gallery: {
+        images: [{ src: "https://cdn.example/1.png" }, { src: "https://cdn.example/2.png" }],
+        caption: "Two views",
+      },
+    }).replace(/"/g, "&quot;");
+    const body = `<p>a</p><div class="image-gallery-embed" data-attrs="${attrs}"></div><p>b</p>`;
+    const result = extract(postPage({ bodyHtml: body }));
+    if (result.status !== "ok") throw new Error(result.status);
+    expect(result.capture.markdown).toBe(
+      "a\n\n![](https://cdn.example/1.png)\n\n![](https://cdn.example/2.png)\n\n*Two views*\n\nb\n",
+    );
+  });
+
+  it("drops widgets and the repeated title, and keeps embeds as links", () => {
     const body = [
       "<h1>The Slow AI Case</h1>",
       "<p>Intro.</p>",
@@ -95,7 +135,7 @@ describe("extractSubstack with preloads", () => {
     const result = extract(postPage({ bodyHtml: body }));
     if (result.status !== "ok") throw new Error(result.status);
     expect(result.capture.markdown).toBe(
-      "Intro.\n\n[YouTube video](https://www.youtube.com/watch?v=abc123)\n\nOutro.\n",
+      "Intro.\n\n![](https://substackcdn.com/a.png)\n\n*A chart*\n\n[YouTube video](https://www.youtube.com/watch?v=abc123)\n\nOutro.\n",
     );
   });
 

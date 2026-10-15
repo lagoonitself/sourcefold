@@ -113,6 +113,14 @@ impl Database {
                 value TEXT NOT NULL
             );
 
+            -- Files the signed-in local copy wrote (see local_copy.rs). Only these are ever
+            -- moved or deleted by it.
+            CREATE TABLE IF NOT EXISTS local_copy_files (
+                item_id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                version TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_items_folder_id ON items(folder_id);
             CREATE INDEX IF NOT EXISTS idx_items_canonical_url ON items(canonical_url);
             CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
@@ -1069,6 +1077,38 @@ impl Database {
             params![key],
             |row| row.get(0),
         ).optional()
+    }
+
+    pub fn local_copy_files(&self) -> Result<Vec<(String, String, String)>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let mut stmt = conn.prepare("SELECT item_id, path, version FROM local_copy_files")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        rows.collect()
+    }
+
+    pub fn set_local_copy_file(&self, item_id: &str, path: &str, version: &str) -> Result<()> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        conn.execute(
+            "INSERT INTO local_copy_files (item_id, path, version) VALUES (?1, ?2, ?3)
+             ON CONFLICT(item_id) DO UPDATE SET path = excluded.path, version = excluded.version",
+            params![item_id, path, version],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_local_copy_file(&self, item_id: &str) -> Result<()> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        conn.execute("DELETE FROM local_copy_files WHERE item_id = ?1", params![item_id])?;
+        Ok(())
     }
 
     pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {

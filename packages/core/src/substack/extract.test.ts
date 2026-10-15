@@ -52,15 +52,14 @@ describe("extractSubstack", () => {
       "[the empirical study](https://example.com/diffusion-study)",
     );
 
+    // Images stay, with their caption, between the paragraphs
+    expect(capture.markdown).toContain(
+      "lags technical breakthroughs by decades.\n\n![Diffusion chart](https://substackcdn.com/image/fetch/w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fexample.com%2Fchart.png)\n\n*Figure 1: Capital installation vs productivity gains over time.*\n\nIn contrast to software deployment",
+    );
+
     // Excluded elements
-    expect(capture.markdown).not.toContain("chart.png");
     expect(capture.markdown).not.toContain("Subscribe");
     expect(capture.markdown).not.toMatch(/^#\s+The Slow AI Case/m);
-
-    // Paragraph separation
-    expect(capture.markdown).toContain(
-      "The history of general-purpose technologies shows that organizational restructuring lags technical breakthroughs by decades.\n\nIn contrast to software deployment",
-    );
   });
 
   it("extracts an accessible paid post with access = 'paid'", () => {

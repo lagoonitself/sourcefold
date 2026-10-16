@@ -7,6 +7,7 @@ import {
   sourceFetchFromGlobalFetch,
 } from "@sourcefold/core/server";
 import { requireApiUser } from "@/lib/api";
+import { BlockedAddressError, publicFetch } from "@/lib/public-fetch";
 import { findDuplicate, formatDuplicateMessage } from "@/features/capture/find-duplicate";
 import { saveSource, saveSourceUnavailable } from "@/features/capture/save-source";
 import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
   let extracted;
   try {
     extracted = await fetchSourceCapture(url, {
-      fetch: sourceFetchFromGlobalFetch(fetch, {
+      fetch: sourceFetchFromGlobalFetch(publicFetch, {
         "User-Agent": BROWSER_USER_AGENT,
         "Accept-Language": "en-US,en;q=0.9",
       }),
@@ -103,6 +104,9 @@ export async function POST(request: Request) {
       signal: AbortSignal.timeout(45_000),
     });
   } catch (error) {
+    if (error instanceof BlockedAddressError) {
+      return errorResponse("invalid_url", INVALID_URL, 400);
+    }
     if (error instanceof SourceError) {
       let message = error.message;
       if (error.code === "blocked" && kind === "reddit" && !/desktop app/i.test(message)) {

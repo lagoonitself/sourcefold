@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
-import { getAllowedEmails } from "@/lib/env";
+import { isEmailAllowed } from "@/lib/env";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { desktopCorsHeaders } from "@/lib/desktop-cors";
 
@@ -23,15 +23,12 @@ export async function proxy(request: NextRequest) {
 
   const { response, user } = await updateSession(request);
 
-  let allowedEmails: string[] = [];
+  let isAllowed = false;
   try {
-    allowedEmails = getAllowedEmails();
+    isAllowed = isEmailAllowed(user?.email);
   } catch {
-    allowedEmails = [];
+    isAllowed = false;
   }
-
-  const userEmail = user?.email?.toLowerCase();
-  const isAllowed = !!userEmail && allowedEmails.includes(userEmail);
 
   // If there is a user whose email is not allowed and path does not start with /login, /auth or /api
   if (

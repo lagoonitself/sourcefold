@@ -1,6 +1,7 @@
 import "server-only";
 import { markdownImageUrls, postImageFileNames, postImagesFolderName } from "@sourcefold/core";
 import { createFolder, listChildren, updateFile, uploadFile } from "@/lib/google/drive";
+import { publicFetch } from "@/lib/public-fetch";
 
 // A copy of each image in a post, in `<file name>_files/` next to its file in Drive
 // (docs/FILE-FORMAT.md, "Post images"). The Markdown keeps linking to the web copy.
@@ -15,7 +16,7 @@ export interface FileSpot {
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
-// Only public web addresses: never a bare IP or a local name, so a crafted post can't make the
+// Only https addresses; `publicFetch` refuses private ones, so a crafted post can't make the
 // server fetch something private.
 function isFetchable(raw: string): boolean {
   try {
@@ -33,7 +34,7 @@ function isFetchable(raw: string): boolean {
 async function fetchImage(url: string): Promise<{ body: Uint8Array; mimeType: string } | null> {
   if (!isFetchable(url)) return null;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(20_000), redirect: "follow" });
+    const res = await publicFetch(url, { signal: AbortSignal.timeout(20_000) });
     if (!res.ok) return null;
     const mimeType = (res.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
     if (mimeType && !mimeType.startsWith("image/") && mimeType !== "application/octet-stream") {

@@ -16,7 +16,7 @@ Later (not in scope now): a public website per video where every claim links to 
 - Images or video from X.
 - Paid Substack posts you do not subscribe to.
 - Re-scraping or versioning Grokipedia articles.
-- Multi-user accounts. One deployment = one person. Anyone can self-host their own copy.
+- Accounts shared between people (teams, shared folders). A deployment can let several people sign in (`ALLOWED_EMAIL` list or `*`), but each person's library is separate.
 
 ## 2. Decisions
 
@@ -94,7 +94,7 @@ docs/              Spec and references
 
 ### Authentication
 
-- **Web app:** Supabase Auth with Google. Sign-in is restricted to `ALLOWED_EMAIL` (env var). Row-level security on every table, keyed by `user_id`.
+- **Web app:** Supabase Auth with Google. Sign-in is restricted to `ALLOWED_EMAIL` (env var: a comma-separated list, or `*` for any Google account). Server-side fetches of pasted links go through `publicFetch`, which refuses private and internal addresses on every redirect hop. Row-level security on every table, keyed by `user_id`.
 - **Google Drive:** request scope `https://www.googleapis.com/auth/drive.file` (the app only sees files it created) with `access_type=offline` and `prompt=consent`. Supabase returns `provider_refresh_token` only at sign-in, so the app stores it in `google_tokens` (server-only access) and refreshes access tokens with Google directly.
 - **Google OAuth app:** set the consent screen to **In production**. In "Testing" mode Google expires refresh tokens after 7 days, which would silently break Save to Drive.
 - **Desktop app:** connects to the web app with a personal access token created through a browser loopback sign-in flow (`/desktop/connect`). Stored locally in `session.json`. Web API routes authenticate token requests via `requireApiUser`.

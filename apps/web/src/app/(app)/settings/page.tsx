@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAllowedEmails } from "@/lib/env";
+import { isEmailAllowed } from "@/lib/env";
 import { ReconnectDriveButton } from "@/features/settings/reconnect-drive-button";
 import { TokenManager } from "@/features/settings/token-manager";
 import { SettingsAppAddress } from "./settings-app-address";
@@ -17,15 +17,13 @@ export default async function SettingsPage() {
     redirect("/login");
   }
 
-  let allowedEmails: string[];
+  let allowed = false;
   try {
-    allowedEmails = getAllowedEmails();
+    allowed = isEmailAllowed(user.email);
   } catch {
-    redirect("/login");
+    allowed = false;
   }
-
-  const email = user.email?.trim().toLowerCase();
-  if (!email || !allowedEmails.includes(email)) {
+  if (!allowed) {
     redirect("/login");
   }
 

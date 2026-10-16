@@ -14,9 +14,13 @@ Sourcefold is built for people who gather a lot of reading before they write or 
 - **Folders inside folders:** unlimited depth, with drag-and-drop to reorder and nest.
 - **Notes and images:** write Markdown notes or upload images next to your sources.
 - **Google Drive:** one **Save to Drive** button (or `Ctrl+S`) mirrors your folders and files. Sourcefold only asks for the `drive.file` scope, so it can't see anything else in your Drive.
-- **Self-hosted and free:** runs entirely on free tiers (Vercel, Supabase, Google Cloud). One deployment serves one person; nobody else can sign in.
+- **Self-hosted and free:** runs entirely on free tiers (Vercel, Supabase, Google Cloud). You decide who can sign in: just you, a list of friends, or anyone with a Google account.
 
 Sourcefold doesn't show source content inside the app. Clicking an item opens the original page; the Markdown is for your AI tools.
+
+## Just want to use it?
+
+If someone shared their Sourcefold with you, you don't need to set anything up. Open the [latest release](https://github.com/lagoonitself/sourcefold/releases/latest) for the website address, the Windows and Mac installers, the Chrome extension, and step-by-step install instructions. The rest of this README is for running your own copy.
 
 ## Supported sources
 
@@ -86,16 +90,16 @@ Sourcefold doesn't show source content inside the app. Clicking an item opens th
    ```
 3. Fill in every variable in `apps/web/.env.local`:
 
-   | Variable                               | Where to find it                                      | Used for                                                                  |
-   | -------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------- |
-   | `NEXT_PUBLIC_SUPABASE_URL`             | Supabase Dashboard → Project Settings → API Keys      | Project URL for database and auth requests                                |
-   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase Dashboard → Project Settings → API Keys      | Public key used in browser and server requests                            |
-   | `ALLOWED_EMAIL`                        | Your Google account email address                     | The only Google account allowed to sign in (comma-separated list allowed) |
-   | `SUPABASE_SECRET_KEY`                  | Supabase Dashboard → Project Settings → API Keys      | Server-only key used for extension token lookups and Drive sync           |
-   | `GOOGLE_CLIENT_ID`                     | Google Cloud Console → Google Auth Platform → Clients | OAuth client ID used to refresh Drive access tokens                       |
-   | `GOOGLE_CLIENT_SECRET`                 | Google Cloud Console → Google Auth Platform → Clients | OAuth client secret used to refresh Drive access tokens                   |
+   | Variable                               | Where to find it                                      | Used for                                                        |
+   | -------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------- |
+   | `NEXT_PUBLIC_SUPABASE_URL`             | Supabase Dashboard → Project Settings → API Keys      | Project URL for database and auth requests                      |
+   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase Dashboard → Project Settings → API Keys      | Public key used in browser and server requests                  |
+   | `ALLOWED_EMAIL`                        | Your Google account email address                     | Who can sign in: comma-separated emails, or `*` for anyone      |
+   | `SUPABASE_SECRET_KEY`                  | Supabase Dashboard → Project Settings → API Keys      | Server-only key used for extension token lookups and Drive sync |
+   | `GOOGLE_CLIENT_ID`                     | Google Cloud Console → Google Auth Platform → Clients | OAuth client ID used to refresh Drive access tokens             |
+   | `GOOGLE_CLIENT_SECRET`                 | Google Cloud Console → Google Auth Platform → Clients | OAuth client secret used to refresh Drive access tokens         |
 
-   `ALLOWED_EMAIL` defines the only Google account allowed to sign in to this deployment. A comma-separated list of emails is allowed.
+   `ALLOWED_EMAIL` decides who can sign in to this deployment: one email, a comma-separated list, or `*` to let any Google account sign up. Each person only ever sees their own sources. With `*`, the Google OAuth app must be published (step 2.5), or only its test users can sign in.
 
 4. Start the development server:
    ```bash

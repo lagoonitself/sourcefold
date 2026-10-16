@@ -7,6 +7,7 @@ const findDuplicate = vi.fn();
 const nextPosition = vi.fn();
 const fetchSourceCapture = vi.fn();
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/api", () => ({
   requireApiUser: (request: Request) => requireApiUser(request),
 }));

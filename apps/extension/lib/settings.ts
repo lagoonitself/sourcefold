@@ -10,8 +10,12 @@ export interface ExtensionSettings {
   connectionMode?: ConnectionMode;
 }
 
+// Release builds set WXT_SOURCEFOLD_WEB_URL to the hosted web app, so nobody has to type it.
+const DEFAULT_APP_URL =
+  (import.meta.env.WXT_SOURCEFOLD_WEB_URL as string | undefined) || "http://localhost:3000";
+
 export const DEFAULT_SETTINGS: Required<ExtensionSettings> = {
-  appUrl: "http://localhost:3000",
+  appUrl: DEFAULT_APP_URL,
   token: "",
   connectionMode: "auto",
 };

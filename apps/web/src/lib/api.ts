@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
-import { getAllowedEmails } from "@/lib/env";
+import { isEmailAllowed } from "@/lib/env";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -32,15 +32,13 @@ export async function requireUser(): Promise<AuthResult> {
     return { response: jsonError(401, "Sign in to continue.") };
   }
 
-  let allowedEmails: string[];
+  let allowed: boolean;
   try {
-    allowedEmails = getAllowedEmails();
+    allowed = isEmailAllowed(user.email);
   } catch {
-    return { response: jsonError(403, "This account can't use Sourcefold.") };
+    allowed = false;
   }
-
-  const email = user.email?.trim().toLowerCase();
-  if (!email || !allowedEmails.includes(email)) {
+  if (!allowed) {
     return { response: jsonError(403, "This account can't use Sourcefold.") };
   }
 
@@ -89,17 +87,15 @@ export async function requireApiUser(request: Request): Promise<ApiAuthResult> {
     };
   }
 
-  // Verify that the token owner is still in ALLOWED_EMAILS
-  let allowedEmails: string[] = [];
-  try {
-    allowedEmails = getAllowedEmails();
-  } catch {
-    return { response: jsonError(403, "This account can't use Sourcefold.") };
-  }
-
+  // Verify that the token owner is still allowed by ALLOWED_EMAIL
   const { data: userData, error: userError } = await admin.auth.admin.getUserById(token.user_id);
-  const userEmail = userData?.user?.email?.trim().toLowerCase();
-  if (userError || !userEmail || !allowedEmails.includes(userEmail)) {
+  let allowed = false;
+  try {
+    allowed = !userError && isEmailAllowed(userData?.user?.email);
+  } catch {
+    allowed = false;
+  }
+  if (!allowed) {
     return { response: jsonError(403, "This account can't use Sourcefold.") };
   }
 

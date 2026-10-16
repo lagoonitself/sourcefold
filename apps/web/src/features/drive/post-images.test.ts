@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+// Every host in these tests is a public one; `publicFetch` has its own tests.
+vi.mock("node:dns/promises", () => ({
+  lookup: async () => [{ address: "93.184.216.34", family: 4 }],
+}));
 
 // A tiny in-memory Drive: id → { name, parent, mimeType, trashed }.
 type Node = { name: string; parent: string; mimeType: string; trashed: boolean };

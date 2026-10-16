@@ -1,6 +1,6 @@
 # Privacy policy
 
-Sourcefold is a personal, self-hosted tool. Each deployment is used by one person, the owner, whose email is set in `ALLOWED_EMAIL`. Nobody else can sign in.
+Sourcefold is a self-hosted tool. Whoever runs a deployment (the owner) chooses who can sign in with `ALLOWED_EMAIL`: just themselves, a list of people, or anyone with a Google account (`*`). Each person sees only their own sources; the database enforces this per account.
 
 ## What it stores
 
@@ -8,7 +8,7 @@ Sourcefold is a personal, self-hosted tool. Each deployment is used by one perso
 - A Google refresh token, so the app can save files to your Google Drive.
 - The sources you save (titles, links, authors and dates), your folders and your notes.
 
-All of this lives in the deployment owner's own Supabase database. The text of saved articles and your uploaded images are kept in Supabase only until they're copied to your Google Drive, usually a few seconds; after that they live only in Drive.
+All of this lives in the deployment owner's Supabase database, which the owner can technically read. The text of saved articles and your uploaded images are kept in Supabase only until they're copied to your Google Drive, usually a few seconds; after that they live only in Drive.
 
 ## Google Drive access
 
@@ -20,7 +20,7 @@ Sourcefold doesn't sell, share or send your data to anyone. It has no analytics 
 
 ## Deleting your data
 
-Delete items and folders in the app, remove Sourcefold's access at https://myaccount.google.com/permissions, and delete the Supabase project to remove everything.
+Delete items and folders in the app and remove Sourcefold's access at https://myaccount.google.com/permissions. To have your account and everything in it removed from a deployment, ask its owner. Owners can remove everything by deleting the Supabase project.
 
 ## Contact
 

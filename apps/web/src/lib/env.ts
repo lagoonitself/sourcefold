@@ -12,7 +12,7 @@ export function getPublicEnv() {
   });
 }
 
-// Server-only: reads ALLOWED_EMAIL from the environment.
+// Server-only: reads ALLOWED_EMAIL from the environment. `*` lets any Google account sign in.
 export function getAllowedEmails(): string[] {
   const raw = process.env.ALLOWED_EMAIL;
   const emails = raw
@@ -27,4 +27,12 @@ export function getAllowedEmails(): string[] {
   }
 
   return emails;
+}
+
+// Server-only: whether this Google account may use Sourcefold. Throws when ALLOWED_EMAIL is unset.
+export function isEmailAllowed(email: string | null | undefined): boolean {
+  const allowed = getAllowedEmails();
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) return false;
+  return allowed.includes("*") || allowed.includes(normalized);
 }

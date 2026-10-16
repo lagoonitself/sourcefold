@@ -1,27 +1,53 @@
-name: Desktop Release
+name: Release
+
+# Push a tag like v0.2.0 to build the Windows and macOS installers and the Chrome extension,
+# attach them to one GitHub Release, and publish it with the install guide
+# (.github/release-notes.md). Set the repository variable SOURCEFOLD_WEB_URL to the deployed
+# web app so the desktop app and the extension point at it out of the box.
 
 on:
   push:
     tags:
-      - "desktop-v*"
-  workflow_dispatch:
-    inputs:
-      tag_name:
-        description: "Release tag name (e.g. desktop-v0.1.0; defaults to desktop-v<version> in tauri.conf.json)"
-        required: false
-        default: ""
-        type: string
+      - "v*"
 
 permissions:
   contents: write
 
 concurrency:
-  group: desktop-release-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  TAG: ${{ github.ref_name }}
+  WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
+
 jobs:
-  release:
-    name: Build Installer (${{ matrix.platform }})
+  create-release:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Create draft release
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${TAG#v}"
+          URL="${WEB_URL:-the Sourcefold web address you were given}"
+          sed -e "s|{{WEB_URL}}|${URL}|g" -e "s|{{VERSION}}|${VERSION}|g" \
+            .github/release-notes.md > notes.md
+          gh release create "$TAG" --draft --title "Sourcefold $TAG" --notes-file notes.md
+          ID=$(gh api "repos/${{ github.repository }}/releases" \
+            --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n 1)
+          echo "release_id=$ID" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    name: Desktop installer (${{ matrix.platform }})
+    needs: create-release
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 45
     strategy:
@@ -57,18 +83,55 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
 
-      - name: Build frontend
-        run: npm run build -w @sourcefold/desktop
-
-      - name: Build and release Tauri app
+      - name: Build and upload installer
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
         with:
           projectPath: "./apps/desktop"
-          tagName: ${{ inputs.tag_name || (startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name || 'desktop-v__VERSION__') }}
-          releaseName: "Sourcefold Desktop v__VERSION__"
-          releaseBody: "Sourcefold Desktop release. Download the appropriate installer below for your operating system."
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+  extension:
+    name: Chrome extension
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        env:
+          WXT_SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
+        run: npm run build -w @sourcefold/extension
+
+      - name: Zip and upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd apps/extension/.output
+          rm -rf sourcefold-extension
+          cp -r chrome-mv3 sourcefold-extension
+          zip -r ../../../sourcefold-extension-chrome.zip sourcefold-extension
+          cd ../../..
+          gh release upload "$TAG" sourcefold-extension-chrome.zip --clobber
+
+  publish:
+    name: Publish release
+    needs: [desktop, extension]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false --latest

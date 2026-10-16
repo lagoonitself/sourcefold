@@ -12,8 +12,13 @@ export {
 export { buildFrontMatter, formatDate, type FrontMatterValue } from "./front-matter";
 export { bodyFromDriveFile, buildItemFile, type BuildItemInput, type ItemKind } from "./drive-file";
 export { markdownImageUrls, postImageFileNames, postImagesFolderName } from "./post-images";
+export { SOURCE_CAPTURE_KINDS, isSourceCaptureKind } from "./capture-types";
 export type {
   CaptureRequest,
+  SourceCapture,
+  SourceCaptureKind,
+  SourceExtractResult,
+  SourceMetaValue,
   SubstackCapture,
   SubstackExtractResult,
   WikipediaCapture,
@@ -21,6 +26,15 @@ export type {
   XTreeNode,
 } from "./capture-types";
 export * from "./wikipedia";
+export * from "./source-links";
+export {
+  SourceError,
+  sourceFetchFromGlobalFetch,
+  type SourceErrorCode,
+  type SourceFetch,
+  type SourceFetchRequest,
+  type SourceFetchResponse,
+} from "./source-fetch";
 export { renderXThreadMarkdown, xThreadTitle } from "./x/markdown";
 export {
   SubstackDiscoveryError,

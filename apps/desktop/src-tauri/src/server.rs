@@ -551,6 +551,65 @@ pub fn handle_request(
                         Err(e) => service_error_response(e, allowed_origin),
                     }
                 }
+                CapturePayload::YouTube { folder_id, capture } => {
+                    match service::save_source(&db_guard, &folder_id, "youtube", capture) {
+                        Ok(item) => json_response(200, json!({ "item": item }), allowed_origin),
+                        Err(e) => service_error_response(e, allowed_origin),
+                    }
+                }
+                CapturePayload::Web { folder_id, capture } => {
+                    match service::save_source(&db_guard, &folder_id, "web", capture) {
+                        Ok(item) => json_response(200, json!({ "item": item }), allowed_origin),
+                        Err(e) => service_error_response(e, allowed_origin),
+                    }
+                }
+                CapturePayload::Reddit { folder_id, capture } => {
+                    match service::save_source(&db_guard, &folder_id, "reddit", capture) {
+                        Ok(item) => json_response(200, json!({ "item": item }), allowed_origin),
+                        Err(e) => service_error_response(e, allowed_origin),
+                    }
+                }
+                CapturePayload::Pdf { folder_id, capture } => {
+                    match service::save_source(&db_guard, &folder_id, "pdf", capture) {
+                        Ok(item) => json_response(200, json!({ "item": item }), allowed_origin),
+                        Err(e) => service_error_response(e, allowed_origin),
+                    }
+                }
+                CapturePayload::HackerNews { folder_id, capture } => {
+                    match service::save_source(&db_guard, &folder_id, "hackernews", capture) {
+                        Ok(item) => json_response(200, json!({ "item": item }), allowed_origin),
+                        Err(e) => service_error_response(e, allowed_origin),
+                    }
+                }
+                CapturePayload::Bluesky { folder_id, capture } => {
+                    match service::save_source(&db_guard, &folder_id, "bluesky", capture) {
+                        Ok(item) => json_response(200, json!({ "item": item }), allowed_origin),
+                        Err(e) => service_error_response(e, allowed_origin),
+                    }
+                }
+                CapturePayload::SourceUnavailable {
+                    folder_id,
+                    source,
+                    url,
+                    title,
+                    reason,
+                } => {
+                    match service::save_source_unavailable(
+                        &db_guard,
+                        &folder_id,
+                        &source,
+                        &url,
+                        &title,
+                        &reason,
+                    ) {
+                        Ok(item) => json_response(
+                            200,
+                            json!({ "item": item, "unavailable": true }),
+                            allowed_origin,
+                        ),
+                        Err(e) => service_error_response(e, allowed_origin),
+                    }
+                }
                 CapturePayload::X { folder_id, posts } => {
                     match service::save_x_thread(&db_guard, &folder_id, posts) {
                         Ok(item) => json_response(200, json!({ "item": item }), allowed_origin),

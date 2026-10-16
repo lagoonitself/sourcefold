@@ -52,13 +52,19 @@ shadcn's other tokens map onto these: `--card` and `--popover` = `--background`;
 
 Each item row shows its source type with a 3px bar on its left edge and a small icon. These colors only ever mean "source type".
 
-| Kind       | Token                 | Light     | Dark      | lucide icon         |
-| ---------- | --------------------- | --------- | --------- | ------------------- |
-| Grokipedia | `--source-grokipedia` | `#4B4FA8` | `#9FA3F0` | `BookOpen`          |
-| Substack   | `--source-substack`   | `#C2610C` | `#F2A65A` | `Newspaper`         |
-| X          | `--source-x`          | `#1C2533` | `#E6EAF0` | `MessageSquareText` |
-| Note       | `--source-note`       | `#7A3E73` | `#D9A0D2` | `StickyNote`        |
-| Image      | `--source-image`      | `#0E7490` | `#67C6DE` | `Image`             |
+| Kind        | Token                 | Light     | Dark      | lucide icon         |
+| ----------- | --------------------- | --------- | --------- | ------------------- |
+| Grokipedia  | `--source-grokipedia` | `#4B4FA8` | `#9FA3F0` | `BookOpen`          |
+| Substack    | `--source-substack`   | `#C2610C` | `#F2A65A` | `Newspaper`         |
+| X           | `--source-x`          | `#1C2533` | `#E6EAF0` | `MessageSquareText` |
+| Note        | `--source-note`       | `#7A3E73` | `#D9A0D2` | `StickyNote`        |
+| Image       | `--source-image`      | `#0E7490` | `#67C6DE` | `Image`             |
+| YouTube     | `--source-youtube`    | `#B4235A` | `#F08AB0` | `MonitorPlay`       |
+| Web page    | `--source-web`        | `#4D5B6B` | `#B4BFCC` | `Globe`             |
+| Reddit      | `--source-reddit`     | `#A33B12` | `#F59E7A` | `MessagesSquare`    |
+| PDF         | `--source-pdf`        | `#7A4B2A` | `#D8A887` | `FileText`          |
+| Hacker News | `--source-hackernews` | `#5F6B0E` | `#C5D16A` | `ChevronsUp`        |
+| Bluesky     | `--source-bluesky`    | `#1D5FD1` | `#8DB4F7` | `Cloud`             |
 
 ## Typography
 

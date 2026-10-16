@@ -1,0 +1,74 @@
+{
+  "playabilityStatus": {
+    "status": "OK"
+  },
+  "videoDetails": {
+    "videoId": "aircAruvnKk",
+    "title": "But what is a neural network? | Deep learning chapter 1",
+    "lengthSeconds": "1120",
+    "channelId": "UCYO_jab_esuFRV4b17AJtAw",
+    "isOwnerViewing": false,
+    "shortDescription": "What are the neurons, why are there layers, and what is the math underlying it?\n\nHelp fund future projects: https://www.patreon.com/3blue1brown\n\n0:00 - Introduction example\n1:07 - Series preview\n# not a heading",
+    "isCrawlable": true,
+    "allowRatings": true,
+    "viewCount": "24825981",
+    "author": "3Blue1Brown",
+    "isPrivate": false,
+    "isUnpluggedCorpus": false,
+    "isLiveContent": false,
+    "isTvfilmVideo": false
+  },
+  "captions": {
+    "playerCaptionsTracklistRenderer": {
+      "captionTracks": [
+        {
+          "baseUrl": "https://www.youtube.com/api/timedtext?v=aircAruvnKk&ei=TEST&caps=asr&opi=112496729&xoaf=5&xowf=1&hl=en&ip=0.0.0.0&ipbits=0&expire=1792152067&sparams=ip,ipbits,expire,v,ei,caps,opi,xoaf&signature=TEST&key=yt8&lang=en&fmt=srv3",
+          "name": {
+            "runs": [
+              {
+                "text": "English"
+              }
+            ]
+          },
+          "vssId": ".en",
+          "languageCode": "en",
+          "isTranslatable": true
+        },
+        {
+          "baseUrl": "https://www.youtube.com/api/timedtext?v=aircAruvnKk&ei=TEST&caps=asr&opi=112496729&xoaf=5&xowf=1&hl=en&ip=0.0.0.0&ipbits=0&expire=1792152067&sparams=ip,ipbits,expire,v,ei,caps,opi,xoaf&signature=TEST&key=yt8&kind=asr&lang=en&fmt=srv3",
+          "name": {
+            "runs": [
+              {
+                "text": "English (auto-generated)"
+              }
+            ]
+          },
+          "vssId": "a.en",
+          "languageCode": "en",
+          "kind": "asr",
+          "isTranslatable": true
+        },
+        {
+          "baseUrl": "https://www.youtube.com/api/timedtext?v=aircAruvnKk&ei=TEST&caps=asr&opi=112496729&xoaf=5&xowf=1&hl=en&ip=0.0.0.0&ipbits=0&expire=1792152067&sparams=ip,ipbits,expire,v,ei,caps,opi,xoaf&signature=TEST&key=yt8&lang=fr&fmt=srv3",
+          "name": {
+            "runs": [
+              {
+                "text": "French"
+              }
+            ]
+          },
+          "vssId": ".fr",
+          "languageCode": "fr",
+          "isTranslatable": true
+        }
+      ],
+      "audioTracks": [
+        {
+          "captionTrackIndices": [0, 1, 2],
+          "defaultCaptionTrackIndex": 1
+        }
+      ],
+      "defaultAudioTrackIndex": 0
+    }
+  }
+}

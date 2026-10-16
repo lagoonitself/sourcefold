@@ -4,13 +4,18 @@ import React, { useState } from "react";
 import {
   BookOpen,
   Check,
+  ChevronsUp,
   CircleAlert,
+  Cloud,
+  FileText,
   Globe,
   Image as ImageIcon,
   Loader2,
   Lock,
   MessageSquare,
+  MessagesSquare,
   MessageSquareText,
+  MonitorPlay,
   Newspaper,
   StickyNote,
 } from "lucide-react";
@@ -54,6 +59,12 @@ const KIND_CONFIG: Record<string, KindConfig> = {
     barClass: "bg-muted-foreground",
     Icon: Globe,
   },
+  youtube: { name: "YouTube", barClass: "bg-source-youtube", Icon: MonitorPlay },
+  web: { name: "Web page", barClass: "bg-source-web", Icon: Globe },
+  reddit: { name: "Reddit", barClass: "bg-source-reddit", Icon: MessagesSquare },
+  pdf: { name: "PDF", barClass: "bg-source-pdf", Icon: FileText },
+  hackernews: { name: "Hacker News", barClass: "bg-source-hackernews", Icon: ChevronsUp },
+  bluesky: { name: "Bluesky", barClass: "bg-source-bluesky", Icon: Cloud },
   x: {
     name: "X",
     barClass: "bg-source-x",
@@ -91,7 +102,7 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
-function renderStatusIcon(status: string, error: string | null) {
+function renderStatusIcon(status: string, error: string | null, kind: string) {
   switch (status) {
     case "saved":
       return (
@@ -128,17 +139,21 @@ function renderStatusIcon(status: string, error: string | null) {
         </span>
       );
     }
-    case "unavailable":
+    case "unavailable": {
+      const isPaidPost = kind === "substack";
+      const label = isPaidPost ? "Paid post, not saved" : (error ?? "Not saved");
+      const StatusIcon = isPaidPost ? Lock : CircleAlert;
       return (
         <span
           className="flex size-4 shrink-0 items-center justify-center text-warning"
           role="img"
-          aria-label="Paid post, not saved"
-          title="Paid post, not saved"
+          aria-label={label}
+          title={label}
         >
-          <Lock className="size-4" aria-hidden="true" />
+          <StatusIcon className="size-4" aria-hidden="true" />
         </span>
       );
+    }
     default:
       return null;
   }
@@ -164,7 +179,7 @@ export function ItemRow({ item, subtitle, selection }: ItemRowProps) {
   }
 
   const formattedDate = formatDate(item.created_at);
-  const statusIcon = renderStatusIcon(item.status, item.error);
+  const statusIcon = renderStatusIcon(item.status, item.error, item.kind);
   const hasNote = Boolean(item.kind !== "note" && item.note && item.note.trim().length > 0);
 
   const content = (

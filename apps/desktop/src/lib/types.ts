@@ -31,7 +31,20 @@ export interface FolderNode {
   children: FolderNode[];
 }
 
-export type ItemKind = "grokipedia" | "substack" | "wikipedia" | "x" | "note" | "image" | string;
+export type ItemKind =
+  | "grokipedia"
+  | "substack"
+  | "wikipedia"
+  | "x"
+  | "note"
+  | "image"
+  | "youtube"
+  | "web"
+  | "reddit"
+  | "pdf"
+  | "hackernews"
+  | "bluesky"
+  | string;
 export type ItemStatus = "saved" | "pending" | "failed" | "unavailable" | string;
 
 export interface Item {

@@ -37,9 +37,57 @@ export interface WikipediaCapture {
   markdown: string; // body only, no front matter, no title heading
 }
 
+/**
+ * Source kinds added on 2026-10-16. They all share one capture shape: the front matter fields
+ * that are particular to the kind travel in `meta`, keyed exactly as in docs/FILE-FORMAT.md.
+ */
+export const SOURCE_CAPTURE_KINDS = [
+  "youtube",
+  "web",
+  "reddit",
+  "pdf",
+  "hackernews",
+  "bluesky",
+] as const;
+
+export type SourceCaptureKind = (typeof SOURCE_CAPTURE_KINDS)[number];
+
+export function isSourceCaptureKind(value: unknown): value is SourceCaptureKind {
+  return typeof value === "string" && (SOURCE_CAPTURE_KINDS as readonly string[]).includes(value);
+}
+
+/** One front matter value: strings are dates or text, numbers are written unquoted. */
+export type SourceMetaValue = string | number | null;
+
+export interface SourceCapture {
+  /** The source's own address, after redirects, as written in the `url` front matter field. */
+  url: string;
+  title: string;
+  /** The kind's front matter fields (FILE-FORMAT "Front matter"), for example `channel`. */
+  meta: Record<string, SourceMetaValue>;
+  /** Body only: no front matter, no `# Title`, no "Saved from" line. */
+  markdown: string;
+}
+
+/** What an extractor returns. Errors it can explain are thrown as a `SourceError`. */
+export type SourceExtractResult =
+  | { status: "ok"; kind: SourceCaptureKind; capture: SourceCapture }
+  // Found, but there is nothing to save (a YouTube video without captions). Saved as an
+  // `unavailable` item so the list shows why, like a locked paid Substack post.
+  | { status: "unavailable"; kind: SourceCaptureKind; url: string; title: string; reason: string };
+
 export type CaptureRequest =
   | { kind: "substack"; folder_id: string; capture: SubstackCapture }
   | { kind: "wikipedia"; folder_id: string; capture: WikipediaCapture }
+  | { kind: SourceCaptureKind; folder_id: string; capture: SourceCapture }
+  | {
+      kind: "source_unavailable";
+      folder_id: string;
+      source: SourceCaptureKind;
+      url: string;
+      title: string;
+      reason: string;
+    }
   | { kind: "substack_unavailable"; folder_id: string; url: string; title: string }
   // posts[0] is the root; each next post replies to the one before it (the author's own thread).
   | { kind: "x"; folder_id: string; posts: XPostCapture[] };

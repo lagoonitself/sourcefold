@@ -15,7 +15,7 @@ export async function capturePage(tabId: number): Promise<CaptureResult> {
 
   try {
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout waiting for content script response")), 10000),
+      setTimeout(() => reject(new Error("Timeout waiting for content script response")), 60000),
     );
 
     const response = (await Promise.race([

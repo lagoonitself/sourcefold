@@ -223,6 +223,61 @@ pub fn handle_native_request(db_mutex: &Arc<Mutex<Database>>, req: Value) -> Val
                         Err(e) => service_error_response(e),
                     }
                 }
+                CapturePayload::YouTube { folder_id, capture } => {
+                    match service::save_source(&db, &folder_id, "youtube", capture) {
+                        Ok(item) => json!({ "item": item }),
+                        Err(e) => service_error_response(e),
+                    }
+                }
+                CapturePayload::Web { folder_id, capture } => {
+                    match service::save_source(&db, &folder_id, "web", capture) {
+                        Ok(item) => json!({ "item": item }),
+                        Err(e) => service_error_response(e),
+                    }
+                }
+                CapturePayload::Reddit { folder_id, capture } => {
+                    match service::save_source(&db, &folder_id, "reddit", capture) {
+                        Ok(item) => json!({ "item": item }),
+                        Err(e) => service_error_response(e),
+                    }
+                }
+                CapturePayload::Pdf { folder_id, capture } => {
+                    match service::save_source(&db, &folder_id, "pdf", capture) {
+                        Ok(item) => json!({ "item": item }),
+                        Err(e) => service_error_response(e),
+                    }
+                }
+                CapturePayload::HackerNews { folder_id, capture } => {
+                    match service::save_source(&db, &folder_id, "hackernews", capture) {
+                        Ok(item) => json!({ "item": item }),
+                        Err(e) => service_error_response(e),
+                    }
+                }
+                CapturePayload::Bluesky { folder_id, capture } => {
+                    match service::save_source(&db, &folder_id, "bluesky", capture) {
+                        Ok(item) => json!({ "item": item }),
+                        Err(e) => service_error_response(e),
+                    }
+                }
+                CapturePayload::SourceUnavailable {
+                    folder_id,
+                    source,
+                    url,
+                    title,
+                    reason,
+                } => {
+                    match service::save_source_unavailable(
+                        &db,
+                        &folder_id,
+                        &source,
+                        &url,
+                        &title,
+                        &reason,
+                    ) {
+                        Ok(item) => json!({ "item": item, "unavailable": true }),
+                        Err(e) => service_error_response(e),
+                    }
+                }
                 CapturePayload::X { folder_id, posts } => {
                     match service::save_x_thread(&db, &folder_id, posts) {
                         Ok(item) => json!({ "item": item }),

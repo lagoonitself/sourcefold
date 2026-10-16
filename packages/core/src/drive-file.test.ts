@@ -117,3 +117,216 @@ describe("buildItemFile for Wikipedia", () => {
     expect(bad).not.toContain("revision:");
   });
 });
+
+function newKind(overrides: Partial<BuildItemInput>): BuildItemInput {
+  return {
+    kind: "youtube",
+    title: "A title",
+    url: "https://example.com/a",
+    saved: "2026-10-16",
+    folder: "Cars",
+    meta: {},
+    markdown: "Body.",
+    ...overrides,
+  };
+}
+
+describe("buildItemFile for the 2026-10 source kinds", () => {
+  it("writes the YouTube fields in order and quotes a sexagesimal duration", () => {
+    const output = buildItemFile(
+      newKind({
+        kind: "youtube",
+        title: "How a Turbocharger Works",
+        url: "https://www.youtube.com/watch?v=abcDEF12345",
+        meta: {
+          channel: "Engineering Explained",
+          channel_url: "https://www.youtube.com/channel/UC12345",
+          published: "2026-09-30T12:00:00Z",
+          duration: "1:02:10",
+          language: "en",
+          captions: "auto-generated",
+        },
+      }),
+      "Cars/Engines",
+    );
+
+    expect(
+      output.startsWith(
+        '---\nsource: youtube\ntitle: How a Turbocharger Works\nurl: https://www.youtube.com/watch?v=abcDEF12345\nchannel: Engineering Explained\nchannel_url: https://www.youtube.com/channel/UC12345\npublished: 2026-09-30\nduration: "1:02:10"\nlanguage: en\ncaptions: auto-generated\nsaved: 2026-10-16\nfolder: Cars/Engines\n---\n',
+      ),
+    ).toBe(true);
+    expect(output).toContain(
+      "> Saved from [YouTube](https://www.youtube.com/watch?v=abcDEF12345) on 2026-10-16. By Engineering Explained. Published 2026-09-30. Transcript from auto-generated captions.",
+    );
+  });
+
+  it("leaves out the auto-generated transcript clause for manual captions", () => {
+    const output = buildItemFile(
+      newKind({ kind: "youtube", meta: { channel: "Someone", captions: "manual" } }),
+      "",
+    );
+    expect(output).toContain("on 2026-10-16. By Someone.\n");
+    expect(output).not.toContain("auto-generated captions");
+  });
+
+  it("uses the site name for a web page, else the host without www", () => {
+    const withSite = buildItemFile(
+      newKind({
+        kind: "web",
+        url: "https://www.britannica.com/technology/turbocharger",
+        meta: { site: "Encyclopedia Britannica", author: "The Editors", published: "2025-03-01" },
+      }),
+      "",
+    );
+    expect(withSite).toContain(
+      "> Saved from [Encyclopedia Britannica](https://www.britannica.com/technology/turbocharger) on 2026-10-16. By The Editors. Published 2025-03-01.",
+    );
+
+    const noSite = buildItemFile(
+      newKind({ kind: "web", url: "https://www.example.com/article.php?id=5" }),
+      "",
+    );
+    expect(noSite).toContain(
+      "> Saved from [example.com](https://www.example.com/article.php?id=5) on 2026-10-16.",
+    );
+  });
+
+  it("writes the Reddit fields and labels the source [r/<subreddit>] or [Reddit]", () => {
+    const output = buildItemFile(
+      newKind({
+        kind: "reddit",
+        url: "https://www.reddit.com/r/cars/comments/1abc2d",
+        meta: {
+          subreddit: "cars",
+          author: "op_user",
+          posted: "2026-10-15",
+          score: 532,
+          comments: 87,
+        },
+      }),
+      "",
+    );
+    expect(
+      output.startsWith(
+        "---\nsource: reddit\ntitle: A title\nurl: https://www.reddit.com/r/cars/comments/1abc2d\nsubreddit: cars\nauthor: op_user\nposted: 2026-10-15\nscore: 532\ncomments: 87\nsaved: 2026-10-16\n---\n",
+      ),
+    ).toBe(true);
+    expect(output).toContain(
+      "> Saved from [r/cars](https://www.reddit.com/r/cars/comments/1abc2d) on 2026-10-16.",
+    );
+
+    const noSub = buildItemFile(newKind({ kind: "reddit" }), "");
+    expect(noSub).toContain("> Saved from [Reddit](https://example.com/a) on 2026-10-16.");
+  });
+
+  it("labels an arXiv PDF [arXiv] and any other PDF by its host", () => {
+    const arxiv = buildItemFile(
+      newKind({
+        kind: "pdf",
+        url: "https://arxiv.org/abs/2401.01234",
+        meta: { author: "A. Author", published: "2024-01-03", pages: 12, arxiv: "2401.01234" },
+      }),
+      "",
+    );
+    expect(arxiv).toContain('arxiv: "2401.01234"\n');
+    expect(arxiv).toContain(
+      "> Saved from [arXiv](https://arxiv.org/abs/2401.01234) on 2026-10-16. By A. Author. Published 2024-01-03.",
+    );
+
+    const plain = buildItemFile(
+      newKind({
+        kind: "pdf",
+        url: "https://www.example.org/files/report.pdf",
+        meta: { pages: 3 },
+      }),
+      "",
+    );
+    expect(plain).toContain(
+      "> Saved from [example.org](https://www.example.org/files/report.pdf) on 2026-10-16.",
+    );
+  });
+
+  it("writes the Hacker News and Bluesky fields and source lines", () => {
+    const hn = buildItemFile(
+      newKind({
+        kind: "hackernews",
+        url: "https://news.ycombinator.com/item?id=41234567",
+        meta: {
+          author: "builder",
+          posted: "2026-10-15",
+          points: 310,
+          comments: 2,
+          link: "https://example.com/turbo",
+        },
+      }),
+      "",
+    );
+    expect(
+      hn.startsWith(
+        "---\nsource: hackernews\ntitle: A title\nurl: https://news.ycombinator.com/item?id=41234567\nauthor: builder\nposted: 2026-10-15\npoints: 310\ncomments: 2\nlink: https://example.com/turbo\nsaved: 2026-10-16\n---\n",
+      ),
+    ).toBe(true);
+    expect(hn).toContain(
+      "> Saved from [Hacker News](https://news.ycombinator.com/item?id=41234567) on 2026-10-16.",
+    );
+
+    const bsky = buildItemFile(
+      newKind({
+        kind: "bluesky",
+        url: "https://bsky.app/profile/jay.bsky.team/post/3l6oveex3ii2l",
+        meta: {
+          author: "Jay",
+          author_url: "https://bsky.app/profile/jay.bsky.team",
+          posted: "2026-10-15",
+        },
+      }),
+      "",
+    );
+    expect(
+      bsky.startsWith(
+        "---\nsource: bluesky\ntitle: A title\nurl: https://bsky.app/profile/jay.bsky.team/post/3l6oveex3ii2l\nauthor: Jay\nauthor_url: https://bsky.app/profile/jay.bsky.team\nposted: 2026-10-15\nsaved: 2026-10-16\n---\n",
+      ),
+    ).toBe(true);
+    expect(bsky).toContain(
+      "> Saved from [Bluesky](https://bsky.app/profile/jay.bsky.team/post/3l6oveex3ii2l) on 2026-10-16.",
+    );
+  });
+
+  it("writes counts from strings as unquoted numbers and skips missing fields", () => {
+    const output = buildItemFile(
+      newKind({
+        kind: "reddit",
+        url: "https://www.reddit.com/r/x/comments/1abc2d",
+        meta: { subreddit: "x", score: "532", comments: 0, posted: null, author: "" },
+      }),
+      "",
+    );
+    expect(output).toContain("\nscore: 532\ncomments: 0\n");
+    expect(output).not.toContain("posted:");
+    expect(output).not.toContain("author:");
+  });
+
+  it("always writes the arxiv field as text", () => {
+    const trailingZero = buildItemFile(newKind({ kind: "pdf", meta: { arxiv: "2401.01230" } }), "");
+    expect(trailingZero).toContain('\narxiv: "2401.01230"\n');
+    const old = buildItemFile(newKind({ kind: "pdf", meta: { arxiv: "hep-th/9901001" } }), "");
+    expect(old).toContain("\narxiv: hep-th/9901001\n");
+  });
+
+  it("round-trips every new kind byte for byte", () => {
+    const items: BuildItemInput[] = [
+      newKind({ kind: "youtube", meta: { channel: "C", captions: "auto-generated" } }),
+      newKind({ kind: "web", meta: { site: "S" } }),
+      newKind({ kind: "reddit", meta: { subreddit: "r", score: 3 } }),
+      newKind({ kind: "pdf", meta: { pages: 2, arxiv: "2401.01234" } }),
+      newKind({ kind: "hackernews", meta: { points: 1 } }),
+      newKind({ kind: "bluesky", meta: { author: "A" } }),
+    ];
+    for (const item of items) {
+      const first = buildItemFile(item, item.folder ?? undefined);
+      const body = bodyFromDriveFile(first);
+      const second = buildItemFile({ ...item, markdown: body }, item.folder ?? undefined);
+      expect(second).toBe(first);
+    }
+  });
+});

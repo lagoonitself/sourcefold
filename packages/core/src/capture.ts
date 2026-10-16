@@ -11,3 +11,15 @@ export {
   type WikipediaErrorCode,
   type WikipediaFetchOptions,
 } from "./wikipedia/fetch";
+export { fetchSourceCapture, type SourceCaptureDeps } from "./sources";
+export {
+  YOUTUBE_NO_CAPTIONS_REASON,
+  fetchYouTubeCapture,
+  listYouTubeVideos,
+  type YouTubeFetchOptions,
+  type YouTubeListOptions,
+  type YouTubeListedVideo,
+  type YouTubeVideoList,
+} from "./youtube";
+export { WebPageIsPdfError, fetchWebPageCapture, webPageToCapture } from "./web-page";
+export { arxivHtmlToCapture, fetchPdfCapture, pdfToCapture, type LoadPdfJs } from "./pdf";

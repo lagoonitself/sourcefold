@@ -1,0 +1,107 @@
+{
+ "author": "latexr",
+ "children": [
+  {
+   "author": "ChrisArchitect",
+   "children": [],
+   "created_at": "2025-01-29T15:18:51.000Z",
+   "created_at_i": 1738163931,
+   "id": 42865905,
+   "points": null,
+   "story_id": 42865527,
+   "text": "Earlier: <a href=\"https:&#x2F;&#x2F;news.ycombinator.com&#x2F;item?id=42861150\">https:&#x2F;&#x2F;news.ycombinator.com&#x2F;item?id=42861150</a><p><a href=\"https:&#x2F;&#x2F;news.ycombinator.com&#x2F;item?id=42860888\">https:&#x2F;&#x2F;news.ycombinator.com&#x2F;item?id=42860888</a>",
+   "title": null,
+   "type": "comment",
+   "url": null
+  },
+  {
+   "author": "roshin",
+   "children": [
+    {
+     "author": "csallen",
+     "children": [],
+     "created_at": "2025-01-29T16:53:03.000Z",
+     "created_at_i": 1738169583,
+     "id": 42867549,
+     "points": null,
+     "story_id": 42865527,
+     "text": "I came here to say just this.<p>Can we change the headline of this article to something more accurate and less clickbaity?<p>The article unjustifiably labels OpenAI as &quot;furious&quot; despite surfacing zero evidence that that&#x27;s how they actually feel, obviously in an attempt to paint them as hypocrites who are okay with copying others but are upset at being copied.<p>This is a very dishonestly-framed and -advertised story.",
+     "title": null,
+     "type": "comment",
+     "url": null
+    },
+    {
+     "author": "ZeroTalent",
+     "children": [],
+     "created_at": "2025-01-29T19:24:14.000Z",
+     "created_at_i": 1738178654,
+     "id": 42869853,
+     "points": null,
+     "story_id": 42865527,
+     "text": "As I understand from Twitter, the issue explained in this article is not the actual case at hand. The issue is that they suspect them of stealing the o1 model with the weights via corporate espionage and optimizing it with Matrix Multiplication and other upgrades. That would explain why the outputs are nearly identical in some cases.<p>I don&#x27;t know how much of any of this is true. This is what I&#x27;m reading on Twitter today.",
+     "title": null,
+     "type": "comment",
+     "url": null
+    }
+   ],
+   "created_at": "2025-01-29T15:43:59.000Z",
+   "created_at_i": 1738165439,
+   "id": 42866322,
+   "points": null,
+   "story_id": 42865527,
+   "text": "I hate clickbait articles that try to make the bad guys seem like they&#x27;re angry.<p>&gt; Both Bloomberg and the Financial Times are reporting that Microsoft and OpenAI have been probing whether DeepSeek improperly trained the R1 model<p>The company openai is not angry, or furious, or enraged. They simply suspect that deepseek broke their usage agreement and are trying to verify that.",
+   "title": null,
+   "type": "comment",
+   "url": null
+  },
+  {
+   "author": "csallen",
+   "children": [
+    {
+     "author": "sebastiennight",
+     "children": [],
+     "created_at": "2025-01-29T16:59:29.000Z",
+     "created_at_i": 1738169969,
+     "id": 42867687,
+     "points": null,
+     "story_id": 42865527,
+     "text": "Such a perfect article title, but wasted on clickbait.",
+     "title": null,
+     "type": "comment",
+     "url": null
+    },
+    {
+     "author": "tim333",
+     "children": [],
+     "created_at": "2025-01-29T22:05:20.000Z",
+     "created_at_i": 1738188320,
+     "id": 42871832,
+     "points": null,
+     "story_id": 42865527,
+     "text": "It&#x27;s funny though. There seem to be a lot of commenters on Hacker News who don&#x27;t really get the sense of humor thing.",
+     "title": null,
+     "type": "comment",
+     "url": null
+    }
+   ],
+   "created_at": "2025-01-29T16:54:43.000Z",
+   "created_at_i": 1738169683,
+   "id": 42867595,
+   "points": null,
+   "story_id": 42865527,
+   "text": "There is nothing in this article to suggest that OpenAI is &quot;furious&quot; or even upset. Zero evidence. It&#x27;s total clickbait.<p>And it&#x27;s embarrassing that so many commenters on Hacker News who <i>want</i> to believe this storyline are just pretending that it&#x27;s true despite the lack of evidence.",
+   "title": null,
+   "type": "comment",
+   "url": null
+  }
+ ],
+ "created_at": "2025-01-29T14:52:34.000Z",
+ "created_at_i": 1738162354,
+ "id": 42865527,
+ "points": 1361,
+ "story_id": 42865527,
+ "text": null,
+ "title": "OpenAI Furious DeepSeek Might Have Stolen All the Data OpenAI Stole from Us",
+ "type": "story",
+ "url": "https://www.404media.co/openai-furious-deepseek-might-have-stolen-all-the-data-openai-stole-from-us/"
+}

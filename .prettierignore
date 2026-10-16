@@ -13,3 +13,4 @@ apps/desktop/src-tauri/target
 apps/desktop/src-tauri/gen
 packages/core/test/golden/
 packages/core/src/wikipedia/fixtures/
+packages/core/src/*/fixtures/

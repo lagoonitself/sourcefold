@@ -5,6 +5,12 @@ export const READER_KINDS: ReadonlySet<string> = new Set([
   "x",
   "wikipedia",
   "note",
+  "youtube",
+  "web",
+  "reddit",
+  "pdf",
+  "hackernews",
+  "bluesky",
 ]);
 
 export interface OpenableItem {
@@ -12,6 +18,7 @@ export interface OpenableItem {
   source_url?: string | null;
   canonical_url?: string | null;
   markdown?: string | null;
+  status?: string | null;
 }
 
 export type OpenTarget = "reader" | "browser" | "image" | "none";
@@ -37,6 +44,8 @@ export function opensInReader(item: OpenableItem): boolean {
 export function openTargetFor(item: OpenableItem, forceExternal = false): OpenTarget {
   if (item.kind === "image") return "image";
   const url = linkOfItem(item);
+  // Nothing was saved (a locked post, a video without captions): show the original page.
+  if (item.status === "unavailable" && url) return "browser";
   if (forceExternal) {
     if (url) return "browser";
     return opensInReader(item) ? "reader" : "none";

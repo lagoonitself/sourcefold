@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { browser } from "wxt/browser";
-import { detectSource, xStatusId, type SourceKind } from "@sourcefold/core";
+import { detectLinkKind, detectSource, xStatusId, type SourceKind } from "@sourcefold/core";
 import {
   listFolders,
   createFolder,
@@ -22,8 +22,12 @@ import {
 } from "../../lib/folder-tree";
 import { getLastFolderId, setLastFolderId } from "../../lib/last-folder";
 import { capturePage } from "../../lib/capture-page";
+import { sourceKindLabel } from "../../lib/capture-route";
 import { resolveTarget, type ResolvedTarget } from "../../lib/target";
 import { hasHostPermission, hostOf, requestHostPermission } from "../../lib/permissions";
+
+const CANNOT_SAVE_MESSAGE =
+  "This page can't be saved. Open a web page, YouTube video, Reddit, Hacker News or Bluesky post, Substack post, Grokipedia article or X post.";
 
 const FOLDER_TREE_CACHE_KEY = "sourcefold:folderTreeCache";
 
@@ -45,6 +49,7 @@ export default function App() {
   const [tabId, setTabId] = useState<number | null>(null);
   const [detectedSource, setDetectedSource] = useState<SourceKind | null>(null);
   const [unsupported, setUnsupported] = useState(false);
+  const [detectedLabel, setDetectedLabel] = useState<string | null>(null);
 
   const [folders, setFolders] = useState<Folder[]>([]);
   const [folderTree, setFolderTree] = useState<FolderTreeItem[]>([]);
@@ -249,7 +254,10 @@ export default function App() {
 
   const getDetectedTypeLabel = (): string => {
     if (unsupported) {
-      return "This page can't be saved. Open a Grokipedia article, a Substack post or an X post.";
+      return CANNOT_SAVE_MESSAGE;
+    }
+    if (detectedLabel) {
+      return detectedLabel;
     }
     switch (detectedSource) {
       case "grokipedia":
@@ -258,8 +266,10 @@ export default function App() {
         return "Substack post";
       case "x":
         return "X post";
-      default:
-        return "Save this page if it's a Substack post.";
+      default: {
+        const kind = tabUrl ? detectLinkKind(tabUrl) : null;
+        return kind ? sourceKindLabel(kind) : "Save this page.";
+      }
     }
   };
 
@@ -427,9 +437,7 @@ export default function App() {
 
       if (captureRes.kind === "unsupported") {
         setUnsupported(true);
-        setErrorMessage(
-          "This page can't be saved. Open a Grokipedia article, a Substack post or an X post.",
-        );
+        setErrorMessage(CANNOT_SAVE_MESSAGE);
         return;
       }
 
@@ -442,9 +450,7 @@ export default function App() {
         const res = captureRes.result;
         if (res.status === "not_substack") {
           setUnsupported(true);
-          setErrorMessage(
-            "This page can't be saved. Open a Grokipedia article, a Substack post or an X post.",
-          );
+          setErrorMessage(CANNOT_SAVE_MESSAGE);
           return;
         }
 
@@ -472,6 +478,39 @@ export default function App() {
           setSuccessMessage(`Saved to ${folderName}`);
           return;
         }
+      }
+
+      if (captureRes.kind === "source") {
+        const res = captureRes.result;
+        const label = sourceKindLabel(res.kind);
+        if (res.status === "unavailable") {
+          const { item } = await capture({
+            kind: "source_unavailable",
+            folder_id: selectedFolderId,
+            source: res.kind,
+            url: res.url,
+            title: res.title,
+            reason: res.reason,
+          });
+          await setLastFolderId(selectedFolderId);
+          markSaved(item);
+          setTabTitle(res.title || tabTitle);
+          setDetectedLabel(label);
+          setWarningMessage(res.reason);
+          return;
+        }
+
+        const { item } = await capture({
+          kind: res.kind,
+          folder_id: selectedFolderId,
+          capture: res.capture,
+        });
+        await setLastFolderId(selectedFolderId);
+        markSaved(item);
+        setTabTitle(res.capture.title || tabTitle);
+        setDetectedLabel(label);
+        setSuccessMessage(`Saved to ${folderName}`);
+        return;
       }
 
       if (captureRes.kind === "x") {

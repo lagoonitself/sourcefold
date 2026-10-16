@@ -1,3 +1,4 @@
+import { canonicalSourceUrl, meaningfulQuery } from "./source-links";
 import { canonicalWikipediaUrl } from "./wikipedia/links";
 
 export type SourceKind = "grokipedia" | "substack" | "x";
@@ -127,8 +128,17 @@ export function canonicalizeUrl(input: string): string {
     return wikipedia;
   }
 
-  // Everything else: path kept as is (case preserved)
-  return pathname ? `https://${host}${pathname}` : `https://${host}`;
+  // YouTube, Reddit, Hacker News, Bluesky and arXiv: one address per video, post or paper.
+  const source = canonicalSourceUrl(trimmed);
+  if (source) {
+    return source;
+  }
+
+  // Everything else: path kept as is (case preserved), plus the query parameters that pick the
+  // page (not `utm_*` and other click tracking). Substack posts never need a query.
+  const isSubstackPost = normalizedHost.endsWith("substack.com") || /^\/p\/[^/]+$/.test(pathname);
+  const query = isSubstackPost ? "" : meaningfulQuery(parsed);
+  return `https://${host}${pathname}${query}`;
 }
 
 export function detectSource(url: string): SourceKind | null {

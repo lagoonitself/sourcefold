@@ -2,9 +2,11 @@ import * as React from "react";
 import { Check, CircleAlert, Loader2, Lock } from "lucide-react";
 import {
   classifySubstackLink,
+  detectLinkKind,
   detectSource,
   extractUrls,
   isWikipediaArticleUrl,
+  parseYouTubeLink,
 } from "@sourcefold/core";
 import { Button } from "@/components/ui/Button";
 import {
@@ -19,6 +21,7 @@ import type { Folder, FolderNode } from "@/lib/types";
 import { checkUrl, saveGrokipedia } from "@/lib/api";
 import { findPublicationPosts, saveSubstackPost } from "../substack/substack-client";
 import { saveWikipediaArticle } from "../wikipedia/wikipedia-client";
+import { findYouTubeVideos, saveSourceLink } from "../sources/source-client";
 import { buildFolderTree } from "../folders/tree-utils";
 import { isMacPlatform } from "../shortcuts/key-utils";
 
@@ -30,10 +33,13 @@ export interface AddLinksDialogProps {
   onFinished: () => Promise<void>;
 }
 
-type LinkSource = "grokipedia" | "wikipedia" | "substack" | "publication";
+// `source` is any of the 2026-10 kinds (YouTube video, web page, Reddit, Hacker News, Bluesky,
+// PDF); `youtube_list` is a playlist or channel, replaced by one row per video.
+type LinkSource =
+  "grokipedia" | "wikipedia" | "substack" | "publication" | "source" | "youtube_list";
 
 export type QueueItemStatus =
-  "waiting" | "finding" | "saving" | "saved" | "duplicate" | "paid" | "failed";
+  "waiting" | "finding" | "saving" | "saved" | "duplicate" | "paid" | "unavailable" | "failed";
 
 export interface QueueItem {
   id: string;
@@ -66,6 +72,9 @@ function parseLinks(text: string): ParsedLinks {
     else if (source === "x") parsed.xLinks.push(url);
     else if (substack === "post") parsed.valid.push({ url, source: "substack" });
     else if (substack === "publication") parsed.valid.push({ url, source: "publication" });
+    else if (detectLinkKind(url) === "youtube" && parseYouTubeLink(url)?.type !== "video") {
+      parsed.valid.push({ url, source: "youtube_list" });
+    } else if (detectLinkKind(url)) parsed.valid.push({ url, source: "source" });
     else parsed.skipped.push(url);
   }
   return parsed;
@@ -181,6 +190,32 @@ export function AddLinksDialog({
       return;
     }
 
+    if (item.source === "source") {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        const outcome = await saveSourceLink(item.url, folderId, controller.signal);
+        if (outcome.kind === "saved") {
+          patchItem(item.id, { status: "saved", title: outcome.title, message: undefined });
+        } else if (outcome.kind === "unavailable") {
+          patchItem(item.id, {
+            status: "unavailable",
+            title: outcome.title,
+            message: outcome.reason,
+          });
+        } else {
+          patchItem(item.id, {
+            status: "duplicate",
+            title: outcome.title ?? item.title,
+            message: outcome.message,
+          });
+        }
+      } finally {
+        abortRef.current = null;
+      }
+      return;
+    }
+
     const outcome = await saveSubstackPost(item.url, folderId);
     if (outcome.kind === "saved") {
       patchItem(item.id, {
@@ -244,6 +279,49 @@ export function AddLinksDialog({
     }
   };
 
+  // Replaces a YouTube playlist or channel row with one row per video, in place.
+  const expandYouTubeList = async (item: QueueItem) => {
+    patchItem(item.id, { status: "finding", message: "Finding videos…" });
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const list = await findYouTubeVideos(item.url, { signal: controller.signal });
+      if (list.videos.length === 0) {
+        patchItem(item.id, { status: "failed", message: "No videos found." });
+        return;
+      }
+      const rows: QueueItem[] = list.videos.map((video) => ({
+        id: newId(),
+        url: video.url,
+        source: "source",
+        status: "waiting",
+        title: video.title,
+        message: video.duration ?? undefined,
+      }));
+      if (list.truncated) {
+        rows[0] = {
+          ...rows[0],
+          message: `Only the first ${list.videos.length} videos are added.`,
+        };
+      }
+      const index = queueRef.current.findIndex((q) => q.id === item.id);
+      const next = [...queueRef.current];
+      next.splice(index, 1, ...rows);
+      setItems(next);
+    } catch (err) {
+      if (controller.signal.aborted) {
+        patchItem(item.id, { status: "waiting", message: undefined });
+      } else {
+        patchItem(item.id, {
+          status: "failed",
+          message: errorMessage(err, "Couldn't list the videos."),
+        });
+      }
+    } finally {
+      abortRef.current = null;
+    }
+  };
+
   const runQueue = async (folderId: string) => {
     setIsRunning(true);
     setIsFinished(false);
@@ -257,12 +335,20 @@ export function AddLinksDialog({
         await expandPublication(item);
         continue;
       }
+      if (item.source === "youtube_list") {
+        await expandYouTubeList(item);
+        continue;
+      }
 
       patchItem(item.id, { status: "saving" });
       try {
         await saveOne(item, folderId);
       } catch (err) {
-        patchItem(item.id, { status: "failed", message: errorMessage(err, "Failed to save") });
+        if (stopRequestedRef.current) {
+          patchItem(item.id, { status: "waiting", message: undefined });
+        } else {
+          patchItem(item.id, { status: "failed", message: errorMessage(err, "Failed to save") });
+        }
       }
     }
 
@@ -296,7 +382,9 @@ export function AddLinksDialog({
   };
 
   const savedCount = queue.filter((q) => q.status === "saved").length;
-  const postCount = queue.filter((q) => q.source !== "publication").length;
+  const postCount = queue.filter(
+    (q) => q.source !== "publication" && q.source !== "youtube_list",
+  ).length;
 
   const handleClose = () => {
     if (isRunning) handleStop();
@@ -327,8 +415,10 @@ export function AddLinksDialog({
         <DialogHeader>
           <DialogTitle>Add links</DialogTitle>
           <DialogDescription>
-            Paste Grokipedia, Wikipedia or Substack links, one per line. A Substack publication link
-            (like name.substack.com) saves every post in it.
+            Paste links, one per line: YouTube videos (saves the transcript), web pages, PDFs and
+            arXiv papers, Reddit, Hacker News and Bluesky threads, Grokipedia, Wikipedia and
+            Substack. A YouTube playlist or channel, or a Substack publication, saves every video or
+            post in it.
           </DialogDescription>
         </DialogHeader>
 
@@ -362,7 +452,7 @@ export function AddLinksDialog({
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={
-                  "https://grokipedia.com/page/...\nhttps://en.wikipedia.org/wiki/...\nhttps://name.substack.com/p/...\nhttps://name.substack.com"
+                  "https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/playlist?list=...\nhttps://example.com/article\nhttps://grokipedia.com/page/...\nhttps://name.substack.com"
                 }
                 rows={8}
                 autoFocus
@@ -446,7 +536,13 @@ export function AddLinksDialog({
                         {(item.status === "saving" || item.status === "finding") && (
                           <span className="flex items-center gap-1 text-primary">
                             <Loader2 className="size-3.5 animate-spin" />
-                            <span>{item.status === "finding" ? "Finding posts" : "Saving"}</span>
+                            <span>
+                              {item.status !== "finding"
+                                ? "Saving"
+                                : item.source === "youtube_list"
+                                  ? "Finding videos"
+                                  : "Finding posts"}
+                            </span>
                           </span>
                         )}
                         {item.status === "saved" && (
@@ -462,6 +558,12 @@ export function AddLinksDialog({
                           <span className="flex items-center gap-1 text-muted-foreground">
                             <Lock className="size-3.5" />
                             <span>Paid, not saved</span>
+                          </span>
+                        )}
+                        {item.status === "unavailable" && (
+                          <span className="flex items-center gap-1 text-muted-foreground">
+                            <CircleAlert className="size-3.5" />
+                            <span>Not saved</span>
                           </span>
                         )}
                         {item.status === "failed" && (

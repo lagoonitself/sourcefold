@@ -4,10 +4,11 @@ import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-export type QueueItemStatus = "waiting" | "saving" | "saved" | "duplicate" | "failed";
+export type QueueItemStatus =
+  "waiting" | "saving" | "saved" | "unavailable" | "duplicate" | "failed";
 
 /** Which endpoint saves a link: each source type has its own. */
-export type LinkSource = "grokipedia" | "wikipedia";
+export type LinkSource = "grokipedia" | "wikipedia" | "source";
 
 export interface QueueLink {
   url: string;
@@ -80,7 +81,11 @@ export function useLinkQueue() {
 
         let res: Response | null = null;
         let json: {
-          data?: { item?: { id?: string; title?: string; folder_id?: string } };
+          data?: {
+            item?: { id?: string; title?: string; folder_id?: string };
+            unavailable?: boolean;
+            reason?: string;
+          };
           error?: { message?: string; code?: string };
           folder_name?: string;
         } | null = null;
@@ -134,7 +139,8 @@ export function useLinkQueue() {
         } else if (res.ok && json?.data?.item) {
           const item = json.data.item;
           updateItem(currentItem.id, {
-            status: "saved",
+            status: json.data.unavailable ? "unavailable" : "saved",
+            message: json.data.unavailable ? (json.data.reason ?? "Nothing to save") : undefined,
             title: item.title || undefined,
             savedItem: {
               id: item.id || "",
@@ -142,7 +148,7 @@ export function useLinkQueue() {
               folder_id: item.folder_id || folderIdRef.current,
             },
           });
-          savedInThisRun++;
+          if (!json.data.unavailable) savedInThisRun++;
           batchSavesSinceRefresh++;
 
           if (batchSavesSinceRefresh >= 3) {

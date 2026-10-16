@@ -50,6 +50,31 @@ pub async fn capture(
         CapturePayload::Wikipedia { folder_id, capture } => {
             service::save_wikipedia(&db, &folder_id, capture)
         }
+        CapturePayload::YouTube { folder_id, capture } => {
+            service::save_source(&db, &folder_id, "youtube", capture)
+        }
+        CapturePayload::Web { folder_id, capture } => {
+            service::save_source(&db, &folder_id, "web", capture)
+        }
+        CapturePayload::Reddit { folder_id, capture } => {
+            service::save_source(&db, &folder_id, "reddit", capture)
+        }
+        CapturePayload::Pdf { folder_id, capture } => {
+            service::save_source(&db, &folder_id, "pdf", capture)
+        }
+        CapturePayload::HackerNews { folder_id, capture } => {
+            service::save_source(&db, &folder_id, "hackernews", capture)
+        }
+        CapturePayload::Bluesky { folder_id, capture } => {
+            service::save_source(&db, &folder_id, "bluesky", capture)
+        }
+        CapturePayload::SourceUnavailable {
+            folder_id,
+            source,
+            url,
+            title,
+            reason,
+        } => service::save_source_unavailable(&db, &folder_id, &source, &url, &title, &reason),
         CapturePayload::X { folder_id, posts } => service::save_x_thread(&db, &folder_id, posts),
         CapturePayload::Grokipedia { folder_id, url, html } => {
             service::save_grokipedia(&db, &url, &folder_id, html.as_deref())

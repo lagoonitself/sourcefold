@@ -90,6 +90,7 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] Signed-in desktop keeps a local copy of the library in the storage folder, same layout as Drive (`GET /api/mirror`, `GET /api/items/[id]/content`, `local_copy.rs`). [ ] Needs the web app deployed, then the owner's check.
   - [x] Reader works signed in and offline for every text source (loads the file from the web app or the local DB, hides front matter, footnotes, inline images, safe links). [ ] Owner's check.
   - [x] Wikipedia source type (web, desktop signed in and offline), migration `20261015000000_wikipedia_kind.sql`. [ ] Migration applied, owner's check.
+  - [x] More source types (2026-10-16): YouTube transcripts (videos, playlists and channels on desktop; videos in the extension), any web page (defuddle), PDFs and arXiv (pdf.js, arXiv HTML), Reddit, Hacker News and Bluesky threads. Shared extractors in `packages/core`, `POST /api/source` on the web, Rust `web_fetch` on desktop, page capture in the extension; migration `20261016000000_more_source_kinds.sql`. [ ] Migration applied, owner's check.
   - [x] Google Doc next to every Markdown file in Drive; `.docx` in the desktop's local copy. [ ] Owner's check of how Drive renders the import.
   - [ ] Owner's hands-on test of Substack saving on desktop (free post, publication import, paid post with cookie).
   - [ ] Owner's hands-on test of desktop sign-in and sync.

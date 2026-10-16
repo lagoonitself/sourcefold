@@ -122,6 +122,7 @@ fn main() {
             commands::get_substack_cookie,
             commands::set_substack_cookie,
             commands::clear_substack_cookie,
+            commands::web_fetch,
             commands::sync_local_copy,
             commands::get_local_copy_enabled,
             commands::set_local_copy_enabled,

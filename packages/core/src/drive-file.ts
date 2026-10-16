@@ -40,6 +40,149 @@ function revisionNumber(val: unknown): number | undefined {
   return undefined;
 }
 
+type KindFieldType = "string" | "date" | "number";
+
+interface KindField {
+  name: string;
+  type: KindFieldType;
+}
+
+// The front matter fields for the source kinds added in 2026-10, in the order given in
+// docs/FILE-FORMAT.md. They are read from the item's `meta`.
+const KIND_FIELDS: Record<string, KindField[]> = {
+  youtube: [
+    { name: "channel", type: "string" },
+    { name: "channel_url", type: "string" },
+    { name: "published", type: "date" },
+    { name: "duration", type: "string" },
+    { name: "language", type: "string" },
+    { name: "captions", type: "string" },
+  ],
+  web: [
+    { name: "site", type: "string" },
+    { name: "author", type: "string" },
+    { name: "published", type: "date" },
+    { name: "summary", type: "string" },
+  ],
+  reddit: [
+    { name: "subreddit", type: "string" },
+    { name: "author", type: "string" },
+    { name: "posted", type: "date" },
+    { name: "score", type: "number" },
+    { name: "comments", type: "number" },
+  ],
+  pdf: [
+    { name: "author", type: "string" },
+    { name: "published", type: "date" },
+    { name: "pages", type: "number" },
+    // An arXiv id is text: written unquoted, 2401.01234 reads back as the float 2401.0123
+    // and the id is lost, so the front matter writer quotes it.
+    { name: "arxiv", type: "string" },
+  ],
+  hackernews: [
+    { name: "author", type: "string" },
+    { name: "posted", type: "date" },
+    { name: "points", type: "number" },
+    { name: "comments", type: "number" },
+    { name: "link", type: "string" },
+  ],
+  bluesky: [
+    { name: "author", type: "string" },
+    { name: "author_url", type: "string" },
+    { name: "posted", type: "date" },
+  ],
+};
+
+function stringValue(val: unknown): string | undefined {
+  return typeof val === "string" && val.trim() ? val.trim() : undefined;
+}
+
+// Counts (score, comments, points, pages) go in unquoted; a numeric string becomes a number.
+function countValue(val: unknown): number | undefined {
+  if (typeof val === "number") {
+    return Number.isFinite(val) ? val : undefined;
+  }
+  if (typeof val === "string" && /^[+-]?\d+(?:\.\d+)?$/.test(val.trim())) {
+    return Number(val.trim());
+  }
+  return undefined;
+}
+
+function hasValue(val: unknown): boolean {
+  if (typeof val === "number") return Number.isFinite(val);
+  return stringValue(val) !== undefined;
+}
+
+function metaValue(type: KindFieldType, val: unknown): FrontMatterValue {
+  if (type === "date") return tryFormatDate(val);
+  if (type === "number") return countValue(val);
+  return stringValue(val);
+}
+
+function buildKindFields(
+  kind: string,
+  meta: Record<string, unknown>,
+): Record<string, FrontMatterValue> {
+  const fields: Record<string, FrontMatterValue> = {};
+  for (const field of KIND_FIELDS[kind] ?? []) {
+    fields[field.name] = metaValue(field.type, meta[field.name]);
+  }
+  return fields;
+}
+
+function hostWithoutWww(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "") || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function newKindSourceLine(
+  kind: string,
+  meta: Record<string, unknown>,
+  itemUrl: string,
+  savedDate: string,
+): string {
+  const author = stringValue(meta.author);
+  const byAuthor = author ? ` By ${author}.` : "";
+  const published = tryFormatDate(meta.published);
+  const publishedClause = published ? ` Published ${published}.` : "";
+
+  switch (kind) {
+    case "youtube": {
+      const channel = stringValue(meta.channel);
+      let line = `> Saved from [YouTube](${itemUrl}) on ${savedDate}.`;
+      if (channel) line += ` By ${channel}.`;
+      line += publishedClause;
+      if (meta.captions === "auto-generated") {
+        line += " Transcript from auto-generated captions.";
+      }
+      return line;
+    }
+    case "web": {
+      const label = stringValue(meta.site) ?? hostWithoutWww(itemUrl) ?? "Web page";
+      return `> Saved from [${label}](${itemUrl}) on ${savedDate}.${byAuthor}${publishedClause}`;
+    }
+    case "reddit": {
+      const subreddit = stringValue(meta.subreddit);
+      const label = subreddit ? `r/${subreddit}` : "Reddit";
+      return `> Saved from [${label}](${itemUrl}) on ${savedDate}.`;
+    }
+    case "pdf": {
+      const label = hasValue(meta.arxiv) ? "arXiv" : (hostWithoutWww(itemUrl) ?? "PDF");
+      return `> Saved from [${label}](${itemUrl}) on ${savedDate}.${byAuthor}${publishedClause}`;
+    }
+    case "hackernews":
+      return `> Saved from [Hacker News](${itemUrl}) on ${savedDate}.`;
+    case "bluesky":
+      return `> Saved from [Bluesky](${itemUrl}) on ${savedDate}.`;
+    default:
+      return `> Saved from [${kind}](${itemUrl}) on ${savedDate}.`;
+  }
+}
+
 // Recovers the Markdown body from a file Sourcefold wrote to Drive: drops the front matter
 // and the trailing "## My note" section, which are rebuilt from the database on every save.
 export function bodyFromDriveFile(fileText: string): string {
@@ -162,6 +305,15 @@ export function buildItemFile(item: BuildItemInput, folderPath?: string): string
       created: tryFormatDate(item.created ?? item.created_at),
       folder: folder || undefined,
     };
+  } else if (KIND_FIELDS[item.kind]) {
+    fields = {
+      source: item.kind,
+      title: item.title,
+      url: itemUrl,
+      ...buildKindFields(item.kind, meta),
+      saved: tryFormatDate(item.saved ?? item.created_at),
+      folder: folder || undefined,
+    };
   } else {
     fields = {
       source: item.kind,
@@ -203,6 +355,8 @@ export function buildItemFile(item: BuildItemInput, folderPath?: string): string
     sourceLine = `> Saved from [X](${url}) on ${savedDate}.`;
   } else if (item.kind === "note") {
     sourceLine = null;
+  } else if (KIND_FIELDS[item.kind] && itemUrl) {
+    sourceLine = newKindSourceLine(item.kind, meta, itemUrl, savedDate);
   } else if (itemUrl) {
     sourceLine = `> Saved from [${item.kind}](${itemUrl}) on ${savedDate}.`;
   }

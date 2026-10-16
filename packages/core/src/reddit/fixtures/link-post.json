@@ -1,0 +1,42 @@
+[
+  {
+    "kind": "Listing",
+    "data": {
+      "after": null,
+      "dist": 1,
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "subreddit": "rust",
+            "selftext": "",
+            "title": "Announcing a faster JSON parser",
+            "subreddit_name_prefixed": "r/rust",
+            "name": "t3_2def3e",
+            "ups": 214,
+            "score": 214,
+            "created_utc": 1792065600,
+            "is_self": false,
+            "domain": "example.com",
+            "url": "https://example.com/blog/faster-json?utm_source=reddit",
+            "permalink": "/r/rust/comments/2def3e/announcing_a_faster_json_parser/",
+            "author": "parser_fan",
+            "num_comments": 0,
+            "post_hint": "link",
+            "is_gallery": false
+          }
+        }
+      ],
+      "before": null
+    }
+  },
+  {
+    "kind": "Listing",
+    "data": {
+      "after": null,
+      "dist": 0,
+      "children": [],
+      "before": null
+    }
+  }
+]

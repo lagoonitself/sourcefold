@@ -4,13 +4,22 @@ import { openSource, openTargetFor, opensInReader } from "../open-decision";
 const url = "https://example.com/page";
 
 describe("openTargetFor", () => {
-  it.each(["grokipedia", "substack", "x", "wikipedia", "note"])(
-    "opens %s in the reader even when no text is loaded",
-    (kind) => {
-      expect(openTargetFor({ kind, source_url: url, markdown: null })).toBe("reader");
-      expect(openTargetFor({ kind, source_url: null, markdown: null })).toBe("reader");
-    },
-  );
+  it.each([
+    "grokipedia",
+    "substack",
+    "x",
+    "wikipedia",
+    "note",
+    "youtube",
+    "web",
+    "reddit",
+    "pdf",
+    "hackernews",
+    "bluesky",
+  ])("opens %s in the reader even when no text is loaded", (kind) => {
+    expect(openTargetFor({ kind, source_url: url, markdown: null })).toBe("reader");
+    expect(openTargetFor({ kind, source_url: null, markdown: null })).toBe("reader");
+  });
 
   it("opens images in the image viewer, whatever the modifier", () => {
     expect(openTargetFor({ kind: "image", source_url: url })).toBe("image");
@@ -27,10 +36,17 @@ describe("openTargetFor", () => {
   });
 
   it("sends an unknown kind to the browser unless its text is at hand", () => {
-    expect(openTargetFor({ kind: "pdf", source_url: url })).toBe("browser");
-    expect(openTargetFor({ kind: "pdf", source_url: url, markdown: "# Text" })).toBe("reader");
-    expect(openTargetFor({ kind: "pdf" })).toBe("none");
+    expect(openTargetFor({ kind: "other", source_url: url })).toBe("browser");
+    expect(openTargetFor({ kind: "other", source_url: url, markdown: "# Text" })).toBe("reader");
+    expect(openTargetFor({ kind: "other" })).toBe("none");
   });
+
+  it.each(["substack", "youtube", "web", "reddit", "pdf", "hackernews", "bluesky"])(
+    "opens an unavailable %s item in the browser",
+    (kind) => {
+      expect(openTargetFor({ kind, source_url: url, status: "unavailable" })).toBe("browser");
+    },
+  );
 });
 
 describe("opensInReader", () => {

@@ -1,0 +1,11 @@
+{
+  "kind": "pdf",
+  "title": "Annual Report 2025",
+  "url": "https://www.example.org/files/report.pdf",
+  "folder": "Papers",
+  "saved": "2026-10-16",
+  "meta": {
+    "pages": 3
+  },
+  "body": "First page text.\n\nSecond paragraph."
+}

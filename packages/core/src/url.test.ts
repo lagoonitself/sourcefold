@@ -39,9 +39,51 @@ describe("canonicalizeUrl", () => {
     );
   });
 
-  it("drops query strings and hashes", () => {
+  it("keeps query parameters that pick the page, drops tracking ones and hashes", () => {
     expect(canonicalizeUrl("https://example.com/page?ref=feed&sort=top#section-2")).toBe(
-      "https://example.com/page",
+      "https://example.com/page?sort=top",
+    );
+    expect(
+      canonicalizeUrl("https://example.com/article.php?id=5&utm_source=x&UTM_MEDIUM=y&fbclid=z"),
+    ).toBe("https://example.com/article.php?id=5");
+    expect(canonicalizeUrl("https://example.com/article.php?id=6")).toBe(
+      "https://example.com/article.php?id=6",
+    );
+  });
+
+  it("drops the query on Substack posts", () => {
+    expect(canonicalizeUrl("https://name.substack.com/p/a-post?r=abc")).toBe(
+      "https://name.substack.com/p/a-post",
+    );
+    expect(canonicalizeUrl("https://www.noahpinion.blog/p/a-post?r=abc")).toBe(
+      "https://noahpinion.blog/p/a-post",
+    );
+  });
+
+  it("gives every form of a YouTube video one address", () => {
+    for (const link of [
+      "https://youtu.be/dQw4w9WgXcQ?t=42",
+      "https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=1m2s",
+      "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+      "https://www.youtube.com/live/dQw4w9WgXcQ",
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabc123",
+    ]) {
+      expect(canonicalizeUrl(link)).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    }
+  });
+
+  it("canonicalizes Reddit, Hacker News, Bluesky and arXiv links", () => {
+    expect(canonicalizeUrl("https://old.reddit.com/r/Cars/comments/1abc2d/some_title/")).toBe(
+      "https://www.reddit.com/r/cars/comments/1abc2d",
+    );
+    expect(canonicalizeUrl("https://news.ycombinator.com/item?id=41234567&p=2")).toBe(
+      "https://news.ycombinator.com/item?id=41234567",
+    );
+    expect(canonicalizeUrl("https://bsky.app/profile/Jay.bsky.team/post/3l6oveex3ii2l")).toBe(
+      "https://bsky.app/profile/jay.bsky.team/post/3l6oveex3ii2l",
+    );
+    expect(canonicalizeUrl("https://arxiv.org/pdf/2401.01234v2.pdf")).toBe(
+      "https://arxiv.org/abs/2401.01234",
     );
   });
 

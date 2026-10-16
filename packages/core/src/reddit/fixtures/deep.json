@@ -1,0 +1,183 @@
+[
+ {
+  "kind": "Listing",
+  "data": {
+   "children": [
+    {
+     "kind": "t3",
+     "data": {
+      "subreddit": "cars",
+      "selftext": "A post with a deep reply chain.",
+      "title": "Deep comments",
+      "name": "t3_1abc2d",
+      "ups": 10,
+      "score": 10,
+      "created_utc": 1792065600,
+      "is_self": true,
+      "url": "https://www.reddit.com/r/cars/comments/1abc2d/deep_comments/",
+      "permalink": "/r/cars/comments/1abc2d/deep_comments/",
+      "author": "op_user",
+      "num_comments": 6
+     }
+    }
+   ]
+  }
+ },
+ {
+  "kind": "Listing",
+  "data": {
+   "children": [
+    {
+     "kind": "t1",
+     "data": {
+      "subreddit": "cars",
+      "author": "user_0",
+      "body": "xxx depth 0",
+      "id": "c0",
+      "created_utc": 1792069200,
+      "parent_id": "t3_1abc2d",
+      "score": 100,
+      "ups": 100,
+      "downs": 0,
+      "score_hidden": false,
+      "permalink": "/r/cars/comments/1abc2d/x/c0/",
+      "link_id": "t3_1abc2d",
+      "depth": 0,
+      "is_submitter": false,
+      "replies": {
+       "kind": "Listing",
+       "data": {
+        "children": [
+         {
+          "kind": "t1",
+          "data": {
+           "subreddit": "cars",
+           "author": "user_1",
+           "body": "xxx depth 1",
+           "id": "c1",
+           "created_utc": 1792069800,
+           "parent_id": "t1_c0",
+           "score": 90,
+           "ups": 90,
+           "downs": 0,
+           "score_hidden": false,
+           "permalink": "/r/cars/comments/1abc2d/x/c1/",
+           "link_id": "t3_1abc2d",
+           "depth": 1,
+           "is_submitter": false,
+           "replies": {
+            "kind": "Listing",
+            "data": {
+             "children": [
+              {
+               "kind": "t1",
+               "data": {
+                "subreddit": "cars",
+                "author": "user_2",
+                "body": "xxx depth 2",
+                "id": "c2",
+                "created_utc": 1792070400,
+                "parent_id": "t1_c1",
+                "score": 80,
+                "ups": 80,
+                "downs": 0,
+                "score_hidden": false,
+                "permalink": "/r/cars/comments/1abc2d/x/c2/",
+                "link_id": "t3_1abc2d",
+                "depth": 2,
+                "is_submitter": false,
+                "replies": {
+                 "kind": "Listing",
+                 "data": {
+                  "children": [
+                   {
+                    "kind": "t1",
+                    "data": {
+                     "subreddit": "cars",
+                     "author": "user_3",
+                     "body": "xxx depth 3",
+                     "id": "c3",
+                     "created_utc": 1792071000,
+                     "parent_id": "t1_c2",
+                     "score": 70,
+                     "ups": 70,
+                     "downs": 0,
+                     "score_hidden": false,
+                     "permalink": "/r/cars/comments/1abc2d/x/c3/",
+                     "link_id": "t3_1abc2d",
+                     "depth": 3,
+                     "is_submitter": false,
+                     "replies": {
+                      "kind": "Listing",
+                      "data": {
+                       "children": [
+                        {
+                         "kind": "t1",
+                         "data": {
+                          "subreddit": "cars",
+                          "author": "user_4",
+                          "body": "xxx depth 4",
+                          "id": "c4",
+                          "created_utc": 1792071600,
+                          "parent_id": "t1_c3",
+                          "score": 60,
+                          "ups": 60,
+                          "downs": 0,
+                          "score_hidden": false,
+                          "permalink": "/r/cars/comments/1abc2d/x/c4/",
+                          "link_id": "t3_1abc2d",
+                          "depth": 4,
+                          "is_submitter": false,
+                          "replies": {
+                           "kind": "Listing",
+                           "data": {
+                            "children": [
+                             {
+                              "kind": "t1",
+                              "data": {
+                               "subreddit": "cars",
+                               "author": "user_5",
+                               "body": "xxx depth 5",
+                               "id": "c5",
+                               "created_utc": 1792072200,
+                               "parent_id": "t1_c4",
+                               "score": 50,
+                               "ups": 50,
+                               "downs": 0,
+                               "score_hidden": false,
+                               "permalink": "/r/cars/comments/1abc2d/x/c5/",
+                               "link_id": "t3_1abc2d",
+                               "depth": 5,
+                               "is_submitter": false,
+                               "replies": ""
+                              }
+                             }
+                            ]
+                           }
+                          }
+                         }
+                        }
+                       ]
+                      }
+                     }
+                    }
+                   }
+                  ]
+                 }
+                }
+               }
+              }
+             ]
+            }
+           }
+          }
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+]

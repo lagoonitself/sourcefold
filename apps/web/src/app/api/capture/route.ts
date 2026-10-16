@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isWikipediaArticleUrl } from "@sourcefold/core";
+import { isWikipediaArticleUrl, SOURCE_CAPTURE_KINDS } from "@sourcefold/core";
 import { requireApiUser } from "@/lib/api";
+import { saveSource, saveSourceUnavailable } from "@/features/capture/save-source";
 import { saveSubstack, saveSubstackUnavailable } from "@/features/capture/save-substack";
 import { saveWikipediaCapture } from "@/features/capture/save-wikipedia";
 import { saveXThread } from "@/features/capture/save-x";
@@ -54,6 +55,34 @@ const xPostCaptureSchema = z.object({
   text: z.string(),
 });
 
+const httpUrlSchema = z
+  .string()
+  .trim()
+  .min(1, "URL is required")
+  .refine((value) => {
+    try {
+      const protocol = new URL(value).protocol;
+      return protocol === "http:" || protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "Enter an http or https link.");
+
+const sourceMetaValueSchema = z.union([
+  z.string().max(2000, "Metadata value is too long"),
+  z.number(),
+  z.null(),
+]);
+
+const sourceCaptureSchema = z.object({
+  url: httpUrlSchema,
+  title: z.string().trim().min(1, "Title is required").max(500, "Title is too long"),
+  meta: z
+    .record(z.string(), sourceMetaValueSchema)
+    .refine((meta) => Object.keys(meta).length <= 30, "Too many metadata fields."),
+  markdown: z.string().max(5_000_000, "Markdown body is too large"),
+});
+
 const captureRequestSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("substack"),
@@ -64,6 +93,19 @@ const captureRequestSchema = z.discriminatedUnion("kind", [
     kind: z.literal("wikipedia"),
     folder_id: z.string().uuid("Invalid folder ID"),
     capture: wikipediaCaptureSchema,
+  }),
+  z.object({
+    kind: z.enum(SOURCE_CAPTURE_KINDS),
+    folder_id: z.string().uuid("Invalid folder ID"),
+    capture: sourceCaptureSchema,
+  }),
+  z.object({
+    kind: z.literal("source_unavailable"),
+    folder_id: z.string().uuid("Invalid folder ID"),
+    source: z.enum(SOURCE_CAPTURE_KINDS),
+    url: httpUrlSchema,
+    title: z.string().trim().min(1, "Title is required").max(500, "Title is too long"),
+    reason: z.string().trim().min(1, "Reason is required").max(300, "Reason is too long"),
   }),
   z.object({
     kind: z.literal("substack_unavailable"),
@@ -125,8 +167,18 @@ export async function POST(request: Request) {
     );
   } else if (parsed.data.kind === "substack_unavailable") {
     result = await saveSubstackUnavailable(auth.db, auth.userId, parsed.data);
-  } else {
+  } else if (parsed.data.kind === "x") {
     result = await saveXThread(auth.db, auth.userId, parsed.data.folder_id, parsed.data.posts);
+  } else if (parsed.data.kind === "source_unavailable") {
+    result = await saveSourceUnavailable(auth.db, auth.userId, parsed.data);
+  } else {
+    result = await saveSource(
+      auth.db,
+      auth.userId,
+      parsed.data.kind,
+      parsed.data.folder_id,
+      parsed.data.capture,
+    );
   }
 
   if (result.success) {

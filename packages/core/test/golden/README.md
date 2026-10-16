@@ -8,7 +8,7 @@ Each input JSON file defines an item to be built into a canonical Markdown file:
 
 ```json
 {
-  "kind": "grokipedia | substack | wikipedia | x | note",
+  "kind": "grokipedia | substack | wikipedia | x | note | youtube | web | reddit | pdf | hackernews | bluesky",
   "title": "Item title",
   "url": "https://example.com/canonical-url",
   "folder": "Folder/Subfolder",
@@ -57,3 +57,11 @@ Each input JSON file defines an item to be built into a canonical Markdown file:
 - `x-thread.input.json` & `x-thread.md`
 - `note.input.json` & `note.md`
 - `item-with-note.input.json` & `item-with-note.md`
+- `youtube.input.json` & `youtube.md` (a duration like `1:02:10` is quoted so YAML 1.1 readers don't take it for a number)
+- `web.input.json` & `web.md`, `web-minimal.input.json` & `web-minimal.md` (no site name: the host without `www.`; the meaningful query stays in the URL)
+- `reddit.input.json` & `reddit.md`
+- `pdf-arxiv.input.json` & `pdf-arxiv.md`, `pdf.input.json` & `pdf.md`
+- `hackernews.input.json` & `hackernews.md` (a title with a colon is quoted)
+- `bluesky.input.json` & `bluesky.md`
+
+The 2026-10 kinds (`youtube`, `web`, `reddit`, `pdf`, `hackernews`, `bluesky`) take their kind fields from `meta`, in the order given in `docs/FILE-FORMAT.md`. Numbers (`score`, `comments`, `points`, `pages`) are written unquoted.

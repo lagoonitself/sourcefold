@@ -2,12 +2,17 @@ import * as React from "react";
 import {
   BookOpen,
   Check,
+  ChevronsUp,
   CircleAlert,
+  Cloud,
+  FileText,
   Globe,
   Image as ImageIcon,
   Loader2,
   Lock,
   MessageSquareText,
+  MessagesSquare,
+  MonitorPlay,
   Newspaper,
   StickyNote,
 } from "lucide-react";
@@ -62,6 +67,42 @@ const SOURCE_KINDS: Record<string, SourceKindConfig> = {
     barClass: "bg-muted-foreground",
     colorVar: "var(--muted-foreground)",
     Icon: Globe,
+  },
+  youtube: {
+    name: "YouTube",
+    barClass: "bg-source-youtube",
+    colorVar: "var(--source-youtube)",
+    Icon: MonitorPlay,
+  },
+  web: {
+    name: "Web page",
+    barClass: "bg-source-web",
+    colorVar: "var(--source-web)",
+    Icon: Globe,
+  },
+  reddit: {
+    name: "Reddit",
+    barClass: "bg-source-reddit",
+    colorVar: "var(--source-reddit)",
+    Icon: MessagesSquare,
+  },
+  pdf: {
+    name: "PDF",
+    barClass: "bg-source-pdf",
+    colorVar: "var(--source-pdf)",
+    Icon: FileText,
+  },
+  hackernews: {
+    name: "Hacker News",
+    barClass: "bg-source-hackernews",
+    colorVar: "var(--source-hackernews)",
+    Icon: ChevronsUp,
+  },
+  bluesky: {
+    name: "Bluesky",
+    barClass: "bg-source-bluesky",
+    colorVar: "var(--source-bluesky)",
+    Icon: Cloud,
   },
 };
 
@@ -122,17 +163,20 @@ export function StatusIcon({ status, error }: { status: string; error?: string |
         </span>
       );
     }
-    case "unavailable":
+    case "unavailable": {
+      // The reason is saved with the item ("No captions on this video"); paid Substack posts have none.
+      const label = error || "Paid post, not saved";
       return (
         <span
           className="flex size-4 shrink-0 items-center justify-center text-warning"
           role="img"
-          aria-label="Paid post, not saved"
-          title="Paid post, not saved"
+          aria-label={label}
+          title={label}
         >
           <Lock className="size-4" aria-hidden="true" />
         </span>
       );
+    }
     default:
       return null;
   }

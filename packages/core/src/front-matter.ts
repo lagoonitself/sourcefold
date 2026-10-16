@@ -6,6 +6,10 @@ const DISALLOWED_START_CHARS = /^[-?:,[\]{}#&*!|>'\"%@`]/;
 const NUMBER_REGEX =
   /^[+-]?(?:0x[0-9a-fA-F]+|0o[0-7]+|0b[01]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/;
 
+// A YAML 1.1 reader (old parsers, Python's yaml.safe_load) takes `3:33` to mean 213, so a
+// sexagesimal-looking value like a video duration has to be quoted.
+const SEXAGESIMAL_REGEX = /^\d+(:\d{1,2})+$/;
+
 function shouldQuoteString(str: string): boolean {
   if (str === "") {
     return true;
@@ -48,7 +52,7 @@ function shouldQuoteString(str: string): boolean {
     return true;
   }
 
-  if (NUMBER_REGEX.test(str)) {
+  if (NUMBER_REGEX.test(str) || SEXAGESIMAL_REGEX.test(str)) {
     return true;
   }
 

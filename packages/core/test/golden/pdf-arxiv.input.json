@@ -1,0 +1,14 @@
+{
+  "kind": "pdf",
+  "title": "Efficient Turbochargers",
+  "url": "https://arxiv.org/abs/2401.01234",
+  "folder": "Papers",
+  "saved": "2026-10-16",
+  "meta": {
+    "author": "A. Author, B. Author",
+    "published": "2024-01-03",
+    "pages": 12,
+    "arxiv": "2401.01234"
+  },
+  "body": "## Abstract\n\nWe study turbocharger efficiency, with $\\eta = W/Q$.\n\n## 1 Introduction\n\nTurbochargers are common."
+}

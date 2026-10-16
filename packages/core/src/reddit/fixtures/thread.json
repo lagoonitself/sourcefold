@@ -1,0 +1,347 @@
+[
+  {
+    "kind": "Listing",
+    "data": {
+      "after": null,
+      "dist": 1,
+      "modhash": "",
+      "geo_filter": "",
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "approved_at_utc": null,
+            "subreddit": "cars",
+            "selftext": "I'm thinking about a turbo kit for my car.\n\nIt's a daily driver, so I'd rather not break anything.\n\nThoughts?",
+            "author_fullname": "t2_opuser",
+            "saved": false,
+            "gilded": 0,
+            "clicked": false,
+            "title": "Should I turbo my car?",
+            "link_flair_richtext": [{ "e": "text", "t": "Question" }],
+            "subreddit_name_prefixed": "r/cars",
+            "hidden": false,
+            "pwls": 6,
+            "downs": 0,
+            "thumbnail_height": null,
+            "hide_score": false,
+            "name": "t3_1abc2d",
+            "link_flair_text_color": "dark",
+            "upvote_ratio": 0.93,
+            "author_flair_background_color": null,
+            "subreddit_type": "public",
+            "ups": 532,
+            "total_awards_received": 0,
+            "is_original_content": false,
+            "user_reports": [],
+            "is_reddit_media_domain": false,
+            "link_flair_text": "Question",
+            "can_mod_post": false,
+            "score": 532,
+            "created_utc": 1792065600,
+            "author_premium": false,
+            "thumbnail": "self",
+            "edited": false,
+            "author_flair_css_class": null,
+            "gildings": {},
+            "is_self": true,
+            "subreddit_id": "t5_2qh1c",
+            "link_flair_type": "text",
+            "removed_by_category": null,
+            "banned_by": null,
+            "author_flair_type": "text",
+            "domain": "self.cars",
+            "allow_live_comments": false,
+            "likes": null,
+            "suggested_sort": null,
+            "banned_at_utc": null,
+            "archived": false,
+            "no_follow": false,
+            "is_crosspostable": false,
+            "pinned": false,
+            "over_18": false,
+            "all_awardings": [],
+            "media_only": false,
+            "can_gild": false,
+            "spoiler": false,
+            "locked": false,
+            "author_flair_text": null,
+            "visited": false,
+            "removed_by": null,
+            "num_reports": null,
+            "distinguished": null,
+            "subreddit_subscribers": 4812345,
+            "created": 1792065600,
+            "num_crossposts": 3,
+            "num_comments": 87,
+            "is_video": false,
+            "url": "https://www.reddit.com/r/cars/comments/1abc2d/should_i_turbo_my_car/",
+            "permalink": "/r/cars/comments/1abc2d/should_i_turbo_my_car/",
+            "author": "op_user",
+            "parent_whitelist_status": "all_ads",
+            "whitelist_status": "all_ads",
+            "post_hint": null,
+            "is_gallery": false
+          }
+        }
+      ],
+      "before": null
+    }
+  },
+  {
+    "kind": "Listing",
+    "data": {
+      "after": null,
+      "dist": 6,
+      "modhash": "",
+      "geo_filter": "",
+      "children": [
+        {
+          "kind": "t1",
+          "data": {
+            "subreddit_id": "t5_2qh1c",
+            "author_is_blocked": false,
+            "comment_type": null,
+            "awards_received": 0,
+            "mod_reason_by": null,
+            "banned_by": null,
+            "author_flair_type": "text",
+            "total_awards_received": 0,
+            "subreddit": "cars",
+            "likes": null,
+            "replies": {
+              "kind": "Listing",
+              "data": {
+                "after": null,
+                "dist": 1,
+                "modhash": "",
+                "geo_filter": "",
+                "children": [
+                  {
+                    "kind": "t1",
+                    "data": {
+                      "subreddit_id": "t5_2qh1c",
+                      "author_is_blocked": false,
+                      "comment_type": null,
+                      "subreddit": "cars",
+                      "likes": null,
+                      "replies": {
+                        "kind": "Listing",
+                        "data": {
+                          "after": null,
+                          "dist": 1,
+                          "children": [
+                            {
+                              "kind": "t1",
+                              "data": {
+                                "subreddit_id": "t5_2qh1c",
+                                "subreddit": "cars",
+                                "author": "gearhead",
+                                "body": "Mine lasted 90k miles on the stock clutch, then it started slipping.",
+                                "id": "c3",
+                                "created_utc": 1792078800,
+                                "parent_id": "t1_c2",
+                                "score": 12,
+                                "ups": 12,
+                                "downs": 0,
+                                "score_hidden": false,
+                                "permalink": "/r/cars/comments/1abc2d/should_i_turbo_my_car/c3/",
+                                "link_id": "t3_1abc2d",
+                                "depth": 2,
+                                "stickied": false,
+                                "distinguished": null,
+                                "replies": "",
+                                "is_submitter": false
+                              }
+                            }
+                          ],
+                          "before": null
+                        }
+                      },
+                      "user_reports": [],
+                      "saved": false,
+                      "id": "c2",
+                      "created_utc": 1792073100,
+                      "author": "op_user",
+                      "body": "Good point, thanks.",
+                      "score": 40,
+                      "ups": 40,
+                      "downs": 0,
+                      "score_hidden": false,
+                      "permalink": "/r/cars/comments/1abc2d/should_i_turbo_my_car/c2/",
+                      "link_id": "t3_1abc2d",
+                      "depth": 1,
+                      "stickied": false,
+                      "distinguished": null,
+                      "parent_id": "t1_c1",
+                      "is_submitter": true
+                    }
+                  }
+                ],
+                "before": null
+              }
+            },
+            "user_reports": [],
+            "saved": false,
+            "id": "c1",
+            "created_utc": 1792069200,
+            "author": "gearhead",
+            "body": "Do the clutch first.",
+            "score": 120,
+            "ups": 120,
+            "downs": 0,
+            "score_hidden": false,
+            "permalink": "/r/cars/comments/1abc2d/should_i_turbo_my_car/c1/",
+            "link_id": "t3_1abc2d",
+            "depth": 0,
+            "stickied": false,
+            "distinguished": null,
+            "parent_id": "t3_1abc2d",
+            "is_submitter": false
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "subreddit_id": "t5_2qh1c",
+            "subreddit": "cars",
+            "author": "tuner_tom",
+            "body": "What car is it? That changes everything.\n\nA stock GTI and a stock Miata are two different answers.",
+            "id": "c4",
+            "created_utc": 1792067400,
+            "parent_id": "t3_1abc2d",
+            "score": 95,
+            "ups": 95,
+            "downs": 0,
+            "score_hidden": false,
+            "permalink": "/r/cars/comments/1abc2d/should_i_turbo_my_car/c4/",
+            "link_id": "t3_1abc2d",
+            "depth": 0,
+            "stickied": false,
+            "distinguished": null,
+            "is_submitter": false,
+            "replies": {
+              "kind": "Listing",
+              "data": {
+                "after": null,
+                "dist": 1,
+                "children": [
+                  {
+                    "kind": "t1",
+                    "data": {
+                      "subreddit_id": "t5_2qh1c",
+                      "subreddit": "cars",
+                      "author": "op_user",
+                      "body": "2019 Golf GTI.",
+                      "id": "c5",
+                      "created_utc": 1792070400,
+                      "parent_id": "t1_c4",
+                      "score": 30,
+                      "ups": 30,
+                      "downs": 0,
+                      "score_hidden": false,
+                      "permalink": "/r/cars/comments/1abc2d/should_i_turbo_my_car/c5/",
+                      "link_id": "t3_1abc2d",
+                      "depth": 1,
+                      "stickied": false,
+                      "distinguished": null,
+                      "is_submitter": true,
+                      "replies": ""
+                    }
+                  }
+                ],
+                "before": null
+              }
+            }
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "subreddit_id": "t5_2qh1c",
+            "subreddit": "cars",
+            "author": "[deleted]",
+            "body": "[deleted]",
+            "id": "c7",
+            "created_utc": 1792067400,
+            "parent_id": "t3_1abc2d",
+            "score": 1,
+            "ups": 1,
+            "downs": 0,
+            "score_hidden": false,
+            "permalink": "/r/cars/comments/1abc2d/should_i_turbo_my_car/c7/",
+            "link_id": "t3_1abc2d",
+            "depth": 0,
+            "stickied": false,
+            "distinguished": null,
+            "is_submitter": false,
+            "replies": {
+              "kind": "Listing",
+              "data": {
+                "after": null,
+                "dist": 1,
+                "children": [
+                  {
+                    "kind": "t1",
+                    "data": {
+                      "subreddit_id": "t5_2qh1c",
+                      "subreddit": "cars",
+                      "author": "wrench_night",
+                      "body": "Same thing happened to my brother's Jetta.",
+                      "id": "c8",
+                      "created_utc": 1792080600,
+                      "parent_id": "t1_c7",
+                      "score": 5,
+                      "ups": 5,
+                      "downs": 0,
+                      "score_hidden": false,
+                      "permalink": "/r/cars/comments/1abc2d/should_i_turbo_my_car/c8/",
+                      "link_id": "t3_1abc2d",
+                      "depth": 1,
+                      "stickied": false,
+                      "distinguished": null,
+                      "is_submitter": false,
+                      "replies": ""
+                    }
+                  }
+                ],
+                "before": null
+              }
+            }
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "subreddit_id": "t5_2qh1c",
+            "subreddit": "cars",
+            "author": "[removed]",
+            "body": "[removed]",
+            "id": "c9",
+            "created_utc": 1792083600,
+            "parent_id": "t3_1abc2d",
+            "score": 0,
+            "ups": 0,
+            "downs": 0,
+            "permalink": "/r/cars/comments/1abc2d/should_i_turbo_my_car/c9/",
+            "link_id": "t3_1abc2d",
+            "depth": 0,
+            "replies": ""
+          }
+        },
+        {
+          "kind": "more",
+          "data": {
+            "count": 60,
+            "name": "t1_more1",
+            "id": "more1",
+            "parent_id": "t3_1abc2d",
+            "depth": 0,
+            "children": ["c10", "c11"]
+          }
+        }
+      ],
+      "before": null
+    }
+  }
+]

@@ -45,6 +45,12 @@
   --color-source-x: var(--source-x);
   --color-source-note: var(--source-note);
   --color-source-image: var(--source-image);
+  --color-source-youtube: var(--source-youtube);
+  --color-source-web: var(--source-web);
+  --color-source-reddit: var(--source-reddit);
+  --color-source-pdf: var(--source-pdf);
+  --color-source-hackernews: var(--source-hackernews);
+  --color-source-bluesky: var(--source-bluesky);
 
   --font-sans: var(--font-schibsted);
   --font-serif: var(--font-source-serif);
@@ -99,6 +105,12 @@
   --source-x: #1c2533;
   --source-note: #7a3e73;
   --source-image: #0e7490;
+  --source-youtube: #b4235a;
+  --source-web: #4d5b6b;
+  --source-reddit: #a33b12;
+  --source-pdf: #7a4b2a;
+  --source-hackernews: #5f6b0e;
+  --source-bluesky: #1d5fd1;
 }
 
 .dark {
@@ -139,6 +151,12 @@
   --source-x: #e6eaf0;
   --source-note: #d9a0d2;
   --source-image: #67c6de;
+  --source-youtube: #f08ab0;
+  --source-web: #b4bfcc;
+  --source-reddit: #f59e7a;
+  --source-pdf: #d8a887;
+  --source-hackernews: #c5d16a;
+  --source-bluesky: #8db4f7;
 }
 
 @layer base {

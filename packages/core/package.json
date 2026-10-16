@@ -18,7 +18,9 @@
   "dependencies": {
     "@joplin/turndown-plugin-gfm": "^1.0.68",
     "@mozilla/readability": "^0.6.0",
+    "defuddle": "^0.19.5",
     "linkedom": "^0.18.13",
+    "pdfjs-dist": "^6.4.299",
     "turndown": "^7.2.4"
   }
 }

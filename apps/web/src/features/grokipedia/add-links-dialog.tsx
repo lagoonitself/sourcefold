@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, CircleAlert, Loader2 } from "lucide-react";
-import { detectSource, extractUrls, isWikipediaArticleUrl } from "@sourcefold/core";
+import { detectLinkKind, detectSource, extractUrls, isWikipediaArticleUrl } from "@sourcefold/core";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -155,28 +155,40 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
     onOpenChange(nextOpen);
   };
 
-  const { links, skippedLinks } = useMemo(() => {
+  const { links, skippedLinks, youtubeLinks } = useMemo(() => {
     if (!text.trim()) {
-      return { links: [], skippedLinks: [] };
+      return { links: [], skippedLinks: [], youtubeLinks: [] };
     }
     const extracted = extractUrls(text);
     const links: QueueLink[] = [];
     const skippedLinks: string[] = [];
+    const youtubeLinks: string[] = [];
 
     for (const url of extracted) {
       if (detectSource(url) === "grokipedia") {
         links.push({ url, source: "grokipedia" });
       } else if (isWikipediaArticleUrl(url)) {
         links.push({ url, source: "wikipedia" });
-      } else {
+      } else if (detectSource(url) !== null) {
+        // Substack and X posts are saved from the desktop app or the extension.
         skippedLinks.push(url);
+      } else {
+        const kind = detectLinkKind(url);
+        if (kind === "youtube") {
+          youtubeLinks.push(url);
+        } else if (kind) {
+          links.push({ url, source: "source" });
+        } else {
+          skippedLinks.push(url);
+        }
       }
     }
-    return { links, skippedLinks };
+    return { links, skippedLinks, youtubeLinks };
   }, [text]);
 
   const n = links.length;
   const m = skippedLinks.length;
+  const y = youtubeLinks.length;
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -197,8 +209,8 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
         <DialogHeader>
           <DialogTitle className="font-sans text-lg font-semibold leading-6">Add links</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Paste Grokipedia or Wikipedia links, one per line. Each article is saved as Markdown in
-            the group you choose.
+            Paste links to Grokipedia, Wikipedia, web pages, PDFs, Reddit, Hacker News or Bluesky,
+            one per line. Each is saved as Markdown in the group you choose.
           </DialogDescription>
         </DialogHeader>
 
@@ -267,6 +279,12 @@ export function AddLinksDialog({ open, onOpenChange }: AddLinksDialogProps) {
                   </span>
                 )}
               </div>
+              {y > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Save YouTube videos with the desktop app or the Sourcefold extension.{" "}
+                  {y === 1 ? "1 YouTube link" : `${y} YouTube links`} will be skipped.
+                </p>
+              )}
             </div>
           ) : (
             /* Results View (While running or after finishing) */
@@ -381,6 +399,16 @@ function renderRowStatus(item: QueueItem, onRetry: (id: string) => void) {
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
           <Check className="size-3.5" aria-hidden="true" />
           <span>Saved</span>
+        </span>
+      );
+
+    case "unavailable":
+      return (
+        <span
+          className="max-w-[220px] truncate text-xs text-warning"
+          title={item.message ?? "Nothing to save."}
+        >
+          {item.message ?? "Nothing to save."}
         </span>
       );
 

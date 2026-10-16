@@ -1,0 +1,112 @@
+{
+ "author": "sneak",
+ "children": [
+  {
+   "author": "user_0",
+   "children": [
+    {
+     "author": "user_1",
+     "children": [
+      {
+       "author": "user_2",
+       "children": [
+        {
+         "author": "user_3",
+         "children": [
+          {
+           "author": "user_4",
+           "children": [
+            {
+             "author": "user_5",
+             "children": [
+              {
+               "author": "user_6",
+               "children": [],
+               "created_at": "2025-01-29T16:00:00.000Z",
+               "created_at_i": 1738175582,
+               "id": 42867506,
+               "points": null,
+               "story_id": 42865527,
+               "text": "Level 6 of the chain.",
+               "title": null,
+               "type": "comment",
+               "url": null
+              }
+             ],
+             "created_at": "2025-01-29T15:00:00.000Z",
+             "created_at_i": 1738174982,
+             "id": 42867505,
+             "points": null,
+             "story_id": 42865527,
+             "text": "Level 5 of the chain.",
+             "title": null,
+             "type": "comment",
+             "url": null
+            }
+           ],
+           "created_at": "2025-01-29T14:00:00.000Z",
+           "created_at_i": 1738174382,
+           "id": 42867504,
+           "points": null,
+           "story_id": 42865527,
+           "text": "Level 4 of the chain.",
+           "title": null,
+           "type": "comment",
+           "url": null
+          }
+         ],
+         "created_at": "2025-01-29T13:00:00.000Z",
+         "created_at_i": 1738173782,
+         "id": 42867503,
+         "points": null,
+         "story_id": 42865527,
+         "text": "Level 3 of the chain.",
+         "title": null,
+         "type": "comment",
+         "url": null
+        }
+       ],
+       "created_at": "2025-01-29T12:00:00.000Z",
+       "created_at_i": 1738173182,
+       "id": 42867502,
+       "points": null,
+       "story_id": 42865527,
+       "text": "Level 2 of the chain.",
+       "title": null,
+       "type": "comment",
+       "url": null
+      }
+     ],
+     "created_at": "2025-01-29T11:00:00.000Z",
+     "created_at_i": 1738172582,
+     "id": 42867501,
+     "points": null,
+     "story_id": 42865527,
+     "text": "Level 1 of the chain.",
+     "title": null,
+     "type": "comment",
+     "url": null
+    }
+   ],
+   "created_at": "2025-01-29T10:00:00.000Z",
+   "created_at_i": 1738171982,
+   "id": 42867500,
+   "points": null,
+   "story_id": 42865527,
+   "text": "Level 0 of the chain.",
+   "title": null,
+   "type": "comment",
+   "url": null
+  }
+ ],
+ "created_at": "2025-01-29T17:33:02.000Z",
+ "created_at_i": 1738171982,
+ "id": 42867595,
+ "parent_id": 42866322,
+ "points": null,
+ "story_id": 42865527,
+ "text": "Level 0",
+ "title": null,
+ "type": "comment",
+ "url": null
+}

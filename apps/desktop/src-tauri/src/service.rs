@@ -34,6 +34,59 @@ static X_I_WEB_RE: LazyLock<Regex> =
 static X_STATUS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^/([^/]+)/status/([^/]+)(?:/.*)?$").expect("invalid X_STATUS_RE regex"));
 
+// --- The 2026-10 source kinds (packages/core/src/source-links.ts mirrors these) ---
+
+/// A YAML 1.1 sexagesimal number like `3:33` or `1:02:10`; a video duration must be quoted.
+static YAML_TIME_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[0-9]+(:[0-9]{1,2})+$").expect("invalid YAML_TIME_RE regex"));
+/// A plain decimal number written as text (`532`, `2401.01234`); the source kinds write those bare.
+static NUMBER_TEXT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^[+-]?([0-9]+(\.[0-9]+)?|\.[0-9]+)$").expect("invalid NUMBER_TEXT_RE regex")
+});
+static YT_VIDEO_ID_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]{11}$").expect("invalid YT_VIDEO_ID_RE regex"));
+static YT_PLAYLIST_ID_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_-]{2,64}$").expect("invalid YT_PLAYLIST_ID_RE regex"));
+static YT_EMBED_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/(?:shorts|live|embed|v|e)/([^/]+)$").expect("invalid YT_EMBED_RE regex")
+});
+static YT_HANDLE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/(@[^/]+)(?:/(?:videos|shorts|streams|featured|playlists))?$")
+        .expect("invalid YT_HANDLE_RE regex")
+});
+static YT_CHANNEL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/(channel|c|user)/([^/]+)(?:/(?:videos|shorts|streams|featured|playlists))?$")
+        .expect("invalid YT_CHANNEL_RE regex")
+});
+static REDDIT_IN_SUB_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/r/([A-Za-z0-9_]{2,32})/comments/([A-Za-z0-9]{3,12})(?:/.*)?$")
+        .expect("invalid REDDIT_IN_SUB_RE regex")
+});
+static REDDIT_BARE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/comments/([A-Za-z0-9]{3,12})(?:/.*)?$").expect("invalid REDDIT_BARE_RE regex")
+});
+static REDDIT_SHARE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/r/([A-Za-z0-9_]{2,32})/s/([A-Za-z0-9]+)$").expect("invalid REDDIT_SHARE_RE regex")
+});
+static REDDIT_ID_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-z0-9]{3,12}$").expect("invalid REDDIT_ID_RE regex"));
+static HN_ID_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[0-9]{1,12}$").expect("invalid HN_ID_RE regex"));
+static BSKY_POST_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/profile/([^/]+)/post/([A-Za-z0-9]{2,32})$").expect("invalid BSKY_POST_RE regex")
+});
+static ARXIV_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/(?:abs|pdf|html)/(.+?)(?:\.pdf)?$").expect("invalid ARXIV_PATH_RE regex")
+});
+static ARXIV_NEW_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^([0-9]{4}\.[0-9]{4,5})(v[0-9]+)?$").expect("invalid ARXIV_NEW_ID_RE regex")
+});
+static ARXIV_OLD_ID_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^([a-z-]+(?:\.[A-Z]{2})?/[0-9]{7})(v[0-9]+)?$").expect("invalid ARXIV_OLD_ID_RE regex")
+});
+static SUBSTACK_POST_PATH_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^/p/[^/]+$").expect("invalid SUBSTACK_POST_PATH_RE regex"));
+
 pub fn dedupe_citation_runs(input: &str) -> String {
     CITATION_RUN_RE.replace_all(input, |caps: &regex::Captures| {
         let matched = caps.get(0).unwrap().as_str();
@@ -128,6 +181,26 @@ pub struct WikipediaCapture {
     pub markdown: String,
 }
 
+/// The source kinds added on 2026-10-16 (docs/FILE-FORMAT.md).
+pub const SOURCE_CAPTURE_KINDS: &[&str] =
+    &["youtube", "web", "reddit", "pdf", "hackernews", "bluesky"];
+
+pub fn is_source_capture_kind(kind: &str) -> bool {
+    SOURCE_CAPTURE_KINDS.contains(&kind)
+}
+
+/// One capture for the kinds above: the `url` and `title` front matter plus the kind's own
+/// fields in `meta`, keyed exactly as in docs/FILE-FORMAT.md.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceCapture {
+    pub url: String,
+    pub title: String,
+    #[serde(default)]
+    pub meta: serde_json::Map<String, Value>,
+    #[serde(default)]
+    pub markdown: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind")]
 pub enum CapturePayload {
@@ -140,6 +213,44 @@ pub enum CapturePayload {
     Wikipedia {
         folder_id: String,
         capture: WikipediaCapture,
+    },
+    #[serde(rename = "youtube")]
+    YouTube {
+        folder_id: String,
+        capture: SourceCapture,
+    },
+    #[serde(rename = "web")]
+    Web {
+        folder_id: String,
+        capture: SourceCapture,
+    },
+    #[serde(rename = "reddit")]
+    Reddit {
+        folder_id: String,
+        capture: SourceCapture,
+    },
+    #[serde(rename = "pdf")]
+    Pdf {
+        folder_id: String,
+        capture: SourceCapture,
+    },
+    #[serde(rename = "hackernews")]
+    HackerNews {
+        folder_id: String,
+        capture: SourceCapture,
+    },
+    #[serde(rename = "bluesky")]
+    Bluesky {
+        folder_id: String,
+        capture: SourceCapture,
+    },
+    #[serde(rename = "source_unavailable")]
+    SourceUnavailable {
+        folder_id: String,
+        source: String,
+        url: String,
+        title: String,
+        reason: String,
     },
     #[serde(rename = "substack_unavailable")]
     SubstackUnavailable {
@@ -269,6 +380,226 @@ fn decode_uri_component(s: &str) -> String {
     String::from_utf8_lossy(&bytes).to_string()
 }
 
+/// Percent-decoding without the `+`-means-space rule of `decode_uri_component` (URL `pathname`
+/// decoding, matching JS `decodeURIComponent`).
+fn decode_percent_encoding(s: &str) -> String {
+    let mut bytes = Vec::with_capacity(s.len());
+    let mut chars = s.bytes();
+    while let Some(b) = chars.next() {
+        if b == b'%' {
+            match (chars.next(), chars.next()) {
+                (Some(h1), Some(h2)) => {
+                    let hex_slice = [h1, h2];
+                    let byte = std::str::from_utf8(&hex_slice)
+                        .ok()
+                        .and_then(|hex| u8::from_str_radix(hex, 16).ok());
+                    match byte {
+                        Some(byte) => bytes.push(byte),
+                        None => {
+                            bytes.push(b'%');
+                            bytes.push(h1);
+                            bytes.push(h2);
+                        }
+                    }
+                }
+                (Some(h1), None) => {
+                    bytes.push(b'%');
+                    bytes.push(h1);
+                }
+                _ => bytes.push(b'%'),
+            }
+        } else {
+            bytes.push(b);
+        }
+    }
+    String::from_utf8_lossy(&bytes).to_string()
+}
+
+/// The host of a URL, lowercased and without a leading `www.`, as the source lines name it.
+fn host_without_www(url: &str) -> Option<String> {
+    let parsed = reqwest::Url::parse(url).ok()?;
+    let host = parsed.host_str()?.to_lowercase();
+    Some(host.strip_prefix("www.").map(str::to_string).unwrap_or(host))
+}
+
+fn canonical_youtube_url(host: &str, path: &str, query: &[(String, String)]) -> Option<String> {
+    let param = |name: &str| query.iter().find(|(k, _)| k == name).map(|(_, v)| v.clone());
+
+    if host == "youtu.be" {
+        let id = path.split('/').nth(1).unwrap_or("");
+        return YT_VIDEO_ID_RE
+            .is_match(id)
+            .then(|| format!("https://www.youtube.com/watch?v={}", id));
+    }
+    if !matches!(
+        host,
+        "youtube.com" | "m.youtube.com" | "music.youtube.com" | "youtube-nocookie.com"
+    ) {
+        return None;
+    }
+
+    if path == "/watch" {
+        let id = param("v").unwrap_or_default();
+        return YT_VIDEO_ID_RE
+            .is_match(&id)
+            .then(|| format!("https://www.youtube.com/watch?v={}", id));
+    }
+    if let Some(caps) = YT_EMBED_RE.captures(path) {
+        let id = &caps[1];
+        return YT_VIDEO_ID_RE
+            .is_match(id)
+            .then(|| format!("https://www.youtube.com/watch?v={}", id));
+    }
+    if path == "/playlist" {
+        let list = param("list").unwrap_or_default();
+        return YT_PLAYLIST_ID_RE
+            .is_match(&list)
+            .then(|| format!("https://www.youtube.com/playlist?list={}", list));
+    }
+    if let Some(caps) = YT_HANDLE_RE.captures(path) {
+        return Some(format!("https://www.youtube.com/{}", caps[1].to_lowercase()));
+    }
+    if let Some(caps) = YT_CHANNEL_RE.captures(path) {
+        return Some(format!("https://www.youtube.com/{}/{}", &caps[1], &caps[2]));
+    }
+    None
+}
+
+fn canonical_reddit_url(host: &str, path: &str) -> Option<String> {
+    if host == "redd.it" {
+        let id = path.split('/').nth(1).unwrap_or("").to_lowercase();
+        return REDDIT_ID_RE
+            .is_match(&id)
+            .then(|| format!("https://www.reddit.com/comments/{}", id));
+    }
+    if !matches!(
+        host,
+        "reddit.com"
+            | "old.reddit.com"
+            | "new.reddit.com"
+            | "np.reddit.com"
+            | "m.reddit.com"
+            | "i.reddit.com"
+    ) {
+        return None;
+    }
+
+    if let Some(caps) = REDDIT_IN_SUB_RE.captures(path) {
+        return Some(format!(
+            "https://www.reddit.com/r/{}/comments/{}",
+            caps[1].to_lowercase(),
+            caps[2].to_lowercase()
+        ));
+    }
+    if let Some(caps) = REDDIT_BARE_RE.captures(path) {
+        return Some(format!(
+            "https://www.reddit.com/comments/{}",
+            caps[1].to_lowercase()
+        ));
+    }
+    // Share links keep their own path: the redirect target needs a request to resolve.
+    if REDDIT_SHARE_RE.is_match(path) {
+        return Some(format!("https://www.reddit.com{}", path));
+    }
+    None
+}
+
+fn canonical_hackernews_url(host: &str, path: &str, query: &[(String, String)]) -> Option<String> {
+    if host != "news.ycombinator.com" || path != "/item" {
+        return None;
+    }
+    let id = query
+        .iter()
+        .find(|(k, _)| k == "id")
+        .map(|(_, v)| v.as_str())
+        .unwrap_or("");
+    HN_ID_RE
+        .is_match(id)
+        .then(|| format!("https://news.ycombinator.com/item?id={}", id))
+}
+
+fn canonical_bluesky_url(host: &str, path: &str) -> Option<String> {
+    if host != "bsky.app" {
+        return None;
+    }
+    let caps = BSKY_POST_RE.captures(path)?;
+    let raw_actor = decode_percent_encoding(&caps[1]);
+    let actor = if raw_actor.starts_with("did:") {
+        raw_actor
+    } else {
+        raw_actor.to_lowercase()
+    };
+    Some(format!("https://bsky.app/profile/{}/post/{}", actor, &caps[2]))
+}
+
+fn canonical_arxiv_url(host: &str, path: &str) -> Option<String> {
+    if host != "arxiv.org" && host != "export.arxiv.org" {
+        return None;
+    }
+    let caps = ARXIV_PATH_RE.captures(path)?;
+    let raw = decode_percent_encoding(&caps[1]);
+    let parts = ARXIV_NEW_ID_RE
+        .captures(&raw)
+        .or_else(|| ARXIV_OLD_ID_RE.captures(&raw))?;
+    Some(format!("https://arxiv.org/abs/{}", &parts[1]))
+}
+
+/// Parameters that only track where a click came from (packages/core/src/source-links.ts).
+const TRACKING_PARAMS: &[&str] = &[
+    "fbclid",
+    "gclid",
+    "dclid",
+    "gbraid",
+    "wbraid",
+    "msclkid",
+    "yclid",
+    "mc_cid",
+    "mc_eid",
+    "igshid",
+    "si",
+    "smid",
+    "_hsenc",
+    "_hsmi",
+    "mkt_tok",
+    "ref",
+    "ref_src",
+    "ref_url",
+];
+
+/// Encodes like JS `URLSearchParams.toString()`: spaces become `+`, everything outside
+/// `A-Za-z0-9*-._` is percent-encoded.
+fn form_encode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for byte in input.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'*' | b'-' | b'.' | b'_' => {
+                out.push(byte as char)
+            }
+            b' ' => out.push('+'),
+            other => out.push_str(&format!("%{:02X}", other)),
+        }
+    }
+    out
+}
+
+/// The query a canonical address keeps for an ordinary web page: every parameter except `utm_*`
+/// and the tracking ones above, in the original order. Empty string when none is left.
+fn meaningful_query(url: &reqwest::Url) -> String {
+    let mut kept: Vec<String> = Vec::new();
+    for (name, value) in url.query_pairs() {
+        let lower = name.to_lowercase();
+        if lower.starts_with("utm_") || TRACKING_PARAMS.contains(&lower.as_str()) {
+            continue;
+        }
+        kept.push(format!("{}={}", form_encode(&name), form_encode(&value)));
+    }
+    if kept.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", kept.join("&"))
+    }
+}
+
 pub fn canonicalize_url(input: &str) -> Result<String, String> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -342,10 +673,34 @@ pub fn canonicalize_url(input: &str) -> Result<String, String> {
         });
     }
 
-    Ok(if pathname.is_empty() {
-        format!("https://{}", host)
+    // YouTube, Reddit, Hacker News, Bluesky and arXiv: one address per video, post or paper.
+    let query: Vec<(String, String)> = parsed
+        .query_pairs()
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    let source = canonical_youtube_url(normalized_host, &pathname, &query)
+        .or_else(|| canonical_reddit_url(normalized_host, &pathname))
+        .or_else(|| canonical_hackernews_url(normalized_host, &pathname, &query))
+        .or_else(|| canonical_bluesky_url(normalized_host, &pathname))
+        .or_else(|| canonical_arxiv_url(normalized_host, &pathname));
+    if let Some(canonical) = source {
+        return Ok(canonical);
+    }
+
+    // Everything else: path kept as is (case preserved), plus the query parameters that pick the
+    // page (not `utm_*` and other click tracking). Substack posts never need a query.
+    let is_substack_post =
+        normalized_host.ends_with("substack.com") || SUBSTACK_POST_PATH_RE.is_match(&pathname);
+    let query = if is_substack_post {
+        String::new()
     } else {
-        format!("https://{}{}", host, pathname)
+        meaningful_query(&parsed)
+    };
+
+    Ok(if pathname.is_empty() {
+        format!("https://{}{}", host, query)
+    } else {
+        format!("https://{}{}{}", host, pathname, query)
     })
 }
 
@@ -464,6 +819,9 @@ pub fn format_yaml_string(s: &str) -> String {
 
     let is_numeric = s.parse::<f64>().is_ok();
 
+    // A duration like `3:33` or `1:02:10` is a YAML 1.1 sexagesimal number, so quote it.
+    let is_time_code = YAML_TIME_RE.is_match(s);
+
     let starts_with_special = s.starts_with(|c: char| {
         matches!(
             c,
@@ -481,7 +839,13 @@ pub fn format_yaml_string(s: &str) -> String {
         || s.contains('\r')
         || s.contains('\t');
 
-    if is_boolean_or_null || is_numeric || starts_with_special || has_whitespace_boundary || has_yaml_control {
+    if is_boolean_or_null
+        || is_numeric
+        || is_time_code
+        || starts_with_special
+        || has_whitespace_boundary
+        || has_yaml_control
+    {
         let escaped = s
             .replace('\\', "\\\\")
             .replace('"', "\\\"")
@@ -767,6 +1131,8 @@ pub struct ItemFileFields {
     pub saved: Option<String>,
     pub created: Option<String>,
     pub folder: Option<String>,
+    /// Kind-specific front matter for the 2026-10 source kinds, keyed as in docs/FILE-FORMAT.md.
+    pub meta: serde_json::Map<String, Value>,
 }
 
 fn clean_date(d: Option<&str>) -> Option<String> {
@@ -779,6 +1145,142 @@ fn meta_text(meta: &Value, key: &str) -> Option<String> {
         Some(Value::Number(n)) => Some(n.to_string()),
         _ => None,
     }
+}
+
+/// One of the 2026-10 source kinds' `meta` values as text, trimmed; None when missing, null or blank.
+fn meta_value_text(meta: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
+    match meta.get(key) {
+        Some(Value::String(s)) => {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Some(Value::Number(n)) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
+fn meta_date(meta: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
+    clean_date(meta_value_text(meta, key).as_deref())
+}
+
+/// The kind fields in docs/FILE-FORMAT.md order, or an empty list for any other kind.
+fn source_kind_field_names(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "youtube" => &["channel", "channel_url", "published", "duration", "language", "captions"],
+        "web" => &["site", "author", "published", "summary"],
+        "reddit" => &["subreddit", "author", "posted", "score", "comments"],
+        "pdf" => &["author", "published", "pages", "arxiv"],
+        "hackernews" => &["author", "posted", "points", "comments", "link"],
+        "bluesky" => &["author", "author_url", "posted"],
+        _ => &[],
+    }
+}
+
+/// Numbers written unquoted, per docs/FILE-FORMAT.md. `arxiv` is not one: it is always text, so
+/// `2401.01234` is quoted rather than read as a YAML float.
+fn is_number_source_field(name: &str) -> bool {
+    matches!(name, "score" | "comments" | "points" | "pages")
+}
+
+fn is_date_source_field(name: &str) -> bool {
+    matches!(name, "published" | "posted")
+}
+
+/// A value that is a bare number: JSON numbers, or strings that are plainly decimal numbers
+/// (`532`, `2401.01234`). Anything else is written as an ordinary string.
+fn number_meta_value(value: &Value) -> Option<String> {
+    match value {
+        Value::Number(n) => Some(n.to_string()),
+        Value::String(s) => {
+            let trimmed = s.trim();
+            NUMBER_TEXT_RE
+                .is_match(trimmed)
+                .then(|| trimmed.to_string())
+        }
+        _ => None,
+    }
+}
+
+/// Front matter lines for one of the 2026-10 source kinds, in docs/FILE-FORMAT.md order.
+fn source_kind_front_matter(kind: &str, meta: &serde_json::Map<String, Value>) -> Vec<String> {
+    let mut lines = Vec::new();
+    for &name in source_kind_field_names(kind) {
+        let value = match meta.get(name) {
+            Some(value) => value,
+            None => continue,
+        };
+        let rendered = if is_number_source_field(name) {
+            number_meta_value(value)
+                .or_else(|| meta_value_text(meta, name).map(|text| format_yaml_string(&text)))
+        } else if is_date_source_field(name) {
+            meta_date(meta, name).map(|date| format_yaml_string(&date))
+        } else {
+            meta_value_text(meta, name).map(|text| format_yaml_string(&text))
+        };
+        if let Some(rendered) = rendered {
+            lines.push(format!("{}: {}\n", name, rendered));
+        }
+    }
+    lines
+}
+
+/// The "Saved from" line for one of the 2026-10 source kinds (docs/FILE-FORMAT.md).
+fn source_kind_source_line(kind: &str, fields: &ItemFileFields) -> String {
+    let meta = &fields.meta;
+    let url = fields.url.as_deref().unwrap_or("");
+    let saved = clean_date(fields.saved.as_deref()).unwrap_or_default();
+
+    let label = match kind {
+        "youtube" => "YouTube".to_string(),
+        "web" => meta_value_text(meta, "site")
+            .or_else(|| host_without_www(url))
+            .unwrap_or_else(|| "Web page".to_string()),
+        "reddit" => match meta_value_text(meta, "subreddit") {
+            Some(subreddit) => format!("r/{}", subreddit),
+            None => "Reddit".to_string(),
+        },
+        "pdf" => {
+            if meta_value_text(meta, "arxiv").is_some() {
+                "arXiv".to_string()
+            } else {
+                host_without_www(url).unwrap_or_else(|| "PDF".to_string())
+            }
+        }
+        "hackernews" => "Hacker News".to_string(),
+        "bluesky" => "Bluesky".to_string(),
+        _ => kind.to_string(),
+    };
+
+    let mut line = format!("> Saved from [{}]({}) on {}.", label, url, saved);
+
+    match kind {
+        "youtube" => {
+            if let Some(channel) = meta_value_text(meta, "channel") {
+                line.push_str(&format!(" By {}.", channel));
+            }
+            if let Some(published) = meta_date(meta, "published") {
+                line.push_str(&format!(" Published {}.", published));
+            }
+            if meta_value_text(meta, "captions").as_deref() == Some("auto-generated") {
+                line.push_str(" Transcript from auto-generated captions.");
+            }
+        }
+        "web" | "pdf" => {
+            if let Some(author) = meta_value_text(meta, "author") {
+                line.push_str(&format!(" By {}.", author));
+            }
+            if let Some(published) = meta_date(meta, "published") {
+                line.push_str(&format!(" Published {}.", published));
+            }
+        }
+        _ => {}
+    }
+
+    line
 }
 
 /// Front matter fields for an item that is already saved: its title and place come from the
@@ -805,6 +1307,7 @@ fn item_file_fields(item: &Item, title: String, folder: Option<String>) -> ItemF
         saved: clean_date(Some(&item.created_at)),
         created: clean_date(Some(&item.created_at)),
         folder,
+        meta: item.meta.as_object().cloned().unwrap_or_default(),
     }
 }
 
@@ -1001,6 +1504,17 @@ pub fn build_item_file(
                 fm.push_str(&format!("created: {}\n", format_yaml_string(&c)));
             }
         }
+        other if is_source_capture_kind(other) => {
+            if let Some(u) = &fields.url {
+                fm.push_str(&format!("url: {}\n", format_yaml_string(u)));
+            }
+            for line in source_kind_front_matter(other, &fields.meta) {
+                fm.push_str(&line);
+            }
+            if let Some(s) = clean_date(fields.saved.as_deref()) {
+                fm.push_str(&format!("saved: {}\n", format_yaml_string(&s)));
+            }
+        }
         _ => {
             if let Some(u) = &fields.url {
                 fm.push_str(&format!("url: {}\n", format_yaml_string(u)));
@@ -1052,6 +1566,7 @@ pub fn build_item_file(
             format!("> Saved from [X]({}) on {}.", u, s)
         }
         "note" => String::new(),
+        other if is_source_capture_kind(other) => source_kind_source_line(other, fields),
         _ => {
             if let Some(u) = &fields.url {
                 let s = clean_date(fields.saved.as_deref()).unwrap_or_default();
@@ -1956,6 +2471,133 @@ pub fn save_substack_unavailable(
         canonical_url: Some(canonical),
         status: "unavailable".to_string(),
         error: Some("Article is paywalled or requires sign-in to read".to_string()),
+        markdown: None,
+        meta: None,
+        note: None,
+        position: None,
+    };
+
+    db.save_item(save_req)
+        .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))
+}
+
+fn source_file_fields(
+    capture: &SourceCapture,
+    folder: Option<String>,
+    saved: &str,
+) -> ItemFileFields {
+    ItemFileFields {
+        title: capture.title.trim().to_string(),
+        url: Some(capture.url.clone()),
+        saved: Some(saved.to_string()),
+        folder,
+        meta: capture.meta.clone(),
+        ..Default::default()
+    }
+}
+
+/// Saves one of the 2026-10 source kinds. The desktop's webview (or the extension, over the
+/// local server) already fetched and converted it; this writes the item and its Markdown file.
+pub fn save_source(
+    db: &Database,
+    folder_id: &str,
+    kind: &str,
+    capture: SourceCapture,
+) -> Result<Item, ServiceError> {
+    if !is_source_capture_kind(kind) {
+        return Err(ServiceError::bad_request(format!(
+            "Unknown source kind \"{}\"",
+            kind
+        )));
+    }
+
+    let title = capture.title.trim().to_string();
+    if title.is_empty() {
+        return Err(ServiceError::bad_request("A title is required"));
+    }
+
+    let canonical = canonicalize_url(&capture.url).unwrap_or_else(|_| capture.url.clone());
+
+    let check = db.check_url(&canonical, folder_id);
+    if check.exists {
+        return Err(ServiceError::duplicate(
+            format!(
+                "Already saved in {}",
+                check.folder_name.as_deref().unwrap_or("this folder")
+            ),
+            check.item_id,
+            check.folder_id,
+            check.folder_name,
+        ));
+    }
+
+    let today = Utc::now().format("%Y-%m-%d").to_string();
+    let (_, folder_path_str) = resolve_folder_path(db, folder_id);
+    let folder_opt = if folder_path_str.is_empty() { None } else { Some(folder_path_str) };
+
+    let fields = source_file_fields(&capture, folder_opt, &today);
+    let full_file_content = build_item_file(kind, &fields, &capture.markdown, None);
+
+    let save_req = SaveItemRequest {
+        folder_id: folder_id.to_string(),
+        kind: kind.to_string(),
+        title: title.clone(),
+        source_url: Some(capture.url.clone()),
+        canonical_url: Some(canonical),
+        status: "saved".to_string(),
+        error: None,
+        markdown: Some(full_file_content.clone()),
+        meta: Some(Value::Object(capture.meta.clone())),
+        note: None,
+        position: None,
+    };
+
+    let mut item = db
+        .save_item(save_req)
+        .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+
+    let (_, rel_str) = write_item_file_to_disk(
+        db,
+        folder_id,
+        &item.id,
+        &title,
+        "md",
+        &item.created_at,
+        full_file_content.as_bytes(),
+    )?;
+    item.storage_path = Some(rel_str);
+
+    Ok(item)
+}
+
+/// Saves one of the 2026-10 source kinds as `unavailable` with the reason the extractor gave
+/// (a YouTube video without captions, for example). No file is written.
+pub fn save_source_unavailable(
+    db: &Database,
+    folder_id: &str,
+    source: &str,
+    url: &str,
+    title: &str,
+    reason: &str,
+) -> Result<Item, ServiceError> {
+    let kind = source.trim();
+    if !is_source_capture_kind(kind) {
+        return Err(ServiceError::bad_request(format!(
+            "Unknown source kind \"{}\"",
+            source
+        )));
+    }
+
+    let canonical = canonicalize_url(url).unwrap_or_else(|_| url.to_string());
+
+    let save_req = SaveItemRequest {
+        folder_id: folder_id.to_string(),
+        kind: kind.to_string(),
+        title: title.to_string(),
+        source_url: Some(url.to_string()),
+        canonical_url: Some(canonical),
+        status: "unavailable".to_string(),
+        error: Some(reason.to_string()),
         markdown: None,
         meta: None,
         note: None,
@@ -3093,6 +3735,246 @@ mod tests {
     }
 
     #[test]
+    fn test_format_yaml_string_quotes_time_codes() {
+        assert_eq!(format_yaml_string("3:33"), "\"3:33\"");
+        assert_eq!(format_yaml_string("1:02:10"), "\"1:02:10\"");
+        assert_eq!(format_yaml_string("0:00"), "\"0:00\"");
+        // Not a sexagesimal number: a 3-digit part can't be one.
+        assert_eq!(format_yaml_string("12:345"), "12:345");
+        assert_eq!(format_yaml_string("abc:def"), "abc:def");
+        assert_eq!(format_yaml_string("auto-generated"), "auto-generated");
+    }
+
+    #[test]
+    fn test_canonicalize_url_youtube() {
+        for link in [
+            "https://youtu.be/dQw4w9WgXcQ?t=42",
+            "https://m.youtube.com/watch?v=dQw4w9WgXcQ&t=1m2s",
+            "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+            "https://www.youtube.com/live/dQw4w9WgXcQ",
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabc123",
+            "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ",
+            "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+        ] {
+            assert_eq!(
+                canonicalize_url(link).unwrap(),
+                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                "link: {}",
+                link
+            );
+        }
+
+        assert_eq!(
+            canonicalize_url("https://www.youtube.com/playlist?list=PLabc123").unwrap(),
+            "https://www.youtube.com/playlist?list=PLabc123"
+        );
+        assert_eq!(
+            canonicalize_url("https://www.youtube.com/@Veritasium/videos").unwrap(),
+            "https://www.youtube.com/@veritasium"
+        );
+        assert_eq!(
+            canonicalize_url("https://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA").unwrap(),
+            "https://www.youtube.com/channel/UCHnyfMqiRRG1u-2MsSQLbXA"
+        );
+        assert_eq!(
+            canonicalize_url("https://www.youtube.com/c/name").unwrap(),
+            "https://www.youtube.com/c/name"
+        );
+        assert_eq!(
+            canonicalize_url("https://www.youtube.com/user/name/videos").unwrap(),
+            "https://www.youtube.com/user/name"
+        );
+        // A too-short id isn't a video: the link stays an ordinary page (the generic rule drops www.).
+        assert_eq!(
+            canonicalize_url("https://www.youtube.com/watch?v=short").unwrap(),
+            "https://youtube.com/watch?v=short"
+        );
+    }
+
+    #[test]
+    fn test_canonicalize_url_reddit_hacker_news_bluesky_arxiv() {
+        for link in [
+            "https://old.reddit.com/r/Cars/comments/1abc2d/some_title/",
+            "https://www.reddit.com/r/cars/comments/1abc2d/some_title/kx9z1yq/",
+            "https://m.reddit.com/r/cars/comments/1ABC2D",
+        ] {
+            assert_eq!(
+                canonicalize_url(link).unwrap(),
+                "https://www.reddit.com/r/cars/comments/1abc2d",
+                "link: {}",
+                link
+            );
+        }
+        assert_eq!(
+            canonicalize_url("https://redd.it/1abc2d").unwrap(),
+            "https://www.reddit.com/comments/1abc2d"
+        );
+        assert_eq!(
+            canonicalize_url("https://www.reddit.com/comments/1abc2d/x").unwrap(),
+            "https://www.reddit.com/comments/1abc2d"
+        );
+        // Share links keep their own path: only following the redirect names the post.
+        assert_eq!(
+            canonicalize_url("https://www.reddit.com/r/cars/s/AbC123xyz").unwrap(),
+            "https://www.reddit.com/r/cars/s/AbC123xyz"
+        );
+        // A subreddit page isn't a post: the link stays an ordinary page (the generic rule drops www.).
+        assert_eq!(
+            canonicalize_url("https://www.reddit.com/r/cars").unwrap(),
+            "https://reddit.com/r/cars"
+        );
+
+        assert_eq!(
+            canonicalize_url("https://news.ycombinator.com/item?id=41234567&p=2").unwrap(),
+            "https://news.ycombinator.com/item?id=41234567"
+        );
+        assert_eq!(
+            canonicalize_url("https://news.ycombinator.com/news").unwrap(),
+            "https://news.ycombinator.com/news"
+        );
+
+        assert_eq!(
+            canonicalize_url("https://bsky.app/profile/Jay.bsky.team/post/3l6oveex3ii2l").unwrap(),
+            "https://bsky.app/profile/jay.bsky.team/post/3l6oveex3ii2l"
+        );
+        assert_eq!(
+            canonicalize_url("https://bsky.app/profile/did:plc:Abc123/post/3l6oveex3ii2l").unwrap(),
+            "https://bsky.app/profile/did:plc:Abc123/post/3l6oveex3ii2l"
+        );
+
+        assert_eq!(
+            canonicalize_url("https://arxiv.org/pdf/2401.01234v2.pdf").unwrap(),
+            "https://arxiv.org/abs/2401.01234"
+        );
+        assert_eq!(
+            canonicalize_url("https://arxiv.org/abs/2401.01234").unwrap(),
+            "https://arxiv.org/abs/2401.01234"
+        );
+        assert_eq!(
+            canonicalize_url("https://arxiv.org/html/2401.01234v1").unwrap(),
+            "https://arxiv.org/abs/2401.01234"
+        );
+        assert_eq!(
+            canonicalize_url("https://export.arxiv.org/abs/hep-th/9901001v1").unwrap(),
+            "https://arxiv.org/abs/hep-th/9901001"
+        );
+        // An arXiv listing is an ordinary page.
+        assert_eq!(
+            canonicalize_url("https://arxiv.org/list/cs.AI/recent").unwrap(),
+            "https://arxiv.org/list/cs.AI/recent"
+        );
+    }
+
+    #[test]
+    fn test_canonicalize_url_keeps_meaningful_query() {
+        assert_eq!(
+            canonicalize_url("https://example.com/page?ref=feed&sort=top#section-2").unwrap(),
+            "https://example.com/page?sort=top"
+        );
+        assert_eq!(
+            canonicalize_url("https://example.com/article.php?id=5&utm_source=x&UTM_MEDIUM=y&fbclid=z")
+                .unwrap(),
+            "https://example.com/article.php?id=5"
+        );
+        assert_eq!(
+            canonicalize_url("https://example.com/article.php?id=6").unwrap(),
+            "https://example.com/article.php?id=6"
+        );
+        assert_eq!(
+            canonicalize_url("https://example.com/p?b=2&utm_source=x&a=1&fbclid=z&si=q&ref=feed")
+                .unwrap(),
+            "https://example.com/p?b=2&a=1"
+        );
+        // Encoded like JS `URLSearchParams.toString()`: spaces become `+`.
+        assert_eq!(
+            canonicalize_url("https://example.com/search?q=a%20b").unwrap(),
+            "https://example.com/search?q=a+b"
+        );
+
+        // Substack posts never need a query.
+        assert_eq!(
+            canonicalize_url("https://name.substack.com/p/a-post?r=abc").unwrap(),
+            "https://name.substack.com/p/a-post"
+        );
+        assert_eq!(
+            canonicalize_url("https://www.noahpinion.blog/p/a-post?r=abc").unwrap(),
+            "https://noahpinion.blog/p/a-post"
+        );
+        // A `/p/<slug>` path on any other host is treated as a Substack-style post too.
+        assert_eq!(
+            canonicalize_url("https://example.com/p/a-post?r=abc").unwrap(),
+            "https://example.com/p/a-post"
+        );
+    }
+
+    #[test]
+    fn test_capture_payload_deserializes_source_kinds() {
+        let payload: CapturePayload = serde_json::from_value(json!({
+            "kind": "reddit",
+            "folder_id": "f1",
+            "capture": {
+                "url": "https://www.reddit.com/r/cars/comments/1abc2d",
+                "title": "Should I turbo my car?",
+                "meta": { "subreddit": "cars", "score": 532 },
+                "markdown": "Body"
+            }
+        }))
+        .unwrap();
+        match payload {
+            CapturePayload::Reddit { folder_id, capture } => {
+                assert_eq!(folder_id, "f1");
+                assert_eq!(capture.meta.get("score"), Some(&json!(532)));
+                assert_eq!(capture.title, "Should I turbo my car?");
+            }
+            other => panic!("expected a Reddit capture, got {:?}", other),
+        }
+
+        let unavailable: CapturePayload = serde_json::from_value(json!({
+            "kind": "source_unavailable",
+            "folder_id": "f1",
+            "source": "youtube",
+            "url": "https://www.youtube.com/watch?v=abcDEF12345",
+            "title": "No captions video",
+            "reason": "No captions on this video"
+        }))
+        .unwrap();
+        match unavailable {
+            CapturePayload::SourceUnavailable { source, reason, .. } => {
+                assert_eq!(source, "youtube");
+                assert_eq!(reason, "No captions on this video");
+            }
+            other => panic!("expected an unavailable capture, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_source_kind_front_matter_numbers_and_order() {
+        let mut meta = serde_json::Map::new();
+        meta.insert("subreddit".to_string(), json!("cars"));
+        meta.insert("score".to_string(), json!("532"));
+        meta.insert("comments".to_string(), json!(87));
+        meta.insert("posted".to_string(), json!("2026-10-15T10:00:00Z"));
+
+        let fields = ItemFileFields {
+            title: "T".to_string(),
+            url: Some("https://www.reddit.com/r/cars/comments/1abc2d".to_string()),
+            saved: Some("2026-10-16".to_string()),
+            meta,
+            ..Default::default()
+        };
+
+        let file = build_item_file("reddit", &fields, "Body", None);
+        let expected_front_matter = "---\nsource: reddit\ntitle: T\n\
+            url: https://www.reddit.com/r/cars/comments/1abc2d\nsubreddit: cars\n\
+            posted: 2026-10-15\nscore: 532\ncomments: 87\nsaved: 2026-10-16\n---\n\n";
+        assert!(
+            file.starts_with(expected_front_matter),
+            "front matter was wrong:\n{}",
+            file
+        );
+    }
+
+    #[test]
     fn test_collapse_duplicate_citations() {
         let input = "Claim one[^1] and claim two[^2][^2] and claim three[^3] [^3] end.";
         let expected = "Claim one[^1] and claim two[^2] and claim three[^3] end.";
@@ -3357,6 +4239,124 @@ mod tests {
     }
 
     #[test]
+    fn test_save_source_writes_file_and_rename_rebuilds_it() {
+        let db = Database::open_in_memory().unwrap();
+        let root =
+            std::env::temp_dir().join(format!("sourcefold-source-test-{}", uuid::Uuid::new_v4()));
+        db.set_setting("storage_dir", root.to_str().unwrap()).unwrap();
+        let project = db.create_folder("Cars", None).unwrap();
+        let group = db.create_folder("Engines", Some(&project.id)).unwrap();
+
+        let mut meta = serde_json::Map::new();
+        meta.insert("channel".to_string(), json!("Engineering Explained"));
+        meta.insert("duration".to_string(), json!("1:02:10"));
+        meta.insert("published".to_string(), json!("2026-09-30"));
+        meta.insert("captions".to_string(), json!("auto-generated"));
+        let capture = SourceCapture {
+            url: "https://www.youtube.com/watch?v=abcDEF12345".to_string(),
+            title: "How a Turbocharger Works".to_string(),
+            meta,
+            markdown: "## Transcript\n\n[0:00](https://youtu.be/abcDEF12345?t=0) Hello.".to_string(),
+        };
+
+        let item = save_source(&db, &group.id, "youtube", capture).unwrap();
+        assert_eq!(item.kind, "youtube");
+        assert_eq!(item.status, "saved");
+        assert_eq!(
+            item.canonical_url.as_deref(),
+            Some("https://www.youtube.com/watch?v=abcDEF12345")
+        );
+        let path = item.storage_path.clone().unwrap();
+        assert_eq!(path, "Cars/Engines/How a Turbocharger Works.md");
+
+        let content = fs::read_to_string(root.join(&path)).unwrap();
+        assert_eq!(content, item.markdown.clone().unwrap());
+        assert!(content.contains("channel: Engineering Explained\n"));
+        assert!(content.contains("duration: \"1:02:10\"\n"));
+        assert!(content.contains("captions: auto-generated\n"));
+        assert!(content.contains("Transcript from auto-generated captions."));
+
+        // Renaming rebuilds the file from the item's own meta, so every other field is unchanged.
+        rename_item(&db, &item.id, "Turbo Basics").unwrap();
+        let renamed = db.get_item(&item.id).unwrap();
+        let renamed_path = renamed.storage_path.clone().unwrap();
+        assert_eq!(renamed_path, "Cars/Engines/Turbo Basics.md");
+
+        let rebuilt = fs::read_to_string(root.join(&renamed_path)).unwrap();
+        assert!(rebuilt.starts_with("---\nsource: youtube\ntitle: Turbo Basics\n"));
+        assert!(rebuilt.contains("# Turbo Basics\n"));
+        assert!(rebuilt.contains("\nduration: \"1:02:10\"\n"));
+        assert!(!root.join(&path).exists());
+
+        // Everything but the title itself is rebuilt identically from the item's own meta.
+        let rebuilds_same = |file: &str| -> Vec<String> {
+            file.lines()
+                .filter(|line| !line.starts_with("# ") && !line.starts_with("title:"))
+                .map(str::to_string)
+                .collect()
+        };
+        assert_eq!(rebuilds_same(&content), rebuilds_same(&rebuilt));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_save_source_rejects_unknown_kind_and_duplicates() {
+        let db = Database::open_in_memory().unwrap();
+        let project = db.create_folder("Cars", None).unwrap();
+        let group = db.create_folder("Engines", Some(&project.id)).unwrap();
+
+        let capture = || SourceCapture {
+            url: "https://www.reddit.com/r/cars/comments/1abc2d".to_string(),
+            title: "Should I turbo my car?".to_string(),
+            meta: serde_json::Map::new(),
+            markdown: "Body".to_string(),
+        };
+
+        assert!(save_source(&db, &group.id, "grokipedia", capture()).is_err());
+
+        save_source(&db, &group.id, "reddit", capture()).unwrap();
+        let duplicate = save_source(&db, &group.id, "reddit", capture());
+        assert!(duplicate.is_err());
+        // Every form of the same post is the same canonical address.
+        let mut again = capture();
+        again.url = "https://old.reddit.com/r/Cars/comments/1ABC2D/some_title/".to_string();
+        assert!(save_source(&db, &group.id, "reddit", again).is_err());
+    }
+
+    #[test]
+    fn test_save_source_unavailable_validates_source() {
+        let db = Database::open_in_memory().unwrap();
+        let project = db.create_folder("Cars", None).unwrap();
+        let group = db.create_folder("Engines", Some(&project.id)).unwrap();
+
+        let item = save_source_unavailable(
+            &db,
+            &group.id,
+            "youtube",
+            "https://www.youtube.com/watch?v=abcDEF12345",
+            "No captions video",
+            "No captions on this video",
+        )
+        .unwrap();
+        assert_eq!(item.kind, "youtube");
+        assert_eq!(item.status, "unavailable");
+        assert_eq!(item.error.as_deref(), Some("No captions on this video"));
+        assert!(item.markdown.is_none());
+        assert!(item.storage_path.is_none());
+
+        let unknown = save_source_unavailable(
+            &db,
+            &group.id,
+            "grokipedia",
+            "https://example.com",
+            "x",
+            "y",
+        );
+        assert!(unknown.is_err());
+    }
+
+    #[test]
     fn test_golden_fixtures() {
         let golden_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../packages/core/test/golden");
@@ -3422,6 +4422,7 @@ mod tests {
                     saved,
                     created,
                     folder,
+                    meta: meta.as_object().cloned().unwrap_or_default(),
                 };
 
                 let built = build_item_file(kind, &fields, body, note);

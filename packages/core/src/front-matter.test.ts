@@ -103,6 +103,19 @@ describe("buildFrontMatter", () => {
     );
   });
 
+  it("quotes sexagesimal-looking strings that YAML 1.1 reads as numbers", () => {
+    const result = buildFrontMatter({
+      duration: "3:33",
+      longer: "1:02:10",
+      notSexagesimal: "3:333",
+      plainTime: "12:5",
+    });
+
+    expect(result).toBe(
+      '---\nduration: "3:33"\nlonger: "1:02:10"\nnotSexagesimal: 3:333\nplainTime: "12:5"\n---\n',
+    );
+  });
+
   it("quotes numeric strings to prevent YAML type coercion", () => {
     const result = buildFrontMatter({
       intStr: "123",

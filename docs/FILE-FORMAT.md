@@ -67,6 +67,17 @@ YAML, one field per line, in the order listed. Fields with no value are left out
 | X          | `source`, `title`, `url`, `author`, `author_url`, `posted`, `saved`, `folder`                                                            |
 | Note       | `source`, `title`, `created`, `folder`                                                                                                   |
 
+The source kinds added in 2026-10 (stored in `items.kind` as `youtube`, `web`, `reddit`, `pdf`, `hackernews`, `bluesky`) all use `source`, `title`, `url`, then the kind's own fields below in this order, then `saved`, `folder`. Numbers are unquoted. The kind's fields travel in the capture's `meta` (`SourceCapture` in `packages/core/src/capture-types.ts`), keyed by these names.
+
+| Kind        | Kind fields, in order                                                                                                                        |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| YouTube     | `channel`, `channel_url`, `published` (date), `duration` (`M:SS` or `H:MM:SS`), `language` (code), `captions` (`manual` or `auto-generated`) |
+| Web page    | `site`, `author`, `published` (date), `summary` (the page description)                                                                       |
+| Reddit      | `subreddit` (no `r/`), `author` (no `u/`), `posted` (date), `score` (number), `comments` (number)                                            |
+| PDF         | `author`, `published` (date), `pages` (number), `arxiv` (id, arXiv only)                                                                     |
+| Hacker News | `author`, `posted` (date), `points` (number), `comments` (number), `link` (the story's own URL)                                              |
+| Bluesky     | `author` (display name), `author_url`, `posted` (date)                                                                                       |
+
 `folder` is the full path with real names joined by `/`, for example `Cars/Engines/Diesel`.
 
 ### Source line
@@ -77,6 +88,12 @@ One blockquote line under the title, so a reader (or NotebookLM) knows where the
 - Wikipedia: `> Saved from [Wikipedia](<url>) on <saved>. Wikipedia articles change; check the live page for edits.`
 - Substack: `> Saved from [<publication>](<url>) on <saved>.` then, on the same line, ` By <author>.` if known and ` Published <published>.` if known. If there's no publication name, use `Substack`.
 - X: `> Saved from [X](<url>) on <saved>.`
+- YouTube: `> Saved from [YouTube](<url>) on <saved>.` then ` By <channel>.`, ` Published <published>.`, and ` Transcript from auto-generated captions.` when `captions` is `auto-generated`.
+- Web page: `> Saved from [<site, or the host without www.>](<url>) on <saved>.` then ` By <author>.` and ` Published <published>.`
+- Reddit: `> Saved from [r/<subreddit>](<url>) on <saved>.` (`[Reddit]` if there's no subreddit).
+- PDF: `> Saved from [arXiv](<url>) on <saved>.` when `arxiv` is set, else `[<host without www.>]`. Then ` By <author>.` and ` Published <published>.`
+- Hacker News: `> Saved from [Hacker News](<url>) on <saved>.`
+- Bluesky: `> Saved from [Bluesky](<url>) on <saved>.`
 - Note: no source line.
 
 Substack only: if there is a subtitle, it goes on its own line between the title and the source line, in italics: `*<subtitle>*`.
@@ -101,6 +118,12 @@ Substack only: if there is a subtitle, it goes on its own line between the title
   - A simple table (one header row, no merged cells, same number of cells in every row) becomes a GFM table; rows with nothing in them are dropped. Any other table keeps its text, one `- ` bullet per row with cells joined by `·`. A table that only lays out other tables is dissolved and the tables inside are converted.
   - Wikipedia's text is CC BY-SA 4.0. The `url` and the "Saved from" line are the attribution and must stay with the text.
 - X threads: one block per post, nested blockquotes for replies, each post starting with `**<name>** (@<handle>) · <date> · [link](<post url>)`. This is the existing `renderXThreadMarkdown` output in `packages/core/src/x/markdown.ts`.
+- YouTube: `## Transcript` first. Each paragraph starts with `[m:ss](https://youtu.be/<id>?t=<s>) ` (`h:mm:ss` past an hour) and runs about 45–90 seconds: it breaks at the end of a sentence after about 45 s, and always by 90 s (auto-generated captions have no punctuation). Caption text has entities unescaped, tags stripped and whitespace collapsed; cues like `[Music]` are kept. Then `## Description` with the video description, blank lines kept as paragraph breaks. A video with no captions isn't saved as a file: it becomes an `unavailable` item with the reason "No captions on this video".
+- Web page: the main content found by defuddle, through Turndown, headings starting at `##`. Images are `![alt](absolute url)` with an italic caption paragraph below when the page has one. No raw HTML.
+- Reddit: the post's text (already Markdown), or a link line for a link post, with images as `![](url)`. Then `## Comments`, one block per comment: `**u/<author>** · <score> points · <date> · [link](<permalink>)` and the text, with replies as nested `>` blockquotes. The top comments by score, depth up to 4, about 200 comments at most; deleted or removed comments with no replies are skipped.
+- Hacker News: the story's URL as a link line and its text, then `## Comments` in the same style: `**<author>** · <date> · [link](https://news.ycombinator.com/item?id=<id>)`.
+- Bluesky: like X. The root post and the author's own replies come in sequence; other replies are nested blockquotes. Each post starts `**<name>** (@<handle>) · <date> · [link](<post url>)`. Images are `![alt](fullsize)`; quoted posts and link cards become links.
+- PDF: the text joined into paragraphs, hyphenated line breaks mended, and repeated page headers, footers and bare page numbers dropped where that's easy. arXiv papers use arXiv's HTML version when there is one: `## Abstract`, then the sections, with math as `$…$` from `<math alttext>`.
 
 ## Post images
 

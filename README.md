@@ -29,15 +29,17 @@ If someone shared their Sourcefold with you, you don't need to set anything up. 
 | Grokipedia    | Extension, right-click, or "Add links"           | Full article with tables, links and every reference as a footnote                                         |
 | Wikipedia     | Extension or "Add links"                         | Full article with its references                                                                          |
 | YouTube       | Extension (on the video page) or the desktop app | The transcript in timestamped paragraphs, plus the description. Playlists and channels in the desktop app |
-| Reddit        | Extension, "Add links", or the desktop app       | The post and its comments                                                                                 |
+| Reddit        | Extension (with the thread open)                 | The post and its comments. Reddit usually blocks pasted links                                             |
 | Hacker News   | Extension, "Add links", or the desktop app       | The story and its comment thread                                                                          |
 | Substack      | Extension                                        | Free posts, plus paid posts you subscribe to (locked posts are marked, not saved)                         |
 | X             | Extension                                        | A single post or the author's whole thread, text only, replies kept as a tree                             |
 | Bluesky       | Extension, "Add links", or the desktop app       | The post or thread                                                                                        |
-| PDF and arXiv | Extension, "Add links", or the desktop app       | The document's text                                                                                       |
+| PDF and arXiv | "Add links" or the desktop app                   | The document's text                                                                                       |
 | Any web page  | Extension, "Add links", or the desktop app       | The main article (news, blogs, docs), without menus and ads                                               |
 
-YouTube only works from the extension or the desktop app, because YouTube blocks requests from servers. A site that blocks servers or needs a login works best from the extension, which saves the page as you see it.
+YouTube only works from the extension or the desktop app, because YouTube blocks requests from servers. A site that blocks servers, needs a login, or builds its page with JavaScript works best from the extension, which saves the page as you see it.
+
+Checked on 2026-10-16: pasted links work for Anthropic, OpenAI, the Google blog, Hugging Face, Mistral, Medium, LessWrong, Stratechery, Simon Willison, Paul Graham and The Verge. DeepMind, Meta AI, xAI, Reddit and paywalled news (New York Times and similar) refuse pasted links or come back empty; save those with the extension while the page is open. Save single posts rather than a blog's index page.
 
 ## Stack
 

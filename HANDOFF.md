@@ -4,13 +4,13 @@ Read this first in any new session. When the user says "continue", pick up at **
 
 This repo is public. Don't put account emails, project IDs, client IDs or other deployment details here; keep them in the agent's private memory.
 
-Last updated: 2026-10-16, after opening the owner's deployment to friends and the v0.2.0 release (Windows, macOS, extension).
+Last updated: 2026-10-16, after the v0.2.0 release (Windows, macOS, extension) and listing every source kind in the README.
 
 ## What we're building
 
 Sourcefold is an open-source (MIT), self-hosted research source collector. The owner collects sources for YouTube video research and feeds them into NotebookLM, Gemini and other tools.
 
-- **Sources:** Grokipedia articles (bulk-paste 30–40 links), Substack posts (free posts, plus paid posts the user subscribes to), and X posts (text only, threads kept as a tree).
+- **Sources:** Grokipedia and Wikipedia articles, YouTube transcripts (captions YouTube already has, fetched as the InnerTube Android client; extension and desktop only), Reddit and Hacker News threads, Bluesky posts, PDFs and arXiv papers, any other web page (defuddle), Substack posts (free, plus paid posts the user subscribes to) and X posts (text only, threads kept as a tree). Bulk-paste 30–40 links of any mix. The README's "Supported sources" table is the user-facing list.
 - **Format:** every source is stored as clean Markdown.
 - **Organizing:** projects (for example "Cars", "Bikes"), each with its own groups inside groups, unlimited depth. A project is a top-level folder and a group is a folder inside one; the UI shows one project at a time. Each item lives in one group. Drag-and-drop to reorder or nest.
 - **Reading:** clicking an item opens the original page (or signed link for uploaded images). The desktop app also includes an integrated Markdown reader for items with saved markdown text.

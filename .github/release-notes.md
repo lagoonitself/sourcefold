@@ -62,5 +62,5 @@ Download the new installer from the newest release and run it; your library is k
 ## Problems?
 
 - **"This account can't use Sourcefold"** when signing in: tell the person who sent you the link.
-- **Reddit or some news sites fail on the website:** they block servers. Save them with the extension while the page is open.
+- **Reddit, DeepMind, Meta AI or some news sites fail on the website:** they block servers or build the page with JavaScript. Save them with the extension while the page is open.
 - **YouTube on the website:** use the desktop app or the extension.

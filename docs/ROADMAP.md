@@ -98,6 +98,7 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [ ] Extension test against desktop signed-in and offline modes.
   - [x] First macOS CI run (green 2026-10-16).
   - [x] First desktop release: v0.2.0 (2026-10-16), Windows and macOS installers and the extension zip in one GitHub Release with an install guide. [ ] Owner's check.
+  - [x] README lists every supported source, with which sites need the extension (2026-10-16).
   - [x] Open the deployment to friends: `ALLOWED_EMAIL=*`, `publicFetch` guard on server-side fetches of pasted links.
   - [ ] Code signing (not planned, $0 budget).
   - [ ] Optional: import an offline library into the account.
@@ -115,5 +116,10 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
 
 ## Later
 
-- [ ] Chrome Web Store listing for the extension.
+- [ ] Chrome Web Store listing for the extension ($5 one-time fee; the store build must drop the manifest `key`, and the desktop native host must also allow the store's extension ID).
+- [ ] Register the native messaging host for Brave too (macOS and Linux keep their own `BraveSoftware/Brave-Browser/NativeMessagingHosts` folder; the local HTTP fallback works meanwhile).
+- [ ] Save a whole blog at once from its RSS feed or sitemap, picking posts like a YouTube playlist.
+- [ ] Pasted links for pages that build their text with JavaScript (DeepMind, Meta AI): render them in a hidden desktop window first. The extension already handles them.
+- [ ] More dedicated sources: GitHub (README, issues, PRs), Semantic Scholar, PubMed, bioRxiv, OpenReview, Stack Overflow, Threads, Mastodon, podcast transcripts.
+- [ ] Speech-to-text (Whisper) for YouTube videos without captions.
 - [ ] Full-text search (title search only today).

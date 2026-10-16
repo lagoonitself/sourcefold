@@ -41,8 +41,8 @@ jobs:
           sed -e "s|{{WEB_URL}}|${URL}|g" -e "s|{{VERSION}}|${VERSION}|g" \
             .github/release-notes.md > notes.md
           gh release create "$TAG" --draft --title "Sourcefold $TAG" --notes-file notes.md
-          ID=$(gh api "repos/${{ github.repository }}/releases" \
-            --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n 1)
+          ID=$(gh release view "$TAG" --json databaseId --jq .databaseId)
+          if [ -z "$ID" ]; then echo "Couldn't read the release ID"; exit 1; fi
           echo "release_id=$ID" >> "$GITHUB_OUTPUT"
 
   desktop:
@@ -91,6 +91,7 @@ jobs:
         with:
           projectPath: "./apps/desktop"
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          tagName: ${{ github.ref_name }}
           args: ${{ matrix.args }}
 
   extension:
@@ -131,6 +132,16 @@ jobs:
     needs: [desktop, extension]
     runs-on: ubuntu-latest
     steps:
+      - name: Check every download is attached
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ASSETS=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
+          echo "$ASSETS"
+          for pattern in '_x64-setup[.]exe$' '_universal[.]dmg$' '^sourcefold-extension-chrome[.]zip$'; do
+            echo "$ASSETS" | grep -Eq "$pattern" || { echo "Missing a file matching $pattern"; exit 1; }
+          done
+
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

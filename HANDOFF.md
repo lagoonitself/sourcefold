@@ -96,8 +96,6 @@ Lessons worth keeping:
    - Try keyboard shortcuts: press `?` to open the shortcuts cheat sheet; try tree navigation (`j`/`k`, `h`/`l`, `[`/`]`), list navigation, command palette (`Mod+K`), and search (`/`).
    - Test offline mode: switch to offline mode in desktop Settings, create an offline group and source, and check that files write to `Documents/Sourcefold/` and `%LOCALAPPDATA%\Sourcefold\sourcefold.db`.
    - Check extension target line: open extension popup in Auto mode with desktop signed in (should show "Saving to your account (via desktop app)"), then with desktop in offline mode (should show "Saving to this computer (desktop app, offline)").
-1. **Push and check the macOS CI run.**
-   - Push the branch to GitHub and confirm the GitHub Actions workflow builds the desktop app on macOS.
 1. **Check that content moves to Drive.**
    - Migration `20261014020000_content_lives_in_drive.sql` is applied to the owner's database and the code is pushed (2026-10-14). After the Vercel deploy, press Save to Drive once: the two existing sources should upload and their text should clear from Supabase (`select count(*) from items where markdown is not null and kind <> 'note'` returns 0). Then save one new Grokipedia link and check it lands in Drive without pressing Save. Rename it and save, and check the Drive file still has its article text.
 1. **Check project archiving on the live app.**

@@ -96,7 +96,7 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [ ] Owner's hands-on test of desktop sign-in and sync.
   - [ ] Owner's hands-on test of the desktop group view (see HANDOFF).
   - [ ] Extension test against desktop signed-in and offline modes.
-  - [ ] First macOS CI run.
+  - [x] First macOS CI run (green 2026-10-16).
   - [ ] First desktop release.
   - [ ] Code signing (not planned, $0 budget).
   - [ ] Optional: import an offline library into the account.

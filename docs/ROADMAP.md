@@ -97,7 +97,8 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [ ] Owner's hands-on test of the desktop group view (see HANDOFF).
   - [ ] Extension test against desktop signed-in and offline modes.
   - [x] First macOS CI run (green 2026-10-16).
-  - [ ] First desktop release.
+  - [x] First desktop release: v0.2.0 (2026-10-16), Windows and macOS installers and the extension zip in one GitHub Release with an install guide. [ ] Owner's check.
+  - [x] Open the deployment to friends: `ALLOWED_EMAIL=*`, `publicFetch` guard on server-side fetches of pasted links.
   - [ ] Code signing (not planned, $0 budget).
   - [ ] Optional: import an offline library into the account.
   - [ ] Item reordering in desktop (no API yet).

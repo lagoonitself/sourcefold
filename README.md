@@ -5,11 +5,11 @@
 
 Collect research sources into folders as clean Markdown, then send them to Google Drive with one click, ready for NotebookLM, Gemini or any other AI tool.
 
-Sourcefold is built for people who gather a lot of reading before they write or make a video. Save Grokipedia articles, Substack posts and X threads from a Chrome extension or by pasting a batch of links. Sourcefold turns each one into a tidy `.md` file, sorts it into nested folders, and mirrors those folders into a `Sourcefold` folder in your Drive.
+Sourcefold is built for people who gather a lot of reading before they write or make a video. Save Grokipedia and Wikipedia articles, YouTube transcripts, Reddit and Hacker News threads, Substack posts, X and Bluesky posts, PDFs, arXiv papers and almost any article or blog post on the web, from a Chrome extension or by pasting a batch of links. Sourcefold turns each one into a tidy `.md` file, sorts it into nested folders, and mirrors those folders into a `Sourcefold` folder in your Drive.
 
 - **Desktop app:** fast native app for Windows and macOS (Tauri v2 + React 19 + Rust). Works signed in (connected to your web account) or offline (local SQLite library on disk).
 - **Chrome extension:** save the page you're on into any folder in one click. Auto mode routes saves to your web account or local desktop app. Right-click a Grokipedia link to save it without opening it.
-- **Bulk add:** paste 30-40 Grokipedia links at once and watch each one import.
+- **Bulk add:** paste 30-40 links at once (any mix of supported sources) and watch each one import.
 - **Markdown first:** every source becomes a `.md` file with a small header (source link, author, dates) and references kept as footnotes.
 - **Folders inside folders:** unlimited depth, with drag-and-drop to reorder and nest.
 - **Notes and images:** write Markdown notes or upload images next to your sources.
@@ -24,11 +24,20 @@ If someone shared their Sourcefold with you, you don't need to set anything up. 
 
 ## Supported sources
 
-| Source     | How to save                            | What you get                                                                      |
-| ---------- | -------------------------------------- | --------------------------------------------------------------------------------- |
-| Grokipedia | Extension, right-click, or "Add links" | Full article with tables, links and every reference as a footnote                 |
-| Substack   | Extension                              | Free posts, plus paid posts you subscribe to (locked posts are marked, not saved) |
-| X          | Extension                              | A single post or the author's whole thread, text only, replies kept as a tree     |
+| Source        | How to save                                      | What you get                                                                                              |
+| ------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Grokipedia    | Extension, right-click, or "Add links"           | Full article with tables, links and every reference as a footnote                                         |
+| Wikipedia     | Extension or "Add links"                         | Full article with its references                                                                          |
+| YouTube       | Extension (on the video page) or the desktop app | The transcript in timestamped paragraphs, plus the description. Playlists and channels in the desktop app |
+| Reddit        | Extension, "Add links", or the desktop app       | The post and its comments                                                                                 |
+| Hacker News   | Extension, "Add links", or the desktop app       | The story and its comment thread                                                                          |
+| Substack      | Extension                                        | Free posts, plus paid posts you subscribe to (locked posts are marked, not saved)                         |
+| X             | Extension                                        | A single post or the author's whole thread, text only, replies kept as a tree                             |
+| Bluesky       | Extension, "Add links", or the desktop app       | The post or thread                                                                                        |
+| PDF and arXiv | Extension, "Add links", or the desktop app       | The document's text                                                                                       |
+| Any web page  | Extension, "Add links", or the desktop app       | The main article (news, blogs, docs), without menus and ads                                               |
+
+YouTube only works from the extension or the desktop app, because YouTube blocks requests from servers. A site that blocks servers or needs a login works best from the extension, which saves the page as you see it.
 
 ## Stack
 
@@ -177,8 +186,8 @@ See [apps/desktop/README.md](apps/desktop/README.md) for full details, architect
 ## Using it
 
 - **Folders:** organize sources in nested folders of unlimited depth. Drag and drop folders in the sidebar to reorder or nest them.
-- **Add links:** paste 30-40 Grokipedia links into the "Add links" dialog to import articles sequentially.
-- **Extension:** save Grokipedia articles, Substack posts (free posts and paid posts you subscribe to), and X threads into your chosen folder with one click.
+- **Add links:** paste 30-40 links into the "Add links" dialog to import them one after another.
+- **Extension:** save the page you're on into your chosen folder with one click: any source in the table under [Supported sources](#supported-sources), including Substack posts you subscribe to, X threads and YouTube transcripts.
 - **Notes and images:** create standalone Markdown notes, add notes to saved sources, or upload research images into any folder.
 - **Save to Drive:** click "Save to Drive" or press `Ctrl+S` to mirror your folders, Markdown files, and images into a `Sourcefold` folder in Google Drive. Deletions in Sourcefold move corresponding files and folders to Google Drive's trash.
 
@@ -209,7 +218,7 @@ For how to contribute, see [CONTRIBUTING.md](CONTRIBUTING.md). Rules for AI codi
 
 1. The web app (Next.js on Vercel) stores folders and items in Supabase Postgres, with row-level security on every table.
 2. The desktop app (Tauri v2) connects to the web app's API with an access token, or works offline using local SQLite and local files on disk.
-3. Grokipedia pages are fetched and converted to Markdown on the server or in the desktop app. Substack and X pages are read by the extension in your own browser (so paid posts you subscribe to work) and sent to `/api/capture`.
+3. Grokipedia, Wikipedia, Reddit, Hacker News, Bluesky, PDF and web page links are fetched and converted to Markdown on the server or in the desktop app. YouTube is fetched by the extension or the desktop app on your own connection, since YouTube blocks servers. Substack and X pages are read by the extension in your own browser (so paid posts you subscribe to work) and sent to `/api/capture`.
 4. The extension communicates with the desktop app via Chrome Native Messaging or local HTTP (`127.0.0.1:23456`), or directly with the web app using a personal access token.
 5. Save to Drive runs in small batches: it creates the folder tree, uploads changed `.md` files and images, and moves deleted ones to Drive's trash.
 

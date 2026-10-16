@@ -7,6 +7,7 @@ pub const HOST_NAME: &str = "com.sourcefold.native";
 
 /// `reg.exe` without a console window; otherwise every call flashes a terminal on screen.
 fn reg_command() -> Command {
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut command = Command::new("reg");
     #[cfg(windows)]
     {

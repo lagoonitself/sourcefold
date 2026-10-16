@@ -461,8 +461,7 @@ fn percent_decode(s: &str) -> String {
 
 fn last_segment(path: &str) -> String {
     path.split('/')
-        .filter(|s| !s.is_empty())
-        .last()
+        .rfind(|s| !s.is_empty())
         .map(percent_decode)
         .unwrap_or_default()
 }

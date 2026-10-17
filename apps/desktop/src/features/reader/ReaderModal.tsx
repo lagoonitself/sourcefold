@@ -5,6 +5,8 @@ import { registerModalLayer } from "@/components/ui/Dialog";
 import { errorMessage, openUrl } from "@/lib/utils";
 import { ReaderView } from "./ReaderView";
 import type { ReaderLoadState, ReaderModalProps } from "./types";
+import { useReaderContent } from "./use-reader-content";
+import { useReaderHighlights } from "./useReaderHighlights";
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -20,8 +22,14 @@ export function ReaderModal({
   onClose,
   className,
   initialTypography = "serif",
+  groupItems,
+  onNavigate,
+  initialHighlightId,
+  onSaveLinks,
+  onHighlightsChanged,
 }: ReaderModalProps) {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const bodyRef = React.useRef<HTMLDivElement | null>(null);
   const [state, setState] = React.useState<ReaderLoadState>({ status: "loading" });
   const [attempt, setAttempt] = React.useState(0);
 
@@ -53,6 +61,22 @@ export function ReaderModal({
     };
   }, [open, itemId, attempt]);
 
+  const content = useReaderContent(state.status === "ready" ? state.text : null);
+  const highlights = useReaderHighlights({
+    item,
+    open,
+    bodyHtml: content.bodyHtml,
+    bodyRef,
+    scrollRef,
+    groupItems,
+    onNavigate,
+    initialHighlightId,
+    onSaveLinks,
+    onHighlightsChanged,
+  });
+  const highlightsRef = React.useRef(highlights);
+  highlightsRef.current = highlights;
+
   const handleClose = React.useCallback(() => {
     onOpenChange(false);
     onClose?.();
@@ -74,11 +98,10 @@ export function ReaderModal({
     return registerModalLayer();
   }, [isShown]);
 
-  // Keyboard navigation shortcuts:
-  // - Escape: close reader
+  // Keyboard shortcuts (the highlight keys live in useReaderHighlights):
+  // - Escape: close the small menu, then a panel note field, then the reader
   // - o / O: open original source URL in browser
-  // - j / ArrowDown: scroll down
-  // - k / ArrowUp: scroll up
+  // - ArrowDown / ArrowUp: scroll
   // - Space / Shift+Space: page down / page up
   React.useEffect(() => {
     if (!open || !item) return;
@@ -88,9 +111,15 @@ export function ReaderModal({
 
       if (e.key === "Escape") {
         e.preventDefault();
-        handleClose();
+        if (!highlightsRef.current.handleEscape()) handleClose();
         return;
       }
+
+      if (highlightsRef.current.handleKey(e)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // Space and Enter on a focused button press that button.
+      if (e.target instanceof HTMLButtonElement && (e.key === " " || e.key === "Enter")) return;
 
       if (e.key === "o" || e.key === "O") {
         const url = item.source_url || item.canonical_url;
@@ -101,13 +130,13 @@ export function ReaderModal({
         return;
       }
 
-      if (e.key === "j" || e.key === "J" || e.key === "ArrowDown") {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         scrollRef.current?.scrollBy({ top: 160, behavior: "smooth" });
         return;
       }
 
-      if (e.key === "k" || e.key === "K" || e.key === "ArrowUp") {
+      if (e.key === "ArrowUp") {
         e.preventDefault();
         scrollRef.current?.scrollBy({ top: -160, behavior: "smooth" });
         return;
@@ -142,6 +171,9 @@ export function ReaderModal({
         scrollRef={scrollRef}
         className={className}
         initialTypography={initialTypography}
+        content={content}
+        highlights={highlights}
+        bodyRef={bodyRef}
       />
     </div>,
     document.body,

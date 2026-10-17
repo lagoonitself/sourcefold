@@ -74,4 +74,39 @@ describe("buildItemFile", () => {
     expect(result).toContain("# Quantum Teleportation\n\n> Saved from [Grokipedia]");
     expect(result).toContain("Body text.\n\n## My note\n\nImportant note\n");
   });
+
+  it("writes the item's highlights as a My highlights section before My note", () => {
+    const result = buildItemFile(
+      {
+        id: "item-123",
+        kind: "grokipedia",
+        title: "Quantum Teleportation",
+        source_url: "https://grokipedia.com/page/Quantum_Teleportation",
+        created_at: "2026-10-13T12:00:00Z",
+        markdown: "Body text.",
+        note: "Important note",
+        highlights: [
+          {
+            id: "h1",
+            item_id: "item-123",
+            kind: "text",
+            quote: "Body text.",
+            prefix: "",
+            suffix: "",
+            start_offset: 0,
+            end_offset: 10,
+            image_src: null,
+            note: null,
+            seconds: null,
+            cited: [],
+            created_at: "2026-10-17T00:00:00Z",
+            updated_at: "2026-10-17T00:00:00Z",
+          },
+        ],
+      },
+      "Physics",
+    );
+    expect(result).toContain("## My highlights\n\n> Body text.\n");
+    expect(result.indexOf("## My highlights")).toBeLessThan(result.indexOf("## My note"));
+  });
 });

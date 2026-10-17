@@ -19,6 +19,7 @@ import {
   type FolderRef,
   type SiblingRef,
 } from "./build-file";
+import { loadHighlightsForItems } from "@/features/highlights/load";
 import { syncGoogleDoc, trashGoogleDoc } from "./google-doc-sync";
 import { syncPostImages, trashPostImages } from "./post-images";
 
@@ -377,6 +378,13 @@ export async function runSaveBatch(
         .filter((id): id is string => Boolean(id)),
     );
 
+    // One query for the whole batch; each file gets its item's highlights (## My highlights).
+    const highlightsByItem = await loadHighlightsForItems(
+      supabase,
+      userId,
+      itemsToProcess.filter((i) => i.deleted_at === null && i.kind !== "image").map((i) => i.id),
+    );
+
     const processItem = async (item: (typeof itemsToProcess)[number]) => {
       try {
         if (item.deleted_at !== null) {
@@ -451,7 +459,10 @@ export async function runSaveBatch(
           if (markdown === null && item.kind !== "note") {
             markdown = await readBodyFromDrive(accessToken, item.drive_file_id);
           }
-          body = buildItemFile({ ...item, markdown }, folderPath);
+          body = buildItemFile(
+            { ...item, markdown, highlights: highlightsByItem.get(item.id) ?? [] },
+            folderPath,
+          );
         }
 
         const existing = item.drive_file_id ? await getFile(accessToken, item.drive_file_id) : null;

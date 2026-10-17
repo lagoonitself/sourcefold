@@ -115,7 +115,7 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [ ] Owner checks a real Grokipedia save in Drive and in desktop offline mode.
 
 - **Reader, highlights and search (planned 2026-10-17, `docs/PLAN-reader-search.md`):**
-  - [ ] Phase 1: highlights in the desktop reader (select to highlight, notes, copy with source, YouTube timestamps, Grokipedia and Wikipedia references kept), side panel, cited sources saved to a group, next/previous source, group Highlights tab with Copy with sources. `highlights` table in Supabase and SQLite.
+  - [x] Phase 1 (built 2026-10-17, migration applied; [ ] owner's check): highlights in the desktop reader (select to highlight, notes, copy with source, YouTube timestamps, Grokipedia and Wikipedia references kept), side panel, cited sources saved to a group, next/previous source, group Highlights tab with Copy with sources. `highlights` table in Supabase and SQLite.
   - [ ] Phase 2: keyword search inside every source (SQLite FTS5 over passages from the local copy or offline storage), results open the reader at the passage.
   - [ ] Phase 3: search by meaning on this computer with EmbeddingGemma 2 (text and images), hybrid with keyword search, Find in other sources on a highlight. Runtime spike first.
 

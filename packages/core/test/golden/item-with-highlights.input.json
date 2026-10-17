@@ -1,0 +1,70 @@
+{
+  "kind": "youtube",
+  "title": "How a Turbocharger Works",
+  "url": "https://www.youtube.com/watch?v=abcDEF12345",
+  "folder": "Cars/Engines",
+  "saved": "2026-10-16",
+  "meta": {
+    "channel": "Engineering Explained",
+    "channel_url": "https://www.youtube.com/channel/UC12345",
+    "published": "2026-09-30",
+    "duration": "1:02:10",
+    "language": "en",
+    "captions": "auto-generated"
+  },
+  "body": "## Transcript\n\n[0:00](https://youtu.be/abcDEF12345?t=0) Hello and welcome. Today we look at how a turbocharger works.\n\n[0:47](https://youtu.be/abcDEF12345?t=47) The exhaust spins a turbine, and the turbine drives a compressor.\n\n[1:02:05](https://youtu.be/abcDEF12345?t=3725) Thanks for watching.\n\n## Description\n\nHow turbos work.\n\nSources: https://example.com/turbo",
+  "note": "Good for the script.",
+  "highlights": [
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "item_id": "11111111-1111-4111-8111-111111111111",
+      "kind": "text",
+      "quote": "Turbo lag was the main\n  obstacle to early adoption.",
+      "prefix": "",
+      "suffix": "",
+      "start_offset": 400,
+      "end_offset": 452,
+      "image_src": null,
+      "note": "Check\nthe  date",
+      "seconds": 3725,
+      "cited": [
+        { "n": "1", "title": "SAE paper", "url": "https://www.sae.org/paper" },
+        { "n": "2", "title": "Archive", "url": "https://example.com/a (old).pdf" }
+      ],
+      "created_at": "2026-10-16T12:03:00.000Z",
+      "updated_at": "2026-10-16T12:03:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "item_id": "11111111-1111-4111-8111-111111111111",
+      "kind": "text",
+      "quote": "The exhaust spins a turbine,\nand the turbine drives a compressor.",
+      "prefix": "",
+      "suffix": "",
+      "start_offset": 120,
+      "end_offset": 185,
+      "image_src": null,
+      "note": "Intro line for the script",
+      "seconds": 47,
+      "cited": [],
+      "created_at": "2026-10-16T12:01:00.000Z",
+      "updated_at": "2026-10-16T12:01:00.000Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "item_id": "11111111-1111-4111-8111-111111111111",
+      "kind": "image",
+      "quote": "Cutaway of a turbocharger",
+      "prefix": "",
+      "suffix": "",
+      "start_offset": 300,
+      "end_offset": 300,
+      "image_src": "https://example.com/turbo.png",
+      "note": null,
+      "seconds": null,
+      "cited": [],
+      "created_at": "2026-10-16T12:02:00.000Z",
+      "updated_at": "2026-10-16T12:02:00.000Z"
+    }
+  ]
+}

@@ -1,7 +1,9 @@
 import { buildFrontMatter, formatDate, type FrontMatterValue } from "./front-matter";
+import { buildHighlightsSection, type FileHighlight } from "./highlights";
 
 const FRONT_MATTER = /^---\r?\n[\s\S]*?\r?\n---\r?\n/;
 const NOTE_HEADING = "\n## My note\n";
+const HIGHLIGHTS_HEADING = "\n## My highlights\n";
 
 export type ItemKind = "grokipedia" | "substack" | "wikipedia" | "x" | "note" | string;
 
@@ -19,6 +21,7 @@ export interface BuildItemInput {
   markdown?: string | null;
   body?: string | null;
   note?: string | null;
+  highlights?: FileHighlight[] | null;
 }
 
 function tryFormatDate(val?: unknown): string | undefined {
@@ -183,16 +186,24 @@ function newKindSourceLine(
   }
 }
 
+// Cuts the trailing "## My note" and then "## My highlights" sections off a body; both are
+// rebuilt from the database on every save.
+function stripTrailingSections(text: string): string {
+  let body = text;
+  const noteStart = body.lastIndexOf(NOTE_HEADING);
+  if (noteStart !== -1) body = body.slice(0, noteStart);
+  const highlightsStart = body.lastIndexOf(HIGHLIGHTS_HEADING);
+  if (highlightsStart !== -1) body = body.slice(0, highlightsStart);
+  return body;
+}
+
 // Recovers the Markdown body from a file Sourcefold wrote to Drive: drops the front matter
-// and the trailing "## My note" section, which are rebuilt from the database on every save.
+// and the trailing "## My highlights" and "## My note" sections, which are rebuilt from the
+// database on every save.
 export function bodyFromDriveFile(fileText: string): string {
   let body = fileText.replace(/^\ufeff/, "").replace(/\r\n/g, "\n");
   body = body.replace(FRONT_MATTER, "");
-
-  const noteStart = body.lastIndexOf(NOTE_HEADING);
-  if (noteStart !== -1) {
-    body = body.slice(0, noteStart);
-  }
+  body = stripTrailingSections(body);
 
   return body.replace(/^\n+/, "").trimEnd() + "\n";
 }
@@ -211,6 +222,8 @@ export function bodyFromDriveFile(fileText: string): string {
  * [> Saved from ...] (source line, omitted for notes)
  *
  * <body>
+ *
+ * [## My highlights]
  *
  * [## My note]
  */
@@ -365,10 +378,7 @@ export function buildItemFile(item: BuildItemInput, folderPath?: string): string
   let rawBody = (item.markdown ?? item.body ?? "").replace(/^\ufeff/, "").replace(/\r\n/g, "\n");
   rawBody = rawBody.replace(FRONT_MATTER, "");
 
-  const noteIdx = rawBody.lastIndexOf(NOTE_HEADING);
-  if (noteIdx !== -1) {
-    rawBody = rawBody.slice(0, noteIdx);
-  }
+  rawBody = stripTrailingSections(rawBody);
 
   let text = rawBody.trim();
 
@@ -420,6 +430,12 @@ export function buildItemFile(item: BuildItemInput, folderPath?: string): string
   // Body
   if (text) {
     sections.push(text);
+  }
+
+  // Highlights, after the body and before the note
+  const highlightsSection = buildHighlightsSection(item.highlights, itemUrl);
+  if (highlightsSection) {
+    sections.push(highlightsSection);
   }
 
   // User note (omitted for kind "note" where the body is the note)

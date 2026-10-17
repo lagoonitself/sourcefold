@@ -12,7 +12,8 @@ use serde_json::{json, Value};
 
 use crate::db::Database;
 use crate::models::{
-    AddXPostRequest, CheckUrlResult, Folder, Item, RecentXItem, SaveItemRequest,
+    AddXPostRequest, CheckUrlResult, Folder, Highlight, HighlightInput, Item, RecentXItem,
+    SaveItemRequest,
 };
 
 // -----------------------------------------------------------------------------
@@ -1324,6 +1325,9 @@ pub fn clean_body_markdown(kind: &str, body: &str, subtitle: Option<&str>) -> St
     if let Some(note_start) = raw.rfind("\n## My note\n") {
         raw.truncate(note_start);
     }
+    if let Some(hl_start) = raw.rfind(HIGHLIGHTS_HEADING) {
+        raw.truncate(hl_start);
+    }
 
     let mut text = raw.trim();
 
@@ -1376,6 +1380,18 @@ pub fn build_item_file(
     fields: &ItemFileFields,
     body: &str,
     note: Option<&str>,
+) -> String {
+    build_item_file_with_highlights(kind, fields, body, note, &[])
+}
+
+/// Same as `build_item_file`, plus the `## My highlights` section (after the body, before
+/// `## My note`) when `highlights` is not empty.
+pub fn build_item_file_with_highlights(
+    kind: &str,
+    fields: &ItemFileFields,
+    body: &str,
+    note: Option<&str>,
+    highlights: &[Highlight],
 ) -> String {
     let mut fm = String::from("---\n");
     fm.push_str(&format!("source: {}\n", kind));
@@ -1598,6 +1614,10 @@ pub fn build_item_file(
         sections.push(cleaned_body);
     }
 
+    if let Some(section) = build_highlights_section(highlights, fields.url.as_deref()) {
+        sections.push(section);
+    }
+
     if kind != "note" {
         if let Some(n) = note {
             let tr = n.trim();
@@ -1622,13 +1642,140 @@ pub fn extract_body_and_note(md: &str) -> (String, Option<String>) {
         trimmed
     };
 
-    if let Some(note_idx) = without_fm.find("\n## My note\n") {
-        let body = &without_fm[..note_idx];
+    let (before_note, note) = if let Some(note_idx) = without_fm.find("\n## My note\n") {
         let note = &without_fm[note_idx + "\n## My note\n".len()..];
-        (body.to_string(), Some(note.trim().to_string()))
+        (&without_fm[..note_idx], Some(note.trim().to_string()))
     } else {
-        (without_fm.to_string(), None)
+        (without_fm, None)
+    };
+    let body = match before_note.rfind(HIGHLIGHTS_HEADING) {
+        Some(hl_idx) => &before_note[..hl_idx],
+        None => before_note,
+    };
+    (body.to_string(), note)
+}
+
+// -----------------------------------------------------------------------------
+// Highlights section (docs/FILE-FORMAT.md, "## My highlights")
+// -----------------------------------------------------------------------------
+
+const HIGHLIGHTS_HEADING: &str = "\n## My highlights\n";
+
+fn collapse_whitespace(s: &str) -> String {
+    WHITESPACE_COLLAPSE_RE.replace_all(s, " ").trim().to_string()
+}
+
+/// The video id of a YouTube item URL (watch?v=, youtu.be/, /shorts/, /live/, /embed/).
+fn youtube_video_id(item_url: &str) -> Option<String> {
+    let url = reqwest::Url::parse(item_url).ok()?;
+    let host = url.host_str()?.to_lowercase();
+    let host = host.strip_prefix("www.").unwrap_or(&host).to_string();
+    let valid = |id: &str| {
+        !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    };
+    if host == "youtu.be" {
+        let id = url.path_segments()?.next()?.to_string();
+        return if valid(&id) { Some(id) } else { None };
     }
+    if host == "youtube.com" || host.ends_with(".youtube.com") || host == "youtube-nocookie.com" {
+        if let Some((_, v)) = url.query_pairs().find(|(k, _)| k == "v") {
+            if valid(&v) {
+                return Some(v.to_string());
+            }
+        }
+        let mut segs = url.path_segments()?;
+        let first = segs.next()?;
+        if matches!(first, "shorts" | "live" | "embed") {
+            let id = segs.next()?.to_string();
+            if valid(&id) {
+                return Some(id);
+            }
+        }
+    }
+    None
+}
+
+/// `M:SS` under an hour, `H:MM:SS` from an hour.
+pub fn format_highlight_time(seconds: i64) -> String {
+    let s = seconds.max(0);
+    let (h, m, sec) = (s / 3600, (s % 3600) / 60, s % 60);
+    if h > 0 {
+        format!("{}:{:02}:{:02}", h, m, sec)
+    } else {
+        format!("{}:{:02}", m, sec)
+    }
+}
+
+fn highlight_domain(url: &str) -> String {
+    reqwest::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.to_string()))
+        .map(|h| h.strip_prefix("www.").map(str::to_string).unwrap_or(h))
+        .unwrap_or_else(|| url.to_string())
+}
+
+fn highlight_block(h: &Highlight, item_url: Option<&str>) -> String {
+    let quote = collapse_whitespace(&h.quote);
+    let mut block = if h.kind == "image" {
+        format!("![{}]({})", quote, h.image_src.as_deref().unwrap_or(""))
+    } else {
+        format!("> {}", quote)
+    };
+
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(sec) = h.seconds {
+        let time = format_highlight_time(sec);
+        match item_url.and_then(youtube_video_id) {
+            Some(id) => parts.push(format!("[{}](https://youtu.be/{}?t={})", time, id, sec)),
+            None => parts.push(time),
+        }
+    }
+    if !h.cited.is_empty() {
+        let cites: Vec<String> = h
+            .cited
+            .iter()
+            .map(|c| {
+                let target = if c.url.contains(' ') || c.url.contains('(') || c.url.contains(')') {
+                    format!("<{}>", c.url)
+                } else {
+                    c.url.clone()
+                };
+                format!("[{}]({})", highlight_domain(&c.url), target)
+            })
+            .collect();
+        parts.push(format!("Cited: {}", cites.join(", ")));
+    }
+    if let Some(n) = &h.note {
+        let n = collapse_whitespace(n);
+        if !n.is_empty() {
+            parts.push(format!("Note: {}", n));
+        }
+    }
+    if !parts.is_empty() {
+        block.push_str("\n\n");
+        block.push_str(&parts.join(" · "));
+    }
+    block
+}
+
+/// The `## My highlights` section, or None when there are no highlights.
+pub fn build_highlights_section(highlights: &[Highlight], item_url: Option<&str>) -> Option<String> {
+    if highlights.is_empty() {
+        return None;
+    }
+    let mut sorted: Vec<&Highlight> = highlights.iter().collect();
+    sorted.sort_by(|a, b| {
+        a.start_offset
+            .cmp(&b.start_offset)
+            .then_with(|| a.created_at.cmp(&b.created_at))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    let blocks: Vec<String> = sorted.iter().map(|h| highlight_block(h, item_url)).collect();
+    Some(format!("## My highlights\n\n{}", blocks.join("\n\n")))
+}
+
+fn item_highlights(db: &Database, item_id: &str) -> Vec<Highlight> {
+    db.get_highlights_for_item(item_id).unwrap_or_default()
 }
 
 // -----------------------------------------------------------------------------
@@ -2779,7 +2926,13 @@ pub fn add_x_post(
             };
 
             let thread_body = render_x_thread_body(&nodes);
-            let full_file_content = build_item_file("x", &fields, &thread_body, item.note.as_deref());
+            let full_file_content = build_item_file_with_highlights(
+                "x",
+                &fields,
+                &thread_body,
+                item.note.as_deref(),
+                &item_highlights(db, item_id),
+            );
 
             if new_title != item.title {
                 let _ = db.rename_item(item_id, &new_title);
@@ -2940,7 +3093,13 @@ pub fn update_note(
         folder: folder_opt,
         ..Default::default()
     };
-    let full_file_content = build_item_file("note", &fields, markdown, None);
+    let full_file_content = build_item_file_with_highlights(
+        "note",
+        &fields,
+        markdown,
+        None,
+        &item_highlights(db, id),
+    );
 
     if new_title != item.title {
         let storage_root = resolve_storage_dir(db);
@@ -3118,6 +3277,177 @@ pub fn get_item(db: &Database, id: &str) -> Result<Item, ServiceError> {
         .map_err(|e| ServiceError::not_found(format!("Item not found: {}", e)))
 }
 
+// -----------------------------------------------------------------------------
+// Highlights (offline mode; contract: docs/handoff-highlights.md)
+// -----------------------------------------------------------------------------
+
+pub const MAX_HIGHLIGHT_QUOTE: usize = 10_000;
+pub const MAX_HIGHLIGHT_NOTE: usize = 5_000;
+pub const MAX_HIGHLIGHT_CONTEXT: usize = 64;
+pub const MAX_HIGHLIGHT_CITED: usize = 50;
+
+fn validate_highlight_note(note: Option<&str>) -> Result<(), ServiceError> {
+    if let Some(n) = note {
+        if n.chars().count() > MAX_HIGHLIGHT_NOTE {
+            return Err(ServiceError::bad_request(format!(
+                "A highlight note can be at most {} characters.",
+                MAX_HIGHLIGHT_NOTE
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_highlight_input(input: &HighlightInput) -> Result<(), ServiceError> {
+    if input.id.trim().is_empty() {
+        return Err(ServiceError::bad_request("A highlight needs an id."));
+    }
+    if input.item_id.trim().is_empty() {
+        return Err(ServiceError::bad_request("A highlight needs an item_id."));
+    }
+    if input.kind != "text" && input.kind != "image" {
+        return Err(ServiceError::bad_request("A highlight's kind must be \"text\" or \"image\"."));
+    }
+    if input.quote.chars().count() > MAX_HIGHLIGHT_QUOTE {
+        return Err(ServiceError::bad_request(format!(
+            "A highlighted passage can be at most {} characters.",
+            MAX_HIGHLIGHT_QUOTE
+        )));
+    }
+    if input.prefix.chars().count() > MAX_HIGHLIGHT_CONTEXT
+        || input.suffix.chars().count() > MAX_HIGHLIGHT_CONTEXT
+    {
+        return Err(ServiceError::bad_request(format!(
+            "A highlight's prefix and suffix can be at most {} characters.",
+            MAX_HIGHLIGHT_CONTEXT
+        )));
+    }
+    if input.cited.len() > MAX_HIGHLIGHT_CITED {
+        return Err(ServiceError::bad_request(format!(
+            "A highlight can cite at most {} references.",
+            MAX_HIGHLIGHT_CITED
+        )));
+    }
+    if input.start_offset < 0 || input.end_offset < input.start_offset {
+        return Err(ServiceError::bad_request(
+            "A highlight's offsets must be non-negative, with end_offset at or after start_offset.",
+        ));
+    }
+    if matches!(input.seconds, Some(sec) if sec < 0) {
+        return Err(ServiceError::bad_request("A highlight's seconds can't be negative."));
+    }
+    validate_highlight_note(input.note.as_deref())
+}
+
+/// Rebuilds the item's file (database copy and file on disk) so it carries its current note and
+/// `## My highlights` section, and moves the item's updated_at.
+fn rewrite_item_file(db: &Database, item_id: &str) {
+    let item = match db.get_item(item_id) {
+        Ok(i) => i,
+        Err(_) => return,
+    };
+    let _ = db.touch_item(item_id);
+    if item.kind == "image" {
+        return;
+    }
+    if let Some(existing_md) = &item.markdown {
+        let (body, _) = extract_body_and_note(existing_md);
+        let (_, folder_path_str) = resolve_folder_path(db, &item.folder_id);
+        let folder_opt = if folder_path_str.is_empty() { None } else { Some(folder_path_str) };
+        let fields = item_file_fields(&item, item.title.clone(), folder_opt);
+        let updated_md = build_item_file_with_highlights(
+            &item.kind,
+            &fields,
+            &body,
+            item.note.as_deref(),
+            &item_highlights(db, item_id),
+        );
+        let _ = db.update_item_content(item_id, None, &updated_md);
+        let _ = write_item_file_to_disk(
+            db,
+            &item.folder_id,
+            item_id,
+            &item.title,
+            "md",
+            &item.created_at,
+            updated_md.as_bytes(),
+        );
+    }
+}
+
+pub fn list_highlights(
+    db: &Database,
+    item_id: Option<&str>,
+    folder_id: Option<&str>,
+) -> Result<Vec<Highlight>, ServiceError> {
+    let result = match (item_id, folder_id) {
+        (Some(i), _) => db.get_highlights_for_item(i),
+        (None, Some(f)) => db.get_highlights_for_folder(f),
+        (None, None) => {
+            return Err(ServiceError::bad_request("Give an itemId or a folderId."));
+        }
+    };
+    result.map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))
+}
+
+pub fn put_highlight(db: &Database, input: HighlightInput) -> Result<Highlight, ServiceError> {
+    validate_highlight_input(&input)?;
+    db.get_item(&input.item_id)
+        .map_err(|e| ServiceError::not_found(format!("Item not found: {}", e)))?;
+    let previous_item = db.get_highlight(&input.id).ok().map(|h| h.item_id);
+
+    let highlight = Highlight {
+        id: input.id,
+        item_id: input.item_id,
+        kind: input.kind,
+        quote: input.quote,
+        prefix: input.prefix,
+        suffix: input.suffix,
+        start_offset: input.start_offset,
+        end_offset: input.end_offset,
+        image_src: input.image_src,
+        note: input.note,
+        seconds: input.seconds,
+        cited: input.cited,
+        created_at: String::new(),
+        updated_at: String::new(),
+    };
+    let saved = db
+        .put_highlight(&highlight)
+        .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+
+    rewrite_item_file(db, &saved.item_id);
+    if let Some(old) = previous_item {
+        if old != saved.item_id {
+            rewrite_item_file(db, &old);
+        }
+    }
+    Ok(saved)
+}
+
+pub fn update_highlight_note(
+    db: &Database,
+    id: &str,
+    note: Option<&str>,
+) -> Result<Highlight, ServiceError> {
+    validate_highlight_note(note)?;
+    let saved = db
+        .update_highlight_note(id, note)
+        .map_err(|_| ServiceError::not_found("Highlight not found."))?;
+    rewrite_item_file(db, &saved.item_id);
+    Ok(saved)
+}
+
+pub fn delete_highlight(db: &Database, id: &str) -> Result<(), ServiceError> {
+    let existing = db
+        .get_highlight(id)
+        .map_err(|_| ServiceError::not_found("Highlight not found."))?;
+    db.delete_highlight(id)
+        .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+    rewrite_item_file(db, &existing.item_id);
+    Ok(())
+}
+
 pub fn update_item_note(db: &Database, id: &str, note: Option<&str>) -> Result<(), ServiceError> {
     let item = db.get_item(id).map_err(|e| ServiceError::not_found(format!("Item not found: {}", e)))?;
     db.update_item_note(id, note).map_err(|e| {
@@ -3132,7 +3462,7 @@ pub fn update_item_note(db: &Database, id: &str, note: Option<&str>) -> Result<(
 
             let fields = item_file_fields(&item, item.title.clone(), folder_opt);
 
-            let updated_md = build_item_file(&item.kind, &fields, &body, note);
+            let updated_md = build_item_file_with_highlights(&item.kind, &fields, &body, note, &item_highlights(db, id));
             let _ = db.update_item_content(id, None, &updated_md);
             let _ = write_item_file_to_disk(
                 db,
@@ -3193,7 +3523,7 @@ pub fn rename_item(db: &Database, id: &str, new_title: &str) -> Result<(), Servi
         let (body, _) = extract_body_and_note(existing_md);
         let folder_opt = if folder_path_str.is_empty() { None } else { Some(folder_path_str) };
         let fields = item_file_fields(&item, safe_t.clone(), folder_opt);
-        let updated_md = build_item_file(&item.kind, &fields, &body, item.note.as_deref());
+        let updated_md = build_item_file_with_highlights(&item.kind, &fields, &body, item.note.as_deref(), &item_highlights(db, id));
 
         if let Some(old_p) = &old_file_path {
             if old_p.is_file() && is_safe_to_delete(old_p, &storage_root) && *old_p != new_file_path {
@@ -3254,7 +3584,7 @@ pub fn move_item(db: &Database, id: &str, new_folder_id: &str) -> Result<(), Ser
         let (body, _) = extract_body_and_note(existing_md);
         let folder_opt = if new_folder_path_str.is_empty() { None } else { Some(new_folder_path_str) };
         let fields = item_file_fields(&item, item.title.clone(), folder_opt);
-        let updated_md = build_item_file(&item.kind, &fields, &body, item.note.as_deref());
+        let updated_md = build_item_file_with_highlights(&item.kind, &fields, &body, item.note.as_deref(), &item_highlights(db, id));
 
         if let Some(old_p) = &old_file_path {
             if old_p.is_file() && is_safe_to_delete(old_p, &storage_root) && *old_p != new_file_path {
@@ -3321,7 +3651,7 @@ fn sync_folder_items_paths(db: &Database, folder_id: &str) -> Result<(), Service
             if let Some(md) = &it.markdown {
                 let (body, _) = extract_body_and_note(md);
                 let fields = item_file_fields(&it, it.title.clone(), folder_opt.clone());
-                let updated = build_item_file(&it.kind, &fields, &body, it.note.as_deref());
+                let updated = build_item_file_with_highlights(&it.kind, &fields, &body, it.note.as_deref(), &item_highlights(db, &it.id));
                 let _ = db.update_item_content(&it.id, None, &updated);
             }
         }
@@ -4356,6 +4686,368 @@ mod tests {
         assert!(unknown.is_err());
     }
 
+    // --- Highlights ---
+
+    fn hl_input(id: &str, item_id: &str, quote: &str, start: i64) -> HighlightInput {
+        HighlightInput {
+            id: id.to_string(),
+            item_id: item_id.to_string(),
+            kind: "text".to_string(),
+            quote: quote.to_string(),
+            prefix: String::new(),
+            suffix: String::new(),
+            start_offset: start,
+            end_offset: start + quote.chars().count() as i64,
+            image_src: None,
+            note: None,
+            seconds: None,
+            cited: Vec::new(),
+        }
+    }
+
+    fn hl_item(db: &Database, group_id: &str, title: &str, url: &str) -> Item {
+        save_generic_item(
+            db,
+            group_id,
+            "youtube",
+            title,
+            Some(url.to_string()),
+            Some(url.to_string()),
+            Some("## Transcript\n\nSome words here."),
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+    }
+
+    fn hl_file(db: &Database, item_id: &str) -> String {
+        let item = db.get_item(item_id).unwrap();
+        let root = resolve_storage_dir(db);
+        fs::read_to_string(root.join(item.storage_path.unwrap())).unwrap()
+    }
+
+    fn hl_setup() -> (Database, Folder) {
+        let db = Database::open_in_memory().unwrap();
+        let project = db.create_folder("Cars", None).unwrap();
+        let group = db.create_folder("Engines", Some(&project.id)).unwrap();
+        (db, group)
+    }
+
+    #[test]
+    fn test_highlight_time_format_and_video_ids() {
+        assert_eq!(format_highlight_time(0), "0:00");
+        assert_eq!(format_highlight_time(47), "0:47");
+        assert_eq!(format_highlight_time(3599), "59:59");
+        assert_eq!(format_highlight_time(3725), "1:02:05");
+        for url in [
+            "https://www.youtube.com/watch?v=abcDEF12345",
+            "https://youtu.be/abcDEF12345?t=5",
+            "https://www.youtube.com/shorts/abcDEF12345",
+            "https://www.youtube.com/live/abcDEF12345?feature=share",
+            "https://www.youtube.com/embed/abcDEF12345",
+            "https://m.youtube.com/watch?feature=x&v=abcDEF12345",
+        ] {
+            assert_eq!(youtube_video_id(url).as_deref(), Some("abcDEF12345"), "{}", url);
+        }
+        assert_eq!(youtube_video_id("https://example.com/watch?v=abcDEF12345"), None);
+        assert_eq!(youtube_video_id("not a url"), None);
+        assert_eq!(youtube_video_id("https://www.youtube.com/"), None);
+    }
+
+    #[test]
+    fn test_highlights_section_matches_contract_example() {
+        let mk = |id: &str, kind: &str, quote: &str, start: i64| Highlight {
+            id: id.to_string(),
+            item_id: "i".to_string(),
+            kind: kind.to_string(),
+            quote: quote.to_string(),
+            prefix: String::new(),
+            suffix: String::new(),
+            start_offset: start,
+            end_offset: start,
+            image_src: None,
+            note: None,
+            seconds: None,
+            cited: Vec::new(),
+            created_at: "2026-10-16T12:00:00Z".to_string(),
+            updated_at: "2026-10-16T12:00:00Z".to_string(),
+        };
+        let mut a = mk("a", "text", "The exhaust spins a turbine,\n and the turbine drives a compressor.", 10);
+        a.seconds = Some(47);
+        a.note = Some("Intro line for the script".to_string());
+        let mut b = mk("b", "image", "Cutaway of a turbocharger", 20);
+        b.image_src = Some("https://example.com/turbo.png".to_string());
+        let mut c = mk("c", "text", "Turbo lag was the main obstacle to early adoption.", 30);
+        c.note = Some("Check the date".to_string());
+        c.cited = vec![crate::models::HighlightCitation {
+            n: "1".to_string(),
+            title: None,
+            url: "https://www.sae.org/paper".to_string(),
+        }];
+        // Given out of order on purpose.
+        let section = build_highlights_section(
+            &[c, a, b],
+            Some("https://www.youtube.com/watch?v=abcDEF12345"),
+        )
+        .unwrap();
+        let expected = "## My highlights\n\n\
+> The exhaust spins a turbine, and the turbine drives a compressor.\n\n\
+[0:47](https://youtu.be/abcDEF12345?t=47) · Note: Intro line for the script\n\n\
+![Cutaway of a turbocharger](https://example.com/turbo.png)\n\n\
+> Turbo lag was the main obstacle to early adoption.\n\n\
+Cited: [sae.org](https://www.sae.org/paper) · Note: Check the date";
+        assert_eq!(section, expected);
+        assert!(build_highlights_section(&[], None).is_none());
+    }
+
+    #[test]
+    fn test_timestamp_without_video_id_is_plain_text() {
+        let mut h = Highlight {
+            id: "a".into(),
+            item_id: "i".into(),
+            kind: "text".into(),
+            quote: "q".into(),
+            prefix: String::new(),
+            suffix: String::new(),
+            start_offset: 0,
+            end_offset: 1,
+            image_src: None,
+            note: None,
+            seconds: Some(125),
+            cited: Vec::new(),
+            created_at: "t".into(),
+            updated_at: "t".into(),
+        };
+        let section = build_highlights_section(&[h.clone()], Some("https://example.com/v")).unwrap();
+        assert_eq!(section, "## My highlights\n\n> q\n\n2:05");
+        h.seconds = None;
+        assert_eq!(build_highlights_section(&[h], None).unwrap(), "## My highlights\n\n> q");
+    }
+
+    #[test]
+    fn test_put_highlight_creates_replaces_and_rewrites_file() {
+        let (db, group) = hl_setup();
+        let url = "https://www.youtube.com/watch?v=abcDEF12345";
+        let item = hl_item(&db, &group.id, "Highlight create", url);
+        assert!(!hl_file(&db, &item.id).contains("## My highlights"));
+
+        let mut input = hl_input("h1", &item.id, "Some words", 5);
+        input.seconds = Some(47);
+        input.cited = vec![crate::models::HighlightCitation {
+            n: "1".into(),
+            title: Some("T".into()),
+            url: "https://example.com/a b".into(),
+        }];
+        let saved = put_highlight(&db, input.clone()).unwrap();
+        assert_eq!(saved.id, "h1");
+        assert_eq!(saved.cited.len(), 1);
+        assert!(!saved.created_at.is_empty());
+
+        let file = hl_file(&db, &item.id);
+        assert!(file.contains(
+            "## My highlights\n\n> Some words\n\n[0:47](https://youtu.be/abcDEF12345?t=47) · Cited: [example.com](<https://example.com/a b>)\n"
+        ));
+        // The stored copy matches the file on disk and the body does not grow on each rewrite.
+        assert_eq!(db.get_item(&item.id).unwrap().markdown.unwrap(), file);
+        assert_eq!(file.matches("## Transcript").count(), 1);
+
+        // Same id replaces, keeping created_at.
+        let mut changed = input;
+        changed.quote = "Other words".into();
+        changed.seconds = None;
+        changed.cited = Vec::new();
+        let replaced = put_highlight(&db, changed).unwrap();
+        assert_eq!(replaced.created_at, saved.created_at);
+        let all = list_highlights(&db, Some(&item.id), None).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].quote, "Other words");
+        let file = hl_file(&db, &item.id);
+        assert!(file.contains("> Other words"));
+        assert!(!file.contains("> Some words"));
+    }
+
+    #[test]
+    fn test_highlights_move_item_updated_at() {
+        let (db, group) = hl_setup();
+        let item = hl_item(&db, &group.id, "Highlight touch", "https://youtu.be/abcDEF12345");
+        let before = db.get_item(&item.id).unwrap().updated_at;
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        put_highlight(&db, hl_input("h1", &item.id, "Some", 0)).unwrap();
+        let after_put = db.get_item(&item.id).unwrap().updated_at;
+        assert!(after_put > before);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        update_highlight_note(&db, "h1", Some("n")).unwrap();
+        let after_note = db.get_item(&item.id).unwrap().updated_at;
+        assert!(after_note > after_put);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        delete_highlight(&db, "h1").unwrap();
+        assert!(db.get_item(&item.id).unwrap().updated_at > after_note);
+    }
+
+    #[test]
+    fn test_highlight_note_update_and_delete() {
+        let (db, group) = hl_setup();
+        let item = hl_item(&db, &group.id, "Highlight note", "https://youtu.be/abcDEF12345");
+        put_highlight(&db, hl_input("h1", &item.id, "Some words", 0)).unwrap();
+
+        let updated = update_highlight_note(&db, "h1", Some("Check\nthis")).unwrap();
+        assert_eq!(updated.note.as_deref(), Some("Check\nthis"));
+        assert!(hl_file(&db, &item.id).contains("> Some words\n\nNote: Check this\n"));
+
+        let cleared = update_highlight_note(&db, "h1", None).unwrap();
+        assert!(cleared.note.is_none());
+        assert!(!hl_file(&db, &item.id).contains("Note: Check"));
+
+        assert!(update_highlight_note(&db, "missing", Some("x")).is_err());
+        assert!(update_highlight_note(&db, "h1", Some(&"x".repeat(5001))).is_err());
+
+        delete_highlight(&db, "h1").unwrap();
+        assert!(list_highlights(&db, Some(&item.id), None).unwrap().is_empty());
+        assert!(!hl_file(&db, &item.id).contains("## My highlights"));
+        assert!(delete_highlight(&db, "h1").is_err());
+    }
+
+    #[test]
+    fn test_highlights_file_keeps_item_note_after_highlights() {
+        let (db, group) = hl_setup();
+        let item = hl_item(&db, &group.id, "Highlight with note", "https://youtu.be/abcDEF12345");
+        update_item_note(&db, &item.id, Some("My own thoughts")).unwrap();
+        put_highlight(&db, hl_input("h1", &item.id, "Some words", 0)).unwrap();
+        let file = hl_file(&db, &item.id);
+        let hl = file.find("## My highlights").unwrap();
+        let note = file.find("## My note").unwrap();
+        assert!(hl < note);
+        assert!(file.ends_with("## My note\n\nMy own thoughts\n"));
+
+        // Rewriting the note keeps the highlights, and neither section leaks into the body.
+        update_item_note(&db, &item.id, Some("Changed")).unwrap();
+        let file = hl_file(&db, &item.id);
+        assert_eq!(file.matches("## My highlights").count(), 1);
+        assert!(file.contains("> Some words"));
+        assert!(file.ends_with("## My note\n\nChanged\n"));
+
+        let (body, note) = extract_body_and_note(&file);
+        assert!(!body.contains("My highlights"));
+        assert_eq!(note.as_deref(), Some("Changed"));
+        assert!(!clean_body_markdown("youtube", &file, None).contains("My highlights"));
+    }
+
+    #[test]
+    fn test_list_highlights_by_item_and_folder_in_order() {
+        let (db, group) = hl_setup();
+        let other_group = db
+            .create_folder("Other", Some(&db.get_folder(&group.id).unwrap().parent_id.unwrap()))
+            .unwrap();
+        let a = hl_item(&db, &group.id, "List A", "https://youtu.be/aaaaaaaaaaa");
+        let b = hl_item(&db, &group.id, "List B", "https://youtu.be/bbbbbbbbbbb");
+        let c = hl_item(&db, &other_group.id, "List C", "https://youtu.be/ccccccccccc");
+
+        put_highlight(&db, hl_input("a2", &a.id, "late", 50)).unwrap();
+        put_highlight(&db, hl_input("a1", &a.id, "early", 5)).unwrap();
+        put_highlight(&db, hl_input("b1", &b.id, "bee", 1)).unwrap();
+        put_highlight(&db, hl_input("c1", &c.id, "sea", 1)).unwrap();
+
+        let by_item: Vec<String> =
+            list_highlights(&db, Some(&a.id), None).unwrap().into_iter().map(|h| h.id).collect();
+        assert_eq!(by_item, vec!["a1", "a2"]);
+
+        let by_folder = list_highlights(&db, None, Some(&group.id)).unwrap();
+        assert_eq!(by_folder.len(), 3);
+        assert!(by_folder.iter().all(|h| h.item_id == a.id || h.item_id == b.id));
+        // Ordered by item id, then offset.
+        let keys: Vec<(String, i64)> =
+            by_folder.iter().map(|h| (h.item_id.clone(), h.start_offset)).collect();
+        let mut sorted = keys.clone();
+        sorted.sort();
+        assert_eq!(keys, sorted);
+
+        assert!(list_highlights(&db, None, None).is_err());
+    }
+
+    #[test]
+    fn test_deleted_items_hide_their_highlights() {
+        let (db, group) = hl_setup();
+        let item = hl_item(&db, &group.id, "Highlight gone", "https://youtu.be/abcDEF12345");
+        put_highlight(&db, hl_input("h1", &item.id, "Some", 0)).unwrap();
+        delete_item(&db, &item.id).unwrap();
+        assert!(list_highlights(&db, Some(&item.id), None).unwrap().is_empty());
+        assert!(list_highlights(&db, None, Some(&group.id)).unwrap().is_empty());
+        // And a deleted item can't take new highlights.
+        assert!(put_highlight(&db, hl_input("h2", &item.id, "Some", 0)).is_err());
+    }
+
+    #[test]
+    fn test_highlight_limits() {
+        let (db, group) = hl_setup();
+        let item = hl_item(&db, &group.id, "Highlight limits", "https://youtu.be/abcDEF12345");
+        let ok = hl_input("h1", &item.id, "Some", 0);
+        assert!(put_highlight(&db, ok.clone()).is_ok());
+
+        let mut bad = ok.clone();
+        bad.quote = "x".repeat(10_001);
+        assert!(put_highlight(&db, bad).is_err());
+        let mut edge = ok.clone();
+        edge.quote = "é".repeat(10_000);
+        edge.end_offset = 10_000;
+        assert!(put_highlight(&db, edge).is_ok());
+
+        let mut bad = ok.clone();
+        bad.note = Some("x".repeat(5_001));
+        assert!(put_highlight(&db, bad).is_err());
+        let mut bad = ok.clone();
+        bad.prefix = "x".repeat(65);
+        assert!(put_highlight(&db, bad).is_err());
+        let mut bad = ok.clone();
+        bad.suffix = "x".repeat(65);
+        assert!(put_highlight(&db, bad).is_err());
+        let mut bad = ok.clone();
+        bad.cited = (0..51)
+            .map(|n| crate::models::HighlightCitation {
+                n: n.to_string(),
+                title: None,
+                url: "https://example.com".into(),
+            })
+            .collect();
+        assert!(put_highlight(&db, bad).is_err());
+        let mut bad = ok.clone();
+        bad.start_offset = -1;
+        assert!(put_highlight(&db, bad).is_err());
+        let mut bad = ok.clone();
+        bad.end_offset = bad.start_offset - 1;
+        assert!(put_highlight(&db, bad).is_err());
+        let mut bad = ok.clone();
+        bad.seconds = Some(-1);
+        assert!(put_highlight(&db, bad).is_err());
+        let mut bad = ok.clone();
+        bad.kind = "audio".into();
+        assert!(put_highlight(&db, bad).is_err());
+        let mut bad = ok;
+        bad.item_id = "nope".into();
+        assert!(put_highlight(&db, bad).is_err());
+    }
+
+    #[test]
+    fn test_highlights_table_upgrades_an_existing_database() {
+        let dir = std::env::temp_dir().join(format!("sourcefold-hl-upgrade-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("old.db");
+        {
+            let db = Database::open(&path).unwrap();
+            db.create_folder("Cars", None).unwrap();
+        }
+        // Simulate a database from before highlights existed.
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch("DROP TABLE highlights;").unwrap();
+        }
+        let db = Database::open(&path).unwrap();
+        assert!(db.get_highlights_for_folder("none").unwrap().is_empty());
+        drop(db);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn test_golden_fixtures() {
         let golden_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -4425,7 +5117,11 @@ mod tests {
                     meta: meta.as_object().cloned().unwrap_or_default(),
                 };
 
-                let built = build_item_file(kind, &fields, body, note);
+                let highlights: Vec<Highlight> = match v.get("highlights") {
+                    Some(h) if !h.is_null() => serde_json::from_value(h.clone()).unwrap(),
+                    _ => Vec::new(),
+                };
+                let built = build_item_file_with_highlights(kind, &fields, body, note, &highlights);
 
                 let filename = path.file_name().unwrap().to_str().unwrap();
                 let base_name = filename.strip_suffix(".input.json").unwrap();

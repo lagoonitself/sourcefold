@@ -1,5 +1,5 @@
-export type ShortcutGroup = "Navigation" | "Projects" | "Groups" | "Sources" | "App";
-export type ShortcutWhen = "global" | "tree" | "list";
+export type ShortcutGroup = "Navigation" | "Projects" | "Groups" | "Sources" | "Reader" | "App";
+export type ShortcutWhen = "global" | "tree" | "list" | "reader";
 
 export interface ShortcutCommand {
   id: string;
@@ -477,6 +477,14 @@ export const SHORTCUT_COMMANDS: ReadonlyArray<ShortcutCommand> = [
     when: "list",
   },
   {
+    id: "list.highlights-tab",
+    title: "Sources or Highlights tab",
+    description: "Switch the group between its Sources and Highlights tabs",
+    group: "Sources",
+    combos: ["Shift+H"],
+    when: "list",
+  },
+  {
     id: "list.delete",
     title: "Delete source",
     description: "Delete selected or focused sources with confirmation",
@@ -486,15 +494,127 @@ export const SHORTCUT_COMMANDS: ReadonlyArray<ShortcutCommand> = [
   },
 ];
 
+/**
+ * Keys inside the reader. They are handled by the reader itself, so they are kept out of
+ * SHORTCUT_COMMANDS (the command palette lists that array and runs its entries by id).
+ */
+export const READER_COMMANDS: ReadonlyArray<ShortcutCommand> = [
+  {
+    id: "reader.focus-next",
+    title: "Next paragraph",
+    description: "Move the paragraph focus down",
+    group: "Reader",
+    combos: ["j"],
+    when: "reader",
+  },
+  {
+    id: "reader.focus-prev",
+    title: "Previous paragraph",
+    description: "Move the paragraph focus up",
+    group: "Reader",
+    combos: ["k"],
+    when: "reader",
+  },
+  {
+    id: "reader.scroll",
+    title: "Scroll",
+    description: "Scroll the text; Space and Shift+Space page down and up",
+    group: "Reader",
+    combos: ["ArrowDown", "ArrowUp", "Space"],
+    when: "reader",
+  },
+  {
+    id: "reader.highlight",
+    title: "Highlight",
+    description: "Highlight the selection, or the focused paragraph or image",
+    group: "Reader",
+    combos: ["h"],
+    when: "reader",
+  },
+  {
+    id: "reader.note",
+    title: "Note on highlight",
+    description: "Add or edit the note on the current highlight",
+    group: "Reader",
+    combos: ["n"],
+    when: "reader",
+  },
+  {
+    id: "reader.copy",
+    title: "Copy with source",
+    description: "Copy the current highlight with its source",
+    group: "Reader",
+    combos: ["c"],
+    when: "reader",
+  },
+  {
+    id: "reader.delete",
+    title: "Delete highlight",
+    description: "Delete the current highlight",
+    group: "Reader",
+    combos: ["Backspace", "Delete"],
+    when: "reader",
+  },
+  {
+    id: "reader.undo",
+    title: "Undo highlight change",
+    description: "Undo the last highlight, note or deletion",
+    group: "Reader",
+    combos: ["z", "Mod+Z"],
+    when: "reader",
+  },
+  {
+    id: "reader.panel",
+    title: "Highlights panel",
+    description: "Show or hide the side panel",
+    group: "Reader",
+    combos: ["Shift+H"],
+    when: "reader",
+  },
+  {
+    id: "reader.prev-source",
+    title: "Previous source",
+    description: "Open the previous source of the group",
+    group: "Reader",
+    combos: ["["],
+    when: "reader",
+  },
+  {
+    id: "reader.next-source",
+    title: "Next source",
+    description: "Open the next source of the group",
+    group: "Reader",
+    combos: ["]"],
+    when: "reader",
+  },
+  {
+    id: "reader.open-original",
+    title: "Open the original",
+    description: "Open the original page in the browser",
+    group: "Reader",
+    combos: ["o"],
+    when: "reader",
+  },
+  {
+    id: "reader.close",
+    title: "Close menu or reader",
+    description: "Closes the small menu first, then a note field, then the reader",
+    group: "Reader",
+    combos: ["Escape"],
+    when: "reader",
+  },
+];
+
 export function getCommandsByGroup(): Record<ShortcutGroup, ShortcutCommand[]> {
   const map: Record<ShortcutGroup, ShortcutCommand[]> = {
     Navigation: [],
     Projects: [],
     Groups: [],
     Sources: [],
+    Reader: [],
     App: [],
   };
-  for (const cmd of SHORTCUT_COMMANDS) {
+  for (const cmd of [...SHORTCUT_COMMANDS, ...READER_COMMANDS]) {
     map[cmd.group].push(cmd);
   }
   return map;

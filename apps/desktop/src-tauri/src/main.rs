@@ -127,6 +127,10 @@ fn main() {
             commands::get_local_copy_enabled,
             commands::set_local_copy_enabled,
             commands::open_storage_folder,
+            commands::list_highlights,
+            commands::put_highlight,
+            commands::update_highlight_note,
+            commands::delete_highlight,
         ])
         .run(tauri::generate_context!())
         .expect("error while running sourcefold desktop application");

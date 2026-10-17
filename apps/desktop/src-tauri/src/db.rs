@@ -6,7 +6,8 @@ use rusqlite::{params, Connection, OptionalExtension, Result};
 use serde_json::Value;
 
 use crate::models::{
-    AddXPostRequest, CheckUrlResult, Folder, Item, RecentXItem, SaveItemRequest, XPost,
+    AddXPostRequest, CheckUrlResult, Folder, Highlight, HighlightCitation, Item, RecentXItem,
+    SaveItemRequest, XPost,
 };
 
 #[derive(Clone)]
@@ -121,6 +122,26 @@ impl Database {
                 version TEXT NOT NULL
             );
 
+            -- Reader highlights (docs/handoff-highlights.md). Hidden with their item when it is
+            -- soft-deleted; removed with it if the row is ever hard-deleted.
+            CREATE TABLE IF NOT EXISTS highlights (
+                id TEXT PRIMARY KEY,
+                item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+                kind TEXT NOT NULL CHECK (kind IN ('text', 'image')),
+                quote TEXT NOT NULL,
+                prefix TEXT NOT NULL DEFAULT '',
+                suffix TEXT NOT NULL DEFAULT '',
+                start_offset INTEGER NOT NULL,
+                end_offset INTEGER NOT NULL,
+                image_src TEXT,
+                note TEXT,
+                seconds INTEGER,
+                cited TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_highlights_item_id ON highlights(item_id);
             CREATE INDEX IF NOT EXISTS idx_items_folder_id ON items(folder_id);
             CREATE INDEX IF NOT EXISTS idx_items_canonical_url ON items(canonical_url);
             CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
@@ -1065,6 +1086,143 @@ impl Database {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(items)
+    }
+
+    // ----------------- Highlights -----------------
+
+    const HIGHLIGHT_COLUMNS: &'static str = "h.id, h.item_id, h.kind, h.quote, h.prefix, h.suffix, h.start_offset, h.end_offset, h.image_src, h.note, h.seconds, h.cited, h.created_at, h.updated_at";
+
+    fn highlight_from_row(row: &rusqlite::Row) -> Result<Highlight> {
+        let cited_str: String = row.get(11)?;
+        let cited: Vec<HighlightCitation> = serde_json::from_str(&cited_str).unwrap_or_default();
+        Ok(Highlight {
+            id: row.get(0)?,
+            item_id: row.get(1)?,
+            kind: row.get(2)?,
+            quote: row.get(3)?,
+            prefix: row.get(4)?,
+            suffix: row.get(5)?,
+            start_offset: row.get(6)?,
+            end_offset: row.get(7)?,
+            image_src: row.get(8)?,
+            note: row.get(9)?,
+            seconds: row.get(10)?,
+            cited,
+            created_at: row.get(12)?,
+            updated_at: row.get(13)?,
+        })
+    }
+
+    /// Creates the highlight, or replaces the one with the same id (keeping its created_at).
+    pub fn put_highlight(&self, h: &Highlight) -> Result<Highlight> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let now = Utc::now().to_rfc3339();
+        let cited = serde_json::to_string(&h.cited).unwrap_or_else(|_| "[]".to_string());
+        conn.execute(
+            "INSERT INTO highlights (id, item_id, kind, quote, prefix, suffix, start_offset, end_offset, image_src, note, seconds, cited, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)
+             ON CONFLICT(id) DO UPDATE SET
+                item_id = excluded.item_id, kind = excluded.kind, quote = excluded.quote,
+                prefix = excluded.prefix, suffix = excluded.suffix,
+                start_offset = excluded.start_offset, end_offset = excluded.end_offset,
+                image_src = excluded.image_src, note = excluded.note, seconds = excluded.seconds,
+                cited = excluded.cited, updated_at = excluded.updated_at",
+            params![
+                h.id, h.item_id, h.kind, h.quote, h.prefix, h.suffix, h.start_offset,
+                h.end_offset, h.image_src, h.note, h.seconds, cited, now
+            ],
+        )?;
+        let sql = format!("SELECT {} FROM highlights h WHERE h.id = ?1", Self::HIGHLIGHT_COLUMNS);
+        conn.query_row(&sql, params![h.id], Self::highlight_from_row)
+    }
+
+    pub fn get_highlight(&self, id: &str) -> Result<Highlight> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let sql = format!("SELECT {} FROM highlights h WHERE h.id = ?1", Self::HIGHLIGHT_COLUMNS);
+        conn.query_row(&sql, params![id], Self::highlight_from_row)
+    }
+
+    /// Highlights of one live item, in file order.
+    pub fn get_highlights_for_item(&self, item_id: &str) -> Result<Vec<Highlight>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let sql = format!(
+            "SELECT {} FROM highlights h JOIN items i ON i.id = h.item_id
+             WHERE h.item_id = ?1 AND i.deleted_at IS NULL
+             ORDER BY h.start_offset ASC, h.created_at ASC, h.id ASC",
+            Self::HIGHLIGHT_COLUMNS
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![item_id], Self::highlight_from_row)?;
+        rows.collect()
+    }
+
+    /// Highlights of the live items directly in a folder.
+    pub fn get_highlights_for_folder(&self, folder_id: &str) -> Result<Vec<Highlight>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let sql = format!(
+            "SELECT {} FROM highlights h JOIN items i ON i.id = h.item_id
+             WHERE i.folder_id = ?1 AND i.deleted_at IS NULL
+             ORDER BY h.item_id ASC, h.start_offset ASC, h.created_at ASC, h.id ASC",
+            Self::HIGHLIGHT_COLUMNS
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![folder_id], Self::highlight_from_row)?;
+        rows.collect()
+    }
+
+    pub fn update_highlight_note(&self, id: &str, note: Option<&str>) -> Result<Highlight> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let now = Utc::now().to_rfc3339();
+        let rows = conn.execute(
+            "UPDATE highlights SET note = ?1, updated_at = ?2 WHERE id = ?3",
+            params![note, now, id],
+        )?;
+        if rows == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        let sql = format!("SELECT {} FROM highlights h WHERE h.id = ?1", Self::HIGHLIGHT_COLUMNS);
+        conn.query_row(&sql, params![id], Self::highlight_from_row)
+    }
+
+    pub fn delete_highlight(&self, id: &str) -> Result<()> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let rows = conn.execute("DELETE FROM highlights WHERE id = ?1", params![id])?;
+        if rows == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        Ok(())
+    }
+
+    /// Moves an item's updated_at (a highlight change counts as an edit of the item).
+    pub fn touch_item(&self, id: &str) -> Result<()> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE items SET updated_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+            params![now, id],
+        )?;
+        Ok(())
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<String>> {

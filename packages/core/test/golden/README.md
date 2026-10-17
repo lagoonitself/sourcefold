@@ -63,5 +63,6 @@ Each input JSON file defines an item to be built into a canonical Markdown file:
 - `pdf-arxiv.input.json` & `pdf-arxiv.md`, `pdf.input.json` & `pdf.md`
 - `hackernews.input.json` & `hackernews.md` (a title with a colon is quoted)
 - `bluesky.input.json` & `bluesky.md`
+- `item-with-highlights.input.json` & `item-with-highlights.md` (a YouTube item with a `highlights` array of full snake_case `Highlight` objects, deliberately out of order: a text highlight with a timestamp and a note, an image, and a text highlight with two citations (one URL needs `<>`), a timestamp over an hour and a note, then the user note. Pins body, then `## My highlights`, then `## My note`.)
 
 The 2026-10 kinds (`youtube`, `web`, `reddit`, `pdf`, `hackernews`, `bluesky`) take their kind fields from `meta`, in the order given in `docs/FILE-FORMAT.md`. Numbers (`score`, `comments`, `points`, `pages`) are written unquoted.

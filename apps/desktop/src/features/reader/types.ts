@@ -1,4 +1,5 @@
 import type { ItemKind } from "@/lib/types";
+import type { ReaderHighlightsController } from "./useReaderHighlights";
 
 export interface ReaderItem {
   id: string;
@@ -30,6 +31,17 @@ export interface ReaderViewProps {
   className?: string;
   scrollRef?: React.RefObject<HTMLDivElement | null>;
   initialTypography?: ReaderTypography;
+  /** The rendered body, parsed once by the modal so highlights and the view agree. */
+  content?: ReaderContent;
+  /** Highlights state and actions; without it the view is a plain reader. */
+  highlights?: ReaderHighlightsController;
+  bodyRef?: React.RefObject<HTMLDivElement | null>;
+}
+
+export interface ReaderContent {
+  parsed: import("./parse-file").ParsedReaderFile | null;
+  bodyHtml: string;
+  noteHtml: string;
 }
 
 export interface ReaderModalProps {
@@ -39,4 +51,11 @@ export interface ReaderModalProps {
   onClose?: () => void;
   className?: string;
   initialTypography?: ReaderTypography;
+  /** All sources of the open group, in list order (for [ and ]). */
+  groupItems?: ReaderItem[];
+  onNavigate?: (item: ReaderItem) => void;
+  /** Scroll to this highlight once the text has loaded. */
+  initialHighlightId?: string | null;
+  onSaveLinks?: (urls: string[], folderId: string) => void;
+  onHighlightsChanged?: (itemId: string) => void;
 }

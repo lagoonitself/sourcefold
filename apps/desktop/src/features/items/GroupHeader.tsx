@@ -15,8 +15,9 @@ import { Input } from "@/components/ui/Input";
 import { Kbd } from "@/components/ui/Kbd";
 import type { Folder } from "@/lib/types";
 import { createFolder } from "@/lib/api";
-import { errorMessage } from "@/lib/utils";
+import { cn, errorMessage } from "@/lib/utils";
 import { isTypingContext } from "../shortcuts/key-utils";
+import { isTabSwitchKey, toggleGroupTab, type GroupTab } from "../highlights/highlight-rows";
 import { AddImageButton } from "./AddImageButton";
 import { onGroupAction } from "./group-actions";
 
@@ -46,6 +47,10 @@ export interface GroupHeaderProps {
   folders: Folder[];
   folderId: string;
   sourceCount: number;
+  /** Highlights in this group; shown on the Highlights tab. */
+  highlightCount?: number;
+  tab?: GroupTab;
+  onTabChange?: (tab: GroupTab) => void;
   isFocusedRegion: boolean;
   onSelectGroup: (id: string) => void;
   onNewNote: () => void;
@@ -58,6 +63,9 @@ export function GroupHeader({
   folders,
   folderId,
   sourceCount,
+  highlightCount = 0,
+  tab = "sources",
+  onTabChange,
   isFocusedRegion,
   onSelectGroup,
   onNewNote,
@@ -88,11 +96,14 @@ export function GroupHeader({
       if (e.key === "N" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         openSubgroupDialog();
+      } else if (onTabChange && isTabSwitchKey(e)) {
+        e.preventDefault();
+        onTabChange(toggleGroupTab(tab));
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isFocusedRegion, openSubgroupDialog]);
+  }, [isFocusedRegion, openSubgroupDialog, onTabChange, tab]);
 
   React.useEffect(
     () =>
@@ -189,7 +200,39 @@ export function GroupHeader({
           </Button>
         </div>
       </div>
-      <div className="border-b border-border" />
+      <div
+        role="tablist"
+        aria-label="Group view"
+        className="flex items-end gap-5 border-b border-border"
+      >
+        {(
+          [
+            { id: "sources", label: "Sources", count: sourceCount },
+            { id: "highlights", label: "Highlights", count: highlightCount },
+          ] as const
+        ).map((entry) => {
+          const active = tab === entry.id;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onTabChange?.(entry.id)}
+              title={entry.id === "highlights" ? "Highlights (Shift+H)" : "Sources (Shift+H)"}
+              className={cn(
+                "-mb-px flex h-10 cursor-pointer items-center gap-1.5 border-b-2 font-sans text-[13px] leading-[18px] transition-colors",
+                active
+                  ? "border-primary font-semibold text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <span>{entry.label}</span>
+              <span className="tabular-nums">{entry.count}</span>
+            </button>
+          );
+        })}
+      </div>
 
       <Dialog open={subgroupOpen} onOpenChange={setSubgroupOpen}>
         <DialogContent>

@@ -9,6 +9,7 @@
  *   *subtitle*            (Substack only)
  *   > Saved from ...      (source line, not on notes)
  *   body
+ *   ## My highlights     (written from the database; never part of the body)
  *   ## My note
  *   the user's note
  *
@@ -29,6 +30,7 @@ const FRONT_MATTER = /^---[ \t]*\n(?:([\s\S]*?)\n)?---[ \t]*(?:\n|$)/;
 const KEY_LINE = /^([A-Za-z_][\w-]*):(?:[ \t]+(.*)|[ \t]*)$/;
 const LIST_ITEM = /^[ \t]+-[ \t]+(.*)$/;
 const NOTE_HEADING = "\n## My note\n";
+const HIGHLIGHTS_HEADING = "\n## My highlights\n";
 const SOURCE_LINE = /^>\s?Saved from /;
 
 /** Decodes one YAML scalar as buildFrontMatter writes it: plain, "double quoted" or 'single'. */
@@ -159,6 +161,11 @@ export function parseReaderFile(text: string): ParsedReaderFile {
     bodyText = padded.slice(0, noteStart);
     note = padded.slice(noteStart + NOTE_HEADING.length).trim() || null;
   }
+
+  // The highlights section sits between the body and the note. It is cut off here so it is never
+  // shown as text and highlight offsets only count the body.
+  const highlightsStart = bodyText.lastIndexOf(HIGHLIGHTS_HEADING);
+  if (highlightsStart !== -1) bodyText = bodyText.slice(0, highlightsStart);
 
   return {
     frontMatter,

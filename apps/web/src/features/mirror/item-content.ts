@@ -11,6 +11,7 @@ import {
 } from "@/lib/google/drive";
 import { getGoogleAccessToken } from "@/lib/google/oauth";
 import { buildItemFile, folderPathOf, type FolderRef } from "@/features/drive/build-file";
+import { loadHighlightsForItems } from "@/features/highlights/load";
 import { GOOGLE_DOC_MIME, googleDocName } from "@/features/drive/google-doc-sync";
 
 export type ItemContent =
@@ -78,9 +79,14 @@ export async function getItemContent(
   if (foldersError) throw new Error(foldersError.message);
   const foldersById = new Map<string, FolderRef>((folders ?? []).map((f) => [f.id, f]));
 
+  const highlights = (await loadHighlightsForItems(db, userId, [item.id])).get(item.id) ?? [];
+
   return {
     ok: true,
-    body: buildItemFile({ ...item, markdown }, folderPathOf(item.folder_id, foldersById)),
+    body: buildItemFile(
+      { ...item, markdown, highlights },
+      folderPathOf(item.folder_id, foldersById),
+    ),
     mimeType: "text/markdown; charset=utf-8",
   };
 }

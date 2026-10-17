@@ -330,3 +330,61 @@ describe("buildItemFile for the 2026-10 source kinds", () => {
     }
   });
 });
+
+describe("highlights in the file", () => {
+  const base: BuildItemInput = {
+    kind: "web",
+    title: "Page",
+    url: "https://example.com/p",
+    saved: "2026-10-16",
+    body: "Body text.",
+  };
+  const one = {
+    id: "a",
+    kind: "text" as const,
+    quote: "Body text.",
+    image_src: null,
+    note: null,
+    seconds: null,
+    cited: [],
+    start_offset: 0,
+    created_at: "2026-10-16T12:00:00.000Z",
+  };
+
+  it("writes the section after the body and before the note", () => {
+    const file = buildItemFile({ ...base, note: "Mine.", highlights: [one] });
+    expect(
+      file.endsWith("Body text.\n\n## My highlights\n\n> Body text.\n\n## My note\n\nMine.\n"),
+    ).toBe(true);
+  });
+
+  it("leaves the section out without highlights", () => {
+    expect(buildItemFile({ ...base, highlights: [] })).toBe(buildItemFile(base));
+    expect(buildItemFile({ ...base, highlights: null })).toBe(buildItemFile(base));
+  });
+
+  it("bodyFromDriveFile strips the highlights and the note", () => {
+    const file = buildItemFile({ ...base, note: "Mine.", highlights: [one] });
+    expect(bodyFromDriveFile(file)).not.toContain("My highlights");
+    expect(bodyFromDriveFile(file)).not.toContain("My note");
+    expect(bodyFromDriveFile(file)).toContain("Body text.");
+  });
+
+  it("strips the highlights when there is no note", () => {
+    const file = buildItemFile({ ...base, highlights: [one] });
+    expect(bodyFromDriveFile(file).trimEnd().endsWith("Body text.")).toBe(true);
+  });
+
+  it("rebuilding from a Drive copy never duplicates the section", () => {
+    const input = { ...base, note: "Mine.", highlights: [one] };
+    const first = buildItemFile(input);
+    const second = buildItemFile({ ...input, markdown: first });
+    expect(second).toBe(first);
+    expect(second.match(/## My highlights/g)).toHaveLength(1);
+  });
+
+  it("also strips it from a body passed in as markdown", () => {
+    const withSection = "Body text.\n\n## My highlights\n\n> old\n";
+    expect(buildItemFile({ ...base, body: null, markdown: withSection })).toBe(buildItemFile(base));
+  });
+});

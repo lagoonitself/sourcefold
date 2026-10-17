@@ -206,3 +206,59 @@ pub struct NativeHostStatus {
     pub host_path: Option<String>,
     pub message: Option<String>,
 }
+
+// -----------------------------------------------------------------------------
+// Highlights (contract: docs/handoff-highlights.md)
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HighlightCitation {
+    pub n: String,
+    #[serde(default)]
+    pub title: Option<String>,
+    pub url: String,
+}
+
+/// Mirrors `Highlight` in packages/core/src/highlights.ts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Highlight {
+    pub id: String,
+    pub item_id: String,
+    pub kind: String, // text | image
+    pub quote: String,
+    pub prefix: String,
+    pub suffix: String,
+    pub start_offset: i64,
+    pub end_offset: i64,
+    #[serde(default)]
+    pub image_src: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub seconds: Option<i64>,
+    #[serde(default)]
+    pub cited: Vec<HighlightCitation>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// What the client sends to create or replace a highlight (`HighlightInput`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HighlightInput {
+    pub id: String,
+    pub item_id: String,
+    pub kind: String,
+    pub quote: String,
+    pub prefix: String,
+    pub suffix: String,
+    pub start_offset: i64,
+    pub end_offset: i64,
+    #[serde(default)]
+    pub image_src: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub seconds: Option<i64>,
+    #[serde(default)]
+    pub cited: Vec<HighlightCitation>,
+}

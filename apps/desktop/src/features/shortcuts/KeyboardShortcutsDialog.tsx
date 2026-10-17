@@ -16,7 +16,14 @@ export interface KeyboardShortcutsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const GROUP_ORDER: ShortcutGroup[] = ["Navigation", "Projects", "Groups", "Sources", "App"];
+const GROUP_ORDER: ShortcutGroup[] = [
+  "Navigation",
+  "Projects",
+  "Groups",
+  "Sources",
+  "Reader",
+  "App",
+];
 
 export function KeyboardShortcutsDialog({ open, onOpenChange }: KeyboardShortcutsDialogProps) {
   const isMac = React.useMemo(() => isMacPlatform(), []);

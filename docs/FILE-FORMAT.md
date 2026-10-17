@@ -50,9 +50,42 @@ Every `.md` file is UTF-8 with `\n` line endings, ends with one newline, and has
 
 <body>
 
+## My highlights
+
+<the user's highlights, only if there are any>
+
 ## My note
 
 <the user's note, only if there is one>
+```
+
+### My highlights
+
+The passages the user highlighted in the reader. The database is the source of truth; the section is rebuilt from it on every save (`buildHighlightsSection` in `packages/core/src/highlights.ts`, `build_item_file` in the desktop). Both are checked against `packages/core/test/golden/item-with-highlights.md`.
+
+- The section comes after the body and before `## My note`. It is left out when there are no highlights.
+- Highlights are listed by `start_offset`, then `created_at`, then `id`.
+- Each highlight is one block; blocks are separated by one blank line:
+  - Text: `> ` followed by the quote with every run of whitespace (including line breaks) collapsed to one space and trimmed.
+  - Image: `![<quote, whitespace collapsed>](<image_src>)`.
+- If the highlight has any details, one more line follows its block (after a blank line), with the parts that apply joined by `·`, in this order:
+  1. Timestamp, when `seconds` is set: `[<time>](https://youtu.be/<video id>?t=<seconds>)`. `<time>` is `M:SS` under an hour, `H:MM:SS` from an hour (the transcript's own format). The video id comes from the item's URL (`watch?v=`, `youtu.be/`, `/shorts/`, `/live/`, `/embed/`); without one, the time is written as plain text.
+  2. Citations, when the passage cites references: `Cited: ` then each as `[<domain>](<url>)` joined by `, `. `<domain>` is the URL's host without a leading `www.`. A URL containing a space or a parenthesis is written `<url>` inside the parentheses, as the references list does.
+  3. Note, when set: `Note: ` then the note with whitespace collapsed to one space.
+- Readers and `bodyFromDriveFile` cut the section off the body (the last `\n## My highlights\n` after removing `## My note`), so the body and the highlight offsets never include it.
+
+```markdown
+## My highlights
+
+> The exhaust spins a turbine, and the turbine drives a compressor.
+
+[0:47](https://youtu.be/abcDEF12345?t=47) · Note: Intro line for the script
+
+![Cutaway of a turbocharger](https://example.com/turbo.png)
+
+> Turbo lag was the main obstacle to early adoption.
+
+Cited: [sae.org](https://www.sae.org/paper) · Note: Check the date
 ```
 
 ### Front matter

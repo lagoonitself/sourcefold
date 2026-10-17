@@ -65,10 +65,11 @@ Copy format, one quote:
 ### Data
 
 - New table `highlights`: `id`, `user_id`, `item_id`, `kind` (`text` | `image`), `quote`, `prefix` and `suffix` (about 32 characters each side), `start` and `end` (offsets in the rendered body text), `image_src`, `note`, `seconds` (YouTube), `cited` (JSON list of `{ n, title, url }`), `created_at`, `updated_at`, `deleted_at`.
-- Signed in: Supabase table with RLS, `GET/POST/PATCH/DELETE /api/highlights` (token routes filter by `user_id`, see HANDOFF lessons). The desktop writes to its SQLite first, then syncs, like other changes.
+- Signed in: Supabase table with RLS, `GET/PUT/PATCH/DELETE /api/highlights` (token routes filter by `user_id`, see HANDOFF lessons). The desktop calls the web API directly, like every other signed-in change, and shows the highlight before the request finishes.
 - Offline: the same table in `sourcefold.db`.
 - Anchoring: find the highlight by `start`/`end` first; if the text there doesn't match `quote`, search for `prefix + quote + suffix`; if that fails, show the highlight in the panel as "Couldn't find this passage in the current text" and keep it.
 - Highlights are small text, so they stay in Supabase like notes; they are not cleared after the Drive push.
+- They are also written into the source's own `.md` file as a `## My highlights` section (Drive, local copy and offline files), so any Markdown app can read them. The exact build contract is `docs/handoff-highlights.md`.
 
 ### Done when
 
@@ -141,8 +142,8 @@ Facts checked 2026-10-17 (Google model page, Hugging Face ONNX card): open weigh
 
 Script document, source-list builder for whole scripts, claim check board, asking questions of sources (no LLM for now), visuals list, phone app, Google export. These come after, built on highlights and passages.
 
-## Open questions for the owner
+## Owner's decisions (2026-10-17)
 
-1. Write highlights into the saved `.md` files (a `## Highlights` section in Drive and the local copy, readable in Obsidian), or keep them only in the app? Recommendation: keep them in the app for phase 1, decide after using it.
-2. Automatic highlight on select (Readwise style) as the default? Recommendation: yes, with `Alt` to select without highlighting and a switch to turn it off.
-3. Should the web app show highlights (read only)? Recommendation: not in phase 1; they sync to the account, so nothing is lost.
+1. Highlights are kept in the database and written into the source's `.md` file as a `## My highlights` section, so they open in any Markdown app.
+2. Selecting text highlights it by default; `Alt` selects without highlighting; a switch turns it off.
+3. The web app stores and serves highlights but doesn't show them in phase 1.

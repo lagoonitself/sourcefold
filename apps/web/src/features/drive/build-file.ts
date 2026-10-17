@@ -3,6 +3,7 @@ import {
   safeName,
   uniqueNames,
   type BuildItemInput,
+  type Highlight,
 } from "@sourcefold/core";
 
 export interface FolderRef {
@@ -21,6 +22,7 @@ export interface ItemData {
   markdown?: string | null;
   meta?: unknown;
   note?: string | null;
+  highlights?: Highlight[] | null;
 }
 
 export interface SiblingItem {

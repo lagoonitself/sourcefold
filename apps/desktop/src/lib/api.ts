@@ -5,6 +5,7 @@ import {
   remoteFetch,
   SessionExpiredError,
 } from "./remote-client";
+import type { Highlight, HighlightInput } from "@sourcefold/core";
 import type {
   AddXPostRequest,
   CaptureRequest,
@@ -320,6 +321,53 @@ export async function updateItemNote(id: string, note: string | null): Promise<v
     method: "PATCH",
     body: JSON.stringify({ note }),
   });
+}
+
+// ----------------- HIGHLIGHTS -----------------
+// Contract: docs/handoff-highlights.md.
+
+export async function getHighlights(
+  scope: { itemId: string } | { folderId: string },
+): Promise<Highlight[]> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Highlight[]>("list_highlights", {
+      itemId: "itemId" in scope ? scope.itemId : undefined,
+      folderId: "folderId" in scope ? scope.folderId : undefined,
+    });
+  }
+  const query =
+    "itemId" in scope
+      ? `item=${encodeURIComponent(scope.itemId)}`
+      : `folder=${encodeURIComponent(scope.folderId)}`;
+  return await httpFetch<Highlight[]>(`/highlights?${query}`);
+}
+
+export async function putHighlight(highlight: HighlightInput): Promise<Highlight> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Highlight>("put_highlight", { highlight });
+  }
+  return await httpFetch<Highlight>(`/highlights/${encodeURIComponent(highlight.id)}`, {
+    method: "PUT",
+    body: JSON.stringify(highlight),
+  });
+}
+
+export async function updateHighlightNote(id: string, note: string | null): Promise<Highlight> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Highlight>("update_highlight_note", { id, note });
+  }
+  return await httpFetch<Highlight>(`/highlights/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function deleteHighlight(id: string): Promise<void> {
+  if (shouldUseTauri()) {
+    await tauriInvoke<null>("delete_highlight", { id });
+    return;
+  }
+  await httpFetch<unknown>(`/highlights/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function createStandaloneNote(

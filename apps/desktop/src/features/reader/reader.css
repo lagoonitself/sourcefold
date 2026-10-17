@@ -243,3 +243,74 @@
 .reader-note > :last-child {
   margin-bottom: 0;
 }
+
+/* Highlights: soft green from the accent token, a stronger bottom edge, readable in both themes. */
+.reader-prose mark.reader-highlight {
+  background-color: color-mix(in srgb, var(--primary) 14%, var(--accent));
+  color: inherit;
+  border-bottom: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.reader-prose mark.reader-highlight.is-current {
+  background-color: color-mix(in srgb, var(--primary) 30%, var(--accent));
+  border-bottom-color: var(--primary);
+}
+
+.reader-prose mark.reader-highlight.is-flash,
+.reader-prose img.reader-image-highlight.is-flash {
+  background-color: color-mix(in srgb, var(--primary) 38%, var(--accent));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reader-prose mark.reader-highlight {
+    transition: background-color 120ms ease;
+  }
+}
+
+.reader-prose img.reader-image-highlight {
+  outline: 3px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  outline-offset: 2px;
+  cursor: pointer;
+}
+
+.reader-prose img.reader-image-highlight.is-current {
+  outline-color: var(--primary);
+}
+
+/* Keyboard focus: a 2px bar of the primary colour to the left of the block (j / k). */
+.reader-prose .reader-block-focus {
+  position: relative;
+  scroll-margin-block: 3rem;
+}
+
+.reader-prose .reader-block-focus::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 0.15em;
+  bottom: 0.15em;
+  width: 2px;
+  border-radius: 1px;
+  background-color: var(--primary);
+}
+
+.reader-prose li.reader-block-focus::before {
+  left: -2.1rem;
+}
+
+.reader-prose img.reader-block-focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+
+.reader-prose img.reader-block-focus::before,
+.reader-prose tr.reader-block-focus::before {
+  content: none;
+}
+
+.reader-prose tr.reader-block-focus > :first-child {
+  box-shadow: inset 2px 0 0 var(--primary);
+}

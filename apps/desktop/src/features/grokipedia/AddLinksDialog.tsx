@@ -30,6 +30,8 @@ export interface AddLinksDialogProps {
   onOpenChange: (open: boolean) => void;
   folders: Folder[];
   defaultFolderId: string | null;
+  /** Starts the paste box with this text when the dialog opens (e.g. links to save). */
+  initialText?: string;
   onFinished: () => Promise<void>;
 }
 
@@ -95,6 +97,7 @@ export function AddLinksDialog({
   onOpenChange,
   folders,
   defaultFolderId,
+  initialText,
   onFinished,
 }: AddLinksDialogProps) {
   const [selectedFolderId, setSelectedFolderId] = React.useState<string>("");
@@ -142,6 +145,10 @@ export function AddLinksDialog({
       setSelectedFolderId(groupOptions[0].id);
     }
   }, [open, defaultFolderId, groupOptions]);
+
+  React.useEffect(() => {
+    if (open && initialText) setText(initialText);
+  }, [open, initialText]);
 
   const links = React.useMemo(() => parseLinks(text), [text]);
   const hasPublication = links.valid.some((l) => l.source === "publication");

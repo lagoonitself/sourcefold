@@ -145,6 +145,68 @@ export type Database = {
         }
         Relationships: []
       }
+      highlights: {
+        Row: {
+          cited: Json
+          created_at: string
+          end_offset: number
+          id: string
+          image_src: string | null
+          item_id: string
+          kind: string
+          note: string | null
+          prefix: string
+          quote: string
+          seconds: number | null
+          start_offset: number
+          suffix: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cited?: Json
+          created_at?: string
+          end_offset: number
+          id?: string
+          image_src?: string | null
+          item_id: string
+          kind: string
+          note?: string | null
+          prefix?: string
+          quote: string
+          seconds?: number | null
+          start_offset: number
+          suffix?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          cited?: Json
+          created_at?: string
+          end_offset?: number
+          id?: string
+          image_src?: string | null
+          item_id?: string
+          kind?: string
+          note?: string | null
+          prefix?: string
+          quote?: string
+          seconds?: number | null
+          start_offset?: number
+          suffix?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "highlights_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       items: {
         Row: {
           canonical_url: string | null

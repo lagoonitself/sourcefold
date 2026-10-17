@@ -27,6 +27,9 @@ import { AddLinksDialog } from "@/features/grokipedia/AddLinksDialog";
 import { SearchDialog } from "@/features/search/SearchDialog";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { NoteDialog } from "@/features/items/NoteDialog";
+import { HighlightsList } from "@/features/highlights/HighlightsList";
+import { useGroupHighlights } from "@/features/highlights/use-group-highlights";
+import { buildHighlightRows, tabFor, type GroupTab } from "@/features/highlights/highlight-rows";
 import { ReaderModal } from "@/features/reader/ReaderModal";
 import { openSource, opensInReader } from "@/features/reader/open-decision";
 import { CommandPalette } from "@/features/command-palette/CommandPalette";
@@ -99,6 +102,27 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
   const [projectSwitcherOpen, setProjectSwitcherOpen] = React.useState(false);
   const [readerItem, setReaderItem] = React.useState<Item | null>(null);
+  // Set when the reader is opened from the Highlights tab; cleared by any other way of opening it.
+  const [readerHighlightId, setReaderHighlightId] = React.useState<string | null>(null);
+  // Links the reader asked to save (one per line), and the group they go to.
+  const [addLinksText, setAddLinksText] = React.useState("");
+  const [addLinksFolderId, setAddLinksFolderId] = React.useState<string | null>(null);
+  // The group view's tab; another group always opens on Sources.
+  const [chosenTab, setChosenTab] = React.useState<{ folderId: string | null; tab: GroupTab }>({
+    folderId: null,
+    tab: "sources",
+  });
+  const groupTab = tabFor(chosenTab, activeFolderId);
+  const setGroupTab = React.useCallback(
+    (tab: GroupTab) => setChosenTab({ folderId: activeFolderIdRef.current, tab }),
+    [],
+  );
+  const groupHighlights = useGroupHighlights(activeFolderId);
+  const highlightCount = React.useMemo(
+    () => buildHighlightRows(groupHighlights.highlights, items).length,
+    [groupHighlights.highlights, items],
+  );
+  const refreshHighlights = groupHighlights.refresh;
 
   // Archive project confirm dialog
   const [archiveConfirmOpen, setArchiveConfirmOpen] = React.useState(false);
@@ -571,6 +595,9 @@ export function App() {
               folders={folders}
               folderId={activeFolderId}
               sourceCount={items.length}
+              highlightCount={highlightCount}
+              tab={groupTab}
+              onTabChange={setGroupTab}
               isFocusedRegion={activeRegion === "list"}
               onSelectGroup={(id) => {
                 setActiveFolderId(id);
@@ -579,24 +606,46 @@ export function App() {
               onNewNote={() => setNewNoteOpen(true)}
               onRefresh={handleRefresh}
             />
-            <SubgroupList
-              folders={folders}
-              folderId={activeFolderId}
-              onSelectGroup={(id) => {
-                setActiveFolderId(id);
-                setFocusedFolderId(id);
-              }}
-            />
-            <ItemList
-              key={activeFolderId}
-              items={items}
-              folders={folders}
-              isFocusedRegion={activeRegion === "list"}
-              focusedItemId={focusedItemId}
-              onFocusedItemChange={setFocusedItemId}
-              onRefresh={refreshItems}
-              onOpenReader={(item) => setReaderItem(item)}
-            />
+            {groupTab === "highlights" ? (
+              <HighlightsList
+                key={activeFolderId}
+                items={items}
+                highlights={groupHighlights.highlights}
+                loading={groupHighlights.loading}
+                error={groupHighlights.error}
+                isFocusedRegion={activeRegion === "list"}
+                onRefresh={refreshHighlights}
+                onOpenHighlight={(item, highlightId) => {
+                  setFocusedItemId(item.id);
+                  setReaderHighlightId(highlightId);
+                  setReaderItem(item);
+                }}
+              />
+            ) : (
+              <>
+                <SubgroupList
+                  folders={folders}
+                  folderId={activeFolderId}
+                  onSelectGroup={(id) => {
+                    setActiveFolderId(id);
+                    setFocusedFolderId(id);
+                  }}
+                />
+                <ItemList
+                  key={activeFolderId}
+                  items={items}
+                  folders={folders}
+                  isFocusedRegion={activeRegion === "list"}
+                  focusedItemId={focusedItemId}
+                  onFocusedItemChange={setFocusedItemId}
+                  onRefresh={refreshItems}
+                  onOpenReader={(item) => {
+                    setReaderHighlightId(null);
+                    setReaderItem(item);
+                  }}
+                />
+              </>
+            )}
           </div>
         ) : hasProjects && isProjectWithNoGroups ? (
           <div className="flex h-full flex-col items-center justify-center p-8 text-center">
@@ -652,7 +701,10 @@ export function App() {
                   toast.error(errorMessage(err, "Couldn't open that image.")),
                 );
               },
-              reader: (source) => setReaderItem(source),
+              reader: (source) => {
+                setReaderHighlightId(null);
+                setReaderItem(source);
+              },
               browser: (url) => void openUrl(url),
             },
             options,
@@ -672,6 +724,7 @@ export function App() {
           setFocusedItemId(item.id);
           setActiveRegion("list");
           if (opensInReader(item)) {
+            setReaderHighlightId(null);
             setReaderItem(item);
           }
         }}
@@ -681,9 +734,16 @@ export function App() {
         <>
           <AddLinksDialog
             open={addLinksOpen}
-            onOpenChange={setAddLinksOpen}
+            onOpenChange={(open) => {
+              setAddLinksOpen(open);
+              if (!open) {
+                setAddLinksText("");
+                setAddLinksFolderId(null);
+              }
+            }}
             folders={folders}
-            defaultFolderId={activeFolderId}
+            defaultFolderId={addLinksFolderId ?? activeFolderId}
+            initialText={addLinksText}
             onFinished={async () => {
               await refreshItems();
               await refreshFolders();
@@ -705,8 +765,29 @@ export function App() {
       <ReaderModal
         item={readerItem}
         open={Boolean(readerItem)}
-        onOpenChange={(open) => !open && setReaderItem(null)}
-        onClose={() => setReaderItem(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReaderItem(null);
+            setReaderHighlightId(null);
+          }
+        }}
+        onClose={() => {
+          setReaderItem(null);
+          setReaderHighlightId(null);
+        }}
+        groupItems={items}
+        onNavigate={(next) => {
+          setReaderHighlightId(null);
+          setFocusedItemId(next.id);
+          setReaderItem(items.find((i) => i.id === next.id) ?? (next as unknown as Item));
+        }}
+        initialHighlightId={readerHighlightId}
+        onHighlightsChanged={() => void refreshHighlights()}
+        onSaveLinks={(urls, folderId) => {
+          setAddLinksText(urls.join("\n"));
+          setAddLinksFolderId(folderId);
+          setAddLinksOpen(true);
+        }}
       />
 
       <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />

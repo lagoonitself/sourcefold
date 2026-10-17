@@ -4,7 +4,7 @@ Read this first in any new session. When the user says "continue", pick up at **
 
 This repo is public. Don't put account emails, project IDs, client IDs or other deployment details here; keep them in the agent's private memory.
 
-Last updated: 2026-10-16, after the v0.2.0 release (Windows, macOS, extension) and listing every source kind in the README.
+Last updated: 2026-10-17, after planning the reader, highlights and search work (`docs/PLAN-reader-search.md`).
 
 ## What we're building
 
@@ -77,6 +77,7 @@ Lessons worth keeping:
 
 ## Next steps
 
+1. **Build phase 1 of `docs/PLAN-reader-search.md`: highlights in the desktop reader.** The owner chose this direction on 2026-10-17: Sourcefold should be the one app creators research in, starting with reading, highlighting and search. No LLM for now; no phone app or Google export. Order: phase 1 (highlights, side panel, cited sources for Grokipedia and Wikipedia, next/previous source, group Highlights tab with Copy with sources), phase 2 (keyword search inside sources, SQLite FTS5), phase 3 (search by meaning with EmbeddingGemma 2 on the GPU; do the runtime spike first). The plan's "UX rules" are the quality bar for every step. Ask the owner the plan's three open questions before writing the highlight storage. The owner checks below can run in parallel.
 1. **Owner checks the friends release.** Open the v0.2.0 release on GitHub and send friends the link. Check that a second Google account (not the owner's) can sign in on the website; if it gets "This account can't use Sourcefold" or Google says the app is in testing, publish the OAuth app in Google Cloud (Google Auth Platform → Audience → Publish app). Install the Windows `.exe` from the release and check it opens with the website address already filled in. Ask a Mac friend to try the `.dmg` with the steps on the release page.
 1. **Owner tests the new source types.** Built 2026-10-16 (see `docs/handoff-more-sources.md` for the decisions). Migrations `20261015000000_wikipedia_kind.sql` and `20261016000000_more_source_kinds.sql` were applied to the owner's database and `main` is deployed (2026-10-16). The extension is rebuilt: reload it in Chrome. Install the new desktop build (or restart `npm run tauri dev -w @sourcefold/desktop`).
    - **YouTube, desktop Add links:** paste a video with captions (e.g. `https://www.youtube.com/watch?v=aircAruvnKk`). It saves with `## Transcript` paragraphs, each starting with a `[m:ss]` link that opens the video at that second, and `## Description` at the end; front matter has channel, published, duration, language and `captions: manual`. Paste a video without captions: the row says "Not saved" with "No captions on this video", and the list shows that reason. Paste a playlist (`https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi`) and a channel (`https://www.youtube.com/@3blue1brown`): one row per video appears (channels list up to 500, newest first) and each saves. Press Stop mid-way and check the remaining rows go back to Waiting.
@@ -118,6 +119,6 @@ Lessons worth keeping:
 
 1. **Ideas for later** (none started):
    - Chrome Web Store listing for the extension.
-   - Full-text search (title search only today).
+   - Full-text search: now planned in `docs/PLAN-reader-search.md`.
    - Item reordering in desktop app (no API yet).
    - Import an offline desktop library into the account.

@@ -169,6 +169,16 @@ describe("buildItemFile for the 2026-10 source kinds", () => {
     expect(output).not.toContain("auto-generated captions");
   });
 
+  it("says when YouTube machine-translated the transcript", () => {
+    const output = buildItemFile(
+      newKind({ kind: "youtube", meta: { channel: "Someone", captions: "translated" } }),
+      "",
+    );
+    expect(output).toContain(
+      "on 2026-10-16. By Someone. Transcript machine-translated into English by YouTube.\n",
+    );
+  });
+
   it("uses the site name for a web page, else the host without www", () => {
     const withSite = buildItemFile(
       newKind({

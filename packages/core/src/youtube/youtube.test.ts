@@ -3,7 +3,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SourceError, type SourceFetch, type SourceFetchRequest } from "../source-fetch";
-import { extractJsonAfter, fetchYouTubeCapture, YOUTUBE_NO_CAPTIONS_REASON } from "./fetch";
+import {
+  extractJsonAfter,
+  fetchYouTubeCapture,
+  isYouTubeRateLimit,
+  YOUTUBE_NO_CAPTIONS_REASON,
+  YOUTUBE_NO_ENGLISH_MESSAGE,
+} from "./fetch";
 import { formatTimestamp, transcriptParagraphs, youTubeBodyMarkdown } from "./markdown";
 import { cleanCaptionText, parseTimedText, type CaptionSegment } from "./timedtext";
 import { chooseCaptionTrack, timedTextUrl, type CaptionTrack } from "./tracks";
@@ -47,23 +53,40 @@ describe("chooseCaptionTrack", () => {
     ...(kind ? { kind } : {}),
   });
 
-  it("prefers written captions in the spoken language", () => {
+  it("prefers written English, the original audio's track first", () => {
     const tracks = [track("fr"), track("en-GB"), track("en", "asr")];
-    expect(chooseCaptionTrack(tracks)?.languageCode).toBe("en-GB");
+    expect(chooseCaptionTrack(tracks)).toEqual({ track: tracks[1], translate: false });
     const exact = [track("fr"), track("en-GB"), track("en"), track("en", "asr")];
-    expect(chooseCaptionTrack(exact)).toBe(exact[2]);
+    expect(chooseCaptionTrack(exact)?.track).toBe(exact[2]);
+    expect(chooseCaptionTrack(exact, 1)?.track).toBe(exact[1]);
   });
 
-  it("falls back to the auto-generated track", () => {
-    expect(chooseCaptionTrack([track("de"), track("ko", "asr")])?.kind).toBe("asr");
+  it("takes written English over the original audio's other-language captions", () => {
+    const tracks = [track("es", "asr"), track("es"), track("en")];
+    expect(chooseCaptionTrack(tracks, 0)).toEqual({ track: tracks[2], translate: false });
   });
 
-  it("without auto captions takes YouTube's default, then English, then the first", () => {
-    const tracks = [track("ja"), track("es"), track("en")];
-    expect(chooseCaptionTrack(tracks, 1)?.languageCode).toBe("es");
-    expect(chooseCaptionTrack(tracks)?.languageCode).toBe("en");
-    expect(chooseCaptionTrack([track("ja"), track("es")])?.languageCode).toBe("ja");
+  it("on an AI-dubbed video takes the original audio's English, not the first by name", () => {
+    // As YouTube lists them: one auto-generated track per dubbed language, sorted by name.
+    const tracks = [track("ar", "asr"), track("bn", "asr"), track("en", "asr"), track("hi", "asr")];
+    expect(chooseCaptionTrack(tracks, 2)).toEqual({ track: tracks[2], translate: false });
+    expect(chooseCaptionTrack(tracks)).toEqual({ track: tracks[2], translate: false });
+  });
+
+  it("without English asks YouTube to translate the original audio's track", () => {
+    const tracks = [track("de", "asr"), track("ja", "asr"), track("ja")];
+    expect(chooseCaptionTrack(tracks, 1)).toEqual({ track: tracks[1], translate: true });
+    expect(chooseCaptionTrack(tracks)).toEqual({ track: tracks[2], translate: true });
+    expect(chooseCaptionTrack([track("ko", "asr")])).toEqual({
+      track: track("ko", "asr"),
+      translate: true,
+    });
     expect(chooseCaptionTrack([])).toBeNull();
+  });
+
+  it("ignores an original index that points at no usable track", () => {
+    const tracks = [track("en", "asr")];
+    expect(chooseCaptionTrack(tracks, 5)?.track).toBe(tracks[0]);
   });
 
   it("asks for the default XML form", () => {
@@ -73,6 +96,9 @@ describe("chooseCaptionTrack", () => {
     expect(
       timedTextUrl({ baseUrl: "https://x/api/timedtext?fmt=srv3&v=1", languageCode: "en" }),
     ).toBe("https://x/api/timedtext?v=1");
+    expect(
+      timedTextUrl({ baseUrl: "https://x/api/timedtext?v=1&fmt=srv3", languageCode: "ja" }, "en"),
+    ).toBe("https://x/api/timedtext?v=1&tlang=en");
   });
 });
 
@@ -214,7 +240,7 @@ describe("fetchYouTubeCapture", () => {
     expect(player.url).toBe("https://www.youtube.com/youtubei/v1/player?key=AIzaTESTKEY_123");
     expect(player.method).toBe("POST");
     expect(JSON.parse(player.body!)).toEqual({
-      context: { client: { clientName: "ANDROID", clientVersion: "20.10.38" } },
+      context: { client: { clientName: "ANDROID", clientVersion: "20.10.38", hl: "en" } },
       videoId: "aircAruvnKk",
     });
     const captions = requests.find((r) => r.url.includes("/api/timedtext"))!;
@@ -236,6 +262,73 @@ describe("fetchYouTubeCapture", () => {
     });
     expect(result.status === "ok" && result.capture.meta.captions).toBe("auto-generated");
     expect(result.status === "ok" && result.capture.markdown).toContain("[Music] This is a three.");
+  });
+
+  // Tracks shaped like an AI-dubbed video's (The Economist, XuoqKYxDHVc, 2026-10-17): one
+  // auto-generated track per audio language, sorted by name, every audio track pointing at the
+  // English original first.
+  function dubbedPlayer(languages: string[], originalIndex: number) {
+    const player = JSON.parse(fixture("player-ok.json"));
+    const captionTracks = languages.map((code) => ({
+      baseUrl: `https://www.youtube.com/api/timedtext?v=aircAruvnKk&kind=asr&lang=${code}&fmt=srv3`,
+      languageCode: code,
+      kind: "asr",
+    }));
+    const indices = [
+      originalIndex,
+      ...languages.map((_, i) => i).filter((i) => i !== originalIndex),
+    ];
+    player.captions.playerCaptionsTracklistRenderer = {
+      captionTracks,
+      audioTracks: languages.map(() => ({ captionTrackIndices: indices })),
+      defaultAudioTrackIndex: 0,
+    };
+    return player;
+  }
+
+  it("saves English from an AI-dubbed video whose first track is Arabic", async () => {
+    const player = dubbedPlayer(["ar", "bn", "nl-NL", "en", "fr-FR"], 3);
+    const { fetch, requests } = fakeFetch(
+      youTubeRoutes({ player, captions: fixture("timedtext-asr-srv3.xml") }),
+    );
+    const result = await fetchYouTubeCapture("https://www.youtube.com/watch?v=aircAruvnKk", {
+      fetch,
+    });
+    expect(result.status === "ok" && result.capture.meta.language).toBe("en");
+    const captions = requests.find((r) => r.url.includes("/api/timedtext"))!;
+    expect(captions.url).toContain("lang=en");
+    expect(captions.url).not.toContain("tlang");
+  });
+
+  it("asks YouTube to translate a video with no English captions", async () => {
+    const player = dubbedPlayer(["de-DE", "ja"], 1);
+    const { fetch, requests } = fakeFetch(
+      youTubeRoutes({ player, captions: fixture("timedtext-asr-srv3.xml") }),
+    );
+    const result = await fetchYouTubeCapture("https://www.youtube.com/watch?v=aircAruvnKk", {
+      fetch,
+    });
+    expect(result.status === "ok" && result.capture.meta).toMatchObject({
+      language: "en",
+      captions: "translated",
+    });
+    const captions = requests.find((r) => r.url.includes("/api/timedtext"))!;
+    expect(captions.url).toContain("lang=ja");
+    expect(captions.url).toContain("&tlang=en");
+  });
+
+  it("explains when YouTube refuses to translate, without calling it a rate limit", async () => {
+    const player = dubbedPlayer(["ja"], 0);
+    const routes = youTubeRoutes({ player });
+    const { fetch } = fakeFetch((request) =>
+      request.url.includes("/api/timedtext") ? { status: 429, text: "" } : routes(request),
+    );
+    const error = await fetchYouTubeCapture("https://www.youtube.com/watch?v=aircAruvnKk", {
+      fetch,
+    }).catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(SourceError);
+    expect((error as SourceError).message).toBe(YOUTUBE_NO_ENGLISH_MESSAGE);
+    expect(isYouTubeRateLimit(error)).toBe(false);
   });
 
   it("returns unavailable when the video has no captions", async () => {
@@ -284,14 +377,18 @@ describe("fetchYouTubeCapture", () => {
 
   it("explains rate limits, bot checks and empty captions", async () => {
     const limited = fakeFetch(() => ({ status: 429, text: "" }));
-    await expect(
-      fetchYouTubeCapture("https://youtu.be/aircAruvnKk", { fetch: limited.fetch }),
-    ).rejects.toMatchObject({ code: "blocked" });
+    const limitedError = await fetchYouTubeCapture("https://youtu.be/aircAruvnKk", {
+      fetch: limited.fetch,
+    }).catch((err: unknown) => err);
+    expect(limitedError).toMatchObject({ code: "blocked" });
+    expect(isYouTubeRateLimit(limitedError)).toBe(true);
 
     const captcha = fakeFetch(youTubeRoutes({ watch: '<div class="g-recaptcha"></div>' }));
-    await expect(
-      fetchYouTubeCapture("https://youtu.be/aircAruvnKk", { fetch: captcha.fetch }),
-    ).rejects.toMatchObject({ code: "blocked" });
+    const captchaError = await fetchYouTubeCapture("https://youtu.be/aircAruvnKk", {
+      fetch: captcha.fetch,
+    }).catch((err: unknown) => err);
+    expect(captchaError).toMatchObject({ code: "blocked" });
+    expect(isYouTubeRateLimit(captchaError)).toBe(true);
 
     const empty = fakeFetch(youTubeRoutes({ captions: "" }));
     await expect(

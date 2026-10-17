@@ -8,6 +8,7 @@ import {
   isWikipediaArticleUrl,
   parseYouTubeLink,
 } from "@sourcefold/core";
+import { isYouTubeRateLimit } from "@sourcefold/core/capture";
 import { Button } from "@/components/ui/Button";
 import {
   Dialog,
@@ -22,6 +23,13 @@ import { checkUrl, saveGrokipedia } from "@/lib/api";
 import { findPublicationPosts, saveSubstackPost } from "../substack/substack-client";
 import { saveWikipediaArticle } from "../wikipedia/wikipedia-client";
 import { findYouTubeVideos, saveSourceLink } from "../sources/source-client";
+import {
+  YOUTUBE_RATE_LIMIT_WAITS_MS,
+  formatWait,
+  isYouTubeVideoLink,
+  waitUnlessStopped,
+  youTubeGapMs,
+} from "../sources/youtube-pacing";
 import { buildFolderTree } from "../folders/tree-utils";
 import { isMacPlatform } from "../shortcuts/key-utils";
 
@@ -41,7 +49,16 @@ type LinkSource =
   "grokipedia" | "wikipedia" | "substack" | "publication" | "source" | "youtube_list";
 
 export type QueueItemStatus =
-  "waiting" | "finding" | "saving" | "saved" | "duplicate" | "paid" | "unavailable" | "failed";
+  | "waiting"
+  | "finding"
+  | "saving"
+  // waiting out a YouTube rate limit before trying the same video again
+  | "paused"
+  | "saved"
+  | "duplicate"
+  | "paid"
+  | "unavailable"
+  | "failed";
 
 export interface QueueItem {
   id: string;
@@ -329,30 +346,78 @@ export function AddLinksDialog({
     }
   };
 
+  const isYouTubeRow = (item: QueueItem) =>
+    item.source === "source" && isYouTubeVideoLink(item.url);
+
+  // On a YouTube rate limit, waits and tries the same video again (see youtube-pacing.ts).
+  const saveWithYouTubeRetries = async (item: QueueItem, folderId: string) => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await saveOne(item, folderId);
+        return;
+      } catch (err) {
+        const wait = YOUTUBE_RATE_LIMIT_WAITS_MS[attempt];
+        if (!isYouTubeRateLimit(err) || wait === undefined || stopRequestedRef.current) throw err;
+        const waited = await waitUnlessStopped(
+          wait,
+          () => stopRequestedRef.current,
+          (seconds) =>
+            patchItem(item.id, {
+              status: "paused",
+              message: `YouTube is limiting requests. Trying again in ${formatWait(seconds)}.`,
+            }),
+        );
+        if (!waited) throw err;
+        patchItem(item.id, { status: "saving", message: undefined });
+      }
+    }
+  };
+
   const runQueue = async (folderId: string) => {
     setIsRunning(true);
     setIsFinished(false);
     stopRequestedRef.current = false;
+    let lastWasYouTube = false;
+    // Set when YouTube kept refusing after the waits: the other videos stay Waiting for a Retry.
+    let youTubeLimited = false;
 
     while (!stopRequestedRef.current) {
-      const item = queueRef.current.find((q) => q.status === "waiting");
+      const item = queueRef.current.find(
+        (q) => q.status === "waiting" && !(youTubeLimited && isYouTubeRow(q)),
+      );
       if (!item) break;
 
       if (item.source === "publication") {
         await expandPublication(item);
+        lastWasYouTube = false;
         continue;
       }
       if (item.source === "youtube_list") {
         await expandYouTubeList(item);
+        lastWasYouTube = true;
         continue;
       }
 
+      const youTube = isYouTubeRow(item);
+      if (youTube && lastWasYouTube) {
+        const waited = await waitUnlessStopped(youTubeGapMs(), () => stopRequestedRef.current);
+        if (!waited) break;
+      }
+      lastWasYouTube = youTube;
+
       patchItem(item.id, { status: "saving" });
       try {
-        await saveOne(item, folderId);
+        await saveWithYouTubeRetries(item, folderId);
       } catch (err) {
         if (stopRequestedRef.current) {
           patchItem(item.id, { status: "waiting", message: undefined });
+        } else if (youTube && isYouTubeRateLimit(err)) {
+          youTubeLimited = true;
+          patchItem(item.id, {
+            status: "failed",
+            message:
+              "YouTube is still limiting requests, so the other videos are left waiting. Press Retry in a few minutes.",
+          });
         } else {
           patchItem(item.id, { status: "failed", message: errorMessage(err, "Failed to save") });
         }
@@ -539,6 +604,9 @@ export function AddLinksDialog({
                       <div className="shrink-0 flex items-center">
                         {item.status === "waiting" && (
                           <span className="text-muted-foreground">Waiting</span>
+                        )}
+                        {item.status === "paused" && (
+                          <span className="text-muted-foreground">Paused</span>
                         )}
                         {(item.status === "saving" || item.status === "finding") && (
                           <span className="flex items-center gap-1 text-primary">

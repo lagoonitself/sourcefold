@@ -1266,8 +1266,12 @@ fn source_kind_source_line(kind: &str, fields: &ItemFileFields) -> String {
             if let Some(published) = meta_date(meta, "published") {
                 line.push_str(&format!(" Published {}.", published));
             }
-            if meta_value_text(meta, "captions").as_deref() == Some("auto-generated") {
-                line.push_str(" Transcript from auto-generated captions.");
+            match meta_value_text(meta, "captions").as_deref() {
+                Some("auto-generated") => line.push_str(" Transcript from auto-generated captions."),
+                Some("translated") => {
+                    line.push_str(" Transcript machine-translated into English by YouTube.")
+                }
+                _ => {}
             }
         }
         "web" | "pdf" => {
@@ -4569,6 +4573,23 @@ mod tests {
     }
 
     #[test]
+    fn youtube_source_line_names_translated_transcripts() {
+        let mut meta = serde_json::Map::new();
+        meta.insert("channel".to_string(), json!("Someone"));
+        meta.insert("captions".to_string(), json!("translated"));
+        let fields = ItemFileFields {
+            url: Some("https://www.youtube.com/watch?v=abcDEF12345".to_string()),
+            saved: Some("2026-10-17".to_string()),
+            meta,
+            ..Default::default()
+        };
+        assert_eq!(
+            source_kind_source_line("youtube", &fields),
+            "> Saved from [YouTube](https://www.youtube.com/watch?v=abcDEF12345) on 2026-10-17. By Someone. Transcript machine-translated into English by YouTube."
+        );
+    }
+
+    #[test]
     fn test_save_source_writes_file_and_rename_rebuilds_it() {
         let db = Database::open_in_memory().unwrap();
         let root =
@@ -4605,6 +4626,7 @@ mod tests {
         assert!(content.contains("duration: \"1:02:10\"\n"));
         assert!(content.contains("captions: auto-generated\n"));
         assert!(content.contains("Transcript from auto-generated captions."));
+        assert!(!content.contains("machine-translated"));
 
         // Renaming rebuilds the file from the item's own meta, so every other field is unchanged.
         rename_item(&db, &item.id, "Turbo Basics").unwrap();

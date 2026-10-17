@@ -1,7 +1,10 @@
 export {
   INNERTUBE_CONTEXT,
+  YOUTUBE_BLOCKED_MESSAGE,
   YOUTUBE_NO_CAPTIONS_REASON,
+  YOUTUBE_NO_ENGLISH_MESSAGE,
   fetchYouTubeCapture,
+  isYouTubeRateLimit,
   type YouTubeFetchOptions,
 } from "./fetch";
 export {
@@ -12,4 +15,9 @@ export {
 } from "./list";
 export { formatTimestamp, transcriptParagraphs, youTubeBodyMarkdown } from "./markdown";
 export { parseTimedText, type CaptionSegment } from "./timedtext";
-export { chooseCaptionTrack, type CaptionTrack } from "./tracks";
+export {
+  TRANSCRIPT_LANGUAGE,
+  chooseCaptionTrack,
+  type CaptionChoice,
+  type CaptionTrack,
+} from "./tracks";

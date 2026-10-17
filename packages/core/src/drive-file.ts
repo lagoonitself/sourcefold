@@ -161,6 +161,8 @@ function newKindSourceLine(
       line += publishedClause;
       if (meta.captions === "auto-generated") {
         line += " Transcript from auto-generated captions.";
+      } else if (meta.captions === "translated") {
+        line += " Transcript machine-translated into English by YouTube.";
       }
       return line;
     }

@@ -15,6 +15,7 @@ export { fetchSourceCapture, type SourceCaptureDeps } from "./sources";
 export {
   YOUTUBE_NO_CAPTIONS_REASON,
   fetchYouTubeCapture,
+  isYouTubeRateLimit,
   listYouTubeVideos,
   type YouTubeFetchOptions,
   type YouTubeListOptions,

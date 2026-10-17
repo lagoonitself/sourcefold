@@ -97,6 +97,7 @@ Copy format, one quote:
 
 - SQLite FTS5 (included in the bundled `rusqlite` build) in the desktop's own database. Search runs on this computer only; the web app keeps title search.
 - One shared chunker splits each source's body into **passages**: by heading and paragraph, 150–400 words, YouTube passages keep their first timestamp. Tables: `passages(id, item_id, ord, heading, start, end, seconds, hash)` and `passages_fts(text, heading)` with `bm25()` ranking and `snippet()` for snippets. Phase 3 reuses the same passages, so every result in every phase maps to a place in the reader.
+- Opening a passage: the index is built from Markdown, but highlight offsets count the reader's rendered text, so the two don't line up. A result carries the passage's opening words and the query; the reader finds them with its anchoring module (search by quote) and marks the matches.
 - What gets indexed: offline mode reads the storage folder; signed in, it reads the local copy (`local_copy.rs`). If Local copy is off, search says "Turn on Local copy in Settings to search inside sources." and still searches titles.
 - Indexing: on start, after each capture, and after each local copy pass; a content hash per item skips unchanged files. Runs on a background thread.
 - Highlights and notes are indexed too.

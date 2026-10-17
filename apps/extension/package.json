@@ -11,7 +11,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/schibsted-grotesk": "^5.3.0",
+    "@fontsource-variable/source-serif-4": "^5.3.1",
     "@sourcefold/core": "*",
+    "lucide-react": "^1.59.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

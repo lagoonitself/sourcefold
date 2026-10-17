@@ -1,6 +1,16 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { browser } from "wxt/browser";
-import { detectLinkKind, detectSource, xStatusId, type SourceKind } from "@sourcefold/core";
+import { xStatusId } from "@sourcefold/core";
+import {
+  Check,
+  CircleAlert,
+  Cloud,
+  CornerDownLeft,
+  HardDrive,
+  Laptop,
+  LoaderCircle,
+  Settings,
+} from "lucide-react";
 import {
   listFolders,
   createFolder,
@@ -16,939 +26,832 @@ import {
 import {
   buildFolderTree,
   buildProjectSections,
-  pickDefaultGroup,
-  projectIdOf,
+  pickGroupInProject,
+  pickStartingPlace,
   type FolderTreeItem,
+  type ProjectSection,
 } from "../../lib/folder-tree";
-import { getLastFolderId, setLastFolderId } from "../../lib/last-folder";
-import { capturePage } from "../../lib/capture-page";
-import { sourceKindLabel } from "../../lib/capture-route";
-import { resolveTarget, type ResolvedTarget } from "../../lib/target";
+import { getLastPlaces, rememberPlace, type LastPlaces } from "../../lib/last-folder";
+import { capturePage, type CaptureResult } from "../../lib/capture-page";
+import { resolveTarget } from "../../lib/target";
 import { hasHostPermission, hostOf, requestHostPermission } from "../../lib/permissions";
+import { hostLabel, pageKindLabel, pageKindOf, type PageKind } from "../../lib/page-kind";
+import {
+  readPopupCache,
+  snapshotOf,
+  writePopupCache,
+  type TargetSnapshot,
+} from "../../lib/popup-cache";
+import { SourceIcon, sourceColor } from "./SourceMark";
+import { ProjectMenu } from "./ProjectMenu";
+import { GroupList, type VisibleGroup } from "./GroupList";
+import { ThreadPicker } from "./ThreadPicker";
 
 const CANNOT_SAVE_MESSAGE =
   "This page can't be saved. Open a web page, YouTube video, Reddit, Hacker News or Bluesky post, Substack post, Grokipedia article or X post.";
 
-const FOLDER_TREE_CACHE_KEY = "sourcefold:folderTreeCache";
+const GROUP_FILTER_FROM = 7;
+const NO_PLACES: LastPlaces = { groupId: null, projectId: null, groupByProject: {} };
 
-interface FolderTreeCache {
-  targetKey: string;
-  timestamp: number;
-  folders: Folder[];
-  tree: FolderTreeItem[];
+type Blocker =
+  { kind: "setup" } | { kind: "error"; message: string } | { kind: "permission"; webUrl: string };
+
+interface PageInfo {
+  tabId: number | null;
+  url: string;
+  title: string;
+  kind: PageKind | null;
+}
+
+interface Place {
+  projectId: string;
+  groupId: string;
+}
+
+type Result = { tone: "warning" | "error"; text: string };
+
+function errorText(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+/** The open project's groups as the list shows them: a tree, or matching names while filtering. */
+function visibleGroupsOf(
+  section: ProjectSection | undefined,
+  tree: FolderTreeItem[],
+  query: string,
+): VisibleGroup[] {
+  if (!section) return [];
+  const q = query.trim().toLowerCase();
+  if (!q) return section.groups.map((item) => ({ item, level: item.depth - 1 }));
+  const byId = new Map(tree.map((item) => [item.id, item]));
+  const hintOf = (item: FolderTreeItem) => {
+    const names: string[] = [];
+    let parent = item.parentId ? byId.get(item.parentId) : undefined;
+    while (parent && parent.depth > 0 && names.length < 20) {
+      names.unshift(parent.name);
+      parent = parent.parentId ? byId.get(parent.parentId) : undefined;
+    }
+    return names.length ? names.join(" / ") : undefined;
+  };
+  return section.groups
+    .filter((item) => item.name.toLowerCase().includes(q))
+    .map((item) => ({ item, level: 0, hint: hintOf(item) }));
+}
+
+function TargetBadge({ target }: { target: TargetSnapshot }) {
+  const { Icon, text } =
+    target.type === "desktop-offline"
+      ? { Icon: HardDrive, text: "This computer" }
+      : target.type === "desktop-web"
+        ? { Icon: Laptop, text: "Desktop app" }
+        : { Icon: Cloud, text: hostOf(target.key) };
+  return (
+    <span className="target-badge" title={target.displayLabel}>
+      <Icon size={13} aria-hidden="true" />
+      <span>{text}</span>
+    </span>
+  );
 }
 
 export default function App() {
-  const [loading, setLoading] = useState(true);
-  const [resolvedTarget, setResolvedTarget] = useState<ResolvedTarget | null>(null);
-  const [needsPermission, setNeedsPermission] = useState(false);
-  const [permissionHost, setPermissionHost] = useState<string>("");
-
-  const [tabTitle, setTabTitle] = useState("");
-  const [tabUrl, setTabUrl] = useState("");
-  const [tabId, setTabId] = useState<number | null>(null);
-  const [detectedSource, setDetectedSource] = useState<SourceKind | null>(null);
+  const [page, setPage] = useState<PageInfo | null>(null);
+  const [pageNote, setPageNote] = useState<string | null>(null);
   const [unsupported, setUnsupported] = useState(false);
-  const [detectedLabel, setDetectedLabel] = useState<string | null>(null);
+
+  const [target, setTarget] = useState<TargetSnapshot | null>(null);
+  const [blocker, setBlocker] = useState<Blocker | null>(null);
+  const [booting, setBooting] = useState(true);
+  const [ready, setReady] = useState(false);
 
   const [folders, setFolders] = useState<Folder[]>([]);
-  const [folderTree, setFolderTree] = useState<FolderTreeItem[]>([]);
-  const [selectedFolderId, setSelectedFolderId] = useState<string>("");
-
-  // Combobox filterable dropdown state
-  const [comboboxOpen, setComboboxOpen] = useState(false);
-  const [filterQuery, setFilterQuery] = useState("");
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const comboboxInputRef = useRef<HTMLInputElement>(null);
-  const comboboxListRef = useRef<HTMLUListElement>(null);
-
-  // Groups that already hold this page. A page is saved once per group.
+  const [place, setPlaceState] = useState<Place>({ projectId: "", groupId: "" });
+  const [query, setQuery] = useState("");
   const [savedGroupIds, setSavedGroupIds] = useState<Set<string>>(() => new Set());
+  const [justSavedId, setJustSavedId] = useState<string | null>(null);
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [warningMessage, setWarningMessage] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<Result | null>(null);
+  const [newProjectName, setNewProjectName] = useState("");
 
-  // Synchronous in-flight guards to prevent double-submit or concurrent operations
-  const isSavingRef = useRef(false);
-  const isAddingToThreadRef = useRef(false);
+  const startedRef = useRef(false);
+  const placesRef = useRef<LastPlaces>(NO_PLACES);
+  const placeRef = useRef<Place>(place);
+  const foldersRef = useRef<Folder[]>([]);
+  const savedRef = useRef(savedGroupIds);
+  const userPickedRef = useRef(false);
+  const readyRef = useRef<Promise<void>>(Promise.resolve());
+  const captureRef = useRef<Promise<CaptureResult> | null>(null);
+  const busyRef = useRef(false);
+  const filterRef = useRef<HTMLInputElement>(null);
+  const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
 
-  // New folder inline state
-  const [newFolderOpen, setNewFolderOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [insideSelected, setInsideSelected] = useState(false);
-  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  savedRef.current = savedGroupIds;
 
-  // X "Add to this thread" state
-  const [recentThreads, setRecentThreads] = useState<RecentXItem[]>([]);
-  const [loadingThreads, setLoadingThreads] = useState(false);
-  const [threadsProjectId, setThreadsProjectId] = useState<string | null>(null);
-  const [addingToThreadId, setAddingToThreadId] = useState<string | null>(null);
-  const [threadStatus, setThreadStatus] = useState<{ message: string; isError: boolean } | null>(
-    null,
+  const tree = useMemo(() => buildFolderTree(folders), [folders]);
+  const sections = useMemo(() => buildProjectSections(tree), [tree]);
+  const section = sections.find((s) => s.project.id === place.projectId);
+  const visibleGroups = useMemo(
+    () => visibleGroupsOf(section, tree, query),
+    [section, tree, query],
   );
+  const selectedGroup = tree.find((item) => item.id === place.groupId && item.depth > 0);
+  const showFilter = (section?.groups.length ?? 0) >= GROUP_FILTER_FROM;
+  const isAlreadySaved = Boolean(place.groupId) && savedGroupIds.has(place.groupId);
 
-  const loadData = async (forceRefresh = false) => {
-    try {
-      const target = await resolveTarget({ forceRefresh });
-      setResolvedTarget(target);
-
-      if (target.type === "unconfigured" || target.type === "error") {
-        setLoading(false);
-        return;
-      }
-
-      // Check host permissions for web targets
-      if (target.type === "desktop-web" || target.type === "web") {
-        const permitted = await hasHostPermission(target.webUrl);
-        if (!permitted) {
-          setNeedsPermission(true);
-          setPermissionHost(target.webUrl);
-          setLoading(false);
-          return;
-        }
-      }
-      setNeedsPermission(false);
-
-      const targetKey =
-        target.type === "desktop-web" || target.type === "web" ? target.webUrl : "desktop-offline";
-
-      // Concurrently read tabs, last folder ID, and cached folder tree
-      const [tabs, lastFolderId, cacheResult] = await Promise.all([
-        browser.tabs.query({ active: true, currentWindow: true }),
-        getLastFolderId(),
-        browser.storage.local.get([FOLDER_TREE_CACHE_KEY]),
-      ]);
-
-      const activeTab = tabs[0];
-      const currentUrl = activeTab?.url ?? "";
-      setTabId(activeTab?.id ?? null);
-      setTabTitle(activeTab?.title || currentUrl || "Untitled page");
-      setTabUrl(currentUrl);
-
-      const source = currentUrl ? detectSource(currentUrl) : null;
-      setDetectedSource(source);
-
-      // Render cached folder tree immediately if present and matching current target
-      const cached = cacheResult[FOLDER_TREE_CACHE_KEY] as FolderTreeCache | undefined;
-      if (
-        cached &&
-        cached.targetKey === targetKey &&
-        Array.isArray(cached.folders) &&
-        Array.isArray(cached.tree) &&
-        cached.tree.length > 0
-      ) {
-        setFolders(cached.folders);
-        setFolderTree(cached.tree);
-        setSelectedFolderId(pickDefaultGroup(cached.tree, lastFolderId));
-        setLoading(false);
-      }
-
-      const loadedFolders = await listFolders();
-      setFolders(loadedFolders);
-      const tree = buildFolderTree(loadedFolders);
-      setFolderTree(tree);
-
-      // Update folder tree cache
-      await browser.storage.local.set({
-        [FOLDER_TREE_CACHE_KEY]: {
-          targetKey,
-          timestamp: Date.now(),
-          folders: loadedFolders,
-          tree,
-        },
-      });
-
-      // Set selected folder ID
-      const defaultGroupId = pickDefaultGroup(tree, lastFolderId);
-      setSelectedFolderId(defaultGroupId);
-      if (defaultGroupId && defaultGroupId !== lastFolderId) {
-        await setLastFolderId(defaultGroupId);
-      }
-    } catch (err: unknown) {
-      if (err instanceof ApiError && err.status === 401) {
-        // Re-resolve
-        const target = await resolveTarget({ forceRefresh: true });
-        setResolvedTarget(target);
-      } else {
-        setErrorMessage(err instanceof Error ? err.message : "Failed to load Sourcefold data.");
-      }
-    } finally {
-      setLoading(false);
-    }
+  const setPlace = (next: Place) => {
+    placeRef.current = next;
+    setPlaceState(next);
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // Keyboard navigation: Escape closes popup or cancels; Enter saves
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (newFolderOpen) {
-          setNewFolderOpen(false);
-          setNewFolderName("");
-          return;
-        }
-        if (comboboxOpen) {
-          setComboboxOpen(false);
-          return;
-        }
-        window.close();
-        return;
-      }
-
-      if (e.key === "Enter") {
-        // Don't intercept Enter inside new folder inline input or open combobox menu
-        if (newFolderOpen || comboboxOpen) {
-          return;
-        }
-        const activeTag = (document.activeElement?.tagName || "").toLowerCase();
-        if (activeTag === "button" || activeTag === "a" || activeTag === "textarea") {
-          return;
-        }
-        e.preventDefault();
-        handleSave();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [newFolderOpen, comboboxOpen, tabUrl, selectedFolderId, isSaving]);
-
-  // Check the selected group each time it changes
-  useEffect(() => {
-    if (!resolvedTarget || resolvedTarget.type === "unconfigured" || !tabUrl || !selectedFolderId) {
-      return;
-    }
-    let ignore = false;
-    checkUrl(tabUrl, selectedFolderId)
-      .then((result) => {
-        if (!ignore && result.exists) {
-          setSavedGroupIds((prev) => new Set(prev).add(selectedFolderId));
-        }
+  const remember = (next: Place) => {
+    if (!next.projectId) return;
+    void rememberPlace(placesRef.current, next.projectId, next.groupId || null)
+      .then((places) => {
+        placesRef.current = places;
       })
-      .catch(() => {
-        // Save itself reports duplicates, so failed check is ignored
-      });
-    return () => {
-      ignore = true;
-    };
-  }, [resolvedTarget, tabUrl, selectedFolderId]);
-
-  const openSettings = () => {
-    browser.runtime.openOptionsPage();
+      .catch(() => {});
   };
 
-  const handleGrantPermission = async () => {
-    if (!permissionHost) return;
-    const granted = await requestHostPermission(permissionHost);
-    if (granted) {
-      setNeedsPermission(false);
-      setLoading(true);
-      await loadData(true);
-    }
-  };
-
-  const getDetectedTypeLabel = (): string => {
-    if (unsupported) {
-      return CANNOT_SAVE_MESSAGE;
-    }
-    if (detectedLabel) {
-      return detectedLabel;
-    }
-    switch (detectedSource) {
-      case "grokipedia":
-        return "Grokipedia article";
-      case "substack":
-        return "Substack post";
-      case "x":
-        return "X post";
-      default: {
-        const kind = tabUrl ? detectLinkKind(tabUrl) : null;
-        return kind ? sourceKindLabel(kind) : "Save this page.";
+  const applyFolders = (next: Folder[]) => {
+    foldersRef.current = next;
+    setFolders(next);
+    const nextTree = buildFolderTree(next);
+    const current = placeRef.current;
+    if (userPickedRef.current) {
+      const kept = buildProjectSections(nextTree).find((s) => s.project.id === current.projectId);
+      if (kept) {
+        const groupId = kept.groups.some((g) => g.id === current.groupId)
+          ? current.groupId
+          : pickGroupInProject(kept, placesRef.current.groupByProject);
+        setPlace({ projectId: current.projectId, groupId });
+        return;
       }
     }
+    setPlace(pickStartingPlace(nextTree, placesRef.current));
   };
 
-  const selectedFolder = folders.find((f) => f.id === selectedFolderId);
-  const projectSections = buildProjectSections(folderTree);
-  const hasGroups = projectSections.some((section) => section.groups.length > 0);
-  const isAlreadySaved = savedGroupIds.has(selectedFolderId);
-
-  // Flattened group list with project names for type-to-filter combobox
-  interface FlatGroupItem {
-    id: string;
-    name: string;
-    projectName: string;
-  }
-  const allGroups: FlatGroupItem[] = [];
-  for (const section of projectSections) {
-    for (const group of section.groups) {
-      allGroups.push({
-        id: group.id,
-        name: group.name,
-        projectName: section.project.name,
-      });
-    }
-  }
-
-  const filteredGroups = allGroups.filter((g) => {
-    if (!filterQuery.trim()) return true;
-    const q = filterQuery.toLowerCase();
-    return g.name.toLowerCase().includes(q) || g.projectName.toLowerCase().includes(q);
-  });
-
-  const folderPath = (folderId: string): string | null => {
+  const folderPath = (folderId: string): string => {
+    const all = foldersRef.current;
     const names: string[] = [];
     const seen = new Set<string>();
-    let current = folders.find((f) => f.id === folderId);
+    let current = all.find((f) => f.id === folderId);
     while (current && !seen.has(current.id)) {
       seen.add(current.id);
       names.unshift(current.name);
       const parentId = current.parent_id;
-      current = parentId ? folders.find((f) => f.id === parentId) : undefined;
+      current = parentId ? all.find((f) => f.id === parentId) : undefined;
     }
-    return names.length > 0 ? names.join(" / ") : null;
+    return names.length > 0 ? names.join(" / ") : "this group";
   };
 
-  const markSaved = (item: { folder_id: string }) => {
-    setSavedGroupIds((prev) => new Set(prev).add(item.folder_id));
+  // Shows what Save will do before it's pressed: the clean title, or why the page can't be saved.
+  const previewCapture = (res: CaptureResult) => {
+    if (res.kind === "unsupported") {
+      setUnsupported(true);
+      return;
+    }
+    if (res.kind === "error") {
+      setPageNote(res.message);
+      return;
+    }
+    const retitle = (title: string | undefined) => {
+      if (title) setPage((p) => (p ? { ...p, title } : p));
+    };
+    if (res.kind === "substack") {
+      if (res.result.status === "not_substack") setUnsupported(true);
+      else if (res.result.status === "paywalled") setPageNote("Paid post, not saved");
+      else if (res.result.status === "ok") retitle(res.result.capture.title);
+    } else if (res.kind === "source") {
+      const kind = res.result.kind;
+      setPage((p) => (p ? { ...p, kind } : p));
+      if (res.result.status === "unavailable") {
+        retitle(res.result.title);
+        setPageNote(res.result.reason);
+      } else {
+        retitle(res.result.capture.title);
+      }
+    } else if (res.kind === "x" && res.result.status === "error") {
+      setPageNote(res.result.message);
+    }
   };
+
+  // The capture script is large; injecting and running it while the user looks at the popup
+  // makes Save nearly instant. It only reads the page.
+  const getCapture = (tabId: number): Promise<CaptureResult> => {
+    if (!captureRef.current) {
+      const run = capturePage(tabId);
+      captureRef.current = run;
+      void run.then((res) => {
+        if (captureRef.current === run) previewCapture(res);
+      });
+    }
+    return captureRef.current;
+  };
+
+  const refresh = async (cachedKey: string | null): Promise<void> => {
+    try {
+      const resolved = await resolveTarget({ forceRefresh: true });
+      if (resolved.type === "unconfigured") {
+        setBlocker({ kind: "setup" });
+        return;
+      }
+      if (resolved.type === "error") {
+        setBlocker({ kind: "error", message: resolved.displayLabel });
+        return;
+      }
+      if (
+        (resolved.type === "web" || resolved.type === "desktop-web") &&
+        !(await hasHostPermission(resolved.webUrl))
+      ) {
+        setBlocker({ kind: "permission", webUrl: resolved.webUrl });
+        return;
+      }
+      setBlocker(null);
+      const snapshot = snapshotOf(resolved);
+      setTarget(snapshot);
+      if (snapshot.key !== cachedKey) {
+        userPickedRef.current = false;
+        setSavedGroupIds(new Set());
+      }
+      const fresh = await listFolders();
+      applyFolders(fresh);
+      setReady(true);
+      void writePopupCache({ target: snapshot, folders: fresh }).catch(() => {});
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 401) {
+        setBlocker({ kind: "error", message: err.message });
+      } else {
+        setResult({ tone: "error", text: errorText(err, "Couldn't load your projects.") });
+      }
+    } finally {
+      setBooting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+
+    void (async () => {
+      const [tabs, cache, places] = await Promise.all([
+        browser.tabs.query({ active: true, currentWindow: true }),
+        readPopupCache().catch(() => null),
+        getLastPlaces().catch(() => NO_PLACES),
+      ]);
+      placesRef.current = places;
+
+      const tab = tabs[0];
+      const url = tab?.url ?? "";
+      const kind = pageKindOf(url);
+      setPage({ tabId: tab?.id ?? null, url, title: tab?.title || url || "Untitled page", kind });
+      if (!kind) setUnsupported(true);
+      else if (kind !== "grokipedia" && tab?.id != null) getCapture(tab.id);
+
+      if (cache) {
+        setTarget(cache.target);
+        applyFolders(cache.folders);
+        setBooting(false);
+      }
+      readyRef.current = refresh(cache?.target.key ?? null);
+    })();
+    // Runs once per popup open.
+  }, []);
+
+  // Is the page already in the picked group? A page is saved once per group.
+  useEffect(() => {
+    const groupId = place.groupId;
+    if (!ready || !page?.url || unsupported || !groupId || savedRef.current.has(groupId)) return;
+    let ignore = false;
+    checkUrl(page.url, groupId)
+      .then((res) => {
+        if (!ignore && res.exists) setSavedGroupIds((prev) => new Set(prev).add(groupId));
+      })
+      .catch(() => {
+        // Save reports duplicates itself.
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [ready, page?.url, unsupported, place.groupId]);
 
   const selectGroup = (groupId: string) => {
-    setSelectedFolderId(groupId);
-    setComboboxOpen(false);
-    setFilterQuery("");
-    setSuccessMessage(null);
-    setWarningMessage(null);
-    setErrorMessage(null);
+    userPickedRef.current = true;
+    const next = { projectId: placeRef.current.projectId, groupId };
+    setPlace(next);
+    setResult(null);
+    remember(next);
   };
 
-  const handleComboboxKeyDown = (e: React.KeyboardEvent) => {
-    if (!comboboxOpen) {
-      if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
-        setComboboxOpen(true);
-        e.preventDefault();
-      }
-      return;
-    }
+  const selectProject = (projectId: string) => {
+    userPickedRef.current = true;
+    const target = buildProjectSections(buildFolderTree(foldersRef.current)).find(
+      (s) => s.project.id === projectId,
+    );
+    const next = {
+      projectId,
+      groupId: target ? pickGroupInProject(target, placesRef.current.groupByProject) : "",
+    };
+    setPlace(next);
+    setQuery("");
+    setResult(null);
+    remember(next);
+  };
 
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHighlightedIndex((prev) => (prev + 1 < filteredGroups.length ? prev + 1 : 0));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filteredGroups.length - 1));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (filteredGroups.length > 0 && highlightedIndex < filteredGroups.length) {
-        const item = filteredGroups[highlightedIndex];
-        if (item) {
-          selectGroup(item.id);
-        }
-      } else {
-        setComboboxOpen(false);
-      }
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      setComboboxOpen(false);
+  const changeQuery = (next: string) => {
+    setQuery(next);
+    const matches = visibleGroupsOf(section, tree, next);
+    if (matches.length && !matches.some((g) => g.item.id === placeRef.current.groupId)) {
+      selectGroup(matches[0]!.item.id);
     }
   };
 
-  const handleCreateFolder = async () => {
-    const trimmed = newFolderName.trim();
-    if (!trimmed || isCreatingFolder) return;
+  const moveSelection = (step: number) => {
+    if (!visibleGroups.length) return;
+    const index = visibleGroups.findIndex((g) => g.item.id === placeRef.current.groupId);
+    const next =
+      index === -1
+        ? step > 0
+          ? 0
+          : visibleGroups.length - 1
+        : (index + step + visibleGroups.length) % visibleGroups.length;
+    selectGroup(visibleGroups[next]!.item.id);
+  };
 
-    setIsCreatingFolder(true);
-    setErrorMessage(null);
+  const cacheFolders = (next: Folder[]) => {
+    const snapshot = target;
+    if (snapshot) void writePopupCache({ target: snapshot, folders: next }).catch(() => {});
+  };
 
+  // Shows the new folder at once, then reloads the list for its real counts.
+  const addFolderLocally = (created: Folder) => {
+    applyFolders([...foldersRef.current, { ...created, item_count: created.item_count ?? 0 }]);
+    void listFolders()
+      .then((fresh) => {
+        applyFolders(fresh);
+        cacheFolders(fresh);
+      })
+      .catch(() => {});
+  };
+
+  const createGroup = async (name: string, insideSelected: boolean): Promise<boolean> => {
+    const { projectId, groupId } = placeRef.current;
+    const parentId = insideSelected && groupId ? groupId : projectId;
+    if (!parentId) return false;
+    setResult(null);
     try {
-      const parentId =
-        insideSelected && selectedFolderId
-          ? selectedFolderId
-          : (projectIdOf(folderTree, selectedFolderId) ?? projectSections[0]?.project.id ?? null);
-      if (!parentId) return;
-      const created = await createFolder({ name: trimmed, parent_id: parentId });
-      const updatedFolders = await listFolders();
-      setFolders(updatedFolders);
-      const tree = buildFolderTree(updatedFolders);
-      setFolderTree(tree);
-      selectGroup(created.id);
-      await setLastFolderId(created.id);
-
-      const targetKey =
-        resolvedTarget && (resolvedTarget.type === "desktop-web" || resolvedTarget.type === "web")
-          ? resolvedTarget.webUrl
-          : "desktop-offline";
-
-      await browser.storage.local.set({
-        [FOLDER_TREE_CACHE_KEY]: {
-          targetKey,
-          timestamp: Date.now(),
-          folders: updatedFolders,
-          tree,
-        },
-      });
-
-      setNewFolderOpen(false);
-      setNewFolderName("");
-      setInsideSelected(false);
+      const created = await createFolder({ name, parent_id: parentId });
+      userPickedRef.current = true;
+      const next = { projectId, groupId: created.id };
+      placeRef.current = next;
+      addFolderLocally(created);
+      setQuery("");
+      setPlace(next);
+      remember(next);
+      return true;
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to create group.");
-    } finally {
-      setIsCreatingFolder(false);
+      setResult({ tone: "error", text: errorText(err, "Couldn't create the group.") });
+      return false;
     }
   };
 
-  const handleSave = async () => {
-    if (isSavingRef.current || isAddingToThreadRef.current) {
-      return;
+  const createProject = async (name: string): Promise<boolean> => {
+    setResult(null);
+    try {
+      const created = await createFolder({ name, parent_id: null });
+      userPickedRef.current = true;
+      const next = { projectId: created.id, groupId: "" };
+      placeRef.current = next;
+      addFolderLocally(created);
+      setQuery("");
+      setPlace(next);
+      remember(next);
+      return true;
+    } catch (err: unknown) {
+      setResult({ tone: "error", text: errorText(err, "Couldn't create the project.") });
+      return false;
     }
-    if (!tabUrl || !selectedFolderId || isAlreadySaved) {
-      return;
-    }
+  };
 
-    isSavingRef.current = true;
-    setIsSaving(true);
-    setErrorMessage(null);
-    setWarningMessage(null);
-    setSuccessMessage(null);
-
-    const folderName = folderPath(selectedFolderId) ?? "this group";
+  const handleSave = async (groupOverride?: string) => {
+    if (busyRef.current || !page?.url || unsupported) return;
+    busyRef.current = true;
+    setSaving(true);
+    setResult(null);
 
     try {
-      if (detectedSource === "grokipedia") {
-        const { item } = await saveGrokipedia(tabUrl, selectedFolderId);
-        await setLastFolderId(selectedFolderId);
-        markSaved(item);
-        setSuccessMessage(`Saved to ${folderName}`);
+      // A cached list may belong to a library that has since changed; wait for the fresh one.
+      await readyRef.current;
+      const groupId =
+        groupOverride && foldersRef.current.some((f) => f.id === groupOverride)
+          ? groupOverride
+          : placeRef.current.groupId;
+      if (!groupId || savedRef.current.has(groupId)) return;
+
+      const done = (item: { folder_id: string }, warning?: string) => {
+        setSavedGroupIds((prev) => new Set(prev).add(item.folder_id));
+        setJustSavedId(item.folder_id);
+        applyFolders(
+          foldersRef.current.map((f) =>
+            f.id === item.folder_id ? { ...f, item_count: (f.item_count ?? 0) + 1 } : f,
+          ),
+        );
+        remember({ projectId: placeRef.current.projectId, groupId: item.folder_id });
+        if (warning) setResult({ tone: "warning", text: warning });
+      };
+
+      if (page.kind === "grokipedia") {
+        const { item } = await saveGrokipedia(page.url, groupId);
+        done(item);
         return;
       }
 
-      if (tabId === null) {
-        setErrorMessage("No active tab to save.");
+      if (page.tabId === null) {
+        setResult({ tone: "error", text: "No active tab to save." });
         return;
       }
 
-      const captureRes = await capturePage(tabId);
-
-      if (captureRes.kind === "unsupported") {
+      const captured = await getCapture(page.tabId);
+      if (captured.kind === "unsupported") {
+        captureRef.current = null;
         setUnsupported(true);
-        setErrorMessage(CANNOT_SAVE_MESSAGE);
+        return;
+      }
+      if (captured.kind === "error") {
+        captureRef.current = null;
+        setResult({ tone: "error", text: captured.message });
         return;
       }
 
-      if (captureRes.kind === "error") {
-        setErrorMessage(captureRes.message);
-        return;
-      }
-
-      if (captureRes.kind === "substack") {
-        const res = captureRes.result;
+      if (captured.kind === "substack") {
+        const res = captured.result;
         if (res.status === "not_substack") {
           setUnsupported(true);
-          setErrorMessage(CANNOT_SAVE_MESSAGE);
           return;
         }
-
         if (res.status === "paywalled") {
           const { item } = await capture({
             kind: "substack_unavailable",
-            folder_id: selectedFolderId,
+            folder_id: groupId,
             url: res.url,
             title: res.title,
           });
-          await setLastFolderId(selectedFolderId);
-          markSaved(item);
-          setWarningMessage("Paid post, not saved");
+          done(item, "Paid post, not saved");
           return;
         }
-
-        if (res.status === "ok") {
-          const { item } = await capture({
-            kind: "substack",
-            folder_id: selectedFolderId,
-            capture: res.capture,
-          });
-          await setLastFolderId(selectedFolderId);
-          markSaved(item);
-          setSuccessMessage(`Saved to ${folderName}`);
-          return;
-        }
+        const { item } = await capture({
+          kind: "substack",
+          folder_id: groupId,
+          capture: res.capture,
+        });
+        done(item);
+        return;
       }
 
-      if (captureRes.kind === "source") {
-        const res = captureRes.result;
-        const label = sourceKindLabel(res.kind);
+      if (captured.kind === "source") {
+        const res = captured.result;
         if (res.status === "unavailable") {
           const { item } = await capture({
             kind: "source_unavailable",
-            folder_id: selectedFolderId,
+            folder_id: groupId,
             source: res.kind,
             url: res.url,
             title: res.title,
             reason: res.reason,
           });
-          await setLastFolderId(selectedFolderId);
-          markSaved(item);
-          setTabTitle(res.title || tabTitle);
-          setDetectedLabel(label);
-          setWarningMessage(res.reason);
+          done(item, res.reason);
           return;
         }
-
         const { item } = await capture({
           kind: res.kind,
-          folder_id: selectedFolderId,
+          folder_id: groupId,
           capture: res.capture,
         });
-        await setLastFolderId(selectedFolderId);
-        markSaved(item);
-        setTabTitle(res.capture.title || tabTitle);
-        setDetectedLabel(label);
-        setSuccessMessage(`Saved to ${folderName}`);
+        done(item);
         return;
       }
 
-      if (captureRes.kind === "x") {
-        const res = captureRes.result;
+      if (captured.kind === "x") {
+        const res = captured.result;
         if (res.status === "error") {
-          setErrorMessage(res.message);
+          captureRef.current = null;
+          setResult({ tone: "error", text: res.message });
           return;
         }
-
-        if (res.status === "ok") {
-          const { item } = await capture({
-            kind: "x",
-            folder_id: selectedFolderId,
-            posts: res.posts,
-          });
-          await setLastFolderId(selectedFolderId);
-          markSaved(item);
-          setSuccessMessage(`Saved to ${folderName}`);
-          return;
-        }
+        const { item } = await capture({ kind: "x", folder_id: groupId, posts: res.posts });
+        done(item);
       }
     } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        if (err.status === 409 || err.code === "duplicate") {
-          markSaved({ folder_id: selectedFolderId });
-          return;
-        }
-        setErrorMessage(err.message);
+      if (err instanceof ApiError && (err.status === 409 || err.code === "duplicate")) {
+        const groupId = groupOverride ?? placeRef.current.groupId;
+        setSavedGroupIds((prev) => new Set(prev).add(groupId));
         return;
       }
-      setErrorMessage(err instanceof Error ? err.message : "Failed to save page.");
+      setResult({ tone: "error", text: errorText(err, "Couldn't save this page.") });
     } finally {
-      isSavingRef.current = false;
-      setIsSaving(false);
+      busyRef.current = false;
+      setSaving(false);
     }
   };
 
-  const handleDetailsToggle = async (e: React.SyntheticEvent<HTMLDetailsElement>) => {
-    const details = e.currentTarget;
-    const projectId = projectIdOf(folderTree, selectedFolderId);
-    if (details.open && projectId && threadsProjectId !== projectId && !loadingThreads) {
-      setLoadingThreads(true);
-      try {
-        const items = await recentXItems(selectedFolderId);
-        setRecentThreads(items);
-        setThreadsProjectId(projectId);
-      } catch (err: unknown) {
-        setThreadStatus({
-          message: err instanceof Error ? err.message : "Failed to load recent threads.",
-          isError: true,
-        });
-      } finally {
-        setLoadingThreads(false);
+  const loadThreads = () => recentXItems(placeRef.current.groupId || placeRef.current.projectId);
+
+  const addToThread = async (item: RecentXItem): Promise<{ message: string; isError: boolean }> => {
+    if (busyRef.current || page?.tabId == null || !page.url) {
+      return { message: "Wait for the save to finish.", isError: true };
+    }
+    busyRef.current = true;
+    const notFound = "Couldn't find the post on this page. Scroll to it and try again.";
+    try {
+      const captured = await getCapture(page.tabId);
+      if (captured.kind !== "x") return { message: "This page isn't an X post.", isError: true };
+      if (captured.result.status === "error") {
+        captureRef.current = null;
+        return { message: captured.result.message, isError: true };
       }
+      const posts = captured.result.posts;
+      if (!posts?.length) return { message: "No posts found in this thread.", isError: true };
+
+      const tabStatus = xStatusId(page.url);
+      const index = tabStatus ? posts.findIndex((p) => xStatusId(p.postUrl) === tabStatus) : -1;
+      const post = index === -1 ? undefined : posts[index];
+      if (!post) return { message: notFound, isError: true };
+
+      const parent_post_url = index > 0 ? posts[index - 1]?.postUrl : undefined;
+      await addXPost(item.id, { post, parent_post_url });
+      return { message: `Added to ${item.title}`, isError: false };
+    } catch (err: unknown) {
+      if (err instanceof ApiError && (err.status === 409 || err.code === "duplicate")) {
+        return { message: "Already in this thread", isError: true };
+      }
+      return { message: errorText(err, "Couldn't add the post to the thread."), isError: true };
+    } finally {
+      busyRef.current = false;
     }
   };
 
-  const handleAddToThread = async (item: RecentXItem) => {
-    if (isSavingRef.current || isAddingToThreadRef.current) {
+  const grantPermission = async () => {
+    if (blocker?.kind !== "permission") return;
+    if (await requestHostPermission(blocker.webUrl)) {
+      setBlocker(null);
+      readyRef.current = refresh(target?.key ?? null);
+    }
+  };
+
+  const openSettings = () => {
+    void browser.runtime.openOptionsPage();
+  };
+
+  // Keyboard: arrows pick a group, Enter saves, typing finds a group, Escape closes.
+  keyHandlerRef.current = (e: KeyboardEvent) => {
+    if (e.defaultPrevented) return;
+    const active = document.activeElement as HTMLElement | null;
+    const tag = active?.tagName.toLowerCase() ?? "";
+    const inFilter = active !== null && active === filterRef.current;
+    const inText =
+      tag === "textarea" || (tag === "input" && (active as HTMLInputElement).type === "text");
+
+    if (e.key === "Escape") {
+      if (inFilter && query) {
+        e.preventDefault();
+        changeQuery("");
+        return;
+      }
+      window.close();
       return;
     }
-    if (tabId === null || !tabUrl) return;
+    if (blocker || booting || (inText && !inFilter)) return;
 
-    isAddingToThreadRef.current = true;
-    setAddingToThreadId(item.id);
-    setThreadStatus(null);
-
-    try {
-      const captureRes = await capturePage(tabId);
-      if (captureRes.kind !== "x") {
-        setThreadStatus({
-          message: "This page isn't an X post.",
-          isError: true,
-        });
-        return;
-      }
-
-      if (captureRes.result.status === "error") {
-        setThreadStatus({
-          message: captureRes.result.message,
-          isError: true,
-        });
-        return;
-      }
-
-      const posts = captureRes.result.posts;
-      if (!posts || posts.length === 0) {
-        setThreadStatus({
-          message: "No posts found in this thread.",
-          isError: true,
-        });
-        return;
-      }
-
-      const tabStatus = xStatusId(tabUrl);
-      const postIndex = tabStatus ? posts.findIndex((p) => xStatusId(p.postUrl) === tabStatus) : -1;
-
-      if (postIndex === -1) {
-        setThreadStatus({
-          message: "Couldn't find the post on this page. Scroll to it and try again.",
-          isError: true,
-        });
-        return;
-      }
-
-      const post = posts[postIndex];
-      if (!post) {
-        setThreadStatus({
-          message: "Couldn't find the post on this page. Scroll to it and try again.",
-          isError: true,
-        });
-        return;
-      }
-
-      const parent_post_url = postIndex > 0 ? posts[postIndex - 1]?.postUrl : undefined;
-
-      await addXPost(item.id, { post, parent_post_url });
-      setThreadStatus({
-        message: `Added to ${item.title}`,
-        isError: false,
-      });
-    } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        if (err.status === 409 || err.code === "duplicate") {
-          setThreadStatus({
-            message: "Already in this thread",
-            isError: true,
-          });
-          return;
-        }
-        setThreadStatus({
-          message: err.message,
-          isError: true,
-        });
-        return;
-      }
-      setThreadStatus({
-        message: err instanceof Error ? err.message : "Failed to add post to thread.",
-        isError: true,
-      });
-    } finally {
-      isAddingToThreadRef.current = false;
-      setAddingToThreadId(null);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      moveSelection(e.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    if (e.key === "Enter") {
+      const isOption = active?.getAttribute("role") === "option";
+      if (!inFilter && !isOption && (tag === "button" || tag === "a")) return;
+      e.preventDefault();
+      void handleSave();
+      return;
+    }
+    if (
+      showFilter &&
+      !inText &&
+      e.key.length === 1 &&
+      e.key !== " " &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
+      filterRef.current?.focus();
     }
   };
 
-  if (loading) {
-    return <div className="popup-container" />;
-  }
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => keyHandlerRef.current(e);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
-  const isUnconfigured = !resolvedTarget || resolvedTarget.type === "unconfigured";
-
-  return (
-    <div className="popup-container">
-      <div className="popup-header">
-        <div className="popup-header-content">
-          <h1 className="popup-header-title">Sourcefold</h1>
-          {!isUnconfigured && resolvedTarget && (
-            <span className="popup-target-label">{resolvedTarget.displayLabel}</span>
-          )}
+  const renderBlocker = (b: Blocker) => {
+    if (b.kind === "permission") {
+      return (
+        <div className="notice">
+          <p>Sourcefold needs permission to reach {hostOf(b.webUrl)}.</p>
+          <button type="button" className="btn-primary" onClick={() => void grantPermission()}>
+            Allow access to {hostOf(b.webUrl)}
+          </button>
         </div>
-        <button
-          type="button"
-          className="btn-icon"
-          onClick={openSettings}
-          title="Options"
-          aria-label="Options"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
+      );
+    }
+    return (
+      <div className="notice">
+        <p>
+          {b.kind === "setup"
+            ? "Open the Sourcefold desktop app, or set up the web app in Options."
+            : b.message}
+        </p>
+        <button type="button" className="btn-primary" onClick={openSettings}>
+          Open options
         </button>
       </div>
+    );
+  };
 
-      {resolvedTarget?.type === "error" ? (
-        <div className="popup-main">
-          <p className="popup-connect-text">{resolvedTarget.displayLabel}</p>
-          <div className="popup-actions">
-            <button type="button" className="btn-primary" onClick={openSettings}>
-              Open options
-            </button>
-          </div>
+  const saveLabel = () => {
+    if (saving) {
+      return (
+        <>
+          <LoaderCircle size={16} className="spin" aria-hidden="true" />
+          <span>Saving…</span>
+        </>
+      );
+    }
+    if (isAlreadySaved && selectedGroup) {
+      return (
+        <>
+          <Check size={16} aria-hidden="true" />
+          <span className="btn-save-text">
+            {justSavedId === selectedGroup.id ? "Saved to" : "Already saved in"}{" "}
+            {selectedGroup.name}
+          </span>
+        </>
+      );
+    }
+    if (!selectedGroup) return <span>Choose a group</span>;
+    return (
+      <>
+        <span className="btn-save-text">Save to {selectedGroup.name}</span>
+        <kbd className="btn-save-key" aria-hidden="true">
+          <CornerDownLeft size={12} />
+        </kbd>
+      </>
+    );
+  };
+
+  const kindLabel = unsupported ? null : page?.kind ? pageKindLabel(page.kind) : "Web page";
+
+  return (
+    <div className="popup">
+      <header className="popup-header">
+        <div className="brand">
+          <img src="/icon/32.png" alt="" width={18} height={18} />
+          <span>Sourcefold</span>
         </div>
-      ) : isUnconfigured ? (
-        <div className="popup-main">
-          <p className="popup-connect-text">
-            Open the Sourcefold desktop app or set up the web app in Options.
-          </p>
-          <div className="popup-actions">
-            <button type="button" className="btn-primary" onClick={openSettings}>
-              Open options
-            </button>
-          </div>
+        <div className="popup-header-end">
+          {target && !blocker && <TargetBadge target={target} />}
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={openSettings}
+            title="Options"
+            aria-label="Options"
+          >
+            <Settings size={16} aria-hidden="true" />
+          </button>
         </div>
-      ) : needsPermission ? (
-        <div className="popup-main">
-          <div className="popup-permission-banner">
-            <p className="popup-permission-text">
-              Sourcefold needs permission to reach {hostOf(permissionHost)}.
-            </p>
-            <button type="button" className="btn-primary btn-sm" onClick={handleGrantPermission}>
-              Allow access to {hostOf(permissionHost)}
-            </button>
+      </header>
+
+      {page && (
+        <section
+          className="page"
+          style={{ "--mark": sourceColor(unsupported ? null : page.kind) } as React.CSSProperties}
+        >
+          <div className="page-meta">
+            {!unsupported && <SourceIcon kind={page.kind} />}
+            {kindLabel && <span className="page-kind">{kindLabel}</span>}
+            {hostLabel(page.url) && <span className="page-host">{hostLabel(page.url)}</span>}
           </div>
+          <h1 className="page-title" title={page.title}>
+            {page.title}
+          </h1>
+          {unsupported ? (
+            <p className="page-note">{CANNOT_SAVE_MESSAGE}</p>
+          ) : (
+            pageNote && (
+              <p className="page-note page-note-warning">
+                <CircleAlert size={13} aria-hidden="true" />
+                <span>{pageNote}</span>
+              </p>
+            )
+          )}
+        </section>
+      )}
+
+      {blocker ? (
+        renderBlocker(blocker)
+      ) : booting ? (
+        <div className="skeleton" aria-label="Loading your projects">
+          <div className="skeleton-bar skeleton-short" />
+          <div className="skeleton-bar" />
+          <div className="skeleton-bar" />
+          <div className="skeleton-bar" />
+        </div>
+      ) : sections.length === 0 ? (
+        <div className="notice">
+          <p>Create your first project to start collecting sources.</p>
+          <form
+            className="inline-create"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = newProjectName.trim();
+              if (name) void createProject(name).then((ok) => ok && setNewProjectName(""));
+            }}
+          >
+            <input
+              type="text"
+              className="input-field input-sm"
+              placeholder="Project name, for example the video title"
+              aria-label="Project name"
+              value={newProjectName}
+              onChange={(e) => setNewProjectName(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+            <button type="submit" className="btn-primary btn-sm" disabled={!newProjectName.trim()}>
+              New project
+            </button>
+          </form>
+          {result && <p className="result result-error">{result.text}</p>}
         </div>
       ) : (
-        <div className="popup-main">
-          <h2 className="popup-page-title">{tabTitle}</h2>
-          <p className="popup-detected-type">{getDetectedTypeLabel()}</p>
+        <>
+          <section className="destination">
+            <span className="label">Project</span>
+            <ProjectMenu
+              sections={sections}
+              currentId={place.projectId}
+              disabled={saving}
+              onSelect={selectProject}
+              onCreate={createProject}
+            />
+            <span className="label label-spaced">Group</span>
+            <GroupList
+              key={place.projectId}
+              groups={visibleGroups}
+              selectedId={place.groupId}
+              savedIds={savedGroupIds}
+              showFilter={showFilter}
+              query={query}
+              onQueryChange={changeQuery}
+              filterRef={filterRef}
+              onSelect={selectGroup}
+              onActivate={(groupId) => {
+                selectGroup(groupId);
+                void handleSave(groupId);
+              }}
+              onCreate={createGroup}
+              selectedName={selectedGroup?.name}
+              disabled={saving}
+              emptyProject={Boolean(section) && section!.groups.length === 0}
+            />
+          </section>
 
-          <div className="popup-folder-section">
-            <div className="popup-combobox">
-              <input
-                ref={comboboxInputRef}
-                type="text"
-                className="input-field popup-combobox-input"
-                placeholder={
-                  selectedFolder
-                    ? `${folderPath(selectedFolder.id) || selectedFolder.name}`
-                    : "Type to filter groups…"
-                }
-                value={
-                  comboboxOpen
-                    ? filterQuery
-                    : selectedFolder
-                      ? folderPath(selectedFolder.id) || selectedFolder.name
-                      : ""
-                }
-                onChange={(e) => {
-                  setFilterQuery(e.target.value);
-                  setHighlightedIndex(0);
-                  if (!comboboxOpen) setComboboxOpen(true);
-                }}
-                onFocus={() => {
-                  setComboboxOpen(true);
-                  setHighlightedIndex(0);
-                }}
-                onKeyDown={handleComboboxKeyDown}
-                disabled={!hasGroups || isSaving}
-                aria-label="Folder"
-                role="combobox"
-                aria-expanded={comboboxOpen}
-              />
-
-              {comboboxOpen && (
-                <ul ref={comboboxListRef} className="popup-combobox-list" role="listbox">
-                  {filteredGroups.length === 0 ? (
-                    <li className="popup-combobox-empty">No matching groups</li>
-                  ) : (
-                    filteredGroups.map((item, idx) => (
-                      <li
-                        key={item.id}
-                        role="option"
-                        aria-selected={item.id === selectedFolderId}
-                        className={`popup-combobox-option ${
-                          idx === highlightedIndex ? "is-highlighted" : ""
-                        } ${item.id === selectedFolderId ? "is-selected" : ""}`}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          selectGroup(item.id);
-                        }}
-                        onMouseEnter={() => setHighlightedIndex(idx)}
-                      >
-                        <span style={{ color: "var(--muted-foreground)", marginRight: "6px" }}>
-                          {item.projectName} /
-                        </span>
-                        <span>{item.name}</span>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              )}
-            </div>
-
-            {projectSections.length === 0 ? (
-              <p className="popup-detected-type">Create a project in Sourcefold first.</p>
-            ) : !newFolderOpen ? (
-              <button type="button" className="btn-text" onClick={() => setNewFolderOpen(true)}>
-                New group
-              </button>
-            ) : (
-              <div className="popup-new-folder">
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="Group name"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleCreateFolder();
-                    } else if (e.key === "Escape") {
-                      setNewFolderOpen(false);
-                      setNewFolderName("");
-                    }
-                  }}
-                  autoFocus
-                />
-                {selectedFolder && (
-                  <label className="popup-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={insideSelected}
-                      onChange={(e) => setInsideSelected(e.target.checked)}
-                    />
-                    <span>Inside {selectedFolder.name}</span>
-                  </label>
-                )}
-                <div className="popup-new-folder-actions">
-                  <button
-                    type="button"
-                    className="btn-primary btn-sm"
-                    onClick={handleCreateFolder}
-                    disabled={!newFolderName.trim() || isCreatingFolder}
-                  >
-                    {isCreatingFolder ? "Creating\u2026" : "Create"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-outline btn-sm"
-                    onClick={() => {
-                      setNewFolderOpen(false);
-                      setNewFolderName("");
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="popup-actions">
+          <footer className="popup-footer">
             <button
               type="button"
-              className="btn-primary btn-full"
-              onClick={handleSave}
-              disabled={isSaving || isAlreadySaved || unsupported || !selectedFolderId}
+              className={`btn-primary btn-save${isAlreadySaved ? " is-saved" : ""}`}
+              onClick={() => void handleSave()}
+              disabled={saving || isAlreadySaved || unsupported || !selectedGroup}
             >
-              {isSaving ? "Saving\u2026" : "Save"}
+              {saveLabel()}
             </button>
 
-            {successMessage && (
-              <p className="popup-result popup-result-success">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <span>{successMessage}</span>
+            {result && (
+              <p className={`result result-${result.tone}`}>
+                <CircleAlert size={14} aria-hidden="true" />
+                <span>{result.text}</span>
               </p>
             )}
 
-            {!successMessage && (warningMessage || isAlreadySaved) && (
-              <p className="popup-result popup-result-warning">
-                {warningMessage ||
-                  `Already saved in ${folderPath(selectedFolderId) ?? "this group"}`}
-              </p>
+            {page?.kind === "x" && !unsupported && section && (
+              <ThreadPicker
+                key={place.projectId}
+                load={loadThreads}
+                add={addToThread}
+                disabled={saving}
+              />
             )}
-
-            {errorMessage && <p className="popup-result popup-result-error">{errorMessage}</p>}
-          </div>
-
-          {detectedSource === "x" && (
-            <details
-              key={projectIdOf(folderTree, selectedFolderId) ?? "none"}
-              className="popup-details"
-              onToggle={handleDetailsToggle}
-            >
-              <summary className="popup-summary">Add to this thread</summary>
-              <div className="popup-thread-list">
-                {loadingThreads && <p className="popup-thread-loading">Loading threads\u2026</p>}
-                {!loadingThreads && recentThreads.length === 0 && (
-                  <p className="popup-thread-empty">No recent X threads.</p>
-                )}
-                {!loadingThreads &&
-                  recentThreads.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="popup-thread-item"
-                      onClick={() => handleAddToThread(item)}
-                      disabled={addingToThreadId !== null || isSaving}
-                    >
-                      <span className="popup-thread-item-title">{item.title}</span>
-                      {addingToThreadId === item.id && (
-                        <span className="popup-thread-item-adding">Adding\u2026</span>
-                      )}
-                    </button>
-                  ))}
-                {threadStatus && (
-                  <p
-                    className={`popup-result ${
-                      threadStatus.isError ? "popup-result-error" : "popup-result-success"
-                    }`}
-                  >
-                    {!threadStatus.isError && (
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    )}
-                    <span>{threadStatus.message}</span>
-                  </p>
-                )}
-              </div>
-            </details>
-          )}
-        </div>
+          </footer>
+        </>
       )}
     </div>
   );

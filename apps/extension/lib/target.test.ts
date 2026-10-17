@@ -460,3 +460,43 @@ describe("Target Caching and Invalidation", () => {
     expect(queryDesktopNative).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("Desktop lookup speed", () => {
+  beforeEach(() => {
+    invalidateTargetCache();
+  });
+
+  it("uses the local server's answer without waiting for a slow native host", async () => {
+    const neverAnswers = () => new Promise<never>(() => {});
+    const started = Date.now();
+    const target = await resolveTarget({
+      forceRefresh: true,
+      settings: { appUrl: "http://localhost:3000", token: "", connectionMode: "auto" },
+      deps: {
+        queryDesktopNative: neverAnswers,
+        queryDesktopHttp: async () => ({ signedIn: false }),
+        pingDesktopNative: async () => false,
+        pingDesktopHttp: async () => true,
+      },
+    });
+    expect(target).toMatchObject({ type: "desktop-offline", transport: "http" });
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it("asks both channels at once and pings both at once", async () => {
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const started = Date.now();
+    await resolveTarget({
+      forceRefresh: true,
+      settings: { appUrl: "https://app.example.com", token: "t", connectionMode: "auto" },
+      deps: {
+        queryDesktopNative: () => delay(150).then(() => null),
+        queryDesktopHttp: () => delay(150).then(() => null),
+        pingDesktopNative: () => delay(150).then(() => false),
+        pingDesktopHttp: () => delay(150).then(() => false),
+      },
+    });
+    // One-after-another would take about 600 ms.
+    expect(Date.now() - started).toBeLessThan(450);
+  });
+});

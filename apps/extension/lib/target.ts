@@ -195,6 +195,24 @@ async function pingDesktopHttp(timeoutMs = 1500): Promise<boolean> {
   }
 }
 
+/** The first channel that returns a readable session, or null once every channel has failed. */
+function firstSession(
+  channels: { via: "native" | "http"; query: () => Promise<unknown> }[],
+): Promise<{ session: DesktopSession; via: "native" | "http" } | null> {
+  return new Promise((resolve) => {
+    let pending = channels.length;
+    for (const { via, query } of channels) {
+      Promise.resolve()
+        .then(query)
+        .then(parseSessionResponse, () => null)
+        .then((session) => {
+          if (session) resolve({ session, via });
+          else if (--pending === 0) resolve(null);
+        });
+    }
+  });
+}
+
 export interface ResolveTargetOptions {
   forceRefresh?: boolean;
   settings?: ExtensionSettings;
@@ -205,7 +223,7 @@ export interface ResolveTargetOptions {
  * Resolves the active saving target according to the configured mode.
  *
  * In auto mode:
- * 1. Ask desktop app for session (first native messaging, else HTTP GET /api/session).
+ * 1. Ask desktop app for session over native messaging and HTTP GET /api/session at once.
  * 2. If desktop signed in -> save to web API at session.webUrl with session.token.
  * 3. If desktop reachable but explicitly not signed in -> save to desktop offline library (native messaging else local HTTP).
  * 4. If desktop is reachable (health OK) but session couldn't be read -> resolve to an error target (do NOT cache).
@@ -257,33 +275,15 @@ export async function resolveTarget(options: ResolveTargetOptions = {}): Promise
     return target;
   }
 
-  // Desktop or Auto mode: query desktop session first
-  let desktopSession: DesktopSession | null = null;
-  let transport: "native" | "http" = "native";
-
-  // Try native messaging
-  try {
-    const res = await nativeQuery();
-    desktopSession = parseSessionResponse(res);
-    if (desktopSession !== null) {
-      transport = "native";
-    }
-  } catch {
-    desktopSession = null;
-  }
-
-  // Fallback to local HTTP for session
-  if (desktopSession === null) {
-    try {
-      const res = await httpQuery();
-      desktopSession = parseSessionResponse(res);
-      if (desktopSession !== null) {
-        transport = "http";
-      }
-    } catch {
-      desktopSession = null;
-    }
-  }
+  // Desktop or Auto mode: ask the desktop app over both channels at once. Native messaging
+  // starts a new host process for every message, so the local server (when the app is running)
+  // usually answers first and is the faster channel for later offline calls too.
+  const answer = await firstSession([
+    { via: "native", query: nativeQuery },
+    { via: "http", query: httpQuery },
+  ]);
+  const desktopSession: DesktopSession | null = answer?.session ?? null;
+  let transport: "native" | "http" = answer?.via ?? "native";
 
   // If a valid session response was returned by desktop
   if (desktopSession !== null) {
@@ -311,14 +311,12 @@ export async function resolveTarget(options: ResolveTargetOptions = {}): Promise
   }
 
   // If session couldn't be read (403, network error, timeout, bad JSON), check if desktop is reachable via ping/health
-  let desktopReachable = false;
-  if (await nativePing()) {
-    desktopReachable = true;
-    transport = "native";
-  } else if (await httpPing()) {
-    desktopReachable = true;
-    transport = "http";
-  }
+  const [nativeUp, httpUp] = await Promise.all([
+    nativePing().catch(() => false),
+    httpPing().catch(() => false),
+  ]);
+  const desktopReachable = nativeUp || httpUp;
+  transport = nativeUp ? "native" : "http";
 
   // If desktop is reachable but session couldn't be read -> resolve to error target and DO NOT cache
   if (desktopReachable) {

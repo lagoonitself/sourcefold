@@ -100,6 +100,7 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] First macOS CI run (green 2026-10-16).
   - [x] First desktop release: v0.2.0 (2026-10-16), Windows and macOS installers and the extension zip in one GitHub Release with an install guide. [ ] Owner's check.
   - [x] README lists every supported source, with which sites need the extension (2026-10-16).
+  - [x] Extension popup redesign (2026-10-17): the project stays put between saves (one project per video) with a full-width switcher, the project's groups as a list, New project / New group inline, source-type mark and bundled fonts. Faster: paints from a cache at once, asks the desktop app over native messaging and HTTP at the same time, and runs the page capture while the popup is open. [ ] Owner's check.
   - [x] Open the deployment to friends: `ALLOWED_EMAIL=*`, `publicFetch` guard on server-side fetches of pasted links.
   - [ ] Code signing (not planned, $0 budget).
   - [ ] Optional: import an offline library into the account.

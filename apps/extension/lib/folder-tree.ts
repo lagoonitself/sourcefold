@@ -114,6 +114,50 @@ export function projectIdOf(tree: FolderTreeItem[], folderId: string): string | 
   return null;
 }
 
+/** The group to open in a project: the one used last there, else its first group, else none. */
+export function pickGroupInProject(
+  section: ProjectSection,
+  groupByProject: Record<string, string>,
+): string {
+  const remembered = groupByProject[section.project.id];
+  if (remembered && section.groups.some((g) => g.id === remembered)) return remembered;
+  return section.groups[0]?.id ?? "";
+}
+
+/**
+ * Where the popup opens. The project stays put between saves (one project per video), so the
+ * last open project wins, even when it has no groups yet; then the last used group's project;
+ * then the first project that has groups.
+ */
+export function pickStartingPlace(
+  tree: FolderTreeItem[],
+  places: {
+    groupId: string | null;
+    projectId: string | null;
+    groupByProject: Record<string, string>;
+  },
+): { projectId: string; groupId: string } {
+  const sections = buildProjectSections(tree);
+  const byId = (id: string | null) => sections.find((s) => s.project.id === id);
+
+  const groupProject =
+    places.groupId && tree.some((item) => item.id === places.groupId && item.depth > 0)
+      ? projectIdOf(tree, places.groupId)
+      : null;
+  const section =
+    byId(places.projectId) ??
+    byId(groupProject) ??
+    sections.find((s) => s.groups.length > 0) ??
+    sections[0];
+  if (!section) return { projectId: "", groupId: "" };
+
+  const groupId =
+    groupProject === section.project.id && places.groupId
+      ? places.groupId
+      : pickGroupInProject(section, places.groupByProject);
+  return { projectId: section.project.id, groupId };
+}
+
 /** The last used group, else the first group of the last used project, else the first group. */
 export function pickDefaultGroup(tree: FolderTreeItem[], lastFolderId: string | null): string {
   const groups = tree.filter((item) => item.depth > 0);

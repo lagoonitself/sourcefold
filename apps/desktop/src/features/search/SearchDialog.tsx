@@ -1,6 +1,8 @@
 import * as React from "react";
 import { ExternalLink, MessageSquare, Search } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/Dialog";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Kbd } from "@/components/ui/Kbd";
 import { getSourceKind } from "@/features/items/source-kinds";
 import type { Folder, Item } from "@/lib/types";
 import { isTauri } from "@/lib/api";
@@ -25,16 +27,53 @@ export interface SearchDialogProps {
 
 const rowClass = (selected: boolean) =>
   cn(
-    "relative flex cursor-pointer select-none items-start justify-between gap-3 py-2.5 pl-5 pr-4 transition-colors",
-    selected ? "bg-accent text-accent-foreground" : "hover:bg-muted/60",
+    "relative flex min-h-[52px] cursor-pointer select-none items-start justify-between gap-3 rounded-[10px] px-2.5 py-2 transition-colors duration-100",
+    selected ? "bg-accent" : "hover:bg-muted",
   );
 
-function TypeBar({ kind }: { kind: string }) {
+/** The tinted tile that stands for a source type; the kind's name is always written on the row too. */
+function KindTile({ kind }: { kind: string }) {
+  const { Icon, colorVar } = getSourceKind(kind);
   return (
     <span
       aria-hidden="true"
-      className={cn("absolute inset-y-0 left-0 w-[3px]", getSourceKind(kind).barClass)}
+      className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[8px]"
+      style={{
+        backgroundColor: `color-mix(in oklab, ${colorVar} 12%, transparent)`,
+        color: colorVar,
+      }}
+    >
+      <Icon className="size-4" aria-hidden={true} />
+    </span>
+  );
+}
+
+/** The 2px ink bar on the left of the row the arrow keys are on. */
+function ActiveBar() {
+  return (
+    <span
+      aria-hidden="true"
+      className="absolute inset-y-2.5 left-0 w-[2px] rounded-full bg-foreground"
     />
+  );
+}
+
+interface MetaPart {
+  text: string;
+  className?: string;
+}
+
+/** One muted line of facts joined with commas, cut off with an ellipsis when it runs out of room. */
+function MetaLine({ parts }: { parts: MetaPart[] }) {
+  return (
+    <p className="mt-0.5 truncate text-[12.5px] leading-[18px] text-muted-foreground">
+      {parts.map((part, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && ", "}
+          <span className={part.className}>{part.text}</span>
+        </React.Fragment>
+      ))}
+    </p>
   );
 }
 
@@ -42,12 +81,15 @@ function Snippet({ text }: { text: string }) {
   const segments = splitSnippet(text);
   if (segments.length === 0) return null;
   return (
-    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+    <p className="mt-1 line-clamp-2 text-[13px] leading-[19px] text-muted-foreground">
       {segments.map((segment, i) =>
         segment.bold ? (
-          <strong key={i} className="font-semibold text-foreground">
+          <mark
+            key={i}
+            className="rounded-[3px] bg-marker-soft px-0.5 font-semibold text-foreground"
+          >
             {segment.text}
-          </strong>
+          </mark>
         ) : (
           <React.Fragment key={i}>{segment.text}</React.Fragment>
         ),
@@ -68,12 +110,16 @@ function SourceRowView({
   showProject: boolean;
 }) {
   const projectId = names.projectOf(item.folder_id);
+  const parts: MetaPart[] = [{ text: names.groupName(item.folder_id) }];
+  if (showProject && projectId) parts.push({ text: names.projectName(projectId) });
+  if (item.source_url) parts.push({ text: item.source_url });
   return (
     <>
-      <TypeBar kind={item.kind} />
+      {selected && <ActiveBar />}
+      <KindTile kind={item.kind} />
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2">
-          <span className="truncate font-serif text-[15px] font-medium text-foreground">
+          <span className="truncate font-serif text-[15px] font-medium leading-[22px] tracking-[-0.005em] text-foreground">
             {item.title}
           </span>
           {item.note && (
@@ -82,33 +128,12 @@ function SourceRowView({
             </span>
           )}
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{getSourceKind(item.kind).name}</span>
-          <span aria-hidden="true">&bull;</span>
-          <span className="shrink-0">{names.groupName(item.folder_id)}</span>
-          {showProject && projectId && (
-            <>
-              <span aria-hidden="true">&bull;</span>
-              <span className="shrink-0">{names.projectName(projectId)}</span>
-            </>
-          )}
-          {item.source_url && (
-            <>
-              <span aria-hidden="true">&bull;</span>
-              <span className="max-w-[200px] truncate">{item.source_url}</span>
-            </>
-          )}
-        </div>
+        <MetaLine parts={parts} />
       </div>
-      {item.source_url && (
-        <ExternalLink
-          className={cn(
-            "mt-1 size-3.5 shrink-0",
-            selected ? "text-accent-foreground" : "text-muted-foreground",
-          )}
-          aria-hidden="true"
-        />
-      )}
+      <div className="mt-1 flex shrink-0 items-center gap-2 text-[12.5px] leading-[18px] text-muted-foreground">
+        <span>{getSourceKind(item.kind).name}</span>
+        {item.source_url && <ExternalLink className="size-3.5" aria-hidden="true" />}
+      </div>
     </>
   );
 }
@@ -116,61 +141,41 @@ function SourceRowView({
 function HitRowView({
   hit,
   label,
+  selected,
   names,
   showProject,
 }: {
   hit: PassageHit | NoteHit;
   /** "Highlight" or "Note" for notes; nothing for passages. */
   label: string | null;
+  selected: boolean;
   names: FolderNames;
   showProject: boolean;
 }) {
   const heading = "heading" in hit ? hit.heading : "";
+  const parts: MetaPart[] = [];
+  if (label) parts.push({ text: label, className: "font-medium text-foreground" });
+  parts.push({ text: names.groupName(hit.folder_id) });
+  if (showProject) parts.push({ text: names.projectName(hit.project_id) });
+  if (heading) parts.push({ text: heading });
+  if (hit.kind === "youtube" && hit.seconds !== null) {
+    parts.push({ text: formatTimestamp(hit.seconds), className: "tabular-nums" });
+  }
+  if (hit.matched === "meaning") parts.push({ text: "Similar meaning", className: "font-medium" });
   return (
     <>
-      <TypeBar kind={hit.kind} />
+      {selected && <ActiveBar />}
+      <KindTile kind={hit.kind} />
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="truncate font-serif text-[15px] font-medium text-foreground">
+          <span className="truncate font-serif text-[15px] font-medium leading-[22px] tracking-[-0.005em] text-foreground">
             {hit.title}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className="shrink-0 text-[12.5px] leading-[18px] text-muted-foreground">
             {getSourceKind(hit.kind).name}
           </span>
         </div>
-        <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-          {label && (
-            <>
-              <span className="shrink-0 font-medium">{label}</span>
-              <span aria-hidden="true">&bull;</span>
-            </>
-          )}
-          <span className="shrink-0">{names.groupName(hit.folder_id)}</span>
-          {showProject && (
-            <>
-              <span aria-hidden="true">&bull;</span>
-              <span className="shrink-0">{names.projectName(hit.project_id)}</span>
-            </>
-          )}
-          {heading && (
-            <>
-              <span aria-hidden="true">&bull;</span>
-              <span className="truncate">{heading}</span>
-            </>
-          )}
-          {hit.kind === "youtube" && hit.seconds !== null && (
-            <>
-              <span aria-hidden="true">&bull;</span>
-              <span className="shrink-0 tabular-nums">{formatTimestamp(hit.seconds)}</span>
-            </>
-          )}
-          {hit.matched === "meaning" && (
-            <>
-              <span aria-hidden="true">&bull;</span>
-              <span className="shrink-0 font-medium">Similar meaning</span>
-            </>
-          )}
-        </div>
+        <MetaLine parts={parts} />
         <Snippet text={hit.snippet} />
       </div>
     </>
@@ -190,6 +195,7 @@ export function SearchDialog({
   // The row the arrow keys are on, by key, so a new answer keeps it on the same row if listed.
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   const projectId = currentProjectId ?? null;
   // Without an open project there is nothing for "This project" to mean.
@@ -217,7 +223,9 @@ export function SearchDialog({
   const showProject = effectiveScope === "all";
 
   React.useEffect(() => {
-    document.getElementById(`search-row-${selectedIndex}`)?.scrollIntoView?.({ block: "nearest" });
+    // The first row sits under its section label; scrolling to the top keeps the label in view.
+    if (selectedIndex === 0 && listRef.current) listRef.current.scrollTop = 0;
+    else document.getElementById(`search-row-${selectedIndex}`)?.scrollIntoView?.({ block: "nearest" });
   }, [selectedIndex, rows]);
 
   const openRow = (row: SearchRow) => {
@@ -246,6 +254,8 @@ export function SearchDialog({
     if (e.key === "Tab") {
       e.preventDefault();
       switchScope();
+      // The dialog's focus trap runs right after this and would move focus to the close button.
+      requestAnimationFrame(() => inputRef.current?.focus());
     } else if (e.key === "ArrowDown" || (mod && e.key.toLowerCase() === "j")) {
       e.preventDefault();
       moveSelection(1);
@@ -263,16 +273,19 @@ export function SearchDialog({
   const footer = footerStatus(status, meaning.enabled);
   const scopeLabel = effectiveScope === "project" ? "This project" : "All projects";
   const showEmpty = trimmed !== "" && rows.length === 0 && !search.pending;
+  const showIdle = trimmed === "" && rows.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Spotlight placement: the overlay centres its box, so the box pins itself to the top at 14vh. */}
       <DialogContent
-        className="max-w-[580px] overflow-hidden border-border bg-card p-0 shadow-float"
+        className="mt-[calc(14vh-16px)] flex max-h-[calc(100dvh-14vh)] max-w-[640px] flex-col self-start overflow-hidden bg-popover p-0 shadow-float"
         onKeyDown={handleKeyDown}
       >
-        <div className="flex items-center gap-3 border-b border-border py-3 pl-4 pr-12">
-          <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="flex h-[52px] shrink-0 items-center gap-3 border-b border-border pl-4 pr-12">
+          <Search className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
+            ref={inputRef}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -288,7 +301,7 @@ export function SearchDialog({
             aria-expanded={rows.length > 0}
             aria-controls="search-results"
             aria-activedescendant={rows.length > 0 ? `search-row-${selectedIndex}` : undefined}
-            className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            className="h-full min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground"
             autoFocus
           />
           <button
@@ -297,21 +310,17 @@ export function SearchDialog({
             onClick={switchScope}
             disabled={!projectId}
             aria-label={`Searching ${scopeLabel.toLowerCase()}. Press Tab to switch.`}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-muted px-2 py-0.5 text-xs font-medium text-foreground transition-colors enabled:hover:bg-accent disabled:opacity-70"
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[7px] bg-muted pl-2.5 pr-1.5 text-[12.5px] font-medium text-foreground transition-colors duration-100 enabled:hover:bg-accent disabled:pr-2.5 disabled:text-muted-foreground"
           >
             {scopeLabel}
-            {projectId && (
-              <kbd className="rounded-[4px] border border-border bg-card px-1 text-[10px] font-medium text-muted-foreground">
-                Tab
-              </kbd>
-            )}
+            {projectId && <Kbd>Tab</Kbd>}
           </button>
         </div>
 
         {notice && (
           <div
             role="status"
-            className="border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground"
+            className="shrink-0 border-b border-border bg-muted/50 px-4 py-2 text-[12.5px] text-muted-foreground"
           >
             {notice}
           </div>
@@ -322,14 +331,32 @@ export function SearchDialog({
           id="search-results"
           role="listbox"
           aria-label="Search results"
-          className="max-h-[420px] overflow-y-auto"
+          className="min-h-0 max-h-[420px] scroll-py-2 overflow-y-auto p-2"
         >
           {showEmpty && (
-            <div className="p-8 text-center text-xs text-muted-foreground">
-              {desktop && !notice
-                ? `No sources mention "${trimmed}".`
-                : `No titles match "${trimmed}".`}
-            </div>
+            <EmptyState
+              compact
+              icon={Search}
+              title={
+                desktop && !notice
+                  ? `No sources mention “${trimmed}”.`
+                  : `No titles match “${trimmed}”.`
+              }
+              description="Check the spelling, or try a shorter word."
+            />
+          )}
+
+          {showIdle && (
+            <EmptyState
+              compact
+              icon={Search}
+              title="Search your sources"
+              description={
+                desktop
+                  ? "Type a title, or a word from inside any saved source."
+                  : "Type a title, a note or part of a link."
+              }
+            />
           )}
 
           {rows.map((row, idx) => {
@@ -340,7 +367,10 @@ export function SearchDialog({
                 {startsSection && (
                   <div
                     role="presentation"
-                    className="border-t border-border bg-muted/30 px-4 py-1 text-xs font-medium text-muted-foreground first:border-t-0"
+                    className={cn(
+                      "px-2.5 pb-1 text-xs font-medium leading-4 text-muted-foreground",
+                      idx === 0 ? "pt-1" : "pt-3",
+                    )}
                   >
                     {SECTION_TITLES[row.type]}
                   </div>
@@ -353,10 +383,7 @@ export function SearchDialog({
                   onMouseMove={() => {
                     if (!selected) setSelectedKey(row.key);
                   }}
-                  className={cn(
-                    rowClass(selected),
-                    idx > 0 && !startsSection && "border-t border-border",
-                  )}
+                  className={rowClass(selected)}
                 >
                   {row.type === "source" ? (
                     <SourceRowView
@@ -375,6 +402,7 @@ export function SearchDialog({
                             : "Note"
                           : null
                       }
+                      selected={selected}
                       names={names}
                       showProject={showProject}
                     />
@@ -385,10 +413,15 @@ export function SearchDialog({
           })}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-0.5 border-t border-border bg-muted/20 px-4 py-1.5 text-[11px] text-muted-foreground">
-          <span>↑↓ to navigate, Enter to open{projectId ? ", Tab to switch" : ""}</span>
+        <div className="flex h-9 shrink-0 items-center justify-between gap-x-4 border-t border-border px-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            <Kbd>↑↓</Kbd> to move, <Kbd>Enter</Kbd> to open, <Kbd>Esc</Kbd> to close
+          </span>
           {(footer.index || footer.meaning) && (
-            <span className="flex flex-wrap gap-x-3" aria-live="polite">
+            <span
+              className="flex min-w-0 flex-wrap justify-end gap-x-3 tabular-nums"
+              aria-live="polite"
+            >
               {footer.index && <span>{footer.index}</span>}
               {footer.meaning && <span>{footer.meaning}</span>}
             </span>

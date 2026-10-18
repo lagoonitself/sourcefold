@@ -16,6 +16,7 @@ import {
   Newspaper,
   StickyNote,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type IconComponent = React.ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" }>;
 
@@ -30,6 +31,7 @@ export interface SourceKindConfig {
 }
 
 // Same kinds, colors and icons as the web app's item rows (see docs/dev/DESIGN.md, "Source-type marks").
+// `barClass` is the web app's 3px bar; the desktop app shows the kind as a `SourceTile` instead.
 const SOURCE_KINDS: Record<string, SourceKindConfig> = {
   grokipedia: {
     name: "Grokipedia",
@@ -61,11 +63,10 @@ const SOURCE_KINDS: Record<string, SourceKindConfig> = {
     colorVar: "var(--source-image)",
     Icon: ImageIcon,
   },
-  // No color of its own in docs/dev/DESIGN.md yet, so it uses the neutral secondary-text color.
   wikipedia: {
     name: "Wikipedia",
-    barClass: "bg-muted-foreground",
-    colorVar: "var(--muted-foreground)",
+    barClass: "bg-source-wikipedia",
+    colorVar: "var(--source-wikipedia)",
     Icon: Globe,
   },
   youtube: {
@@ -117,6 +118,86 @@ export function getSourceKind(kind: string): SourceKindConfig {
   return SOURCE_KINDS[kind] ?? FALLBACK_KIND;
 }
 
+/**
+ * The source type as a tile: a rounded square tinted with the source color at 12%, with its icon in
+ * the source color. 32px by default; pass a size class (`size-7`) to change it. Always show the
+ * source name in text somewhere next to it.
+ */
+export function SourceTile({
+  kind,
+  className,
+}: {
+  kind: string | SourceKindConfig;
+  className?: string;
+}) {
+  const config = typeof kind === "string" ? getSourceKind(kind) : kind;
+  const Icon = config.Icon;
+  return (
+    <span
+      aria-hidden="true"
+      className={cn("flex size-8 shrink-0 items-center justify-center rounded-[8px]", className)}
+      style={{
+        color: config.colorVar,
+        backgroundColor: `color-mix(in oklab, ${config.colorVar} 12%, transparent)`,
+      }}
+    >
+      <Icon className="size-4" aria-hidden="true" />
+    </span>
+  );
+}
+
+function metaText(meta: Record<string, unknown>, key: string): string | null {
+  const value = meta[key];
+  if (typeof value === "string") return value.trim() || null;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+// What each extractor stores in `item.meta` (see the capture code in src-tauri/src/service.rs),
+// in the order the second line of a row prefers it.
+const META_LINE_FIELDS: Record<string, Array<(meta: Record<string, unknown>) => string | null>> = {
+  youtube: [(m) => metaText(m, "channel"), (m) => metaText(m, "duration")],
+  web: [(m) => metaText(m, "site"), (m) => metaText(m, "author")],
+  reddit: [
+    (m) => {
+      const subreddit = metaText(m, "subreddit");
+      return subreddit && (subreddit.startsWith("r/") ? subreddit : `r/${subreddit}`);
+    },
+    (m) => metaText(m, "author"),
+  ],
+  pdf: [
+    (m) => metaText(m, "author"),
+    (m) => {
+      const pages = metaText(m, "pages");
+      return pages && `${pages} ${pages === "1" ? "page" : "pages"}`;
+    },
+  ],
+  hackernews: [
+    (m) => metaText(m, "author"),
+    (m) => {
+      const points = metaText(m, "points");
+      return points && `${points} ${points === "1" ? "point" : "points"}`;
+    },
+  ],
+  bluesky: [(m) => metaText(m, "author")],
+  substack: [(m) => metaText(m, "author"), (m) => metaText(m, "publication")],
+  x: [(m) => metaText(m, "author")],
+};
+
+/** Author, channel, site or duration for the second line of a row; null when the source has none. */
+export function getSourceMetaLine(
+  kind: string,
+  meta: Record<string, unknown> | null | undefined,
+): string | null {
+  const readers = META_LINE_FIELDS[kind];
+  if (!readers || !meta || typeof meta !== "object") return null;
+  const parts = readers
+    .map((read) => read(meta))
+    .filter((part): part is string => Boolean(part))
+    .slice(0, 2);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
 /** "Oct 15"; empty when the date is missing or invalid. */
@@ -131,7 +212,7 @@ export function StatusIcon({ status, error }: { status: string; error?: string |
     case "saved":
       return (
         <span
-          className="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+          className="flex size-4 shrink-0 items-center justify-center text-success"
           role="img"
           aria-label="Saved"
           title="Saved"

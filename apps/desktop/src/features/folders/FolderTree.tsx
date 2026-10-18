@@ -20,6 +20,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import {
@@ -32,6 +33,7 @@ import {
   isAnyDialogOpen,
 } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
+import { Kbd } from "@/components/ui/Kbd";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +56,7 @@ import {
   resolveInlineRename,
 } from "./tree-utils";
 import { isMacPlatform, isTypingContext } from "../shortcuts/key-utils";
+import { NEW_GROUP_EVENT } from "@/features/items/group-actions";
 import { cn } from "@/lib/utils";
 
 export interface FolderTreeProps {
@@ -166,6 +169,17 @@ export function FolderTree({
 
   const [deleteTarget, setDeleteTarget] = React.useState<FolderNode | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  // Empty states and the top bar ask for a new top-level group the same way the `n` key does.
+  React.useEffect(() => {
+    const open = () => {
+      setNewGroupParentId(null);
+      setNewGroupName("");
+      setNewGroupOpen(true);
+    };
+    window.addEventListener(NEW_GROUP_EVENT, open);
+    return () => window.removeEventListener(NEW_GROUP_EVENT, open);
+  }, []);
 
   // Keyboard navigation handler for Tree region
   React.useEffect(() => {
@@ -528,34 +542,31 @@ export function FolderTree({
   };
 
   return (
-    <div
-      className={cn(
-        "flex flex-col flex-1 min-h-0 select-none rounded-[6px] transition-colors",
-        isFocusedRegion && "ring-1 ring-primary/40",
-      )}
-    >
-      <div className="flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="flex min-h-0 flex-1 select-none flex-col">
+      <div className="flex items-center justify-between py-1 pl-3 pr-1 text-[12px] font-medium leading-4 text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <span>Groups</span>
           {isFocusedRegion && (
             <span
-              className="size-1.5 rounded-full bg-primary animate-pulse"
+              className="size-1.5 rounded-full bg-foreground motion-safe:animate-pop-in"
               title="Keyboard focused region"
             />
           )}
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
           onClick={() => {
             setNewGroupParentId(null);
             setNewGroupName("");
             setNewGroupOpen(true);
           }}
-          className="flex size-5 items-center justify-center rounded-[4px] hover:bg-black/5 dark:hover:bg-white/5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          aria-label="New group"
           title="New group (n)"
         >
-          <Plus className="size-3.5" />
-        </button>
+          <Plus className="size-4" />
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-1.5 py-1">
@@ -566,53 +577,66 @@ export function FolderTree({
           onDragEnd={handleDragEnd}
         >
           {tree.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-              No groups yet. Press <kbd className="font-semibold text-foreground">n</kbd> to create
-              one.
+            <div className="flex flex-col items-center gap-3 px-3 py-6 text-center text-[13px] leading-[19px] text-muted-foreground motion-safe:animate-rise-in">
+              <p>No groups yet.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setNewGroupParentId(null);
+                  setNewGroupName("");
+                  setNewGroupOpen(true);
+                }}
+              >
+                <FolderPlus className="size-4" />
+                New group
+              </Button>
             </div>
           ) : (
-            <div className="space-y-0.5">
-              {tree.map((node) => (
-                <TreeNodeItem
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  activeFolderId={activeFolderId}
-                  focusedFolderId={focusedFolderId}
-                  isFocusedRegion={isFocusedRegion}
-                  expandedIds={expandedIds}
-                  toggleExpand={toggleExpand}
-                  onSelect={(id) => {
-                    onSelectFolder(id);
-                    setFocusedFolderId(id);
-                  }}
-                  onNewSubgroup={(parent) => {
-                    setNewGroupParentId(parent.id);
-                    setNewGroupName("");
-                    setNewGroupOpen(true);
-                  }}
-                  onRename={beginInlineRename}
-                  onDelete={(target) => setDeleteTarget(target)}
-                  inlineRenameId={inlineRenameId}
-                  inlineRenameValue={inlineRenameValue}
-                  onInlineRenameChange={setInlineRenameValue}
-                  onInlineRenameSave={handleSaveInlineRename}
-                  onInlineRenameCancel={cancelInlineRename}
-                  activeDragId={activeDragId}
-                  dropIndicator={dropIndicator}
-                  isMac={isMac}
-                />
-              ))}
-            </div>
+            <LayoutGroup id="sidebar-tree">
+              <div className="space-y-0.5">
+                {tree.map((node) => (
+                  <TreeNodeItem
+                    key={node.id}
+                    node={node}
+                    depth={0}
+                    activeFolderId={activeFolderId}
+                    focusedFolderId={focusedFolderId}
+                    isFocusedRegion={isFocusedRegion}
+                    expandedIds={expandedIds}
+                    toggleExpand={toggleExpand}
+                    onSelect={(id) => {
+                      onSelectFolder(id);
+                      setFocusedFolderId(id);
+                    }}
+                    onNewSubgroup={(parent) => {
+                      setNewGroupParentId(parent.id);
+                      setNewGroupName("");
+                      setNewGroupOpen(true);
+                    }}
+                    onRename={beginInlineRename}
+                    onDelete={(target) => setDeleteTarget(target)}
+                    inlineRenameId={inlineRenameId}
+                    inlineRenameValue={inlineRenameValue}
+                    onInlineRenameChange={setInlineRenameValue}
+                    onInlineRenameSave={handleSaveInlineRename}
+                    onInlineRenameCancel={cancelInlineRename}
+                    activeDragId={activeDragId}
+                    dropIndicator={dropIndicator}
+                    isMac={isMac}
+                  />
+                ))}
+              </div>
+            </LayoutGroup>
           )}
         </DndContext>
       </div>
 
-      <div className="p-2 border-t border-border">
+      <div className="p-1.5">
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="w-full justify-between text-xs font-normal h-8"
+          className="w-full justify-start gap-2 px-2 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
           title="New group (n)"
           onClick={() => {
             setNewGroupParentId(null);
@@ -620,13 +644,9 @@ export function FolderTree({
             setNewGroupOpen(true);
           }}
         >
-          <div className="flex items-center">
-            <FolderPlus className="mr-2 size-3.5" />
-            <span>New group</span>
-          </div>
-          <kbd className="rounded border border-border bg-muted/60 px-1 py-0.2 font-mono text-[9px] text-muted-foreground">
-            n
-          </kbd>
+          <FolderPlus className="size-4" />
+          <span>New group</span>
+          <Kbd className="ml-auto">n</Kbd>
         </Button>
       </div>
 

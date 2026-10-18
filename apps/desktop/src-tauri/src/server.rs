@@ -1,10 +1,12 @@
 use std::io::Cursor;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tiny_http::{Header, Method, Response, Server, StatusCode};
 
+use crate::agent::{self, AgentContext};
 use crate::db::Database;
 use crate::native_installer;
 use crate::service::{self, CapturePayload, ServiceError, XPostCapture};
@@ -258,12 +260,35 @@ pub fn handle_request(
     body: &[u8],
     headers: &[Header],
 ) -> Response<Cursor<Vec<u8>>> {
+    handle_request_with_agent(db_arc, method, path, query, body, headers, None)
+}
+
+/// `handle_request` plus the `/api/agent/*` routes. Without an agent context (no running app, or
+/// `agent.json` could not be written) those routes answer 403.
+pub fn handle_request_with_agent(
+    db_arc: &Arc<Mutex<Database>>,
+    method: &Method,
+    path: &str,
+    query: &str,
+    body: &[u8],
+    headers: &[Header],
+    agent_ctx: Option<&AgentContext>,
+) -> Response<Cursor<Vec<u8>>> {
     // 1. Host Header Validation
     let host = match get_header(headers, "Host") {
         Some(h) if is_valid_host(h) => h,
         _ => return forbidden_response(),
     };
     let _ = host;
+
+    // 1b. Agent routes (the MCP server): their own key and Origin rules, no CORS, nothing else is
+    // reachable with the key.
+    if agent::is_agent_path(path) {
+        return match agent_ctx {
+            Some(ctx) => agent::handle(ctx, db_arc, method, path, body, headers),
+            None => forbidden_response(),
+        };
+    }
 
     // 2. Origin / extension identity validation.
     //
@@ -871,6 +896,19 @@ pub fn start_local_server(
     })
 }
 
+/// Agent requests run on their own thread: a slow search or Substack fetch must not hold up the
+/// extension's requests. More than this many at once are turned away.
+const MAX_AGENT_REQUESTS: usize = 8;
+static AGENT_REQUESTS_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+
+struct InFlightGuard;
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        AGENT_REQUESTS_IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 pub fn run_server(db_arc: Arc<Mutex<Database>>, port: u16, app_handle: Option<tauri::AppHandle>) {
     let addr = format!("127.0.0.1:{}", port);
     let server = match Server::http(&addr) {
@@ -882,6 +920,22 @@ pub fn run_server(db_arc: Arc<Mutex<Database>>, port: u16, app_handle: Option<ta
             eprintln!("[Sourcefold] Failed to bind HTTP server to {}: {}", addr, e);
             return;
         }
+    };
+
+    // The agent routes need the running app and this run's key. The key is published in agent.json
+    // only now that the port is ours, so a second app instance never replaces the first one's key.
+    let agent_ctx: Option<AgentContext> = match (&app_handle, agent::current_key()) {
+        (Some(app), Some(key)) => match agent::publish(port) {
+            Ok(()) => Some(AgentContext {
+                key: key.to_string(),
+                host: Arc::new(agent::TauriHost { app: app.clone() }),
+            }),
+            Err(e) => {
+                eprintln!("[Sourcefold] Couldn't write agent.json: {}", e);
+                None
+            }
+        },
+        _ => None,
     };
 
     for mut request in server.incoming_requests() {
@@ -901,18 +955,52 @@ pub fn run_server(db_arc: Arc<Mutex<Database>>, port: u16, app_handle: Option<ta
             let _ = std::io::copy(&mut reader, &mut body_bytes);
         }
 
+        if let (Some(ctx), true) = (&agent_ctx, agent::is_agent_path(path)) {
+            if AGENT_REQUESTS_IN_FLIGHT.fetch_add(1, Ordering::SeqCst) >= MAX_AGENT_REQUESTS {
+                AGENT_REQUESTS_IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+                let _ = request.respond(error_response(
+                    503,
+                    "The app is busy. Try again in a moment.",
+                    "busy",
+                    None,
+                ));
+                continue;
+            }
+            let ctx = ctx.clone();
+            let db = db_arc.clone();
+            let method = request.method().clone();
+            let path = path.to_string();
+            let query = query.to_string();
+            let headers: Vec<Header> = request.headers().to_vec();
+            std::thread::spawn(move || {
+                let _in_flight = InFlightGuard;
+                let response = handle_request_with_agent(
+                    &db,
+                    &method,
+                    &path,
+                    &query,
+                    &body_bytes,
+                    &headers,
+                    Some(&ctx),
+                );
+                let _ = request.respond(response);
+            });
+            continue;
+        }
+
         let is_mutating = matches!(
             request.method(),
             &Method::Post | &Method::Put | &Method::Patch | &Method::Delete
         );
 
-        let response = handle_request(
+        let response = handle_request_with_agent(
             &db_arc,
             request.method(),
             path,
             query,
             &body_bytes,
             request.headers(),
+            agent_ctx.as_ref(),
         );
 
         if is_mutating {
@@ -1766,5 +1854,55 @@ mod tests {
         let empty = serde_json::to_vec(&json!({})).unwrap();
         let resp = handle_request(&db, &Method::Post, "/api/native-host/register", "", &empty, &standard_headers());
         assert_eq!(resp.status_code().0, 400);
+    }
+
+    struct NoopHost;
+
+    impl agent::AgentHost for NoopHost {
+        fn emit(&self, _event: &str, _payload: Value) {}
+        fn focus_main_window(&self) {}
+        fn search(&self, _request: &crate::search::query::SearchRequest) -> Result<Value, String> {
+            Err("not used".to_string())
+        }
+        fn substack_fetch(&self, _url: &str, _with_cookie: bool) -> Result<Value, String> {
+            Err("not used".to_string())
+        }
+    }
+
+    #[test]
+    fn test_agent_routes_are_gated_by_host_key_and_origin() {
+        let db = create_test_db();
+        let key = "k".repeat(64);
+        let ctx = AgentContext { key: key.clone(), host: Arc::new(NoopHost) };
+        let bearer = Header::from_bytes(&b"Authorization"[..], format!("Bearer {}", key).as_bytes()).unwrap();
+        let host = Header::from_bytes(&b"Host"[..], &b"127.0.0.1:23456"[..]).unwrap();
+        let call = |headers: &[Header], agent: Option<&AgentContext>| {
+            handle_request_with_agent(&db, &Method::Post, "/api/agent/changed", "", b"{}", headers, agent)
+                .status_code()
+                .0
+        };
+
+        // Key and no Origin: allowed.
+        assert_eq!(call(&[host.clone(), bearer.clone()], Some(&ctx)), 200);
+        // The Host check still comes first.
+        let bad_host = Header::from_bytes(&b"Host"[..], &b"evil.com"[..]).unwrap();
+        assert_eq!(call(&[bad_host, bearer.clone()], Some(&ctx)), 403);
+        // Any Origin, even an allowed extension's, is refused on agent routes.
+        let origin = Header::from_bytes(
+            &b"Origin"[..],
+            format!("chrome-extension://{}", native_installer::PINNED_EXTENSION_ID).as_bytes(),
+        )
+        .unwrap();
+        assert_eq!(call(&[host.clone(), bearer.clone(), origin], Some(&ctx)), 403);
+        // No key, and no agent context at all.
+        assert_eq!(call(&[host.clone()], Some(&ctx)), 403);
+        assert_eq!(call(&[host.clone(), bearer.clone()], None), 403);
+        // The plain entry point has no agent routes.
+        let resp = handle_request(&db, &Method::Post, "/api/agent/changed", "", b"{}", &[host.clone(), bearer.clone()]);
+        assert_eq!(resp.status_code().0, 403);
+
+        // The key opens nothing else: other routes still need an allowed Origin or extension id.
+        let resp = handle_request_with_agent(&db, &Method::Get, "/api/folders", "", &[], &[host, bearer], Some(&ctx));
+        assert_eq!(resp.status_code().0, 403);
     }
 }

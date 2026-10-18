@@ -2,7 +2,7 @@
 
 use std::env;
 use std::sync::{Arc, Mutex};
-use sourcefold_desktop::{commands, db::Database, native_host, native_installer, search, server};
+use sourcefold_desktop::{agent, commands, db::Database, native_host, native_installer, search, server};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -78,6 +78,10 @@ fn main() {
 
     let auth_flow_state = Arc::new(commands::auth::AuthFlowState::default());
 
+    // This run's key for the Sourcefold MCP server. It is written to agent.json by the local server
+    // once the port is bound. App process only: the native-messaging branch above has returned.
+    agent::init();
+
     // Build and run Tauri application
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -143,6 +147,7 @@ fn main() {
             commands::search_embed_jobs,
             commands::search_put_vectors,
             commands::search_delete_vectors,
+            commands::open_claude_extension,
         ])
         .run(tauri::generate_context!())
         .expect("error while running sourcefold desktop application");

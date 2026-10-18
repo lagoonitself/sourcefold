@@ -13,6 +13,7 @@ export {
 } from "./wikipedia/fetch";
 export { fetchSourceCapture, type SourceCaptureDeps } from "./sources";
 export {
+  YOUTUBE_BLOCKED_MESSAGE,
   YOUTUBE_GAP_MS,
   YOUTUBE_NO_CAPTIONS_REASON,
   YOUTUBE_RATE_LIMIT_WAITS_MS,

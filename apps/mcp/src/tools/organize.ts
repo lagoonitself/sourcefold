@@ -1,4 +1,296 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ToolContext } from "./define";
+import { z } from "zod";
+import type { Folder, Item } from "../types";
+import { defineTool, type ToolContext } from "./define";
+import { messageOf, plural, sourceLine } from "./format";
+import {
+  isProject,
+  loadFolderIndex,
+  mapLimit,
+  requireFolder,
+  sourcesIn,
+  withHint,
+} from "./library-data";
+import { forgetCachedSource } from "./read";
 
-export function registerOrganizeTools(_server: McpServer, _ctx: ToolContext): void {}
+const BATCH_CONCURRENCY = 4;
+const GROUP_HINT = "Use get_project_tree to find group ids.";
+
+/** Runs `fn` for each distinct id; returns what worked and what failed, in order. */
+async function eachId<T>(
+  ids: string[],
+  fn: (id: string) => Promise<T>,
+): Promise<{
+  done: Array<{ id: string; value: T }>;
+  failed: Array<{ id: string; message: string }>;
+}> {
+  const unique = [...new Set(ids)];
+  const results = await mapLimit(unique, BATCH_CONCURRENCY, async (id) => {
+    try {
+      return { id, value: await fn(id) };
+    } catch (err) {
+      return { id, error: messageOf(withHint(err, "Use get_project_tree to find source ids.")) };
+    }
+  });
+  const done: Array<{ id: string; value: T }> = [];
+  const failed: Array<{ id: string; message: string }> = [];
+  for (const result of results) {
+    if ("error" in result && result.error !== undefined) {
+      failed.push({ id: result.id, message: result.error });
+    } else if ("value" in result) {
+      done.push({ id: result.id, value: result.value });
+    }
+  }
+  return { done, failed };
+}
+
+function failureLines(failed: Array<{ id: string; message: string }>): string[] {
+  return failed.map((f) => `[${f.id}] ${f.message}`);
+}
+
+export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void {
+  defineTool(server, ctx, {
+    name: "create_project",
+    title: "Create a project",
+    description:
+      "Creates a new top-level project. A project holds groups, and groups hold sources, so after this use create_group with the project's id before adding sources. Answers with the new project's id.",
+    input: {
+      name: z.string().min(1).max(200).describe("Name of the project, up to 200 characters."),
+    },
+    run: async ({ name }, { api }) => {
+      const project = await api.post<Folder>("/folders", { name });
+      return `Created project "${project.name}" [${project.id}]. Sources can't live directly in a project: use create_group with parent_id ${project.id} to make a group.`;
+    },
+  });
+
+  defineTool(server, ctx, {
+    name: "create_group",
+    title: "Create a group",
+    description:
+      "Creates a group inside a project or inside another group (groups nest to any depth). Sources are saved into groups, never directly into a project. parent_id is required: the id of the project or group it goes in (from list_projects or get_project_tree). Answers with the new group's id.",
+    input: {
+      name: z.string().min(1).max(200).describe("Name of the group, up to 200 characters."),
+      parent_id: z
+        .string()
+        .min(1)
+        .describe(
+          "Id of the project or group to create it in (from list_projects/get_project_tree).",
+        ),
+    },
+    run: async ({ name, parent_id }, { api }) => {
+      const index = await loadFolderIndex(api);
+      const parent = requireFolder(index, parent_id, "any");
+      const group = await api.post<Folder>("/folders", { name, parent_id });
+      return `Created group "${group.name}" [${group.id}] in ${index.pathOf(parent.id)}.`;
+    },
+  });
+
+  defineTool(server, ctx, {
+    name: "update_group",
+    title: "Change a group or project",
+    description:
+      "Renames a group or project, moves it into another project or group (parent_id; null makes it a top-level project, which only works for a group without sources), changes its position among its siblings, or archives/unarchives a project (archived; projects only). Give only the fields to change. Sources keep their places when a group moves.",
+    input: {
+      group_id: z.string().min(1).describe("Id of the group or project."),
+      name: z.string().min(1).max(200).optional().describe("New name."),
+      parent_id: z
+        .string()
+        .nullable()
+        .optional()
+        .describe("Id of the project or group to move it into, or null to make it a project."),
+      position: z
+        .number()
+        .int()
+        .optional()
+        .describe("Place among its siblings, starting at 0 (lower comes first)."),
+      archived: z
+        .boolean()
+        .optional()
+        .describe("true to archive a project, false to bring it back. Projects only."),
+    },
+    idempotent: true,
+    run: async ({ group_id, name, parent_id, position, archived }, { api }) => {
+      const body: Record<string, unknown> = {};
+      if (name !== undefined) body.name = name;
+      if (parent_id !== undefined) body.parent_id = parent_id;
+      if (position !== undefined) body.position = position;
+      if (Object.keys(body).length === 0 && archived === undefined) {
+        throw new Error("Nothing to change. Give name, parent_id, position or archived.");
+      }
+
+      const index = await loadFolderIndex(api);
+      const folder = requireFolder(index, group_id, "any");
+      if (archived !== undefined && !isProject(folder)) {
+        throw new Error(
+          `Only projects can be archived, and "${folder.name}" is a group in ${index.pathOf(group_id)}.`,
+        );
+      }
+      if (parent_id) requireFolder(index, parent_id, "any");
+
+      const changes: string[] = [];
+      // The web app handles `archived` on its own and ignores other fields sent with it.
+      if (Object.keys(body).length > 0) {
+        try {
+          await api.patch(`/folders/${encodeURIComponent(group_id)}`, body);
+        } catch (err) {
+          throw withHint(err, GROUP_HINT);
+        }
+        if (name !== undefined) changes.push(`renamed to "${name}"`);
+        if (parent_id !== undefined) {
+          changes.push(
+            parent_id === null
+              ? "made a top-level project"
+              : `moved into ${index.pathOf(parent_id)}`,
+          );
+        }
+        if (position !== undefined) changes.push(`position ${position}`);
+      }
+      if (archived !== undefined) {
+        await api.patch(`/folders/${encodeURIComponent(group_id)}`, { archived });
+        changes.push(archived ? "archived" : "unarchived");
+      }
+      return `Updated "${folder.name}" [${group_id}]: ${changes.join(", ")}.`;
+    },
+  });
+
+  defineTool(server, ctx, {
+    name: "delete_group",
+    title: "Delete a group or project",
+    description:
+      "Deletes a group (or a whole project) together with every group inside it and every source in them. This cannot be undone from here. Check with get_project_tree first, and use move_sources to keep sources that should survive. Answers with what was deleted.",
+    input: {
+      group_id: z.string().min(1).describe("Id of the group or project to delete."),
+    },
+    destructive: true,
+    run: async ({ group_id }, { api }) => {
+      let summary = `[${group_id}]`;
+      let note = "";
+      try {
+        const index = await loadFolderIndex(api);
+        const folder = requireFolder(index, group_id, "any");
+        const inside = index.descendantsOf(group_id);
+        const sources = inside.reduce((sum, f) => sum + sourcesIn(f), 0);
+        summary = `${isProject(folder) ? "project" : "group"} "${index.pathOf(group_id)}" [${group_id}]`;
+        note = ` with ${plural(inside.length - 1, "subgroup")} and ${plural(sources, "source")}`;
+      } catch (err) {
+        // A missing folder is an answer; a failed lookup is not a reason to refuse the delete.
+        if (err instanceof Error && err.message.startsWith("No ")) throw err;
+      }
+      try {
+        await api.delete(`/folders/${encodeURIComponent(group_id)}`);
+      } catch (err) {
+        throw withHint(err, GROUP_HINT);
+      }
+      return `Deleted ${summary}${note}.`;
+    },
+  });
+
+  defineTool(server, ctx, {
+    name: "update_source",
+    title: "Change a source",
+    description:
+      "Renames a source (title), moves it to another group (group_id), or sets, replaces or clears the user's own note on it (note; null clears it). Give only the fields to change. This is the user's note about the source, not its text: to edit a standalone note's text use edit_note. To move many sources at once use move_sources.",
+    input: {
+      source_id: z.string().min(1).describe("Id of the source."),
+      title: z.string().min(1).max(500).optional().describe("New title."),
+      group_id: z
+        .string()
+        .optional()
+        .describe("Id of the group to move it to (a group, not a project)."),
+      note: z
+        .string()
+        .max(20000)
+        .nullable()
+        .optional()
+        .describe("The user's note on the source; null or an empty string removes it."),
+    },
+    idempotent: true,
+    run: async ({ source_id, title, group_id, note }, { api }) => {
+      const body: Record<string, unknown> = {};
+      if (title !== undefined) body.title = title;
+      if (group_id !== undefined) body.folder_id = group_id;
+      if (note !== undefined) body.note = note;
+      if (Object.keys(body).length === 0) {
+        throw new Error("Nothing to change. Give title, group_id or note.");
+      }
+      let item: Item;
+      try {
+        item = await api.patch<Item>(`/items/${encodeURIComponent(source_id)}`, body);
+      } catch (err) {
+        throw withHint(err, "Use get_project_tree to find source ids.");
+      }
+      forgetCachedSource(source_id);
+      const changes = [
+        title !== undefined ? "renamed" : null,
+        group_id !== undefined ? `moved to group ${group_id}` : null,
+        note !== undefined ? (note ? "note set" : "note cleared") : null,
+      ].filter(Boolean);
+      return `Updated (${changes.join(", ")}): ${sourceLine(item)}`;
+    },
+  });
+
+  defineTool(server, ctx, {
+    name: "move_sources",
+    title: "Move sources to a group",
+    description:
+      "Moves several sources into one group (a group, not a project). Each source is handled on its own, and the reply lists which moved and which failed with the reason. Fails as a whole only when none could be moved.",
+    input: {
+      source_ids: z
+        .array(z.string().min(1))
+        .min(1)
+        .max(200)
+        .describe("Ids of the sources to move."),
+      group_id: z.string().min(1).describe("Id of the group to move them into."),
+    },
+    idempotent: true,
+    run: async ({ source_ids, group_id }, { api }) => {
+      const index = await loadFolderIndex(api);
+      const target = requireFolder(index, group_id, "group");
+      const { done, failed } = await eachId(source_ids, async (id) => {
+        const item = await api.patch<Item>(`/items/${encodeURIComponent(id)}`, {
+          folder_id: group_id,
+        });
+        forgetCachedSource(id);
+        return item;
+      });
+      if (done.length === 0) {
+        throw new Error(["Couldn't move any source:", ...failureLines(failed)].join("\n"));
+      }
+      const lines = [
+        `Moved ${done.length} of ${done.length + failed.length} sources to ${index.pathOf(target.id)} [${target.id}].`,
+        ...done.map(({ value }) => sourceLine(value)),
+      ];
+      if (failed.length > 0) lines.push("Failed:", ...failureLines(failed));
+      return lines.join("\n");
+    },
+  });
+
+  defineTool(server, ctx, {
+    name: "delete_sources",
+    title: "Delete sources",
+    description:
+      "Deletes sources by id. Each one is handled on its own, and the reply lists which were deleted and which failed with the reason. Fails as a whole only when none could be deleted. Check ids with get_project_tree or find_sources first; this cannot be undone from here.",
+    input: {
+      source_ids: z
+        .array(z.string().min(1))
+        .min(1)
+        .max(200)
+        .describe("Ids of the sources to delete."),
+    },
+    destructive: true,
+    run: async ({ source_ids }, { api }) => {
+      const { done, failed } = await eachId(source_ids, async (id) => {
+        await api.delete(`/items/${encodeURIComponent(id)}`);
+        forgetCachedSource(id);
+      });
+      if (done.length === 0) {
+        throw new Error(["Couldn't delete any source:", ...failureLines(failed)].join("\n"));
+      }
+      const lines = [
+        `Deleted ${done.length} of ${done.length + failed.length} sources: ${done.map((d) => `[${d.id}]`).join(" ")}`,
+      ];
+      if (failed.length > 0) lines.push("Failed:", ...failureLines(failed));
+      return lines.join("\n");
+    },
+  });
+}

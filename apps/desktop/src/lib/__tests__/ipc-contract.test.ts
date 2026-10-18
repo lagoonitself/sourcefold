@@ -270,6 +270,19 @@ describe("IPC contract: the search index commands", () => {
   });
 });
 
+describe("IPC contract: the Claude extension command", () => {
+  it("is registered, takes no arguments, and claude-api.ts calls it with none", () => {
+    const { registered, registry } = loadRealRegistry();
+    expect(registered).toContain("open_claude_extension");
+    expect(registry.get("open_claude_extension")).toEqual([]);
+    const file = "features/claude/claude-api.ts";
+    const calls = extractInvokeCalls(file, readFileSync(path.join(srcDir, file), "utf8"));
+    expect(calls).toEqual([
+      { file, command: "open_claude_extension", keys: [], usesObjectLiteral: true },
+    ]);
+  });
+});
+
 describe("IPC contract checker", () => {
   const registry: CommandRegistry = new Map([
     [

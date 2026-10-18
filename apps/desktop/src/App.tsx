@@ -30,6 +30,8 @@ import { SearchDialog } from "@/features/search/SearchDialog";
 import { MeaningIndexer } from "@/features/search/embedding";
 import type { NoteHit, PassageHit } from "@/features/search/search-api";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
+import { useAgentEvents } from "@/features/claude/use-agent-events";
+import type { ShowNavigation } from "@/features/claude/agent-show";
 import { NoteDialog } from "@/features/items/NoteDialog";
 import { HighlightsList } from "@/features/highlights/HighlightsList";
 import { useGroupHighlights } from "@/features/highlights/use-group-highlights";
@@ -518,6 +520,27 @@ export function App() {
     },
     [closeDrawer],
   );
+
+  // Claude (the MCP server) asking the app to show a group, a source or a highlight.
+  const showForAgent = React.useCallback(
+    (nav: ShowNavigation) => {
+      setReaderItem(null);
+      setReaderHighlightId(null);
+      setActiveProjectId(nav.projectId);
+      setActiveFolderId(nav.groupId);
+      setFocusedFolderId(nav.groupId);
+      setFocusedItemId(nav.focusItemId);
+      setChosenTab({ folderId: nav.groupId, tab: "sources" });
+      setActiveRegion("list");
+      closeDrawer();
+      if (nav.reader) {
+        setReaderHighlightId(nav.reader.highlightId);
+        setReaderItem(nav.reader.item);
+      }
+    },
+    [closeDrawer],
+  );
+  useAgentEvents({ refreshFolders, navigate: showForAgent });
 
   const canAddLinks = Boolean(activeFolderId) && !isProjectWithNoGroups;
 

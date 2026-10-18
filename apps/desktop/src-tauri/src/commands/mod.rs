@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod claude;
 pub mod folders;
 pub mod highlights;
 pub mod items;
@@ -9,6 +10,7 @@ pub mod substack;
 pub mod web_fetch;
 
 pub use auth::*;
+pub use claude::*;
 pub use folders::*;
 pub use highlights::*;
 pub use items::*;

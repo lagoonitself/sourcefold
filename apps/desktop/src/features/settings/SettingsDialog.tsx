@@ -10,6 +10,7 @@ import {
   Palette,
   Search,
   SlidersHorizontal,
+  Sparkles,
   Sun,
   User,
   X,
@@ -33,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { SubstackCookieSettings } from "../substack/SubstackCookieSettings";
 import { LocalCopySettings } from "../local-copy/LocalCopySettings";
 import { SearchSettings } from "../search/SearchSettings";
+import { ClaudeSettings } from "../claude/ClaudeSettings";
 
 export interface SettingsDialogProps {
   open: boolean;
@@ -41,7 +43,7 @@ export interface SettingsDialogProps {
   onThemeChange: (theme: "light" | "dark" | "system") => void;
 }
 
-type SettingsSection = "general" | "appearance" | "account" | "search" | "substack";
+type SettingsSection = "general" | "appearance" | "account" | "search" | "claude" | "substack";
 
 interface SectionConfig {
   id: SettingsSection;
@@ -54,6 +56,7 @@ const SECTIONS: SectionConfig[] = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "account", label: "Account", icon: User },
   { id: "search", label: "Search", icon: Search },
+  { id: "claude", label: "Claude", icon: Sparkles },
   { id: "substack", label: "Substack", icon: Newspaper },
 ];
 
@@ -256,6 +259,7 @@ export function SettingsDialog({
               {activeSection === "appearance" && "Appearance"}
               {activeSection === "account" && "Account"}
               {activeSection === "search" && "Search"}
+              {activeSection === "claude" && "Claude"}
               {activeSection === "substack" && "Substack"}
             </h2>
 
@@ -576,6 +580,14 @@ export function SettingsDialog({
             )}
 
             {activeSection === "search" && <SearchSettings open={open} />}
+
+            {activeSection === "claude" && (
+              <ClaudeSettings
+                signedIn={Boolean(session) && !isOffline}
+                offline={isOffline}
+                email={session?.email ?? null}
+              />
+            )}
 
             {activeSection === "substack" && <SubstackCookieSettings open={open} />}
           </div>

@@ -9,6 +9,8 @@ export interface Folder {
   name: string;
   position: number;
   archived_at?: string | null;
+  /** What `GET /api/folders` sends for a project. */
+  archived?: boolean;
   created_at?: string;
   updated_at?: string;
   item_count?: number | null;

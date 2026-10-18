@@ -92,7 +92,18 @@ export function createWebApi(deps: WebApiDeps = {}): WebApi {
       throw new ApiError(0, `Sourcefold (${creds.webUrl}) didn't answer: ${reason}.`);
     }
 
-    if (res.status === 401) throw new ApiError(401, EXPIRED_MESSAGE[creds.source]);
+    if (res.status === 401) {
+      // Only the sign-in itself is "expired". Other routes answer 401 for their own reasons
+      // ("Reconnect Google Drive…"), and those messages are passed on as they are.
+      const payload = (await res
+        .clone()
+        .json()
+        .catch(() => null)) as { error?: { message?: string } } | null;
+      const message = payload?.error?.message ?? "";
+      if (!message || /access token|sign in to continue/i.test(message)) {
+        throw new ApiError(401, EXPIRED_MESSAGE[creds.source]);
+      }
+    }
     return res;
   }
 

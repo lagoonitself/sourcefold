@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Check, CircleAlert, Loader2, Lock } from "lucide-react";
+import { Check, ChevronsUpDown, CircleAlert, Loader2, Lock } from "lucide-react";
+import { motion } from "motion/react";
 import {
   classifySubstackLink,
   detectLinkKind,
@@ -18,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/Dialog";
+import { Kbd } from "@/components/ui/Kbd";
 import type { Folder, FolderNode } from "@/lib/types";
 import { checkUrl, saveGrokipedia } from "@/lib/api";
 import { findPublicationPosts, saveSubstackPost } from "../substack/substack-client";
@@ -31,6 +33,7 @@ import {
   youTubeGapMs,
 } from "../sources/youtube-pacing";
 import { buildFolderTree } from "../folders/tree-utils";
+import { SourceTile, getSourceKind } from "../items/source-kinds";
 import { isMacPlatform } from "../shortcuts/key-utils";
 
 export interface AddLinksDialogProps {
@@ -45,7 +48,7 @@ export interface AddLinksDialogProps {
 
 // `source` is any of the 2026-10 kinds (YouTube video, web page, Reddit, Hacker News, Bluesky,
 // PDF); `youtube_list` is a playlist or channel, replaced by one row per video.
-type LinkSource =
+export type LinkSource =
   "grokipedia" | "wikipedia" | "substack" | "publication" | "source" | "youtube_list";
 
 export type QueueItemStatus =
@@ -97,6 +100,24 @@ function parseLinks(text: string): ParsedLinks {
     else parsed.skipped.push(url);
   }
   return parsed;
+}
+
+function getItemKind(item: QueueItem): string {
+  if (item.source === "grokipedia") return "grokipedia";
+  if (item.source === "wikipedia") return "wikipedia";
+  if (item.source === "substack" || item.source === "publication") return "substack";
+  if (item.source === "youtube_list") return "youtube";
+  if (item.source === "source") return detectLinkKind(item.url) ?? "web";
+  return "web";
+}
+
+function getLinkKind(link: { url: string; source: LinkSource }): string {
+  if (link.source === "grokipedia") return "grokipedia";
+  if (link.source === "wikipedia") return "wikipedia";
+  if (link.source === "substack" || link.source === "publication") return "substack";
+  if (link.source === "youtube_list") return "youtube";
+  if (link.source === "source") return detectLinkKind(link.url) ?? "web";
+  return "web";
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -175,6 +196,19 @@ export function AddLinksDialog({
       : after && before && after >= before
         ? "The start date must be before the end date."
         : null;
+
+  const kindCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const link of links.valid) {
+      const kind = getLinkKind(link);
+      counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).map(([kind, count]) => ({
+      kind,
+      count,
+      name: getSourceKind(kind).name,
+    }));
+  }, [links.valid]);
 
   const setItems = (items: QueueItem[]) => {
     queueRef.current = items;
@@ -457,6 +491,13 @@ export function AddLinksDialog({
   const postCount = queue.filter(
     (q) => q.source !== "publication" && q.source !== "youtube_list",
   ).length;
+  const doneCount = queue.filter(
+    (q) =>
+      q.status !== "waiting" &&
+      q.status !== "finding" &&
+      q.status !== "saving" &&
+      q.status !== "paused",
+  ).length;
 
   const handleClose = () => {
     if (isRunning) handleStop();
@@ -478,101 +519,199 @@ export function AddLinksDialog({
     }
   };
 
-  const importHint = isMac ? "⌘Enter to add" : "Ctrl+Enter to add";
   const ignoredCount = links.skipped.length + links.xLinks.length;
+
+  const renderStatus = (item: QueueItem) => {
+    switch (item.status) {
+      case "waiting":
+        return <span className="text-[12.5px] text-muted-foreground">Waiting</span>;
+      case "finding":
+      case "saving":
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-foreground">
+            <Loader2 className="size-3.5 motion-safe:animate-spin" />
+            <span>
+              {item.status !== "finding"
+                ? "Saving"
+                : item.source === "youtube_list"
+                  ? "Finding videos"
+                  : "Finding posts"}
+            </span>
+          </span>
+        );
+      case "saved":
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-success">
+            <Check className="size-3.5" />
+            <span>Saved</span>
+          </span>
+        );
+      case "duplicate":
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+            <Check className="size-3.5" />
+            <span>{item.message || "Already saved"}</span>
+          </span>
+        );
+      case "paused": {
+        const waitMatch = item.message?.match(/Trying again in (.+?)\./);
+        const pauseLabel = waitMatch ? `Paused ${waitMatch[1]}` : "Paused";
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-warning">
+            <Loader2 className="size-3.5 motion-safe:animate-spin" />
+            <span>{pauseLabel}</span>
+          </span>
+        );
+      }
+      case "unavailable":
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+            <CircleAlert className="size-3.5" />
+            <span>{item.message ? `Not saved: ${item.message}` : "Not saved"}</span>
+          </span>
+        );
+      case "paid":
+        return (
+          <span className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+            <Lock className="size-3.5" />
+            <span>{item.message ? `Paid, not saved: ${item.message}` : "Paid, not saved"}</span>
+          </span>
+        );
+      case "failed":
+        return (
+          <div className="inline-flex items-center gap-1.5 text-[12.5px] text-destructive">
+            <CircleAlert className="size-3.5" />
+            <span>Failed</span>
+            {!isRunning && (
+              <button
+                type="button"
+                onClick={() => handleRetryItem(item.id)}
+                className="ml-1 cursor-pointer font-medium text-foreground underline hover:text-foreground"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        );
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-[600px]" onKeyDown={handleKeyDown}>
-        <DialogHeader>
+      <DialogContent className="max-w-[640px]" onKeyDown={handleKeyDown}>
+        <DialogHeader className="mb-4">
           <DialogTitle>Add links</DialogTitle>
-          <DialogDescription>
-            Paste links, one per line: YouTube videos (saves the transcript), web pages, PDFs and
-            arXiv papers, Reddit, Hacker News and Bluesky threads, Grokipedia, Wikipedia and
-            Substack. A YouTube playlist or channel, or a Substack publication, saves every video or
-            post in it.
+          <DialogDescription className="flex flex-wrap items-center gap-1.5 text-[13px] leading-[19px] text-muted-foreground">
+            <span>Save sources into</span>
+            <span className="relative inline-flex items-center">
+              <select
+                value={selectedFolderId}
+                onChange={(e) => setSelectedFolderId(e.target.value)}
+                disabled={isRunning || groupOptions.length === 0}
+                aria-label="Save to group"
+                className="h-7 max-w-[280px] cursor-pointer appearance-none truncate rounded-[7px] border border-border bg-muted/60 pl-2.5 pr-6 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {groupOptions.length === 0 ? (
+                  <option value="" disabled>
+                    No groups available
+                  </option>
+                ) : (
+                  groupOptions.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.projectName} / {g.name}
+                    </option>
+                  ))
+                )}
+              </select>
+              <ChevronsUpDown
+                className="pointer-events-none absolute right-1.5 size-3.5 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </span>
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4 py-2">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-foreground">Save to group</label>
-            <select
-              value={selectedFolderId}
-              onChange={(e) => setSelectedFolderId(e.target.value)}
-              disabled={isRunning || groupOptions.length === 0}
-              className="h-9 w-full rounded-[6px] border border-input bg-background px-3 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {groupOptions.length === 0 ? (
-                <option value="" disabled>
-                  No groups available
-                </option>
-              ) : (
-                groupOptions.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.projectName} / {g.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
+        <div className="flex flex-col gap-4 py-1">
           {!isRunning && !isFinished ? (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-foreground">Links</label>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder={
-                  "https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/playlist?list=...\nhttps://example.com/article\nhttps://grokipedia.com/page/...\nhttps://name.substack.com"
-                }
-                rows={8}
-                autoFocus
-                className="w-full resize-y rounded-[6px] border border-input bg-transparent p-2.5 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  {links.valid.length === 1
-                    ? "1 link detected"
-                    : `${links.valid.length} links detected`}
-                </span>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder={
+                    "https://www.youtube.com/watch?v=...\nhttps://www.youtube.com/playlist?list=...\nhttps://example.com/article\nhttps://grokipedia.com/page/...\nhttps://name.substack.com"
+                  }
+                  rows={7}
+                  autoFocus
+                  className="min-h-[160px] w-full resize-y rounded-[9px] border border-input bg-background p-3 font-sans text-[13.5px] leading-[20px] text-foreground transition-[border-color,box-shadow] duration-150 ease-out placeholder:text-muted-foreground/80 hover:border-border-strong focus-visible:border-foreground/40 focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--foreground)_10%,transparent)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white/[0.03]"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-muted-foreground">
+                {links.valid.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                    <span className="font-medium text-foreground tabular-nums">
+                      {links.valid.length} {links.valid.length === 1 ? "link" : "links"}:
+                    </span>
+                    {kindCounts.map((k, i) => (
+                      <span key={k.kind} className="inline-flex items-center gap-1.5 tabular-nums">
+                        <SourceTile
+                          kind={k.kind}
+                          className="size-4 rounded-[4px] [&_svg]:size-2.5"
+                        />
+                        <span>
+                          {k.count} {k.name}
+                          {i < kindCounts.length - 1 ? "," : ""}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="max-w-[60ch]">
+                    Paste links, one per line: YouTube videos (saves the transcript), web pages,
+                    PDFs and arXiv papers, Reddit, Hacker News and Bluesky threads, Grokipedia,
+                    Wikipedia and Substack. A YouTube playlist or channel, or a Substack
+                    publication, saves every video or post in it.
+                  </span>
+                )}
                 {ignoredCount > 0 && (
-                  <span>
+                  <span className="tabular-nums">
                     {ignoredCount} {ignoredCount === 1 ? "link" : "links"} will be skipped
                   </span>
                 )}
               </div>
+
               {links.xLinks.length > 0 && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[12.5px] text-muted-foreground">
                   X posts are saved from the Chrome extension: open the post and click Save.
                 </p>
               )}
 
               {hasPublication && (
-                <div className="mt-2 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-foreground">
+                <div className="mt-1 flex flex-col gap-2 rounded-[10px] bg-muted/40 p-3">
+                  <label className="text-[12px] font-medium text-foreground">
                     Publication posts (optional date range)
                   </label>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground">
                     <span>Published after</span>
                     <input
                       type="date"
                       value={after}
                       onChange={(e) => setAfter(e.target.value)}
-                      className="h-8 rounded-[6px] border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="h-8 rounded-[8px] border border-input bg-background px-2.5 text-[13px] text-foreground transition-colors hover:border-border-strong focus-visible:border-foreground/40 focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--foreground)_10%,transparent)] focus-visible:outline-none"
                     />
                     <span>and before</span>
                     <input
                       type="date"
                       value={before}
                       onChange={(e) => setBefore(e.target.value)}
-                      className="h-8 rounded-[6px] border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="h-8 rounded-[8px] border border-input bg-background px-2.5 text-[13px] text-foreground transition-colors hover:border-border-strong focus-visible:border-foreground/40 focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--foreground)_10%,transparent)] focus-visible:outline-none"
                     />
                   </div>
                   {dateError ? (
-                    <p className="text-xs text-destructive">{dateError}</p>
+                    <p className="text-[12px] text-destructive">{dateError}</p>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[12px] text-muted-foreground">
                       Leave empty to save every post. Paid posts need your Substack cookie in
                       Settings.
                     </p>
@@ -581,91 +720,58 @@ export function AddLinksDialog({
               )}
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-medium">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between text-[12.5px] text-muted-foreground">
+                <span className="font-medium text-foreground tabular-nums">
                   {savedCount} of {postCount} saved
                 </span>
                 {isRunning && (
-                  <span className="flex items-center gap-1.5 text-primary">
-                    <Loader2 className="size-3.5 animate-spin" />
+                  <span className="inline-flex items-center gap-1.5 text-foreground">
+                    <Loader2 className="size-3.5 motion-safe:animate-spin" />
                     <span>Saving…</span>
                   </span>
                 )}
               </div>
 
-              <div className="max-h-72 overflow-y-auto divide-y divide-border rounded-[6px] border border-border">
+              {/* Thin ink progress bar: done / total */}
+              <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                <motion.div
+                  className="h-full w-full origin-left bg-foreground"
+                  initial={false}
+                  animate={{
+                    scaleX: queue.length > 0 ? doneCount / queue.length : 0,
+                  }}
+                  transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                />
+              </div>
+
+              <div className="max-h-[300px] space-y-0.5 overflow-y-auto rounded-[10px] border border-border p-1">
                 {queue.map((item) => (
-                  <div key={item.id} className="flex flex-col gap-0.5 px-3 py-2 text-xs">
+                  <div
+                    key={item.id}
+                    className="group flex flex-col gap-0.5 rounded-[8px] px-2.5 py-1.5 transition-colors hover:bg-muted"
+                  >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="truncate flex-1 font-sans text-foreground" title={item.url}>
-                        {item.title || item.url}
-                      </span>
-                      <div className="shrink-0 flex items-center">
-                        {item.status === "waiting" && (
-                          <span className="text-muted-foreground">Waiting</span>
-                        )}
-                        {item.status === "paused" && (
-                          <span className="text-muted-foreground">Paused</span>
-                        )}
-                        {(item.status === "saving" || item.status === "finding") && (
-                          <span className="flex items-center gap-1 text-primary">
-                            <Loader2 className="size-3.5 animate-spin" />
-                            <span>
-                              {item.status !== "finding"
-                                ? "Saving"
-                                : item.source === "youtube_list"
-                                  ? "Finding videos"
-                                  : "Finding posts"}
-                            </span>
-                          </span>
-                        )}
-                        {item.status === "saved" && (
-                          <span className="flex items-center gap-1 text-primary font-medium">
-                            <Check className="size-3.5" />
-                            <span>Saved</span>
-                          </span>
-                        )}
-                        {item.status === "duplicate" && (
-                          <span className="text-muted-foreground">Already saved</span>
-                        )}
-                        {item.status === "paid" && (
-                          <span className="flex items-center gap-1 text-muted-foreground">
-                            <Lock className="size-3.5" />
-                            <span>Paid, not saved</span>
-                          </span>
-                        )}
-                        {item.status === "unavailable" && (
-                          <span className="flex items-center gap-1 text-muted-foreground">
-                            <CircleAlert className="size-3.5" />
-                            <span>Not saved</span>
-                          </span>
-                        )}
-                        {item.status === "failed" && (
-                          <div className="flex items-center gap-1.5 text-destructive">
-                            <CircleAlert className="size-3.5" />
-                            <span>Failed</span>
-                            {!isRunning && (
-                              <button
-                                type="button"
-                                onClick={() => handleRetryItem(item.id)}
-                                className="ml-1 text-xs text-primary hover:underline cursor-pointer"
-                              >
-                                Retry
-                              </button>
-                            )}
-                          </div>
-                        )}
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                        <SourceTile
+                          kind={getItemKind(item)}
+                          className="size-7 rounded-[7px] [&_svg]:size-3.5"
+                        />
+                        <span
+                          className="truncate font-serif text-[14.5px] font-medium leading-[20px] text-foreground"
+                          title={item.url}
+                        >
+                          {item.title || item.url}
+                        </span>
+                      </div>
+                      <div className="flex shrink-0 items-center text-right">
+                        {renderStatus(item)}
                       </div>
                     </div>
-                    {item.message && item.status !== "waiting" && item.status !== "saving" && (
-                      <span
-                        className={
-                          item.status === "failed" ? "text-destructive" : "text-muted-foreground"
-                        }
-                      >
+                    {item.status === "failed" && item.message && (
+                      <div className="pb-0.5 pl-9.5 pr-2.5 text-[12px] leading-relaxed text-destructive">
                         {item.message}
-                      </span>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -674,10 +780,16 @@ export function AddLinksDialog({
           )}
         </div>
 
-        <DialogFooter className="flex items-center justify-between">
-          <span className="text-[11px] text-muted-foreground">
-            {!isRunning && !isFinished ? importHint : ""}
-          </span>
+        <DialogFooter className="mt-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1 text-[12px] text-muted-foreground">
+            {!isRunning && !isFinished ? (
+              <>
+                <Kbd>{isMac ? "⌘" : "Ctrl"}</Kbd>
+                <Kbd>Enter</Kbd>
+                <span className="ml-1">to add</span>
+              </>
+            ) : null}
+          </div>
           <div className="flex items-center gap-2">
             {!isRunning && !isFinished ? (
               <>

@@ -1,5 +1,7 @@
 import * as React from "react";
 import { CircleAlert } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Logo } from "@/components/ui/Logo";
 import { isTauri } from "@/lib/api";
 import { syncLocalCopy } from "../local-copy/local-copy";
 import { getSessionStatus, sessionFromStatus, type Session } from "@/lib/remote-client";
@@ -97,24 +99,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [signedIn]);
 
   if (loading) {
-    return <div className="min-h-screen w-full bg-background" />;
+    return (
+      <div className="desk-grain relative flex h-dvh w-full flex-col items-center justify-center text-foreground select-none">
+        <div data-tauri-drag-region className="absolute inset-x-0 top-0 z-10 h-[52px]" />
+        <Logo className="size-10 motion-safe:animate-fade-in" />
+        <div className="skeleton mt-5 h-1 w-24 rounded-full" aria-hidden="true" />
+      </div>
+    );
   }
 
   // If outside Tauri and not signed in, show a clear error state instead of fake data
   if (!isTauri() && !signedIn) {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-background p-6 text-foreground">
-        <div className="w-full max-w-[420px] rounded-xl border border-border bg-card p-6 shadow-sm flex flex-col items-center text-center gap-4">
-          <div className="size-10 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive">
-            <CircleAlert className="size-5" />
-          </div>
-          <div className="space-y-1.5">
-            <h2 className="font-serif text-base font-semibold">Desktop app required</h2>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Sourcefold requires the Tauri desktop app for local storage, or an active signed-in
-              connection.
-            </p>
-          </div>
+      <div className="desk-grain relative flex h-dvh w-full items-center justify-center p-6 text-foreground select-none">
+        <div data-tauri-drag-region className="absolute inset-x-0 top-0 z-10 h-[52px]" />
+        <div className="w-full max-w-[420px] rounded-[16px] bg-background p-6 shadow-sheet">
+          <EmptyState
+            icon={CircleAlert}
+            title="Desktop app required"
+            description="Sourcefold requires the Tauri desktop app for local storage, or an active signed-in connection."
+            compact
+          />
         </div>
       </div>
     );

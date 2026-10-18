@@ -16,7 +16,7 @@ import {
   startSignIn,
 } from "@/lib/remote-client";
 import { cn } from "@/lib/utils";
-import { getSourceKind } from "../items/source-kinds";
+import { SourceTile } from "../items/source-kinds";
 import { isMacPlatform } from "../shortcuts/key-utils";
 
 const DEFAULT_WEB_URL =
@@ -33,21 +33,6 @@ function rise(index: number, extraDelay = 0) {
       opacity: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const, delay },
     },
   };
-}
-
-function SourceMark({ kind }: { kind: string }) {
-  const { Icon, colorVar } = getSourceKind(kind);
-  return (
-    <span
-      className="flex size-8 shrink-0 items-center justify-center rounded-[8px]"
-      style={{
-        color: colorVar,
-        backgroundColor: `color-mix(in oklab, ${colorVar} 12%, transparent)`,
-      }}
-    >
-      <Icon className="size-4" aria-hidden="true" />
-    </span>
-  );
 }
 
 // Purely decorative: three source rows laid out like cards on the desk.
@@ -87,7 +72,7 @@ function SampleStack() {
           )}
           {...rise(index, 0.3)}
         >
-          <SourceMark kind={card.kind} />
+          <SourceTile kind={card.kind} />
           <div className="min-w-0 flex-1">
             <div className="truncate font-serif text-[15px] font-medium leading-[20px] tracking-[-0.005em] text-foreground">
               {card.title}

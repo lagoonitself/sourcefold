@@ -66,9 +66,21 @@ Works in Chrome, Edge, Brave and Arc.
    - **With the website only:** on the website open **Settings**, click **Create token** under Extension and copy the token. Then right-click the Sourcefold icon, choose **Options**, set **Connection mode** to **Web app only**, check the website address, paste the token into **Access token**, click **Save**, then **Test connection**. Allow access to the site if the browser asks.
 7. Open any article or video and click the Sourcefold icon (or press `Alt+Shift+S`), pick a group and press **Save**. The popup remembers your project for next time.
 
+## Claude Desktop
+
+Lets Claude read, add and organize your library from a normal Claude chat. You need [Claude Desktop](https://claude.com/download) on the same computer.
+
+1. **With the desktop app** (easiest): open Sourcefold's **Settings → Claude** and click **Add to Claude Desktop**. Claude Desktop opens an install window: click **Install**. Claude uses the desktop app's sign-in, so leave the settings empty.
+2. **Without the desktop app:** download [Sourcefold-Claude.mcpb](https://github.com/lagoonitself/sourcefold/releases/latest/download/Sourcefold-Claude.mcpb) and double-click it (or drag it onto Claude Desktop). On the website open **Settings**, click **Create token** and paste it into **Access token** in the install window. Fill in **Website address** only if your website isn't the one the download was built for.
+3. Start a new chat in Claude Desktop and ask, for example, "List my Sourcefold projects" or "Add this YouTube playlist to my Cars › Turbo group". The first time Claude uses a Sourcefold tool it asks for permission; choose **Always allow** for the ones you're happy with.
+
+Claude Desktop starts Sourcefold by itself whenever it runs; there is nothing to keep open. With the Sourcefold desktop app open as well, Claude can also search inside your sources, open a source or highlight in the app for you, and save paid Substack posts with your cookie. X posts still need the browser extension.
+
+Other AI apps that support MCP (Claude Code, Cursor and others) can run the same server: unzip the `.mcpb` and run `node server/index.mjs` from that folder as a stdio MCP server, for example `claude mcp add sourcefold -- node /path/to/unzipped/server/index.mjs`.
+
 ## Updating
 
-Download the new installer from the [latest release](https://github.com/lagoonitself/sourcefold/releases/latest) and run it; your library is kept. For the extension, unzip the new version over the old folder and click the reload icon on Sourcefold in `chrome://extensions`.
+Download the new installer from the [latest release](https://github.com/lagoonitself/sourcefold/releases/latest) and run it; your library is kept. For Claude Desktop, click **Add to Claude Desktop** again (or open the new `.mcpb`). For the extension, unzip the new version over the old folder and click the reload icon on Sourcefold in `chrome://extensions`.
 
 ## Problems?
 

@@ -4,7 +4,7 @@ Read this first in any new session. When the user says "continue", pick up at **
 
 This repo is public. Don't put account emails, project IDs, client IDs or other deployment details here; keep them in the agent's private memory.
 
-Last updated: 2026-10-18, after the desktop redesign (branch `desktop-redesign`) and tidying the repository (developer docs in `docs/dev/`, a user-first README, `docs/INSTALL.md`, `docs/SELF-HOSTING.md`, `CHANGELOG.md`) and releasing v0.3.0 with fixed download names.
+Last updated: 2026-10-19, after building Sourcefold for Claude (an MCP server; branch `claude-mcp`, off `desktop-redesign`, not merged). Before that: the desktop redesign (branch `desktop-redesign`), tidying the repository (developer docs in `docs/dev/`, a user-first README, `docs/INSTALL.md`, `docs/SELF-HOSTING.md`, `CHANGELOG.md`) and releasing v0.3.0 with fixed download names.
 
 ## What we're building
 
@@ -86,9 +86,38 @@ Lessons worth keeping:
 
 - Search inside sources (2026-10-18, contract `docs/dev/handoff-search.md`): desktop only. Rust keeps one SQLite FTS5 index file per project in `<app data>/search/<project id>.sqlite` (`src-tauri/src/search/`: chunker, catalog, indexer thread, query with RRF), so a project search never opens another project's file; "All projects" asks every file and merges. Meaning search runs EmbeddingGemma 2 (`q4`, 256 dims) in a Web Worker with WebGPU (`src/features/search/embedding/`); the webview pulls passages with `search_embed_jobs` and stores vectors with `search_put_vectors`. Signed in, the index reads the local copy, and it needs `project_id` in `/api/mirror` entries (web change in this commit), so until the web is deployed the search box says "Update the web app to search inside sources." The previous session ran out of usage mid-build; the next session finished it from the files on disk with three Sonnet 5.5 high agents.
 - The desktop app has no ESLint config: root `npm run lint` only lints `apps/web`. Prettier (`format:check`) does cover the desktop.
+- Sourcefold for Claude (2026-10-19, contract `docs/dev/handoff-mcp.md`): `apps/mcp` is a stdio MCP server (Node, `@modelcontextprotocol/sdk`) that Claude Desktop starts itself from `Sourcefold-Claude.mcpb`.
+  - **Sign-in:** the desktop app's `session.json`, or a token pasted in the bundle's settings.
+  - **Desktop closed:** it talks to the web API directly, so everything except the extras below still works.
+  - **Desktop open:** it reaches the running app through `agent.json` (a new random key every start) and `/api/agent/*` on the loopback server, for keyword search, show-in-app, instant refresh and paid Substack. Those routes refuse any request with an `Origin` header and compare the key in constant time; the key opens nothing else.
+  - **Adding links** runs as a background job in the server process, because Claude Desktop cuts a tool call off after about a minute. Jobs run one at a time, with the desktop's YouTube pacing (now `packages/core/src/youtube/pacing.ts`).
+  - **Highlights** Claude makes are placed on the reader's own text. The reader's parser, renderer and anchoring moved to `packages/core/src/reader` (the desktop keeps re-export files), and `apps/mcp/src/reader-text.ts` rebuilds the reader's `textContent` with linkedom.
+- The MCP bundle keeps pdf.js outside the esbuild bundle, because pdf.js loads its worker from the file next to its module. The build starts the built server once to list its tools into the manifest, which also proves the bundle runs. Release builds add the bundle to the installers with `tauri build --config '{"bundle":{"resources":…}}'`, so dev builds and CI don't need it; dev builds of the desktop read `apps/mcp/dist/`.
+- Not every 401 from the web API means "sign-in expired": Drive answers 401 "Reconnect Google Drive…". `apps/mcp/src/web-api.ts` only rewrites 401s whose message is about the token or signing in.
+- `YOUTUBE_BLOCKED_MESSAGE` wasn't exported from `@sourcefold/core/capture`; importing it gave `undefined` with no type error under the agent's test setup, so a fake rate limit never matched. It is exported now.
+- Two Sonnet 5.5 agents hit the Claude session limit mid-way on 2026-10-18. Resumed with SendMessage the next day, they finished from their files on disk. The owner doesn't want Gemini models used.
 
 ## Next steps
 
+1. **Owner tests Sourcefold in Claude Desktop (built 2026-10-19, branch `claude-mcp`, which includes the desktop redesign).**
+   - **Setup:** install Claude Desktop. Run `git checkout claude-mcp`, `npm install`, `npm run build -w @sourcefold/mcp` (makes `apps/mcp/dist/Sourcefold-Claude.mcpb`), then `npm run tauri dev -w @sourcefold/desktop`, and sign in.
+   - **Install:** in Sourcefold open **Settings → Claude** and click **Add to Claude Desktop**. Claude Desktop shows an install window: click **Install** and leave both settings empty (it uses the desktop app's sign-in). Or double-click the `.mcpb` yourself.
+   - **Try in a new Claude Desktop chat,** one at a time:
+     - "List my Sourcefold projects."
+     - "Show me the tree of my ai research project."
+     - "Read the Dario Amodei interview and summarize it." Claude reads it in parts.
+     - "Find where anything in ai research talks about self-play." Needs the desktop app open.
+     - "Create a group Test inside ai research and add this playlist to it: <a short YouTube playlist>." Rows appear in the app as they save, and Claude checks progress itself.
+     - "Highlight the sentence … in that source with the note …", then open that source in the reader: the sentence should be highlighted in the right place.
+     - "Show that source in the app." The window comes to the front with the reader open.
+     - "Move the first two videos to <another group>", then "Delete the Test group".
+     - "Save everything to Drive."
+   - **Permissions:** Claude asks permission the first time it uses each tool; **Always allow** is fine for the ones you're happy with.
+   - **With the app closed:** quit the desktop app and ask "List my projects" again. It should still work, and searching inside sources should say to open the app.
+   - **Report** anything Claude got wrong or couldn't do, and how the speed felt.
+   - **Checks already run:** all 94 MCP tests, 288 desktop tests and 195 Rust tests pass. The built bundle was started, and `get_status`, `list_projects`, `get_project_tree` and `read_source` were run read-only against the live account.
+   - **Merge order:** merge `desktop-redesign` into `main` first, then `claude-mcp`.
+   - **Next release:** it also ships `Sourcefold-Claude.mcpb`, as a fourth download and inside the installers. Turn the `## Unreleased` section in `CHANGELOG.md` into the version's section before tagging.
 1. **Owner tests the desktop redesign "ink and highlighter" (built 2026-10-18, branch `desktop-redesign`, not merged).** Desktop only; the web app and extension are unchanged. Run `git checkout desktop-redesign`, `npm install` (new packages: `motion`, bundled fonts), then `npm run tauri dev -w @sourcefold/desktop`. Merge into `main` once it looks right (`docs/dev/DESIGN.md`, "Desktop app", is the spec; `docs/dev/handoff-desktop-redesign.md` records how it was split up).
    - Look: grey desk with a rounded white sheet on it; group names in a serif with a yellow highlighter stroke that sweeps in when you open a group; the open group in the sidebar has a pill that slides and the same stroke. Dark mode (Settings → Appearance): near-black desk, the stroke sits lower like an underline. New ink-and-yellow app icon (Start menu, taskbar, Dock).
    - Window sizes: drag the window narrow. Below about 1024px wide the sidebar hides; the button at the top left (or `Ctrl+B` / `⌘B`) slides it over the content, and picking a group or Esc closes it. On a wide window `Ctrl+B` hides and shows it (remembered). The top bar's labels shrink to icons, the group's three buttons fold into a "…" menu, and rows drop the source name, then the date. The window can now go down to 720×520.

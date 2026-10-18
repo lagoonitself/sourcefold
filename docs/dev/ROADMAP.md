@@ -124,6 +124,14 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [ ] Phase 3, rest: images inside sources, **Find in other sources** (`f`) on a highlight.
   - [ ] Serve the ONNX Runtime files from the app instead of `cdn.jsdelivr.net` (set `env.backends.onnx.wasm.wasmPaths`), and drop the unused 27 MB asyncify `.wasm` from the build.
 
+- **Sourcefold for Claude, MCP server (built 2026-10-19, contract `docs/dev/handoff-mcp.md`; [ ] owner's check in Claude Desktop):**
+  - [x] `apps/mcp`: 26 tools over the web API (browse, read in parts, find, organize, notes, highlights on the reader's own text, add links as background jobs with YouTube pacing, images, Drive, show in app), packed as `Sourcefold-Claude.mcpb`.
+  - [x] Desktop bridge: `agent.json` key and `/api/agent/*` (status, keyword search, show, changed, Substack fetch); Settings → Claude → Add to Claude Desktop; live refresh and "show in app".
+  - [x] Release workflow builds the bundle, ships it inside the desktop installers and as a fourth download.
+  - [ ] Offline mode (the desktop's local library) through the bridge.
+  - [ ] Search by meaning for Claude (the query vector comes from the app's GPU worker).
+  - [ ] Optional: a remote MCP server on Vercel for Claude on the phone and claude.ai (no YouTube adding, no search inside sources).
+
 - **Tidy repository and v0.3.0 release (2026-10-18):**
   - [x] README rewritten for users first (downloads, features, which part does what, supported sources); setup moved to `docs/SELF-HOSTING.md`, install steps to `docs/INSTALL.md`, developer docs to `docs/dev/`.
   - [x] `CHANGELOG.md`; the release workflow puts the tagged version's section in the notes and refuses to release without one.

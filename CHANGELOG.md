@@ -2,6 +2,12 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
+## Unreleased
+
+### New
+
+- **Sourcefold in Claude Desktop.** Add it from the desktop app (**Settings → Claude → Add to Claude Desktop**) or with `Sourcefold-Claude.mcpb`, then ask Claude to do what you do: list and read your sources (long ones in parts), add links, YouTube playlists and channels or a Substack publication to a group, rename, move, archive and delete, highlight passages and write notes, and save to Drive. It uses the desktop app's sign-in; with the app open, Claude can also search inside your sources and open things in the app for you.
+
 ## 0.3.0 (2026-10-18)
 
 ### New

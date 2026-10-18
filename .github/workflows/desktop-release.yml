@@ -1,12 +1,14 @@
 name: Release
 
-# Push a tag like v0.3.0 to build the Windows and Mac apps and the Chrome extension, attach them
+# Push a tag like v0.3.0 to build the Windows and Mac apps, the Chrome extension and the Claude
+# Desktop extension (apps/mcp, also bundled inside the desktop app), attach them
 # to one GitHub Release, and publish it. The notes are .github/release-notes.md with the tag's
 # section of CHANGELOG.md filled in, so add that section before tagging.
 #
-# The three files keep the same names in every release, so
+# The four files keep the same names in every release, so
 # https://github.com/<repo>/releases/latest/download/<name> always points at the newest one:
-# Sourcefold-Windows-Setup.exe, Sourcefold-Mac.dmg and Sourcefold-Chrome-Extension.zip.
+# Sourcefold-Windows-Setup.exe, Sourcefold-Mac.dmg, Sourcefold-Chrome-Extension.zip and
+# Sourcefold-Claude.mcpb (the desktop app's Settings → Claude falls back to downloading it).
 #
 # Set the repository variable SOURCEFOLD_WEB_URL to the deployed website so the desktop app and
 # the extension point at it out of the box.
@@ -102,12 +104,21 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
 
+      - name: Build the Claude extension
+        env:
+          SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
+        run: npm run build -w @sourcefold/mcp
+
+      # The bundle ships inside the app so Settings → Claude → Add to Claude Desktop works offline
+      # and matches the app's version. Only release builds add it: dev builds read apps/mcp/dist.
       - name: Build
         working-directory: apps/desktop
         shell: bash
         env:
           VITE_SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
-        run: npm run tauri -- build ${{ matrix.args }}
+        run: >-
+          npm run tauri -- build ${{ matrix.args }}
+          --config '{"bundle":{"resources":{"../../mcp/dist/Sourcefold-Claude.mcpb":"Sourcefold-Claude.mcpb"}}}'
 
       - name: Upload
         shell: bash
@@ -124,7 +135,7 @@ jobs:
           gh release upload "$TAG" "${{ matrix.asset }}" --clobber
 
   extension:
-    name: Chrome extension
+    name: Chrome and Claude extensions
     needs: create-release
     runs-on: ubuntu-latest
     steps:
@@ -156,6 +167,14 @@ jobs:
           cd ../../..
           gh release upload "$TAG" Sourcefold-Chrome-Extension.zip --clobber
 
+      - name: Build and upload the Claude extension
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
+        run: |
+          npm run build -w @sourcefold/mcp
+          gh release upload "$TAG" apps/mcp/dist/Sourcefold-Claude.mcpb --clobber
+
   publish:
     name: Publish release
     needs: [desktop, extension]
@@ -167,7 +186,7 @@ jobs:
         run: |
           ASSETS=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
           echo "$ASSETS"
-          for name in Sourcefold-Windows-Setup.exe Sourcefold-Mac.dmg Sourcefold-Chrome-Extension.zip; do
+          for name in Sourcefold-Windows-Setup.exe Sourcefold-Mac.dmg Sourcefold-Chrome-Extension.zip Sourcefold-Claude.mcpb; do
             echo "$ASSETS" | grep -qx "$name" || { echo "Missing $name"; exit 1; }
           done
 

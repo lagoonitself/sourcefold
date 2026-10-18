@@ -26,7 +26,7 @@ Every web API route already accepts `Authorization: Bearer <token>` (`requireApi
 
 In this order, read fresh on every call (signing in later works without restarting Claude):
 
-1. `SOURCEFOLD_TOKEN` (and `SOURCEFOLD_WEB_URL`) from the bundle's settings, when non-empty. For people without the desktop app: web Settings → Access tokens → create one.
+1. `SOURCEFOLD_TOKEN` (and `SOURCEFOLD_WEB_URL`) from the bundle's settings, when non-empty. For people without the desktop app: web Settings → Create token.
 2. The desktop app's sign-in: `session.json` in the app data folder (`{ web_url, token, email, signed_in_at }`). App data folder: Windows `%LOCALAPPDATA%\Sourcefold`, macOS `~/Library/Application Support/Sourcefold`, Linux `$XDG_DATA_HOME/Sourcefold` or `~/.local/share/Sourcefold` (Rust `dirs::data_local_dir()`).
 3. Neither: every tool answers "Sign in to the Sourcefold desktop app on this computer, or paste an access token in Claude Desktop → Settings → Extensions → Sourcefold."
 
@@ -135,3 +135,15 @@ Settings → **Claude** pane (package C; follow `docs/dev/DESIGN.md`):
 - `npm run typecheck`, `npm test`, `npm run format:check` pass; desktop `cargo test` and `cargo check` pass; the IPC contract test covers `open_claude_extension`.
 - `npm run build -w @sourcefold/mcp` produces `apps/mcp/dist/Sourcefold-Claude.mcpb`, which installs in Claude Desktop and lists the tools above.
 - The owner can, from a Claude chat: list projects, read a long source in parts, add a YouTube playlist to a group and watch it fill, move and delete sources, highlight a sentence (it shows in the reader), save to Drive, and ask Claude to show a source in the app.
+
+## Built (2026-10-19): deviations and notes
+
+- **Tools:** 26, as listed above.
+  - `read_source` shows the outline only when a source has more than one part.
+  - `show_in_app` is marked read-only.
+  - `add_image` downloads with plain `fetch`, without the address guard; it only accepts image types up to 10 MB.
+- **Add jobs:** `get_add_progress` without a `job_id` lists the recent jobs. Jobs run one at a time across all `add_links` calls.
+- **`agent.json`:** written once the loopback port is bound (in `run_server`), not before. That way a second app instance that fails to bind never replaces the first one's key. The key is 32 random bytes taken from three v4 UUIDs, because the app has no `rand` crate.
+- **Agent threads:** agent requests are served on their own threads (at most 8, then 503), so a slow Substack fetch or search doesn't hold up the extension.
+- **`open_claude_extension`:** downloads with `reqwest`: https only, 50 MB cap, and the file must start with `PK` (a zip).
+- **`show`:** on a project it opens the project's first group; on an image it only focuses the row.

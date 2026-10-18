@@ -27,7 +27,7 @@ const EXPIRED_MESSAGE = {
   desktop:
     "The desktop app's sign-in is no longer valid. Open the Sourcefold desktop app and sign in again.",
   settings:
-    "The access token in Claude Desktop isn't valid any more. Create a new one on the website (Settings → Access tokens) and paste it in Claude Desktop → Settings → Extensions → Sourcefold.",
+    "The access token in Claude Desktop isn't valid any more. Create a new one on the website (Settings → Create token) and paste it in Claude Desktop → Settings → Extensions → Sourcefold.",
 } as const;
 
 export interface RequestOptions {

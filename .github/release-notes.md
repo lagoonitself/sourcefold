@@ -7,6 +7,7 @@ Sourcefold saves everything you read (web pages, YouTube transcripts, PDFs, Wiki
 | **Windows** 10 or 11                         | [Sourcefold-Windows-Setup.exe](https://github.com/{{REPO}}/releases/download/{{TAG}}/Sourcefold-Windows-Setup.exe)       |
 | **Mac** (macOS 11+, Apple Silicon or Intel)  | [Sourcefold-Mac.dmg](https://github.com/{{REPO}}/releases/download/{{TAG}}/Sourcefold-Mac.dmg)                           |
 | **Chrome extension** (also Edge, Brave, Arc) | [Sourcefold-Chrome-Extension.zip](https://github.com/{{REPO}}/releases/download/{{TAG}}/Sourcefold-Chrome-Extension.zip) |
+| **Claude Desktop** extension                 | [Sourcefold-Claude.mcpb](https://github.com/{{REPO}}/releases/download/{{TAG}}/Sourcefold-Claude.mcpb)                   |
 | **Website** (nothing to install)             | {{WEB_URL}}                                                                                                              |
 
 ## What's new in {{VERSION}}
@@ -29,6 +30,8 @@ Then click **Sign in with browser** (the website address is filled in) and **Con
 
 **Extension:** unzip `Sourcefold-Chrome-Extension.zip` somewhere permanent. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the unzipped folder. With the desktop app open, it saves through the app; nothing else to set up. Without it, see [INSTALL.md](https://github.com/{{REPO}}/blob/{{TAG}}/docs/INSTALL.md#chrome-extension).
 
+**Claude Desktop:** in the desktop app open **Settings → Claude** and click **Add to Claude Desktop**, then **Install** in Claude Desktop. Or double-click `Sourcefold-Claude.mcpb`. Then ask Claude "List my Sourcefold projects".
+
 **Updating:** run the new installer; your library is kept. For the extension, unzip the new version over the old folder and click reload on `chrome://extensions`.
 
 ## Everything Sourcefold does
@@ -37,6 +40,7 @@ Then click **Sign in with browser** (the website address is filled in) and **Con
 - **Read and highlight** (desktop): a clean reader, highlights with notes, quotes copied with their source, and every source an article cites, ready to save.
 - **Search** (desktop): inside every source in a project, by keyword or by meaning, all on your computer.
 - **Organize:** projects, groups inside groups, notes and images, drag and drop, archiving.
+- **Claude:** ask Claude Desktop to list, read, add, organize, highlight and save your sources for you.
 - **Your files:** every source is a Markdown file. **Save to Drive** mirrors your folders into your own Google Drive with a Google Doc copy of each; the desktop app keeps a copy with Word files in `Documents/Sourcefold`, or works fully offline.
 
 Supported sources, and which part does what: [README](https://github.com/{{REPO}}#readme).

@@ -1,0 +1,48 @@
+{
+  "manifest_version": "0.3",
+  "name": "sourcefold",
+  "display_name": "Sourcefold",
+  "version": "0.0.0",
+  "description": "Read, add and organize your Sourcefold research library from Claude.",
+  "long_description": "Lets Claude work with your Sourcefold library the way you do: list projects, groups and sources, read sources in parts, search inside them, add YouTube videos and playlists, articles, PDFs and more, move, rename and delete things, highlight passages, write notes and save to Google Drive.\n\nIf the Sourcefold desktop app is signed in on this computer, Claude uses its sign-in and nothing needs to be filled in. Otherwise create an access token on the Sourcefold website (Settings → Create token) and paste it below.\n\nWith the desktop app open, Claude can also search inside your sources, open things in the app for you, and save paid Substack posts you subscribe to.",
+  "author": { "name": "Sourcefold", "url": "https://github.com/lagoonitself/sourcefold" },
+  "repository": { "type": "git", "url": "https://github.com/lagoonitself/sourcefold" },
+  "homepage": "https://github.com/lagoonitself/sourcefold",
+  "support": "https://github.com/lagoonitself/sourcefold/issues",
+  "icon": "icon.png",
+  "license": "MIT",
+  "keywords": ["research", "sources", "youtube", "notes", "highlights", "reading"],
+  "privacy_policies": ["https://github.com/lagoonitself/sourcefold/blob/main/PRIVACY.md"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.mjs"],
+      "env": {
+        "SOURCEFOLD_WEB_URL": "${user_config.web_url}",
+        "SOURCEFOLD_TOKEN": "${user_config.api_token}"
+      }
+    }
+  },
+  "user_config": {
+    "api_token": {
+      "type": "string",
+      "title": "Access token (optional)",
+      "description": "Leave empty to use the Sourcefold desktop app's sign-in on this computer. Otherwise create one on the Sourcefold website: Settings → Create token.",
+      "sensitive": true,
+      "required": false
+    },
+    "web_url": {
+      "type": "string",
+      "title": "Website address (optional)",
+      "description": "Only needed with an access token, if your Sourcefold website isn't the default one.",
+      "required": false
+    }
+  },
+  "tools": [],
+  "compatibility": {
+    "platforms": ["win32", "darwin"],
+    "runtimes": { "node": ">=18.0.0" }
+  }
+}

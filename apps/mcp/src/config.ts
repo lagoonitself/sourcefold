@@ -20,7 +20,7 @@ export interface Credentials {
 }
 
 export const NOT_SIGNED_IN_MESSAGE =
-  "Sourcefold isn't signed in on this computer. Sign in to the Sourcefold desktop app, or create an access token on the website (Settings → Access tokens) and paste it in Claude Desktop → Settings → Extensions → Sourcefold.";
+  "Sourcefold isn't signed in on this computer. Sign in to the Sourcefold desktop app, or create an access token on the website (Settings → Create token) and paste it in Claude Desktop → Settings → Extensions → Sourcefold.";
 
 /** The desktop app's data folder, the same as Rust's `dirs::data_local_dir()/Sourcefold`. */
 export function appDataDir(env: NodeJS.ProcessEnv = process.env, platform = process.platform) {

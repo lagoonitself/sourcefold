@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/Input";
 import type { Item } from "@/lib/types";
 import { getItem, updateItemNote, createStandaloneNote, updateStandaloneNote } from "@/lib/api";
 import { isMacPlatform } from "../shortcuts/key-utils";
+import { cn } from "@/lib/utils";
 
 export interface NoteDialogProps {
   open: boolean;
@@ -118,7 +119,7 @@ export function NoteDialog({ open, onOpenChange, item, folderId, onSaved }: Note
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-2">
+        <div className="space-y-3 py-1">
           {(!item || isEditStandalone) && (
             <div>
               <Input
@@ -142,26 +143,32 @@ export function NoteDialog({ open, onOpenChange, item, folderId, onSaved }: Note
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Write thoughts, quotes, or markdown highlights here..."
-              rows={12}
+              rows={10}
               autoFocus={Boolean(item && !isEditStandalone)}
               disabled={isSaving}
-              className="w-full resize-y rounded-[6px] border border-input bg-transparent p-3 font-sans text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className={cn(
+                "flex min-h-[140px] w-full resize-y rounded-[9px] border border-input bg-background p-3 text-[13.5px] text-foreground font-sans leading-relaxed",
+                "transition-[border-color,box-shadow] duration-150 ease-out placeholder:text-muted-foreground/80",
+                "hover:border-border-strong focus-visible:border-foreground/40 focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--foreground)_10%,transparent)] focus-visible:outline-none",
+                "disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white/[0.03]",
+              )}
             />
           </div>
         </div>
 
-        <DialogFooter className="flex items-center justify-between">
-          <span className="text-[11px] text-muted-foreground">{saveHint}</span>
+        <DialogFooter className="flex items-center justify-between mt-4">
+          <span className="text-[12px] text-muted-foreground">{saveHint}</span>
           <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => onOpenChange(false)}
               disabled={isSaving}
             >
               Cancel
             </Button>
-            <Button type="button" onClick={handleSave} disabled={isSaving}>
+            <Button type="button" size="sm" onClick={handleSave} disabled={isSaving}>
               {isSaving ? "Saving..." : "Save note"}
             </Button>
           </div>

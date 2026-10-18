@@ -1,24 +1,25 @@
 import * as React from "react";
-import { Check, CircleAlert, Laptop, Loader2, LogOut, Moon, Sun, User, X } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  Laptop,
+  Loader2,
+  LogOut,
+  Moon,
+  Newspaper,
+  Palette,
+  Search,
+  SlidersHorizontal,
+  Sun,
+  User,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/Dialog";
+import { Dialog, DialogContent } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import type { NativeHostStatus, Settings } from "@/lib/types";
-import {
-  getNativeHostStatus,
-  getSettings,
-  installNativeHost,
-  isTauri,
-  updateSettings,
-} from "@/lib/api";
+import { getNativeHostStatus, getSettings, installNativeHost, updateSettings } from "@/lib/api";
 import {
   cancelSignIn,
   getSessionStatus,
@@ -40,6 +41,22 @@ export interface SettingsDialogProps {
   onThemeChange: (theme: "light" | "dark" | "system") => void;
 }
 
+type SettingsSection = "general" | "appearance" | "account" | "search" | "substack";
+
+interface SectionConfig {
+  id: SettingsSection;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const SECTIONS: SectionConfig[] = [
+  { id: "general", label: "General", icon: SlidersHorizontal },
+  { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "account", label: "Account", icon: User },
+  { id: "search", label: "Search", icon: Search },
+  { id: "substack", label: "Substack", icon: Newspaper },
+];
+
 const DEFAULT_WEB_URL =
   ((import.meta as any).env?.VITE_SOURCEFOLD_WEB_URL as string) || "http://localhost:3000";
 
@@ -49,7 +66,7 @@ export function SettingsDialog({
   currentTheme,
   onThemeChange,
 }: SettingsDialogProps) {
-  const [activeTab, setActiveTab] = React.useState<"general" | "account" | "substack">("general");
+  const [activeSection, setActiveSection] = React.useState<SettingsSection>("general");
   const [settings, setSettings] = React.useState<Settings | null>(null);
   const [storagePath, setStoragePath] = React.useState("");
   const [hostStatus, setHostStatus] = React.useState<NativeHostStatus | null>(null);
@@ -185,297 +202,394 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[520px]">
-        <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>
-            Configure storage, appearance, browser extension, your Sourcefold account and Substack.
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Tab navigation */}
-        <div className="flex border-b border-border text-xs font-medium -mt-1 gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("general")}
-            className={cn(
-              "pb-2 px-3 border-b-2 font-medium transition-colors cursor-pointer",
-              activeTab === "general"
-                ? "border-primary text-foreground font-semibold"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            General
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("account")}
-            className={cn(
-              "pb-2 px-3 border-b-2 font-medium transition-colors cursor-pointer flex items-center gap-1.5",
-              activeTab === "account"
-                ? "border-primary text-foreground font-semibold"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <User className="size-3.5" />
-            <span>Account</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("substack")}
-            className={cn(
-              "pb-2 px-3 border-b-2 font-medium transition-colors cursor-pointer",
-              activeTab === "substack"
-                ? "border-primary text-foreground font-semibold"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Substack
-          </button>
+      <DialogContent className="max-w-[760px] h-[560px] max-h-[calc(100dvh-32px)] p-0 overflow-hidden flex flex-col sm:flex-row">
+        {/* Left Nav Pane (200px, bg-muted/60, rounded on left side; horizontal chips below 640px) */}
+        <div className="w-full sm:w-[200px] sm:h-full flex flex-row sm:flex-col p-3 gap-1 shrink-0 bg-muted/60 border-b sm:border-b-0 sm:border-r border-border sm:rounded-l-[16px] overflow-x-auto sm:overflow-y-auto">
+          {SECTIONS.map((sec) => {
+            const Icon = sec.icon;
+            const isActive = activeSection === sec.id;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => setActiveSection(sec.id)}
+                className={cn(
+                  "h-8 flex items-center gap-2.5 px-3 rounded-[8px] text-[13px] font-medium transition-colors cursor-pointer select-none whitespace-nowrap",
+                  isActive
+                    ? "bg-background shadow-raised text-foreground font-medium"
+                    : "text-muted-foreground hover:text-foreground hover:bg-background/40",
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "size-4 shrink-0",
+                    isActive ? "text-foreground" : "text-muted-foreground",
+                  )}
+                />
+                <span>{sec.label}</span>
+              </button>
+            );
+          })}
         </div>
 
-        {authError && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-start gap-2.5">
-            <CircleAlert className="size-4 shrink-0 mt-0.5" />
-            <div className="flex-1 leading-relaxed">{authError}</div>
-            <button
-              type="button"
-              onClick={() => setAuthError(null)}
-              className="text-destructive/70 hover:text-destructive cursor-pointer"
-              aria-label="Dismiss error"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-
-        {activeTab === "general" ? (
-          <div className="flex flex-col gap-5 py-2">
-            {/* Storage Directory */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-foreground">Storage Directory</label>
-              <p className="text-[11px] text-muted-foreground">
-                Folder on this computer where your sources are saved as Markdown files.
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  value={storagePath}
-                  onChange={(e) => setStoragePath(e.target.value)}
-                  placeholder="Path to folder"
-                  className="font-mono text-xs"
-                />
-              </div>
-            </div>
-
-            <LocalCopySettings open={open} signedIn={Boolean(session) && !isOffline} />
-
-            <SearchSettings open={open} />
-
-            {/* Native Messaging Host Installer */}
-            <div className="flex flex-col gap-2 rounded-[6px] border border-border p-3 bg-muted/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-foreground">
-                    Chrome Extension Native Messaging
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Connect the Sourcefold browser extension directly to this app.
-                  </div>
-                </div>
-                <div className="shrink-0">
-                  {hostStatus?.installed ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground">
-                      <Check className="size-3" />
-                      Installed
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      <CircleAlert className="size-3" />
-                      Not registered
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleInstallHost}
-                  disabled={isInstalling}
-                  className="text-xs h-8 cursor-pointer"
-                >
-                  {isInstalling
-                    ? "Installing..."
-                    : hostStatus?.installed
-                      ? "Re-register native host"
-                      : "1-Click Install Native Host"}
-                </Button>
-              </div>
-            </div>
-
-            {/* Theme Selector */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-foreground">Appearance</label>
-              <div className="grid grid-cols-3 gap-2">
+        {/* Right Content Pane (scrollable) */}
+        <div className="flex-1 flex flex-col h-full min-w-0 bg-card overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 pr-10">
+            {authError && (
+              <div className="mb-4 rounded-[8px] border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-start gap-2.5">
+                <CircleAlert className="size-4 shrink-0 mt-0.5" />
+                <div className="flex-1 leading-relaxed">{authError}</div>
                 <button
                   type="button"
-                  onClick={() => onThemeChange("light")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-[6px] border border-border p-2 text-xs font-medium transition-colors cursor-pointer",
-                    currentTheme === "light"
-                      ? "border-primary bg-primary/5 text-primary font-semibold"
-                      : "hover:bg-muted text-muted-foreground",
-                  )}
+                  onClick={() => setAuthError(null)}
+                  className="text-destructive/70 hover:text-destructive cursor-pointer"
+                  aria-label="Dismiss error"
                 >
-                  <Sun className="size-4" />
-                  <span>Light</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onThemeChange("dark")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-[6px] border border-border p-2 text-xs font-medium transition-colors cursor-pointer",
-                    currentTheme === "dark"
-                      ? "border-primary bg-primary/5 text-primary font-semibold"
-                      : "hover:bg-muted text-muted-foreground",
-                  )}
-                >
-                  <Moon className="size-4" />
-                  <span>Dark</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onThemeChange("system")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-[6px] border border-border p-2 text-xs font-medium transition-colors cursor-pointer",
-                    currentTheme === "system"
-                      ? "border-primary bg-primary/5 text-primary font-semibold"
-                      : "hover:bg-muted text-muted-foreground",
-                  )}
-                >
-                  <Laptop className="size-4" />
-                  <span>System</span>
+                  <X className="size-3.5" />
                 </button>
               </div>
-            </div>
-          </div>
-        ) : activeTab === "substack" ? (
-          <SubstackCookieSettings open={open} />
-        ) : (
-          <div className="flex flex-col gap-4 py-2">
-            {session ? (
-              <div className="flex flex-col gap-4">
-                <div className="rounded-[8px] border border-border p-4 bg-muted/20 flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-foreground">Connected Account</span>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                      <Check className="size-3" />
-                      Signed in
-                    </span>
-                  </div>
+            )}
 
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-foreground">{session.email}</div>
-                    <div className="text-xs text-muted-foreground font-mono">{session.web_url}</div>
-                  </div>
+            {/* Section Header */}
+            <h2 className="font-serif text-[22px] font-medium leading-[28px] tracking-[-0.012em] text-foreground mb-6">
+              {activeSection === "general" && "General"}
+              {activeSection === "appearance" && "Appearance"}
+              {activeSection === "account" && "Account"}
+              {activeSection === "search" && "Search"}
+              {activeSection === "substack" && "Substack"}
+            </h2>
 
-                  <div className="text-[11px] text-muted-foreground">
-                    Connected to web app and syncing with Google Drive and Chrome extension.
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSignOut}
-                    className="text-xs text-destructive hover:bg-destructive/10 cursor-pointer"
-                  >
-                    <LogOut className="size-3.5 mr-1.5" />
-                    Sign out
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <div className="rounded-[8px] border border-border p-4 bg-muted/20 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-foreground">Working Offline</span>
-                    {isOffline && (
-                      <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium">
-                        Offline Mode
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Sourcefold Desktop is storing all your items locally on your computer. Sign in
-                    with your browser to connect to the Sourcefold Web App, enable Google Drive
-                    sync, and sync with the Chrome extension.
-                  </p>
-                </div>
-
+            {/* Section Content */}
+            {activeSection === "general" && (
+              <div className="flex flex-col gap-5">
+                {/* Storage Directory Row */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold text-foreground">Web App URL</label>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[13.5px] font-medium text-foreground">
+                      Storage directory
+                    </span>
+                    <p className="text-[12.5px] leading-[18px] text-muted-foreground">
+                      Folder on this computer where your sources are saved as Markdown files.
+                    </p>
+                  </div>
                   <Input
-                    value={webUrl}
-                    onChange={(e) => setWebUrl(e.target.value)}
-                    placeholder="http://localhost:3000"
-                    disabled={isSigningIn}
+                    value={storagePath}
+                    onChange={(e) => setStoragePath(e.target.value)}
+                    placeholder="Path to folder"
                     className="font-mono text-xs"
                   />
-                  <p className="text-[11px] text-muted-foreground">
-                    The URL of your hosted or local Sourcefold Web instance.
-                  </p>
                 </div>
 
-                <div className="pt-2 flex items-center gap-2">
-                  {isSigningIn ? (
-                    <>
-                      <Button
-                        type="button"
-                        disabled
-                        className="text-xs h-8 flex items-center gap-1.5"
+                <LocalCopySettings open={open} signedIn={Boolean(session) && !isOffline} />
+
+                {/* Chrome Extension Native Messaging */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                      <span className="text-[13.5px] font-medium text-foreground">
+                        Chrome extension native messaging
+                      </span>
+                      <p className="text-[12.5px] leading-[18px] text-muted-foreground">
+                        Connect the Sourcefold browser extension directly to this app.
+                      </p>
+                    </div>
+                    <div className="shrink-0 pt-0.5">
+                      {hostStatus?.installed ? (
+                        <span className="inline-flex items-center gap-1 rounded-[6px] bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground">
+                          <Check className="size-3" />
+                          Installed
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-[6px] bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                          <CircleAlert className="size-3" />
+                          Not registered
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleInstallHost}
+                      disabled={isInstalling}
+                    >
+                      {isInstalling
+                        ? "Installing..."
+                        : hostStatus?.installed
+                          ? "Re-register native host"
+                          : "Install native host"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === "appearance" && (
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[13.5px] font-medium text-foreground">Theme</span>
+                    <p className="text-[12.5px] leading-[18px] text-muted-foreground">
+                      Select how Sourcefold looks on your desktop.
+                    </p>
+                  </div>
+
+                  {/* Three small cards with preview */}
+                  <div className="grid grid-cols-3 gap-3 pt-1">
+                    {/* Light Theme Card */}
+                    <button
+                      type="button"
+                      onClick={() => onThemeChange("light")}
+                      className={cn(
+                        "group flex flex-col items-center gap-2 rounded-[10px] border border-border p-2 transition-all cursor-pointer text-left",
+                        currentTheme === "light"
+                          ? "ring-2 ring-primary ring-offset-2 ring-offset-card border-transparent font-medium text-foreground"
+                          : "hover:bg-muted/40 text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <div
+                        className="h-16 w-full rounded-[6px] p-2 flex flex-col justify-end overflow-hidden"
+                        style={{ backgroundColor: "#e8eaee", borderColor: "#e1e4ea" }}
                       >
-                        <Loader2 className="size-3.5 animate-spin" />
-                        Waiting for browser sign-in...
-                      </Button>
+                        <div
+                          className="h-9 w-full rounded-[4px] p-1.5 flex flex-col justify-center gap-1 shadow-xs"
+                          style={{ backgroundColor: "#fcfcfb" }}
+                        >
+                          <div
+                            className="h-1 w-7 rounded-full"
+                            style={{ backgroundColor: "#15181e" }}
+                          />
+                          <div
+                            className="h-1 w-11 rounded-full"
+                            style={{ backgroundColor: "#979eaa" }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[12.5px]">
+                        <Sun className="size-3.5" />
+                        <span>Light</span>
+                      </div>
+                    </button>
+
+                    {/* Dark Theme Card */}
+                    <button
+                      type="button"
+                      onClick={() => onThemeChange("dark")}
+                      className={cn(
+                        "group flex flex-col items-center gap-2 rounded-[10px] border border-border p-2 transition-all cursor-pointer text-left",
+                        currentTheme === "dark"
+                          ? "ring-2 ring-primary ring-offset-2 ring-offset-card border-transparent font-medium text-foreground"
+                          : "hover:bg-muted/40 text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <div className="dark w-full">
+                        <div
+                          className="h-16 w-full rounded-[6px] p-2 flex flex-col justify-end overflow-hidden"
+                          style={{ backgroundColor: "#0e0f13", borderColor: "#2a2e36" }}
+                        >
+                          <div
+                            className="h-9 w-full rounded-[4px] p-1.5 flex flex-col justify-center gap-1 shadow-xs"
+                            style={{ backgroundColor: "#17191e" }}
+                          >
+                            <div
+                              className="h-1 w-7 rounded-full"
+                              style={{ backgroundColor: "#ecedef" }}
+                            />
+                            <div
+                              className="h-1 w-11 rounded-full"
+                              style={{ backgroundColor: "#5e6573" }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[12.5px]">
+                        <Moon className="size-3.5" />
+                        <span>Dark</span>
+                      </div>
+                    </button>
+
+                    {/* System Theme Card */}
+                    <button
+                      type="button"
+                      onClick={() => onThemeChange("system")}
+                      className={cn(
+                        "group flex flex-col items-center gap-2 rounded-[10px] border border-border p-2 transition-all cursor-pointer text-left",
+                        currentTheme === "system"
+                          ? "ring-2 ring-primary ring-offset-2 ring-offset-card border-transparent font-medium text-foreground"
+                          : "hover:bg-muted/40 text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <div className="h-16 w-full rounded-[6px] overflow-hidden flex border border-border">
+                        <div
+                          className="w-1/2 h-full p-1.5 flex flex-col justify-end"
+                          style={{ backgroundColor: "#e8eaee" }}
+                        >
+                          <div
+                            className="h-9 w-full rounded-l-[4px] p-1 flex flex-col justify-center gap-1 shadow-xs"
+                            style={{ backgroundColor: "#fcfcfb" }}
+                          >
+                            <div
+                              className="h-1 w-5 rounded-full"
+                              style={{ backgroundColor: "#15181e" }}
+                            />
+                            <div
+                              className="h-1 w-6 rounded-full"
+                              style={{ backgroundColor: "#979eaa" }}
+                            />
+                          </div>
+                        </div>
+                        <div className="dark w-1/2 h-full">
+                          <div
+                            className="w-full h-full p-1.5 flex flex-col justify-end"
+                            style={{ backgroundColor: "#0e0f13" }}
+                          >
+                            <div
+                              className="h-9 w-full rounded-r-[4px] p-1 flex flex-col justify-center gap-1 shadow-xs"
+                              style={{ backgroundColor: "#17191e" }}
+                            >
+                              <div
+                                className="h-1 w-5 rounded-full"
+                                style={{ backgroundColor: "#ecedef" }}
+                              />
+                              <div
+                                className="h-1 w-6 rounded-full"
+                                style={{ backgroundColor: "#5e6573" }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[12.5px]">
+                        <Laptop className="size-3.5" />
+                        <span>System</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === "account" && (
+              <div className="flex flex-col gap-5">
+                {session ? (
+                  <div className="flex flex-col gap-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex flex-col gap-1 min-w-0 flex-1">
+                        <span className="text-[13.5px] font-medium text-foreground">
+                          Connected account
+                        </span>
+                        <div className="text-[13.5px] font-medium text-foreground">
+                          {session.email}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-mono">
+                          {session.web_url}
+                        </div>
+                        <p className="text-[12.5px] leading-[18px] text-muted-foreground pt-1">
+                          Connected to web app and syncing with Google Drive and Chrome extension.
+                        </p>
+                      </div>
+                      <div className="shrink-0 pt-0.5">
+                        <span className="inline-flex items-center gap-1 text-[11.5px] font-medium text-success bg-muted px-2 py-0.5 rounded-full">
+                          <Check className="size-3" />
+                          Signed in
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-1">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={handleCancelSignIn}
-                        className="text-xs h-8 cursor-pointer"
+                        onClick={handleSignOut}
+                        className="text-destructive hover:bg-destructive/10"
                       >
-                        Cancel
+                        <LogOut className="size-3.5 mr-1.5" />
+                        Sign out
                       </Button>
-                    </>
-                  ) : (
-                    <Button
-                      type="button"
-                      onClick={handleStartSignIn}
-                      className="text-xs h-8 cursor-pointer"
-                    >
-                      Sign in with browser
-                    </Button>
-                  )}
-                </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                        <span className="text-[13.5px] font-medium text-foreground">
+                          Working offline
+                        </span>
+                        <p className="text-[12.5px] leading-[18px] text-muted-foreground">
+                          Sourcefold Desktop is storing all your items locally on your computer.
+                          Sign in with your browser to connect to the Sourcefold Web App, enable
+                          Google Drive sync, and sync with the Chrome extension.
+                        </p>
+                      </div>
+                      {isOffline && (
+                        <div className="shrink-0 pt-0.5">
+                          <span className="text-[11.5px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full font-medium">
+                            Offline mode
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[13.5px] font-medium text-foreground">
+                        Web app URL
+                      </label>
+                      <Input
+                        value={webUrl}
+                        onChange={(e) => setWebUrl(e.target.value)}
+                        placeholder="http://localhost:3000"
+                        disabled={isSigningIn}
+                        className="font-mono text-xs"
+                      />
+                      <p className="text-[12px] text-muted-foreground">
+                        The URL of your hosted or local Sourcefold Web instance.
+                      </p>
+                    </div>
+
+                    <div className="pt-1 flex items-center gap-2">
+                      {isSigningIn ? (
+                        <>
+                          <Button type="button" disabled size="sm" className="gap-1.5">
+                            <Loader2 className="size-3.5 animate-spin" />
+                            Waiting for browser sign-in...
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleCancelSignIn}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button type="button" size="sm" onClick={handleStartSignIn}>
+                          Sign in with browser
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="cursor-pointer">
-            Cancel
-          </Button>
-          <Button onClick={handleSaveSettings} disabled={isSaving} className="cursor-pointer">
-            {isSaving ? "Saving..." : "Save changes"}
-          </Button>
-        </DialogFooter>
+            {activeSection === "search" && <SearchSettings open={open} />}
+
+            {activeSection === "substack" && <SubstackCookieSettings open={open} />}
+          </div>
+
+          {/* Footer Bar */}
+          <div className="px-6 py-3 border-t border-border flex items-center justify-end gap-2 shrink-0 bg-card">
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSaveSettings} disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save changes"}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

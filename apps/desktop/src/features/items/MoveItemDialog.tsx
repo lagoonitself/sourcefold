@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Folder as FolderIcon, Search } from "lucide-react";
+import { Folder as FolderIcon, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import {
@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/Dialog";
+import { Kbd } from "@/components/ui/Kbd";
 import type { Folder, FolderNode, Item } from "@/lib/types";
 import { moveItem } from "@/lib/api";
 import { buildFolderTree } from "../folders/tree-utils";
@@ -30,6 +31,7 @@ interface FlatGroupOption {
   fullPath: string;
   projectName: string;
   isCurrent: boolean;
+  depth: number;
 }
 
 export function MoveItemDialog({
@@ -60,7 +62,7 @@ export function MoveItemDialog({
   const allGroupOptions = React.useMemo(() => {
     const list: FlatGroupOption[] = [];
 
-    function collect(nodes: FolderNode[], pathPrefix: string, projectName: string) {
+    function collect(nodes: FolderNode[], pathPrefix: string, projectName: string, depth = 0) {
       for (const node of nodes) {
         const fullPath = pathPrefix
           ? `${pathPrefix} / ${node.name}`
@@ -71,15 +73,16 @@ export function MoveItemDialog({
           fullPath,
           projectName,
           isCurrent: currentFolderId === node.id,
+          depth,
         });
         if (node.children && node.children.length > 0) {
-          collect(node.children, fullPath, projectName);
+          collect(node.children, fullPath, projectName, depth + 1);
         }
       }
     }
 
     for (const project of tree) {
-      collect(project.children, "", project.name);
+      collect(project.children, "", project.name, 0);
     }
 
     return list;
@@ -158,15 +161,15 @@ export function MoveItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[460px] p-0 overflow-hidden" onKeyDown={handleKeyDown}>
-        <DialogHeader className="p-4 pb-2 mb-0">
+      <DialogContent className="max-w-[480px] p-0 overflow-hidden" onKeyDown={handleKeyDown}>
+        <DialogHeader className="p-4 pb-3 mb-0">
           <DialogTitle>
             {items.length > 1 ? `Move ${items.length} sources to group` : "Move source to group"}
           </DialogTitle>
         </DialogHeader>
 
         {/* Type-to-filter input */}
-        <div className="flex items-center gap-2.5 border-y border-border px-4 py-2.5 bg-muted/20">
+        <div className="flex items-center gap-2.5 border-y border-border px-4 py-2 bg-muted/20">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
             value={filterQuery}
@@ -175,15 +178,15 @@ export function MoveItemDialog({
               setSelectedIndex(0);
             }}
             placeholder="Filter groups... (↑↓ to select, Enter to move)"
-            className="flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+            className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/80"
             autoFocus
           />
         </div>
 
         {/* Filtered Groups List */}
-        <div ref={listRef} className="max-h-72 overflow-y-auto divide-y divide-border/40 py-1">
+        <div ref={listRef} className="max-h-72 overflow-y-auto p-1.5 space-y-0.5">
           {filteredGroups.length === 0 ? (
-            <div className="p-6 text-center text-xs text-muted-foreground">
+            <div className="p-8 text-center text-[13px] text-muted-foreground">
               No groups match &ldquo;{filterQuery}&rdquo;
             </div>
           ) : (
@@ -199,33 +202,42 @@ export function MoveItemDialog({
                     }
                   }}
                   onMouseEnter={() => setSelectedIndex(idx)}
+                  style={{ paddingLeft: `${12 + group.depth * 14}px` }}
                   className={cn(
-                    "flex items-center justify-between gap-3 px-4 py-2 transition-colors cursor-pointer select-none text-xs",
-                    group.isCurrent && "cursor-not-allowed opacity-50 text-muted-foreground",
+                    "relative flex items-center justify-between gap-3 pr-3 py-2 rounded-[8px] transition-colors select-none text-[13px]",
+                    group.isCurrent && "cursor-not-allowed opacity-50",
+                    !group.isCurrent && "cursor-pointer",
                     !group.isCurrent &&
                       isSelected &&
                       "bg-accent text-accent-foreground font-medium",
-                    !group.isCurrent && !isSelected && "hover:bg-muted/60 text-foreground",
+                    !group.isCurrent && !isSelected && "hover:bg-muted text-foreground",
                   )}
                 >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  {!group.isCurrent && isSelected && (
+                    <span
+                      className="absolute left-1 top-2 bottom-2 w-0.5 rounded-full bg-foreground"
+                      aria-hidden="true"
+                    />
+                  )}
+
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className="flex size-7 shrink-0 items-center justify-center rounded-[7px] bg-muted text-foreground">
+                      <FolderIcon className="size-3.5 shrink-0" />
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">{group.name}</div>
-                      <div className="truncate text-[10px] text-muted-foreground">
+                      <div className="truncate font-medium text-foreground">{group.name}</div>
+                      <div className="truncate text-[11px] text-muted-foreground">
                         {group.fullPath}
                       </div>
                     </div>
                   </div>
 
                   {group.isCurrent ? (
-                    <span className="text-[10px] font-medium text-muted-foreground shrink-0">
-                      (current)
+                    <span className="text-[11.5px] font-medium text-muted-foreground shrink-0">
+                      Current
                     </span>
                   ) : isSelected ? (
-                    <kbd className="text-[10px] font-sans font-semibold text-accent-foreground">
-                      ↵ Enter
-                    </kbd>
+                    <Kbd className="text-[10px]">↵ Enter</Kbd>
                   ) : null}
                 </div>
               );
@@ -233,12 +245,13 @@ export function MoveItemDialog({
           )}
         </div>
 
-        <DialogFooter className="p-4 pt-2 border-t border-border mt-0 flex items-center justify-between">
-          <span className="text-[11px] text-muted-foreground">↑↓ to select, Enter to move</span>
+        <DialogFooter className="p-4 pt-3 border-t border-border mt-0 flex items-center justify-between">
+          <span className="text-[12px] text-muted-foreground">↑↓ to select, Enter to move</span>
           <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => onOpenChange(false)}
               disabled={isMoving}
             >
@@ -246,6 +259,7 @@ export function MoveItemDialog({
             </Button>
             <Button
               type="button"
+              size="sm"
               onClick={() => {
                 if (selectedTarget && !selectedTarget.isCurrent) {
                   void handleMoveTo(selectedTarget.id);

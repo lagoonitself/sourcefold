@@ -1,7 +1,9 @@
 import * as React from "react";
+import { Check, CircleAlert, Loader2, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { isTauri } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   EMBEDDING_MODEL_KEY,
   deleteSearchIndex,
@@ -40,9 +42,50 @@ function keywordLine(status: SearchStatus): string {
   }
 }
 
+function Switch({
+  checked,
+  onCheckedChange,
+  disabled,
+  id,
+  "aria-label": ariaLabel,
+}: {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  disabled?: boolean;
+  id?: string;
+  "aria-label"?: string;
+}) {
+  return (
+    <label
+      className={cn(
+        "relative inline-flex h-5 w-[34px] shrink-0 cursor-pointer items-center select-none",
+        disabled && "cursor-not-allowed opacity-50",
+      )}
+    >
+      <input
+        type="checkbox"
+        id={id}
+        aria-label={ariaLabel}
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onCheckedChange(e.target.checked)}
+        className="peer sr-only"
+      />
+      <span
+        aria-hidden="true"
+        className="h-5 w-[34px] rounded-full bg-border-strong transition-colors duration-150 ease-out peer-checked:bg-primary peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ring"
+      />
+      <span
+        aria-hidden="true"
+        className="absolute left-0.5 top-0.5 size-4 rounded-full bg-background shadow-xs transition-transform duration-150 ease-spring peer-checked:translate-x-3.5"
+      />
+    </label>
+  );
+}
+
 type Confirming = "index" | "model" | null;
 
-/** Settings → General: search inside sources, by keyword (always on) and by meaning (opt in). */
+/** Settings → Search: search inside sources, by keyword (always on) and by meaning (opt in). */
 export function SearchSettings({ open }: { open: boolean }) {
   const meaning = useMeaningSearch();
   const [status, setStatus] = React.useState<SearchStatus | null>(null);
@@ -123,134 +166,158 @@ export function SearchSettings({ open }: { open: boolean }) {
         : null;
 
   return (
-    <div className="flex flex-col gap-2 rounded-[6px] border border-border p-3 bg-muted/20">
-      <div className="text-xs font-semibold text-foreground">Search</div>
-      <div className="text-[11px] text-muted-foreground">
-        {status ? keywordLine(status) : "Checking the search index..."}
-        {status &&
-          !needsFiles &&
-          status.disk_bytes > 0 &&
-          ` · ${formatBytes(status.disk_bytes)} on disk`}
+    <div className="flex flex-col gap-5">
+      {/* Row 1: Keyword Index */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+            <span className="text-[13.5px] font-medium text-foreground">Keyword search</span>
+            <div className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+              <Search className="size-3.5 shrink-0 text-muted-foreground" />
+              <span>
+                {status ? keywordLine(status) : "Checking the search index..."}
+                {status &&
+                  !needsFiles &&
+                  status.disk_bytes > 0 &&
+                  `, ${formatBytes(status.disk_bytes)} on disk`}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {confirming ? (
+          <div className="flex flex-col gap-2 pt-1">
+            <p className="text-[12.5px] text-foreground">
+              {confirming === "index"
+                ? "Delete the search index? Keyword search is rebuilt from your sources."
+                : "Delete the downloaded model? Search by meaning turns off until you turn it on again."}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void runConfirmed()}
+                className="text-destructive hover:bg-destructive/10"
+              >
+                {confirming === "index" ? "Delete index" : "Delete model"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setConfirming(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void togglePause()}
+              disabled={busy || !status || needsFiles}
+            >
+              {paused ? "Resume" : "Pause"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirming("index")}
+              disabled={busy}
+            >
+              Delete index
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirming("model")}
+              disabled={busy}
+            >
+              Delete model
+            </Button>
+          </div>
+        )}
       </div>
 
-      <label className="flex items-start gap-2.5 cursor-pointer pt-1">
-        <input
-          type="checkbox"
-          checked={meaning.enabled}
-          onChange={(e) => setMeaningEnabled(e.target.checked)}
-          className="mt-0.5 cursor-pointer"
-        />
-        <span className="flex flex-col gap-0.5">
-          <span className="text-xs font-semibold text-foreground">
-            Search by meaning (runs on this computer)
-          </span>
-          <span className="text-[11px] text-muted-foreground">
-            Downloads a 175 MB model from Hugging Face once.
-          </span>
-        </span>
-      </label>
-
-      {meaning.enabled && (
-        <div className="flex flex-col gap-1 pl-6">
-          {meaning.state === "downloading" && (
-            <>
-              <div className="text-[11px] text-muted-foreground">
-                Downloading the model: {percent}%
-              </div>
-              <div
-                className="h-1 rounded-full bg-muted overflow-hidden"
-                role="progressbar"
-                aria-label="Model download"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={percent}
-              >
-                <div className="h-full bg-primary" style={{ width: `${percent}%` }} />
-              </div>
-            </>
-          )}
-          {meaning.state === "loading" && (
-            <div className="text-[11px] text-muted-foreground">Starting the model...</div>
-          )}
-          {meaning.state === "error" && (
-            <div className="text-[11px] text-destructive">
-              {meaning.message || "Couldn't run search by meaning."}
-            </div>
-          )}
-          {meaning.state === "ready" && meaning.message && (
-            <div className="text-[11px] text-destructive">{meaning.message}</div>
-          )}
-          {deviceLine && meaning.state === "ready" && (
-            <div className="text-[11px] text-muted-foreground">{deviceLine}</div>
-          )}
-          {status && status.passages_total > 0 && (
-            <div className="text-[11px] text-muted-foreground">
-              {status.passages_embedded.toLocaleString()} of{" "}
-              {status.passages_total.toLocaleString()} passages
-              {meaning.passagesPerSecond !== null &&
-                ` · ${Math.max(1, Math.round(meaning.passagesPerSecond))} passages per second`}
-            </div>
-          )}
-        </div>
-      )}
-
-      {confirming ? (
-        <div className="flex flex-col gap-2 pt-1">
-          <div className="text-[11px] text-foreground">
-            {confirming === "index"
-              ? "Delete the search index? Keyword search is rebuilt from your sources."
-              : "Delete the downloaded model? Search by meaning turns off until you turn it on again."}
+      {/* Row 2: Search by meaning */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+            <span className="text-[13.5px] font-medium text-foreground">
+              Search by meaning (runs on this computer)
+            </span>
+            <p className="text-[12.5px] leading-[18px] text-muted-foreground">
+              Downloads a 175 MB model from Hugging Face once. Uses your GPU or CPU to search by
+              concept rather than exact keywords.
+            </p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void runConfirmed()}
-              className="text-xs h-8 cursor-pointer text-destructive hover:bg-destructive/10"
-            >
-              {confirming === "index" ? "Delete index" : "Delete model"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirming(null)}
-              className="text-xs h-8 cursor-pointer"
-            >
-              Cancel
-            </Button>
+          <div className="shrink-0 pt-0.5">
+            <Switch
+              checked={meaning.enabled}
+              onCheckedChange={(val) => setMeaningEnabled(val)}
+              aria-label="Search by meaning"
+            />
           </div>
         </div>
-      ) : (
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void togglePause()}
-            disabled={busy || !status || needsFiles}
-            className="text-xs h-8 cursor-pointer"
-          >
-            {paused ? "Resume" : "Pause"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setConfirming("index")}
-            disabled={busy}
-            className="text-xs h-8 cursor-pointer"
-          >
-            Delete index
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setConfirming("model")}
-            disabled={busy}
-            className="text-xs h-8 cursor-pointer"
-          >
-            Delete model
-          </Button>
-        </div>
-      )}
+
+        {meaning.enabled && (
+          <div className="flex flex-col gap-2 pl-0 pt-1">
+            {meaning.state === "downloading" && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin shrink-0 text-muted-foreground" />
+                  <span>Downloading the model: {percent}%</span>
+                </div>
+                <div
+                  className="h-1 w-full rounded-full bg-muted overflow-hidden"
+                  role="progressbar"
+                  aria-label="Model download"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={percent}
+                >
+                  <div
+                    className="h-full bg-primary transition-all duration-150"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {meaning.state === "loading" && (
+              <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin shrink-0 text-muted-foreground" />
+                <span>Starting the model...</span>
+              </div>
+            )}
+            {meaning.state === "error" && (
+              <div className="flex items-center gap-1.5 text-[12px] text-destructive">
+                <CircleAlert className="size-3.5 shrink-0" />
+                <span>{meaning.message || "Couldn't run search by meaning."}</span>
+              </div>
+            )}
+            {meaning.state === "ready" && meaning.message && (
+              <div className="flex items-center gap-1.5 text-[12px] text-destructive">
+                <CircleAlert className="size-3.5 shrink-0" />
+                <span>{meaning.message}</span>
+              </div>
+            )}
+            {deviceLine && meaning.state === "ready" && (
+              <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
+                <span>{deviceLine}</span>
+              </div>
+            )}
+            {status && status.passages_total > 0 && (
+              <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <Check className="size-3.5 shrink-0 text-muted-foreground" />
+                <span>
+                  {status.passages_embedded.toLocaleString()} of{" "}
+                  {status.passages_total.toLocaleString()} passages embedded
+                  {meaning.passagesPerSecond !== null &&
+                    `, ${Math.max(1, Math.round(meaning.passagesPerSecond))} passages per second`}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

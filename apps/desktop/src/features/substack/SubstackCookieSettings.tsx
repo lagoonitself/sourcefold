@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, CircleAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -63,39 +63,48 @@ export function SubstackCookieSettings({ open }: { open: boolean }) {
   };
 
   return (
-    <div className="flex flex-col gap-4 py-2">
-      <div className="rounded-[8px] border border-border p-4 bg-muted/20 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-foreground">Paid Substack posts</span>
-          {status?.configured && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-              <Check className="size-3" />
-              Cookie saved {formatSavedAt(status.saved_at)}
-            </span>
-          )}
+    <div className="flex flex-col gap-5">
+      {/* Row 1: Paid Substack posts explanation & cookie status */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+          <span className="text-[13.5px] font-medium text-foreground">Paid Substack posts</span>
+          <p className="text-[12.5px] leading-[18px] text-muted-foreground">
+            Free posts save without this. To save paid posts from publications you subscribe to,
+            paste your Substack login cookie. It stays on this computer and is only sent to
+            Substack.
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Free posts save without this. To save paid posts from publications you subscribe to, paste
-          your Substack login cookie. It stays on this computer and is only sent to Substack.
-        </p>
+        {status?.configured && (
+          <span className="inline-flex shrink-0 items-center gap-1 text-[11.5px] font-medium text-success bg-muted px-2 py-0.5 rounded-full">
+            <Check className="size-3" />
+            Cookie saved {formatSavedAt(status.saved_at)}
+          </span>
+        )}
       </div>
 
-      <ol className="list-decimal pl-5 text-[11px] text-muted-foreground leading-relaxed space-y-0.5">
-        <li>In Chrome, sign in at substack.com.</li>
-        <li>Open DevTools (F12), then Application, then Cookies, then https://substack.com.</li>
-        <li>
-          Copy the value of <span className="font-mono">substack.sid</span> and paste it below.
-        </li>
-      </ol>
+      {/* Guide steps */}
+      <div className="rounded-[8px] bg-muted/40 p-3 text-[12px] leading-relaxed text-muted-foreground">
+        <p className="font-medium text-foreground mb-1">How to find your cookie:</p>
+        <ol className="list-decimal pl-4 space-y-0.5">
+          <li>In Chrome, sign in at substack.com.</li>
+          <li>Open DevTools (F12), then Application → Cookies → https://substack.com.</li>
+          <li>
+            Copy the value of{" "}
+            <code className="font-mono text-foreground font-semibold">substack.sid</code> and paste
+            it below.
+          </li>
+        </ol>
+      </div>
 
+      {/* Row 2: Cookie Inputs */}
       <div className="flex flex-col gap-2">
-        <label className="text-xs font-semibold text-foreground">Cookie</label>
+        <span className="text-[13.5px] font-medium text-foreground">Cookie</span>
         <div className="flex gap-2">
           <select
             value={name}
             onChange={(e) => setName(e.target.value as SubstackCookieName)}
             disabled={busy}
-            className="h-9 rounded-[6px] border border-input bg-background px-2 text-xs font-mono text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 rounded-[9px] border border-input bg-background px-2.5 text-[13px] font-mono text-foreground focus-visible:outline-2 focus-visible:outline-ring"
           >
             <option value="substack.sid">substack.sid</option>
             <option value="connect.sid">connect.sid</option>
@@ -108,37 +117,37 @@ export function SubstackCookieSettings({ open }: { open: boolean }) {
             disabled={busy}
             autoComplete="off"
             spellCheck={false}
-            className="font-mono text-xs"
+            className="font-mono text-xs flex-1"
           />
         </div>
-        <p className="text-[11px] text-muted-foreground">
-          Use connect.sid only if a publication on its own domain doesn't unlock with substack.sid.
-          The cookie lasts until you sign out of Substack.
+        <p className="text-[12px] text-muted-foreground">
+          Use connect.sid only if a publication on its own domain doesn&apos;t unlock with
+          substack.sid. The cookie lasts until you sign out of Substack.
         </p>
-        {error && <p className="text-xs text-destructive">{error}</p>}
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          onClick={handleSave}
-          disabled={busy || !value.trim()}
-          className="text-xs h-8 cursor-pointer"
-        >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : "Save cookie"}
-        </Button>
-        {status?.configured && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleRemove}
-            disabled={busy}
-            className="text-xs h-8 cursor-pointer"
-          >
-            Remove
-          </Button>
+        {error && (
+          <div className="flex items-center gap-1.5 text-xs text-destructive">
+            <CircleAlert className="size-3.5 shrink-0" />
+            <span>{error}</span>
+          </div>
         )}
+
+        <div className="flex items-center gap-2 pt-1">
+          <Button type="button" size="sm" onClick={handleSave} disabled={busy || !value.trim()}>
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : "Save cookie"}
+          </Button>
+          {status?.configured && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRemove}
+              disabled={busy}
+              className="text-destructive hover:bg-destructive/10"
+            >
+              Remove
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,12 @@
 import * as React from "react";
-import { Folder as FolderIcon, FolderPlus, StickyNote } from "lucide-react";
+import { motion } from "motion/react";
+import {
+  Folder as FolderIcon,
+  FolderPlus,
+  ImagePlus,
+  MoreHorizontal,
+  StickyNote,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import {
@@ -11,6 +18,12 @@ import {
   DialogTitle,
   isAnyDialogOpen,
 } from "@/components/ui/Dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/DropdownMenu";
 import { Input } from "@/components/ui/Input";
 import { Kbd } from "@/components/ui/Kbd";
 import type { Folder } from "@/lib/types";
@@ -19,7 +32,7 @@ import { cn, errorMessage } from "@/lib/utils";
 import { isTypingContext } from "../shortcuts/key-utils";
 import { isTabSwitchKey, toggleGroupTab, type GroupTab } from "../highlights/highlight-rows";
 import { AddImageButton } from "./AddImageButton";
-import { onGroupAction } from "./group-actions";
+import { dispatchGroupAction, onGroupAction } from "./group-actions";
 
 function plural(count: number, one: string, many: string) {
   return count === 1 ? `1 ${one}` : `${count} ${many}`;
@@ -58,7 +71,7 @@ export interface GroupHeaderProps {
   onRefresh: () => Promise<void>;
 }
 
-/** Breadcrumb, group title, source count and the add actions, like the web app's group page. */
+/** Group title, counts, actions and tabs. Breadcrumb sits in the top bar. */
 export function GroupHeader({
   folders,
   folderId,
@@ -67,15 +80,11 @@ export function GroupHeader({
   tab = "sources",
   onTabChange,
   isFocusedRegion,
-  onSelectGroup,
+  onSelectGroup: _onSelectGroup,
   onNewNote,
   onRefresh,
 }: GroupHeaderProps) {
   const folder = folders.find((f) => f.id === folderId);
-  const ancestors = React.useMemo(
-    () => (folder ? ancestorsOf(folders, folder) : []),
-    [folders, folder],
-  );
   const subgroupCount = React.useMemo(
     () => subgroupsOf(folders, folderId).length,
     [folders, folderId],
@@ -137,40 +146,25 @@ export function GroupHeader({
     plural(sourceCount, "source", "sources"),
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(", ");
 
   return (
     <header className="shrink-0">
-      <nav
-        aria-label="Breadcrumb"
-        className="mb-1 min-h-[18px] font-sans text-[13px] leading-[18px] text-muted-foreground"
-      >
-        {ancestors.map((ancestor, index) => (
-          <span key={ancestor.id}>
-            {index > 0 && " / "}
-            {index === 0 ? (
-              // The project itself has no page; only groups can be opened.
-              <span>{ancestor.name}</span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onSelectGroup(ancestor.id)}
-                className="cursor-pointer rounded-sm hover:text-foreground"
-              >
-                {ancestor.name}
-              </button>
-            )}
+      <div className="pb-1">
+        <h1 className="min-w-0 font-serif text-[30px] font-medium leading-[36px] tracking-[-0.02em] text-foreground @[560px]/view:text-[40px] @[560px]/view:leading-[44px]">
+          <span className="marker marker-sweep" key={folderId}>
+            {folder.name}
           </span>
-        ))}
-      </nav>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 pb-3">
-        <h1 className="min-w-0 truncate font-serif text-[28px] font-semibold leading-[34px] text-foreground">
-          {folder.name}
         </h1>
-        <div className="flex shrink-0 items-center gap-3">
-          <span className="font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
-            {counts}
-          </span>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 pt-1.5 pb-4">
+        <span className="font-sans text-[12.5px] leading-[18px] text-muted-foreground tabular-nums">
+          {counts}
+        </span>
+
+        {/* Wide actions: visible at >= 640px container width */}
+        <div className="hidden items-center gap-2 @[640px]/view:flex">
           <Button
             type="button"
             variant="outline"
@@ -199,11 +193,46 @@ export function GroupHeader({
             <Kbd>c</Kbd>
           </Button>
         </div>
+
+        {/* Narrow actions: collapsed into MoreHorizontal menu below 640px */}
+        <div className="flex items-center @[640px]/view:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Group actions"
+                title="Group actions"
+              >
+                <MoreHorizontal className="size-4" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={openSubgroupDialog}>
+                <FolderPlus className="size-3.5" aria-hidden="true" />
+                <span>New subgroup</span>
+                <Kbd>⇧N</Kbd>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => dispatchGroupAction("add-image")}>
+                <ImagePlus className="size-3.5" aria-hidden="true" />
+                <span>Add image</span>
+                <Kbd>i</Kbd>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onNewNote}>
+                <StickyNote className="size-3.5" aria-hidden="true" />
+                <span>New note</span>
+                <Kbd>c</Kbd>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
+
       <div
         role="tablist"
         aria-label="Group view"
-        className="flex items-end gap-5 border-b border-border"
+        className="relative flex items-center gap-6 border-b border-border"
       >
         {(
           [
@@ -221,14 +250,21 @@ export function GroupHeader({
               onClick={() => onTabChange?.(entry.id)}
               title={entry.id === "highlights" ? "Highlights (Shift+H)" : "Sources (Shift+H)"}
               className={cn(
-                "-mb-px flex h-10 cursor-pointer items-center gap-1.5 border-b-2 font-sans text-[13px] leading-[18px] transition-colors",
-                active
-                  ? "border-primary font-semibold text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
+                "relative flex h-10 cursor-pointer items-center gap-2 font-sans text-[13.5px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <span>{entry.label}</span>
-              <span className="tabular-nums">{entry.count}</span>
+              <span className="rounded-[6px] bg-muted px-1.5 py-0.5 text-[12px] font-normal tabular-nums text-muted-foreground">
+                {entry.count}
+              </span>
+              {active && (
+                <motion.span
+                  layoutId="group-tab-underline"
+                  className="absolute inset-x-0 -bottom-px h-[2px] bg-foreground"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
             </button>
           );
         })}
@@ -276,17 +312,17 @@ export interface SubgroupListProps {
   onSelectGroup: (id: string) => void;
 }
 
-/** The group's subgroups as 48px rows above its sources. */
+/** The group's subgroups as 52px rows above its sources. */
 export function SubgroupList({ folders, folderId, onSelectGroup }: SubgroupListProps) {
   const subgroups = React.useMemo(() => subgroupsOf(folders, folderId), [folders, folderId]);
   if (subgroups.length === 0) return null;
 
   return (
     <section aria-label="Subgroups" className="max-h-[40%] shrink-0 overflow-y-auto">
-      <div className="pt-4 pb-1.5 font-sans text-[12px] font-medium leading-4 text-muted-foreground">
+      <div className="pt-3 pb-1 font-sans text-[12px] font-medium text-muted-foreground">
         Subgroups
       </div>
-      <ul role="list" className="divide-y divide-border border-b border-border">
+      <ul role="list" className="flex flex-col gap-0.5">
         {subgroups.map((group) => {
           const nested = subgroupsOf(folders, group.id).length;
           const meta = [
@@ -294,19 +330,24 @@ export function SubgroupList({ folders, folderId, onSelectGroup }: SubgroupListP
             plural(group.item_count ?? 0, "source", "sources"),
           ]
             .filter(Boolean)
-            .join(" · ");
+            .join(", ");
           return (
             <li key={group.id}>
               <button
                 type="button"
                 onClick={() => onSelectGroup(group.id)}
-                className="flex min-h-[48px] w-full cursor-pointer items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-muted"
+                className="group -mx-2.5 flex min-h-[52px] w-[calc(100%+1.25rem)] cursor-pointer items-center gap-3 rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
               >
-                <FolderIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate font-serif text-[15px] font-medium leading-[22px] text-foreground">
+                <span
+                  aria-hidden="true"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-[8px] bg-muted text-foreground"
+                >
+                  <FolderIcon className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1 truncate font-serif text-[16px] font-medium leading-[22px] text-foreground">
                   {group.name}
                 </span>
-                <span className="shrink-0 font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
+                <span className="shrink-0 font-sans text-[12.5px] leading-[18px] text-muted-foreground tabular-nums">
                   {meta}
                 </span>
               </button>
@@ -317,3 +358,5 @@ export function SubgroupList({ folders, folderId, onSelectGroup }: SubgroupListP
     </section>
   );
 }
+
+export { ancestorsOf };

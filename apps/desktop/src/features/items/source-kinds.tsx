@@ -189,13 +189,19 @@ export function getSourceMetaLine(
   kind: string,
   meta: Record<string, unknown> | null | undefined,
 ): string | null {
+  if (!meta || typeof meta !== "object") return null;
   const readers = META_LINE_FIELDS[kind];
-  if (!readers || !meta || typeof meta !== "object") return null;
-  const parts = readers
-    .map((read) => read(meta))
+  if (readers) {
+    const parts = readers
+      .map((read) => read(meta))
+      .filter((part): part is string => Boolean(part))
+      .slice(0, 2);
+    if (parts.length > 0) return parts.join(", ");
+  }
+  const fallback = [metaText(meta, "author"), metaText(meta, "site"), metaText(meta, "channel")]
     .filter((part): part is string => Boolean(part))
     .slice(0, 2);
-  return parts.length > 0 ? parts.join(", ") : null;
+  return fallback.length > 0 ? fallback.join(", ") : null;
 }
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });

@@ -1,9 +1,11 @@
 import * as React from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   BookOpen,
   Check,
   Copy,
   ExternalLink,
+  FileStack,
   Folder as FolderIcon,
   MessageSquare,
   MoreVertical,
@@ -30,13 +32,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/DropdownMenu";
+import { EmptyState } from "@/components/ui/EmptyState";
 import type { Folder, Item } from "@/lib/types";
 import { deleteItem, openImage, renameItem } from "@/lib/api";
 import { openUrl, cn, errorMessage } from "@/lib/utils";
 import { NoteDialog } from "./NoteDialog";
 import { MoveItemDialog } from "./MoveItemDialog";
 import { linkOfItem, openSource, opensInReader } from "../reader/open-decision";
-import { formatSavedDate, getSourceKind, StatusIcon } from "./source-kinds";
+import {
+  formatSavedDate,
+  getSourceKind,
+  getSourceMetaLine,
+  SourceTile,
+  StatusIcon,
+} from "./source-kinds";
 import { onGroupAction } from "./group-actions";
 import { hasTextSelection, isMacPlatform, isTypingContext } from "../shortcuts/key-utils";
 
@@ -56,12 +65,6 @@ function linkOf(item: Item): string | null {
 
 function linksLabel(count: number) {
   return count === 1 ? "1 link" : `${count} links`;
-}
-
-function authorOf(item: Item): string | null {
-  if ((item.kind !== "substack" && item.kind !== "x") || !item.meta) return null;
-  const author = (item.meta as Record<string, unknown>).author;
-  return typeof author === "string" && author.trim() ? author : null;
 }
 
 async function openImageItem(item: Item) {
@@ -546,136 +549,171 @@ export function ItemList({
   const selectedLinkCount = selectedItems.filter((i) => linkOf(i)).length;
 
   return (
-    <div ref={listContainerRef} className="flex flex-col flex-1 min-h-0 select-none">
-      {/* List toolbar: Select and Copy all links, or the bulk actions in selection mode */}
-      {items.length > 0 && (
-        <div className="flex h-11 shrink-0 items-center gap-3 border-b border-border">
-          {selectionMode ? (
-            <>
-              <label className="ml-[3px] flex w-9 shrink-0 cursor-pointer items-center justify-center">
-                <input
-                  ref={selectAllRef}
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  aria-label="Select all sources"
-                  className="size-4 cursor-pointer accent-primary"
-                />
-              </label>
-              <span className="font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
-                {selectedItems.length > 0 ? `${selectedItems.length} selected` : "Select sources"}
-              </span>
-              <div className="mr-2 ml-auto flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={selectedLinkCount === 0}
-                  onClick={() => void handleCopyLinks(selectedItems)}
-                  title="Copy links (y)"
-                >
-                  <Copy className="size-3.5" aria-hidden="true" />
-                  <span>
-                    {selectedLinkCount > 0 ? `Copy ${linksLabel(selectedLinkCount)}` : "Copy links"}
-                  </span>
-                  <Kbd>y</Kbd>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={selectedItems.length === 0}
-                  onClick={() => setMoveOpen(true)}
-                  title="Move to group (m)"
-                >
-                  <FolderIcon className="size-3.5" aria-hidden="true" />
-                  <span>Move</span>
-                  <Kbd>m</Kbd>
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={selectedItems.length === 0}
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  title="Delete (Delete)"
-                >
-                  <Trash2 className="size-3.5" aria-hidden="true" />
-                  <span>Delete</span>
-                </Button>
-                <Button variant="ghost" size="sm" onClick={stopSelecting} title="Cancel (Esc)">
-                  <span>Cancel</span>
-                  <Kbd>Esc</Kbd>
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="mr-2 ml-auto flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={toggleSelecting} title="Select (s)">
-                <span>Select</span>
-                <Kbd>s</Kbd>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={linkItems.length === 0}
-                onClick={() => void handleCopyAll()}
-                title={
-                  linkItems.length === 0
-                    ? "No sources in this group have a link"
-                    : "Copy all links (Shift+Y)"
-                }
-              >
-                {copiedAll ? (
-                  <Check className="size-3.5 text-primary" aria-hidden="true" />
-                ) : (
-                  <Copy className="size-3.5" aria-hidden="true" />
-                )}
-                <span>{copiedAll ? "Copied" : "Copy all links"}</span>
-                {!copiedAll && <Kbd>⇧Y</Kbd>}
-              </Button>
-            </div>
-          )}
+    <div ref={listContainerRef} className="relative flex min-h-0 flex-1 flex-col select-none">
+      {/* List toolbar: Select and Copy all links when outside select mode */}
+      {!selectionMode && items.length > 0 && (
+        <div className="flex h-11 shrink-0 items-center justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={toggleSelecting} title="Select (s)">
+            <span>Select</span>
+            <Kbd>s</Kbd>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={linkItems.length === 0}
+            onClick={() => void handleCopyAll()}
+            title={
+              linkItems.length === 0
+                ? "No sources in this group have a link"
+                : "Copy all links (Shift+Y)"
+            }
+          >
+            {copiedAll ? (
+              <Check className="size-3.5 text-primary" aria-hidden="true" />
+            ) : (
+              <Copy className="size-3.5" aria-hidden="true" />
+            )}
+            <span>{copiedAll ? "Copied" : "Copy all links"}</span>
+            {!copiedAll && <Kbd>⇧Y</Kbd>}
+          </Button>
         </div>
       )}
 
+      {/* Floating action bar in selection mode */}
+      <AnimatePresence>
+        {selectionMode && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: 12, x: "-50%", transition: { duration: 0.12 } }}
+            transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+            className="absolute bottom-5 left-1/2 z-30 flex items-center gap-2 rounded-[12px] border border-border bg-popover px-3 py-2 text-popover-foreground shadow-float"
+          >
+            <label className="flex cursor-pointer items-center justify-center pr-1">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label="Select all sources"
+                className="size-4 cursor-pointer accent-primary"
+              />
+            </label>
+            <span className="font-sans text-[13px] font-medium leading-none tabular-nums text-foreground">
+              {selectedItems.length > 0 ? `${selectedItems.length} selected` : "Select sources"}
+            </span>
+            <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={selectedLinkCount === 0}
+              onClick={() => void handleCopyLinks(selectedItems)}
+              title="Copy links (y)"
+            >
+              <Copy className="size-3.5" aria-hidden="true" />
+              <span>
+                {selectedLinkCount > 0 ? `Copy ${linksLabel(selectedLinkCount)}` : "Copy links"}
+              </span>
+              <Kbd>y</Kbd>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={selectedItems.length === 0}
+              onClick={() => setMoveOpen(true)}
+              title="Move to group (m)"
+            >
+              <FolderIcon className="size-3.5" aria-hidden="true" />
+              <span>Move</span>
+              <Kbd>m</Kbd>
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={selectedItems.length === 0}
+              onClick={() => setDeleteConfirmOpen(true)}
+              title="Delete (Delete)"
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+              <span>Delete</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={stopSelecting} title="Cancel (Esc)">
+              <span>Cancel</span>
+              <Kbd>Esc</Kbd>
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Item rows */}
-      <div className="divide-y divide-border overflow-y-auto flex-1">
+      <div className={cn("flex flex-1 flex-col gap-0.5 overflow-y-auto", selectionMode && "pb-20")}>
         {items.length === 0 ? (
-          <div className="py-12 font-sans text-sm text-muted-foreground">
-            Nothing here yet. Add Grokipedia links, or save a page with the Sourcefold extension.
-            Press <Kbd className="text-[11px]">a</Kbd> to add links.
+          <div className="flex flex-1 items-center justify-center py-12">
+            <EmptyState
+              icon={FileStack}
+              title="Nothing here yet"
+              description="Add Grokipedia, YouTube, Substack or any other links, or save a page with the Sourcefold extension."
+              actions={
+                <Button
+                  variant="default"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true }),
+                    );
+                  }}
+                  title="Add links (a)"
+                >
+                  <span>Add links</span>
+                  <Kbd>A</Kbd>
+                </Button>
+              }
+            />
           </div>
         ) : (
-          items.map((item) => {
+          items.map((item, index) => {
             const isSelected = selectedIds.has(item.id);
             const isFocusedRow = item.id === focusedItemId;
             const hasNote = Boolean(item.kind !== "note" && item.note && item.note.trim());
             const canRead = opensInReader(item);
             const kind = getSourceKind(item.kind);
-            const KindIcon = kind.Icon;
-            const author = authorOf(item);
+            const metaLine = getSourceMetaLine(
+              item.kind,
+              item.meta as Record<string, unknown> | null,
+            );
+            const staggerDelay = index < 12 ? index * 0.02 : 0;
 
             return (
-              <div
+              <motion.div
                 key={item.id}
                 data-item-id={item.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1], delay: staggerDelay }}
                 onClick={() => {
                   setFocusedItemId(item.id);
                   if (selectionMode) toggleSelected(item.id);
                   else handleOpenSource(item);
                 }}
                 className={cn(
-                  "group relative flex min-h-[48px] items-stretch transition-colors cursor-pointer",
-                  isSelected ? "bg-accent" : "hover:bg-muted",
-                  isFocusedRow && !isSelected && !isFocusedRegion && "bg-muted",
-                  isFocusedRow && isFocusedRegion && "ring-2 ring-primary ring-inset",
+                  "group relative -mx-2.5 flex min-h-[52px] cursor-pointer items-center gap-3 rounded-[10px] px-2.5 py-1.5 transition-colors duration-100",
+                  isSelected
+                    ? "bg-marker-soft"
+                    : isFocusedRow && isFocusedRegion
+                      ? "bg-accent"
+                      : isFocusedRow
+                        ? "bg-muted/70"
+                        : "hover:bg-muted",
                 )}
               >
-                <span
-                  className={cn("w-[3px] shrink-0 self-stretch", kind.barClass)}
-                  aria-hidden="true"
-                />
+                {isFocusedRow && isFocusedRegion && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-2 left-0.5 w-[2px] rounded-full bg-foreground"
+                  />
+                )}
 
                 {selectionMode && (
-                  <div className="flex w-9 shrink-0 items-center justify-center">
+                  <div className="flex w-7 shrink-0 items-center justify-center">
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -691,10 +729,11 @@ export function ItemList({
                   </div>
                 )}
 
-                <div className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-3 pr-2">
-                  <KindIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <div className="flex min-w-0 flex-1 items-baseline gap-2">
-                    <span className="truncate font-serif text-[15px] font-medium leading-[22px] text-foreground">
+                <SourceTile kind={kind} />
+
+                <div className="flex min-w-0 flex-1 flex-col justify-center">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate font-serif text-[16px] font-medium leading-[22px] text-foreground">
                       {item.title}
                     </span>
                     {hasNote && (
@@ -702,32 +741,35 @@ export function ItemList({
                         role="img"
                         aria-label="Has a note"
                         title={item.note ?? "Has a note"}
-                        className="inline-flex shrink-0 self-center text-muted-foreground"
+                        className="inline-flex shrink-0 text-muted-foreground"
                       >
                         <MessageSquare className="size-3.5" aria-hidden="true" />
                       </span>
                     )}
-                    {author && (
-                      <span className="shrink-0 font-sans text-[13px] leading-[18px] text-muted-foreground">
-                        {author}
-                      </span>
-                    )}
                   </div>
-                  <div className="w-24 shrink-0 text-right font-sans text-[13px] leading-[18px] text-muted-foreground">
-                    {kind.name}
-                  </div>
-                  <div className="w-16 shrink-0 text-right font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
-                    {formatSavedDate(item.created_at)}
-                  </div>
-                  <div className="flex w-5 shrink-0 items-center justify-end">
-                    <StatusIcon status={item.status} error={item.error} />
-                  </div>
+                  {metaLine && (
+                    <div className="truncate font-sans text-[12px] leading-[16px] text-muted-foreground">
+                      {metaLine}
+                    </div>
+                  )}
+                </div>
+
+                <div className="hidden w-24 shrink-0 text-right font-sans text-[13px] leading-[18px] text-muted-foreground @[560px]/view:block">
+                  {kind.name}
+                </div>
+
+                <div className="hidden w-16 shrink-0 text-right font-sans text-[12.5px] leading-[18px] text-muted-foreground tabular-nums @[440px]/view:block">
+                  {formatSavedDate(item.created_at)}
+                </div>
+
+                <div className="flex w-5 shrink-0 items-center justify-end">
+                  <StatusIcon status={item.status} error={item.error} />
                 </div>
 
                 {/* Row actions: on hover, on keyboard focus, and on the keyboard-focused row */}
                 <div
                   className={cn(
-                    "flex w-[60px] shrink-0 items-center justify-end gap-1 pr-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
+                    "flex shrink-0 items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100",
                     isFocusedRow && isFocusedRegion && "opacity-100",
                   )}
                   onClick={(e) => e.stopPropagation()}
@@ -739,7 +781,7 @@ export function ItemList({
                       setNoteItem(item);
                     }}
                     aria-label="Add or edit note"
-                    className="flex size-7 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-background hover:text-foreground cursor-pointer"
+                    className="flex size-7 cursor-pointer items-center justify-center rounded-[7px] text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                     title="Note (n)"
                   >
                     <MessageSquare className="size-3.5" />
@@ -749,26 +791,23 @@ export function ItemList({
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
-                        aria-label="Item menu"
-                        className="flex size-7 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-background hover:text-foreground cursor-pointer"
+                        aria-label="Source menu"
+                        className="flex size-7 cursor-pointer items-center justify-center rounded-[7px] text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                       >
                         <MoreVertical className="size-3.5" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuContent align="end" className="w-48">
                       {canRead && (
                         <DropdownMenuItem
                           onClick={() => {
                             setFocusedItemId(item.id);
                             onOpenReader?.(item);
                           }}
-                          className="flex items-center justify-between"
                         >
-                          <div className="flex items-center">
-                            <BookOpen className="mr-2 size-3.5" />
-                            <span>Reader view</span>
-                          </div>
-                          <kbd className="text-[9px] font-mono text-muted-foreground">↵</kbd>
+                          <BookOpen className="size-3.5" />
+                          <span>Reader view</span>
+                          <Kbd>↵</Kbd>
                         </DropdownMenuItem>
                       )}
 
@@ -777,13 +816,10 @@ export function ItemList({
                           setFocusedItemId(item.id);
                           handleOpenSource(item, { forceExternal: true });
                         }}
-                        className="flex items-center justify-between"
                       >
-                        <div className="flex items-center">
-                          <ExternalLink className="mr-2 size-3.5" />
-                          <span>{item.kind === "image" ? "Open image" : "Open in browser"}</span>
-                        </div>
-                        <kbd className="text-[9px] font-mono text-muted-foreground">⇧↵ / o</kbd>
+                        <ExternalLink className="size-3.5" />
+                        <span>{item.kind === "image" ? "Open image" : "Open in browser"}</span>
+                        <Kbd>⇧↵ / o</Kbd>
                       </DropdownMenuItem>
 
                       <DropdownMenuItem
@@ -791,13 +827,10 @@ export function ItemList({
                           setFocusedItemId(item.id);
                           void handleCopyLinks([item]);
                         }}
-                        className="flex items-center justify-between"
                       >
-                        <div className="flex items-center">
-                          <Copy className="mr-2 size-3.5" />
-                          <span>Copy link</span>
-                        </div>
-                        <kbd className="text-[9px] font-mono text-muted-foreground">y</kbd>
+                        <Copy className="size-3.5" />
+                        <span>Copy link</span>
+                        <Kbd>y</Kbd>
                       </DropdownMenuItem>
 
                       <DropdownMenuItem
@@ -805,13 +838,10 @@ export function ItemList({
                           setFocusedItemId(item.id);
                           setMoveOpen(true);
                         }}
-                        className="flex items-center justify-between"
                       >
-                        <div className="flex items-center">
-                          <FolderIcon className="mr-2 size-3.5" />
-                          <span>Move to group</span>
-                        </div>
-                        <kbd className="text-[9px] font-mono text-muted-foreground">m</kbd>
+                        <FolderIcon className="size-3.5" />
+                        <span>Move to group</span>
+                        <Kbd>m</Kbd>
                       </DropdownMenuItem>
 
                       <DropdownMenuItem
@@ -820,13 +850,10 @@ export function ItemList({
                           setRenameItemTarget(item);
                           setRenameValue(item.title);
                         }}
-                        className="flex items-center justify-between"
                       >
-                        <div className="flex items-center">
-                          <Pencil className="mr-2 size-3.5" />
-                          <span>Rename</span>
-                        </div>
-                        <kbd className="text-[9px] font-mono text-muted-foreground">e / F2</kbd>
+                        <Pencil className="size-3.5" />
+                        <span>Rename</span>
+                        <Kbd>e / F2</Kbd>
                       </DropdownMenuItem>
 
                       <DropdownMenuItem
@@ -834,13 +861,10 @@ export function ItemList({
                           setFocusedItemId(item.id);
                           setNoteItem(item);
                         }}
-                        className="flex items-center justify-between"
                       >
-                        <div className="flex items-center">
-                          <MessageSquare className="mr-2 size-3.5" />
-                          <span>{hasNote ? "Edit note" : "Add note"}</span>
-                        </div>
-                        <kbd className="text-[9px] font-mono text-muted-foreground">n</kbd>
+                        <MessageSquare className="size-3.5" />
+                        <span>{hasNote ? "Edit note" : "Add note"}</span>
+                        <Kbd>n</Kbd>
                       </DropdownMenuItem>
 
                       <DropdownMenuSeparator />
@@ -850,20 +874,16 @@ export function ItemList({
                           setFocusedItemId(item.id);
                           setDeleteConfirmOpen(true);
                         }}
-                        className="text-destructive focus:text-destructive flex items-center justify-between"
+                        variant="destructive"
                       >
-                        <div className="flex items-center">
-                          <Trash2 className="mr-2 size-3.5" />
-                          <span>Delete</span>
-                        </div>
-                        <kbd className="text-[9px] font-mono text-muted-foreground">
-                          {isMac ? "⌦" : "Del"}
-                        </kbd>
+                        <Trash2 className="size-3.5" />
+                        <span>Delete</span>
+                        <Kbd>{isMac ? "⌦" : "Del"}</Kbd>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-              </div>
+              </motion.div>
             );
           })
         )}

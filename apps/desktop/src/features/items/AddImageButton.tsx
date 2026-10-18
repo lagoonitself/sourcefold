@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Kbd } from "@/components/ui/Kbd";
 import { isAnyDialogOpen } from "@/components/ui/Dialog";
+import { DropdownMenuItem } from "@/components/ui/DropdownMenu";
 import { addImage } from "@/lib/api";
-import { errorMessage } from "@/lib/utils";
+import { cn, errorMessage } from "@/lib/utils";
 import { isTypingContext } from "../shortcuts/key-utils";
 import { onGroupAction } from "./group-actions";
 
@@ -17,10 +18,20 @@ export interface AddImageButtonProps {
   /** Lets the `i` shortcut work while the source list has keyboard focus. */
   isFocusedRegion: boolean;
   onAdded: () => Promise<void>;
+  /** Optional class name to pass to the trigger element. */
+  className?: string;
+  /** Render as a dropdown menu item instead of an outline button. */
+  asMenuItem?: boolean;
 }
 
 /** Adds picked images to the group: on this computer offline, in the account when signed in. */
-export function AddImageButton({ folderId, isFocusedRegion, onAdded }: AddImageButtonProps) {
+export function AddImageButton({
+  folderId,
+  isFocusedRegion,
+  onAdded,
+  className,
+  asMenuItem = false,
+}: AddImageButtonProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [progress, setProgress] = React.useState<{ current: number; total: number } | null>(null);
   const uploading = progress !== null;
@@ -82,20 +93,34 @@ export function AddImageButton({ folderId, isFocusedRegion, onAdded }: AddImageB
     if (files.length > 0) void uploadFiles(files);
   };
 
+  const label = progress ? `Adding ${progress.current} of ${progress.total}…` : "Add image";
+
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={uploading}
-        onClick={openPicker}
-        title="Add image (i)"
-      >
-        <ImagePlus className="size-3.5" aria-hidden="true" />
-        <span>{progress ? `Adding ${progress.current} of ${progress.total}…` : "Add image"}</span>
-        {!uploading && <Kbd>i</Kbd>}
-      </Button>
+      {asMenuItem ? (
+        <DropdownMenuItem
+          className={cn(uploading && "pointer-events-none opacity-50", className)}
+          onClick={uploading ? undefined : openPicker}
+        >
+          <ImagePlus className="size-3.5" aria-hidden="true" />
+          <span>{label}</span>
+          {!uploading && <Kbd>i</Kbd>}
+        </DropdownMenuItem>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={uploading}
+          onClick={openPicker}
+          title="Add image (i)"
+          className={className}
+        >
+          <ImagePlus className="size-3.5" aria-hidden="true" />
+          <span>{label}</span>
+          {!uploading && <Kbd>i</Kbd>}
+        </Button>
+      )}
       <input
         ref={inputRef}
         type="file"

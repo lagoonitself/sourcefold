@@ -79,6 +79,19 @@ export function DropdownMenuTrigger({
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }) {
   const { open, setOpen } = React.useContext(DropdownContext);
 
+  // asChild: the single child (for example a Button) becomes the trigger, so buttons don't nest.
+  if (asChild && React.isValidElement<React.ButtonHTMLAttributes<HTMLButtonElement>>(children)) {
+    const child = children;
+    return React.cloneElement(child, {
+      "aria-expanded": open,
+      onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+        child.props.onClick?.(e);
+        onClick?.(e);
+        setOpen(!open);
+      },
+    });
+  }
+
   return (
     <button
       type="button"

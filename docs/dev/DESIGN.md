@@ -2,6 +2,131 @@
 
 Every UI task follows this file. If a brief and this file disagree, the brief wins for that task. Do not invent new colors, fonts, radii or shadows; use the tokens below.
 
+There are two looks:
+
+- **Desktop app** (`apps/desktop`): "Ink and highlighter", redesigned 2026-10-18. Its section comes first.
+- **Web app and extension** (`apps/web`, `apps/extension`): the original archive look, under "Web app and extension" below. Don't change them to the desktop look until the owner asks.
+
+# Desktop app: ink and highlighter
+
+## Idea
+
+A researcher's desk. The window is the **desk** (cool grey with a faint paper grain); the content is a **sheet** of paper lying on it (rounded, slightly raised). Everything is written in **ink** (near-black in light mode, near-white in dark). There is one colour of its own: the **highlighter**, a yellow marker stroke that means "this is where you are" or "this is what you marked". Source types keep their own colours (below); they are the only other colours on screen.
+
+The one memorable element is the **highlighted heading**: the open group's name, set large in Newsreader, with a highlighter stroke swept in behind it from the left when the group opens. The open group in the sidebar gets the same stroke, smaller. Don't put the stroke anywhere else except highlights in the reader and the unsaved count; that would cheapen it.
+
+## Tokens
+
+All tokens live in `apps/desktop/src/index.css` and are Tailwind colours (`bg-desk`, `text-muted-foreground`, `bg-marker-soft`, …). Never write raw hex values in components; never use Tailwind's palette colours (`amber-500`, `emerald-600`, `gray-*`, `black/40`).
+
+| Token                                       | Light                             | Dark                              | Use                                                 |
+| ------------------------------------------- | --------------------------------- | --------------------------------- | --------------------------------------------------- |
+| `--desk`                                    | `#E8EAEE`                         | `#0E0F13`                         | Window background and sidebar                       |
+| `--background`                              | `#FCFCFB`                         | `#17191E`                         | The sheet (main content)                            |
+| `--card` / `--popover`                      | `#FFFFFF`                         | `#1C1E24`                         | Dialogs, menus, raised panels                       |
+| `--foreground`                              | `#15181E`                         | `#ECEDEF`                         | Ink: text                                           |
+| `--primary` / `--primary-foreground`        | ink / paper                       | ink / paper                       | The one main action in a view ("Add links", "Save") |
+| `--muted`                                   | `#F1F2F5`                         | `#22252C`                         | Hover fills, search field, count chips              |
+| `--accent`                                  | `#EAECF0`                         | `#272A32`                         | Keyboard-focused or selected row                    |
+| `--muted-foreground`                        | `#5E6573`                         | `#979EAA`                         | Secondary text, metadata                            |
+| `--border` / `--border-strong`              | `#E1E4EA` / `#CDD2DA`             | `#2A2E36` / `#3A3F49`             | Hairlines / outline buttons, strong dividers        |
+| `--input`                                   | `#D9DDE4`                         | `#343842`                         | Input borders                                       |
+| `--marker`                                  | `#F7E35A`                         | `#B9A332`                         | The highlighter stroke (`.marker` class only)       |
+| `--marker-soft`                             | `#FBF1B0`                         | `#3A361D`                         | Text selection, ticked rows, highlight backgrounds  |
+| `--marker-strong` (+ `-foreground`)         | `#F5DC3C`                         | `#EAD34B`                         | Solid marker chips (unsaved count), the logo's fold |
+| `--destructive` / `--warning` / `--success` | `#C2362B` / `#B25E09` / `#2F8A57` | `#F0857A` / `#F2A65A` / `#6CC794` | Delete and errors / warnings / saved                |
+| `--ring`                                    | ink                               | ink                               | Focus outline                                       |
+| `--sidebar-accent`                          | white 72%                         | white 6%                          | Hover and selected rows on the desk (sidebar)       |
+| `--overlay`                                 | ink 32%                           | black 56%                         | Behind dialogs and the sliding sidebar              |
+
+Source-type colours are the same values as the web app's (table under "Web app and extension"), plus `--source-wikipedia` (`#3F4A5A` / `#C3CAD4`). A source type is shown as a **tile**: a 28–32px rounded square (radius 8px) filled with the source colour at 12% (`color-mix(in oklab, <colour> 12%, transparent)`), its lucide icon in the source colour, always next to the source name in text somewhere on the row. `getSourceKind()` in `features/items/source-kinds.tsx` gives the colour.
+
+## Type
+
+Fonts are bundled (no network): `@fontsource-variable/geist`, `geist-mono`, `newsreader` (imported in `main.tsx`).
+
+- **Geist** (`font-sans`): all interface text. Weights 400, 500, 600.
+- **Newsreader** (`font-serif`): headings, dialog titles, source titles in rows, the reader's body. Weights 400–600; it has optical sizes, so large sizes look right automatically.
+- **Geist Mono** (`font-mono`): key hints (`Kbd`) and real code only.
+
+| Role                     | Font       | Size / line height              | Weight | Tracking     |
+| ------------------------ | ---------- | ------------------------------- | ------ | ------------ |
+| Group heading            | Newsreader | 40px / 44px (30/36 when narrow) | 500    | -0.02em      |
+| Empty-state title        | Newsreader | 24px / 30px                     | 500    | -0.012em     |
+| Dialog title             | Newsreader | 22px / 28px                     | 500    | -0.012em     |
+| Source title in a row    | Newsreader | 16px / 22px                     | 500    | -0.005em     |
+| Body / UI default        | Geist      | 13.5–14px / 20px                | 400    |              |
+| Buttons, tabs, menu rows | Geist      | 13–13.5px                       | 500    |              |
+| Metadata, counts         | Geist      | 12.5–13px / 18px, muted         | 400    | tabular-nums |
+| Small labels             | Geist      | 12px / 16px, muted              | 500    |              |
+
+Sentence case everywhere; no all-caps labels, no letter-spaced eyebrows, no "·"-joined meta strings (use commas or separate columns), no "→" on buttons. Numbers that line up (counts, dates, times) use `tabular-nums`.
+
+## Layout
+
+```
+desk ────────────────────────────────────────────────────────────────────────
+│ [logo] Sourcefold   ⌘K [⇤] │ ┌ sheet (radius 14, shadow-sheet) ───────────────┐ │
+│ [ Cars             ⌄ ]     │ │ Cars / Engines / Turbocharging   [⌕ Search /] (●Saved) [+ Add links A] │
+│ Groups               +     │ ├────────────────────────────────────────────────┤ │
+│ › Engines           14     │ │  Turbocharging              ← Newsreader 40, marker │
+│ ⌄ ▔Turbocharging▔    6     │ │  2 subgroups, 6 sources        [New subgroup] [Add image] [New note] │
+│     Lag and boost    3     │ │  Sources 6   Highlights 14                       │ │
+│                            │ │  [tile] Title in Newsreader            YouTube  Oct 17 ✓ │
+│ (AK) anil  Synced    ⌨  ⚙ │ └────────────────────────────────────────────────┘ │
+```
+
+- **Window:** on macOS the title bar is transparent and the traffic lights sit over the sidebar's top strip (`.platform-mac` on `<html>`; the strip is 52px tall with 84px left padding). The top bar and sidebar header carry `data-tauri-drag-region`. Windows keeps its native title bar. Minimum window 720×520.
+- **Sidebar** (`features/shell/AppSidebar.tsx`): 264px on the desk, no border. At 1024px and wider it sits beside the sheet and `Mod+B` hides it (remembered). Narrower, it's hidden and slides over the content as a floating panel (`shadow-float`, radius 16px) with a scrim; picking a group or Esc closes it.
+- **Sheet:** inset 8px from the window edges, radius 14px, `bg-background shadow-sheet`. It is a container (`@container/view`); rows and headers adapt to its width with container queries (`@[560px]/view:…`), not window media queries.
+- **Top bar** (`features/shell/TopBar.tsx`, 52px, `@container/topbar`): sidebar button when hidden, breadcrumb (project / ancestors / group in ink), search field, Drive status (`DriveSyncStatus`), **Add links** (ink). Labels drop to icons as it narrows.
+- **Group view:** padding 36px (20px when narrow). Heading, counts and actions, tabs, then rows. Content is left-aligned; numbers right-aligned in their column.
+- **Rows** (sources, subgroups, highlights, search results): no divider lines and no cards. Each row is a 52–56px rounded (10px) band that bleeds 10px past the text column (`-mx-2.5 px-2.5`); hover `bg-muted`, keyboard focus `bg-accent` plus a 2px ink bar on the left edge, ticked `bg-marker-soft`. Row actions (three dots) appear on hover and focus. Columns, narrowest last to go: tile, title (+ one muted line under it when there's real data: author, site, channel, duration), source name, date, status. Below 560px sheet width hide source name; below 440px hide the date.
+- **Sidebar rows:** 30px, radius 8px, indent 14px per level, chevron 14px. Hover `bg-sidebar-accent`; open group `bg-sidebar-accent shadow-raised` with the group name in `.marker`; count right-aligned, muted, tabular.
+
+## Shape and depth
+
+- Radius: key hints 5px; small buttons, inputs, sidebar rows 8–9px; list rows and menus' items 8–10px; menus and popovers 12px; the sheet 14px; dialogs and the sliding sidebar 16px. Inner radius = outer radius minus padding.
+- Shadows (all tinted with ink, defined once): `shadow-raised` (hairline + 1px: buttons, chips, tiles), `shadow-sheet` (the sheet), `shadow-float` (dialogs, menus, toasts, sliding sidebar). Nothing else has a shadow. Outline buttons draw their border with an inset shadow (`--border-strong`).
+- Borders are 1px `--border`, used for the top bar, tabs and section rules only.
+
+## Motion
+
+The app uses `motion` (`motion/react`) and CSS keyframes from `index.css`. `MotionConfig reducedMotion="user"` wraps the app and a CSS rule shortens everything under `prefers-reduced-motion`.
+
+- Curves: `--ease-spring` `cubic-bezier(0.32, 0.72, 0, 1)` for things that move (dialogs, drawers, menus), `--ease-out` `cubic-bezier(0.16, 1, 0.3, 1)` for fades. Never `linear` (except spinners and shimmer) or plain `ease-in-out`.
+- Durations: 100–160ms for hovers and presses, 180–260ms for menus and dialogs, 300–340ms for the sidebar and the reader, 640ms for the heading's highlighter sweep.
+- What moves: dialogs rise 10px and scale from 97% (exit faster); menus scale from their corner; the sidebar slides; buttons press to 97% (`motion-safe:active:scale-[0.97]`); chevrons rotate; tree branches expand by height; the active tab's underline and the open sidebar row's pill slide between items (`layoutId`); rows of a newly opened group rise in with a 20ms stagger (first 12 rows only); the heading's stroke sweeps (`.marker.marker-sweep`, re-keyed per group); the "Saved to Drive" dot pings twice.
+- What never moves: anything on scroll, hover lifts, looping decoration, blur on scrolling content. Animate only `transform` and `opacity` (the marker sweep animates `background-size` on one element, which is fine).
+
+## Components
+
+Use the primitives in `apps/desktop/src/components/ui/`; don't restyle them per use.
+
+- `Button`: `default` (ink, the main action), `outline`, `ghost`, `secondary`, `destructive`, `link`, `marker` (rare). Sizes `sm` (32px), `default` (36px), `lg` (40px), `icon` (32px), `icon-sm` (28px). Put a `Kbd` inside for the shortcut.
+- `Input`: 36px, radius 9px. Textareas copy its classes.
+- `Kbd`: key hints. Inside an ink button it turns translucent by itself.
+- `Dialog*`: animated, Esc stack and focus trap built in. Title in Newsreader. Footer has no rule; the main action is last (rightmost) and uses `default` or `destructive`.
+- `DropdownMenu*`: animated. Items are 32px with an icon on the left (muted) and an optional `Kbd` on the right.
+- `EmptyState`: icon in a little stack of cards, serif title, one sentence, the next action. Use it for every empty or "nothing found" view; `compact` inside panels.
+- `Logo`: the ink tile with the folded S and its highlighted middle fold.
+- Loading: `.skeleton` blocks shaped like the rows they replace, not spinners, for lists. Spinners (`Loader2`, `motion-safe:animate-spin`) only inside buttons and status chips.
+- Icons: lucide, stroke 1.75 (set globally), `size-4` in buttons and rows, `size-3.5` in dense menus.
+
+## Accessibility floor
+
+- Visible keyboard focus everywhere: 2px ink outline, 2px offset (rows use the focused-row style instead).
+- Every icon-only button has an `aria-label` and a `title` with its shortcut.
+- The tree keeps `role="tree"`/`treeitem` with `aria-expanded`; tabs keep `role="tablist"`/`tab`.
+- Colour is never the only signal: source tiles sit next to the source name; statuses pair an icon with a tooltip.
+- Text contrast at least 4.5:1 (muted text on the desk included).
+
+## Writing
+
+The same rules as the web app (below): name things by what the user does, actions keep their name in the result ("Save to Drive" gives "Saved to Drive"), errors say what happened and what to do, empty states invite action, sentence case.
+
+# Web app and extension
+
 ## Idea
 
 Sourcefold is an archive of research sources. The look borrows from archive boxes and library catalogues: cool paper, blue-black ink, one bookbinding green for actions. It is a dense desktop tool, not a marketing page.

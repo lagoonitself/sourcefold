@@ -1,4 +1,5 @@
 import * as React from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { registerModalLayer } from "./Dialog";
 
@@ -103,21 +104,27 @@ export function DropdownMenuContent({
 }: React.HTMLAttributes<HTMLDivElement> & { align?: "start" | "end" }) {
   const { open } = React.useContext(DropdownContext);
 
-  if (!open) return null;
-
   return (
-    <div
-      className={cn(
-        "absolute z-50 mt-1 min-w-[8rem] overflow-hidden rounded-[8px] border border-border bg-popover p-1 text-popover-foreground shadow-float",
-        "animate-in fade-in-0 zoom-in-95 duration-100",
-        align === "end" ? "right-0" : "left-0",
-        className,
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0, y: -4, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -2, scale: 0.98, transition: { duration: 0.1 } }}
+          transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
+          style={{ transformOrigin: align === "end" ? "top right" : "top left" }}
+          className={cn(
+            "absolute z-50 mt-1.5 min-w-[10rem] overflow-hidden rounded-[12px] bg-popover p-1 text-popover-foreground shadow-float",
+            align === "end" ? "right-0" : "left-0",
+            className,
+          )}
+          onClick={onClick}
+          {...(props as React.ComponentProps<typeof motion.div>)}
+        >
+          {children}
+        </motion.div>
       )}
-      onClick={onClick}
-      {...props}
-    >
-      {children}
-    </div>
+    </AnimatePresence>
   );
 }
 
@@ -136,9 +143,9 @@ export function DropdownMenuItem({
     <div
       role="menuitem"
       className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-[4px] px-2.5 py-1.5 text-xs font-medium outline-none transition-colors",
+        "relative flex min-h-8 cursor-pointer select-none items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-[13px] outline-none transition-colors duration-100 [&_kbd]:ml-auto [&_svg]:text-muted-foreground",
         variant === "destructive"
-          ? "text-destructive hover:bg-destructive/10 focus:bg-destructive/10"
+          ? "text-destructive hover:bg-destructive/10 focus:bg-destructive/10 [&_svg]:!text-destructive"
           : "text-foreground hover:bg-muted focus:bg-muted",
         className,
       )}
@@ -157,5 +164,5 @@ export function DropdownMenuSeparator({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />;
+  return <div role="separator" className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />;
 }

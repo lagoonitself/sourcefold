@@ -1,12 +1,14 @@
 import * as React from "react";
-import { AlertCircle, CheckCircle2, Cloud, Loader2 } from "lucide-react";
+import { AlertCircle, CloudUpload, HardDrive, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/Button";
-import { isAnyDialogOpen } from "@/components/ui/Dialog";
 import { cn } from "@/lib/utils";
+import { isMacPlatform } from "../shortcuts/key-utils";
 import { isRemoteConfigured } from "@/lib/remote-client";
 import { fetchDriveStatus, triggerDriveSave } from "./drive-api";
 import type { DriveSaveResult, DriveStatus } from "./types";
+
+/** Dispatch on `window` to save to Drive through the status button (shows its progress and toasts). */
+export const SAVE_TO_DRIVE_EVENT = "sourcefold:save-to-drive";
 
 export interface DriveSyncStatusProps {
   className?: string;
@@ -118,98 +120,90 @@ export function DriveSyncStatus({ className, onSaved }: DriveSyncStatusProps) {
     }
   }, [configured, isSaving, loadStatus, onSaved]);
 
-  // Global Ctrl+S keyboard shortcut when unsaved items exist
+  // Mod+S and the command palette ask for a save through this event (see App.tsx).
   React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-        if (isAnyDialogOpen()) return;
-        if (status?.connected && (status?.unsaved ?? 0) > 0 && !isSaving) {
-          e.preventDefault();
-          void handleSave();
-        }
-      }
-    };
+    const onSaveRequest = () => void handleSave();
+    window.addEventListener(SAVE_TO_DRIVE_EVENT, onSaveRequest);
+    return () => window.removeEventListener(SAVE_TO_DRIVE_EVENT, onSaveRequest);
+  }, [handleSave]);
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave, isSaving, status]);
+  const pill =
+    "inline-flex h-8 shrink-0 select-none items-center gap-2 rounded-[9px] px-2.5 text-[13px] font-medium transition-colors duration-150";
 
-  // Completely hide Drive UI in offline mode or when not signed in
+  // Offline mode: everything is already on this computer.
   if (!configured) {
-    return null;
+    return (
+      <div
+        className={cn(pill, "cursor-default text-muted-foreground", className)}
+        title="Offline library. Sources are saved in Documents/Sourcefold on this computer."
+      >
+        <HardDrive className="size-4" aria-hidden="true" />
+        <span className="hidden @[720px]/topbar:inline">On this computer</span>
+      </div>
+    );
   }
 
   const isSyncing = isSaving || Boolean(status?.is_syncing);
 
-  // If sync is in progress
   if (isSyncing) {
     return (
-      <div
-        className={cn("inline-flex items-center gap-1.5 px-2 py-1 text-xs select-none", className)}
-      >
-        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-        <span className="text-muted-foreground">Saving to Drive...</span>
+      <div className={cn(pill, "text-muted-foreground", className)} role="status">
+        <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden="true" />
+        <span className="hidden @[720px]/topbar:inline">Saving to Drive</span>
       </div>
     );
   }
 
-  // If Drive is disconnected or status is not yet available
   if (!status || !status.connected) {
     return (
       <div
-        className={cn(
-          "inline-flex items-center gap-1.5 px-2 py-1 text-xs select-none text-muted-foreground",
-          className,
-        )}
-        title={status?.error || "Drive disconnected"}
+        className={cn(pill, "cursor-default text-warning", className)}
+        title={status?.error || "Google Drive isn't connected. Reconnect it in Settings."}
       >
-        <AlertCircle className="size-3.5 text-muted-foreground" />
-        <span>Drive disconnected</span>
+        <AlertCircle className="size-4" aria-hidden="true" />
+        <span className="hidden @[720px]/topbar:inline">Drive disconnected</span>
       </div>
     );
   }
 
-  // When unsaved > 0
   if (status.unsaved > 0) {
     return (
-      <div
-        className={cn("inline-flex items-center gap-2 px-2 py-1 text-xs select-none", className)}
+      <button
+        type="button"
+        onClick={() => void handleSave()}
+        title={`Save to Drive (${isMacPlatform() ? "⌘S" : "Ctrl+S"})`}
+        className={cn(
+          pill,
+          "cursor-pointer text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)] hover:bg-muted motion-safe:active:scale-[0.97]",
+          className,
+        )}
       >
-        <div className="flex items-center gap-1.5">
-          <Cloud className="size-3.5 text-amber-500 fill-amber-500/20" />
-          <span className="font-medium text-amber-600 dark:text-amber-400">
-            {status.unsaved} unsaved
-          </span>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 px-2.5 text-xs text-foreground cursor-pointer"
-          onClick={() => void handleSave()}
-          disabled={isSyncing}
-          title="Ctrl+S"
+        <CloudUpload className="size-4" aria-hidden="true" />
+        <span className="hidden @[720px]/topbar:inline">Save to Drive</span>
+        <span
+          className="min-w-5 rounded-[6px] bg-marker-strong px-1.5 text-center text-[11.5px] font-semibold leading-5 text-marker-strong-foreground tabular-nums"
+          aria-label={`${status.unsaved} unsaved`}
         >
-          Save
-        </Button>
-      </div>
+          {status.unsaved}
+        </span>
+      </button>
     );
   }
 
-  // When unsaved === 0: subtle green icon + "Saved to Drive" (shows last saved timestamp on hover)
   const lastSavedTooltip = status.last_saved_at
-    ? `Last saved: ${formatLastSaved(status.last_saved_at)}`
-    : "All items saved to Drive";
+    ? `Saved to Drive ${formatLastSaved(status.last_saved_at)}`
+    : "Everything is saved to Drive";
 
   return (
     <div
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2 py-1 text-xs select-none text-muted-foreground cursor-default transition-colors hover:text-foreground",
-        className,
-      )}
+      className={cn(pill, "cursor-default text-muted-foreground hover:text-foreground", className)}
       title={lastSavedTooltip}
     >
-      <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-      <span>Saved to Drive</span>
+      <span className="relative flex size-2" aria-hidden="true">
+        <span className="absolute inset-0 rounded-full bg-success opacity-40 motion-safe:animate-ping [animation-iteration-count:2]" />
+        <span className="relative size-2 rounded-full bg-success" />
+      </span>
+      <span className="hidden @[720px]/topbar:inline">Saved to Drive</span>
     </div>
   );
 }

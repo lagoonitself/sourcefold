@@ -54,6 +54,14 @@ export const SHORTCUT_COMMANDS: ReadonlyArray<ShortcutCommand> = [
     when: "global",
   },
   {
+    id: "app.toggle-sidebar",
+    title: "Show or hide the sidebar",
+    description: "Make room for the source list, or bring the groups back",
+    group: "App",
+    combos: ["Mod+B"],
+    when: "global",
+  },
+  {
     id: "app.settings",
     title: "Settings",
     description: "Configure storage, theme, and connections",

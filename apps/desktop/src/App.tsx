@@ -1,15 +1,9 @@
 import * as React from "react";
-import {
-  BookOpen,
-  Command,
-  FolderOpen,
-  HelpCircle,
-  Plus,
-  Settings as SettingsIcon,
-  StickyNote,
-} from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { FolderOpen, FolderPlus, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +16,15 @@ import { ProjectSwitcher } from "@/features/projects/ProjectSwitcher";
 import { FolderTree } from "@/features/folders/FolderTree";
 import { ItemList } from "@/features/items/ItemList";
 import { GroupHeader, SubgroupList } from "@/features/items/GroupHeader";
-import { dispatchGroupAction, groupActionForCommand } from "@/features/items/group-actions";
+import {
+  dispatchGroupAction,
+  groupActionForCommand,
+  requestNewGroup,
+} from "@/features/items/group-actions";
+import { AppSidebar } from "@/features/shell/AppSidebar";
+import { TopBar } from "@/features/shell/TopBar";
+import { useSidebar } from "@/features/shell/use-sidebar";
+import { SAVE_TO_DRIVE_EVENT } from "@/features/drive";
 import { AddLinksDialog } from "@/features/grokipedia/AddLinksDialog";
 import { SearchDialog } from "@/features/search/SearchDialog";
 import { MeaningIndexer } from "@/features/search/embedding";
@@ -39,12 +41,12 @@ import { KeyboardShortcutsDialog, useKeyboardShortcuts } from "@/features/shortc
 import { isMacPlatform, matchesKeyCombo } from "@/features/shortcuts/key-utils";
 import type { Folder, Item } from "@/lib/types";
 import { archiveProject, getFolders, getItem, getItems, openImage } from "@/lib/api";
-import { isSessionExpiredError } from "@/lib/remote-client";
-import { triggerDriveSave } from "@/features/drive/drive-api";
+import { isRemoteConfigured, isSessionExpiredError } from "@/lib/remote-client";
 import { openUrl, cn, errorMessage } from "@/lib/utils";
 
 export function App() {
   const isMac = React.useMemo(() => isMacPlatform(), []);
+  const sidebar = useSidebar();
 
   // Theme state
   const [theme, setTheme] = React.useState<"light" | "dark" | "system">(() => {
@@ -317,23 +319,13 @@ export function App() {
     setFocusedFolderId(projectGroups[nextIndex].id);
   }, [projectGroups, activeFolderId]);
 
-  // Action: Save to Google Drive
-  const handleSaveToDrive = React.useCallback(async () => {
-    try {
-      toast.info("Saving to Google Drive...");
-      const result = await triggerDriveSave();
-      if (result.processed > 0) {
-        toast.success(
-          `Processed ${result.processed} item${result.processed === 1 ? "" : "s"} for Google Drive`,
-        );
-      } else if (result.remaining === 0) {
-        toast.info("All items are already up to date in Drive");
-      } else {
-        toast.info("No unsaved items to upload");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save to Google Drive");
+  // Action: Save to Google Drive. The top bar's Drive status runs the save and shows its progress.
+  const handleSaveToDrive = React.useCallback(() => {
+    if (!isRemoteConfigured()) {
+      toast.info("Sign in to save to Google Drive. Offline sources are already on this computer.");
+      return;
     }
+    window.dispatchEvent(new Event(SAVE_TO_DRIVE_EVENT));
   }, []);
 
   // Action: Refresh
@@ -405,6 +397,9 @@ export function App() {
         case "app.settings":
           setSettingsOpen(true);
           break;
+        case "app.toggle-sidebar":
+          sidebar.toggle();
+          break;
         case "app.refresh":
           void handleRefresh();
           toast.success("Refreshed");
@@ -454,6 +449,7 @@ export function App() {
       handleRefresh,
       handlePreviousGroup,
       handleNextGroup,
+      sidebar.toggle,
     ],
   );
 
@@ -475,6 +471,7 @@ export function App() {
       void handleSaveToDrive();
     },
     onSettings: () => setSettingsOpen(true),
+    onToggleSidebar: sidebar.toggle,
     onProjectSwitcher: () => {
       setProjectSwitcherOpen((prev) => !prev);
     },
@@ -499,217 +496,249 @@ export function App() {
     onNextGroup: handleNextGroup,
   });
 
-  return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground antialiased">
-      {/* Sidebar: 280px fixed width */}
-      <aside
-        className={cn(
-          "flex w-[280px] shrink-0 flex-col border-r border-border bg-sidebar select-none transition-colors",
-          activeRegion === "tree" && "border-r-primary/40",
-        )}
-        onClick={() => setActiveRegion("tree")}
-      >
-        {/* App Title / Header */}
-        <div className="flex h-14 items-center justify-between border-b border-border px-4">
-          <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-[6px] bg-primary text-primary-foreground">
-              <BookOpen className="size-4" />
-            </div>
-            <span className="font-serif text-base font-semibold tracking-tight text-foreground">
-              Sourcefold
-            </span>
-          </div>
+  // The open group's path inside the project, for the top bar's breadcrumb.
+  const trail = React.useMemo(() => {
+    if (!activeFolderId) return [];
+    const byId = new Map(folders.map((f) => [f.id, f]));
+    const chain: Folder[] = [];
+    let current = byId.get(activeFolderId);
+    while (current && current.parent_id && chain.length < 1000) {
+      chain.unshift(current);
+      current = byId.get(current.parent_id);
+    }
+    return chain;
+  }, [folders, activeFolderId]);
 
-          <button
-            type="button"
-            onClick={() => setCommandPaletteOpen(true)}
-            title={`Command Palette (${isMac ? "⌘K / ⌘⇧P" : "Ctrl+K / Ctrl+Shift+P"})`}
-            className="flex items-center gap-1 rounded-[4px] border border-border bg-muted/60 px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-          >
-            <Command className="size-3" />
-            <span>{isMac ? "⌘K" : "Ctrl+K"}</span>
-          </button>
-        </div>
+  const closeDrawer = sidebar.closeDrawer;
+  const selectGroup = React.useCallback(
+    (id: string) => {
+      setActiveFolderId(id);
+      setFocusedFolderId(id);
+      closeDrawer();
+    },
+    [closeDrawer],
+  );
 
-        {/* Project Switcher & Quick Add */}
-        <div className="p-3 space-y-2 border-b border-border">
-          <ProjectSwitcher
-            projects={folders.filter((f) => !f.parent_id)}
-            activeProjectId={activeProjectId}
-            onSelectProject={handleSelectProject}
-            onRefresh={async () => {
-              await refreshFolders();
+  const canAddLinks = Boolean(activeFolderId) && !isProjectWithNoGroups;
+
+  // Esc closes the sliding sidebar before anything else.
+  React.useEffect(() => {
+    if (!sidebar.drawerOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeDrawer();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [sidebar.drawerOpen, closeDrawer]);
+
+  const sidebarContent = (
+    <AppSidebar
+      isMac={isMac}
+      isFocusedRegion={activeRegion === "tree"}
+      onActivate={() => setActiveRegion("tree")}
+      onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+      onOpenShortcuts={() => setShortcutsOpen(true)}
+      onOpenSettings={() => setSettingsOpen(true)}
+      onHide={sidebar.drawerOpen ? closeDrawer : sidebar.toggle}
+      projectSwitcher={
+        <ProjectSwitcher
+          projects={folders.filter((f) => !f.parent_id)}
+          activeProjectId={activeProjectId}
+          onSelectProject={handleSelectProject}
+          onRefresh={async () => {
+            await refreshFolders();
+          }}
+          open={projectSwitcherOpen}
+          onOpenChange={setProjectSwitcherOpen}
+        />
+      }
+      tree={
+        activeProjectId ? (
+          <FolderTree
+            projectId={activeProjectId}
+            folders={folders}
+            activeFolderId={activeFolderId}
+            isFocusedRegion={activeRegion === "tree"}
+            focusedFolderId={focusedFolderId}
+            onFocusedFolderChange={setFocusedFolderId}
+            onSelectFolder={(id) => {
+              // The tree reports the project itself when its last group is deleted; sources
+              // can only be shown and saved in groups.
+              const groupId = id === activeProjectId ? null : id;
+              setActiveFolderId(groupId);
+              setFocusedFolderId(groupId);
+              if (groupId) closeDrawer();
             }}
-            open={projectSwitcherOpen}
-            onOpenChange={setProjectSwitcherOpen}
+            onRefresh={refreshFolders}
+            onRequestFocusList={() => setActiveRegion("list")}
+          />
+        ) : (
+          <p className="px-3 py-6 text-[13px] leading-[19px] text-muted-foreground">
+            Your groups show here once you create a project.
+          </p>
+        )
+      }
+    />
+  );
+
+  return (
+    <div className="flex h-dvh w-screen overflow-hidden text-foreground antialiased">
+      {/* Sidebar beside the content on wide windows; it slides closed when hidden. */}
+      <motion.aside
+        aria-label="Projects and groups"
+        initial={false}
+        animate={{ width: sidebar.docked ? 264 : 0, opacity: sidebar.docked ? 1 : 0 }}
+        transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
+        className="relative shrink-0 select-none overflow-hidden"
+        inert={!sidebar.docked}
+      >
+        <div className="h-full w-[264px]">{sidebar.docked && sidebarContent}</div>
+      </motion.aside>
+
+      {/* On narrow windows (or once hidden) it slides over the content instead. */}
+      <AnimatePresence>
+        {sidebar.drawerOpen && (
+          <>
+            <motion.div
+              key="sidebar-scrim"
+              className="fixed inset-0 z-40 bg-[var(--overlay)]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={closeDrawer}
+            />
+            <motion.aside
+              key="sidebar-drawer"
+              aria-label="Projects and groups"
+              className="desk-grain fixed inset-y-2 left-2 z-40 w-[288px] max-w-[calc(100vw-48px)] select-none overflow-hidden rounded-[16px] shadow-float"
+              initial={{ x: "-110%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-110%" }}
+              transition={{ duration: 0.34, ease: [0.32, 0.72, 0, 1] }}
+            >
+              {sidebarContent}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <div className={cn("flex min-w-0 flex-1 flex-col p-2", sidebar.docked && "pl-0")}>
+        <main
+          className={cn(
+            "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] bg-background shadow-sheet",
+          )}
+          onClick={() => setActiveRegion("list")}
+        >
+          <TopBar
+            isMac={isMac}
+            sidebarDocked={sidebar.docked}
+            onShowSidebar={sidebar.toggle}
+            project={currentProject}
+            trail={trail}
+            onSelectGroup={selectGroup}
+            onSearch={() => setSearchOpen(true)}
+            onAddLinks={() => setAddLinksOpen(true)}
+            canAddLinks={canAddLinks}
           />
 
-          {hasProjects && (
-            <Button
-              className="w-full justify-between h-8 text-xs font-medium"
-              onClick={() => setAddLinksOpen(true)}
-              disabled={!activeFolderId || isProjectWithNoGroups}
-              title={`Add links (a or ${isMac ? "⌘N" : "Ctrl+N"})`}
-            >
-              <div className="flex items-center">
-                <Plus className="mr-1.5 size-3.5" />
-                <span>Add links</span>
-              </div>
-              <kbd className="rounded border border-primary-foreground/20 bg-primary-foreground/10 px-1 py-0.2 font-mono text-[9px]">
-                a
-              </kbd>
-            </Button>
-          )}
-        </div>
-
-        {/* Hierarchical Folder / Group Tree */}
-        <div className="flex-1 overflow-hidden flex flex-col p-1.5">
-          {activeProjectId ? (
-            <FolderTree
-              projectId={activeProjectId}
-              folders={folders}
-              activeFolderId={activeFolderId}
-              isFocusedRegion={activeRegion === "tree"}
-              focusedFolderId={focusedFolderId}
-              onFocusedFolderChange={setFocusedFolderId}
-              onSelectFolder={(id) => {
-                // The tree reports the project itself when its last group is deleted; sources
-                // can only be shown and saved in groups.
-                const groupId = id === activeProjectId ? null : id;
-                setActiveFolderId(groupId);
-                setFocusedFolderId(groupId);
-              }}
-              onRefresh={refreshFolders}
-              onRequestFocusList={() => setActiveRegion("list")}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center p-8 text-center text-xs text-muted-foreground">
-              <FolderOpen className="size-8 stroke-[1.5] mb-2 opacity-50" />
-              <span>Create a project to start organizing sources</span>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className="border-t border-border p-2 flex items-center justify-between text-xs text-muted-foreground">
-          <button
-            type="button"
-            onClick={() => setShortcutsOpen(true)}
-            className="flex items-center gap-1.5 hover:text-foreground transition-colors p-1.5 rounded-[4px] cursor-pointer"
-            title="Keyboard shortcuts (?)"
-          >
-            <HelpCircle className="size-3.5" />
-            <span>Shortcuts</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="flex items-center gap-1.5 hover:text-foreground transition-colors p-1.5 rounded-[4px] cursor-pointer"
-            title={`Settings (${isMac ? "⌘," : "Ctrl+,"})`}
-          >
-            <SettingsIcon className="size-3.5" />
-            <span>Settings</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content: Source List */}
-      <main
-        className={cn(
-          "flex-1 flex flex-col overflow-hidden bg-background transition-colors",
-          activeRegion === "list" && "ring-1 ring-inset ring-primary/20",
-        )}
-        onClick={() => setActiveRegion("list")}
-      >
-        {activeFolderId ? (
-          <div className="flex min-h-0 flex-1 flex-col px-8 pt-6">
-            <GroupHeader
-              folders={folders}
-              folderId={activeFolderId}
-              sourceCount={items.length}
-              highlightCount={highlightCount}
-              tab={groupTab}
-              onTabChange={setGroupTab}
-              isFocusedRegion={activeRegion === "list"}
-              onSelectGroup={(id) => {
-                setActiveFolderId(id);
-                setFocusedFolderId(id);
-              }}
-              onNewNote={() => setNewNoteOpen(true)}
-              onRefresh={handleRefresh}
-            />
-            {groupTab === "highlights" ? (
-              <HighlightsList
-                key={activeFolderId}
-                items={items}
-                highlights={groupHighlights.highlights}
-                loading={groupHighlights.loading}
-                error={groupHighlights.error}
+          {activeFolderId ? (
+            <div className="@container/view flex min-h-0 flex-1 flex-col px-5 pt-7 @[720px]/view:px-9 @[720px]/view:pt-9">
+              <GroupHeader
+                folders={folders}
+                folderId={activeFolderId}
+                sourceCount={items.length}
+                highlightCount={highlightCount}
+                tab={groupTab}
+                onTabChange={setGroupTab}
                 isFocusedRegion={activeRegion === "list"}
-                onRefresh={refreshHighlights}
-                onOpenHighlight={(item, highlightId) => {
-                  setFocusedItemId(item.id);
-                  setReaderHighlightId(highlightId);
-                  setReaderItem(item);
-                }}
+                onSelectGroup={selectGroup}
+                onNewNote={() => setNewNoteOpen(true)}
+                onRefresh={handleRefresh}
               />
-            ) : (
-              <>
-                <SubgroupList
-                  folders={folders}
-                  folderId={activeFolderId}
-                  onSelectGroup={(id) => {
-                    setActiveFolderId(id);
-                    setFocusedFolderId(id);
-                  }}
-                />
-                <ItemList
+              {groupTab === "highlights" ? (
+                <HighlightsList
                   key={activeFolderId}
                   items={items}
-                  folders={folders}
+                  highlights={groupHighlights.highlights}
+                  loading={groupHighlights.loading}
+                  error={groupHighlights.error}
                   isFocusedRegion={activeRegion === "list"}
-                  focusedItemId={focusedItemId}
-                  onFocusedItemChange={setFocusedItemId}
-                  onRefresh={refreshItems}
-                  onOpenReader={(item) => {
-                    setReaderHighlightId(null);
+                  onRefresh={refreshHighlights}
+                  onOpenHighlight={(item, highlightId) => {
+                    setFocusedItemId(item.id);
+                    setReaderHighlightId(highlightId);
                     setReaderItem(item);
                   }}
                 />
-              </>
-            )}
-          </div>
-        ) : hasProjects && isProjectWithNoGroups ? (
-          <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-            <div className="size-12 rounded-xl bg-muted/60 flex items-center justify-center text-muted-foreground mb-3">
-              <FolderOpen className="size-6 stroke-[1.5]" />
+              ) : (
+                <>
+                  <SubgroupList
+                    folders={folders}
+                    folderId={activeFolderId}
+                    onSelectGroup={selectGroup}
+                  />
+                  <ItemList
+                    key={activeFolderId}
+                    items={items}
+                    folders={folders}
+                    isFocusedRegion={activeRegion === "list"}
+                    focusedItemId={focusedItemId}
+                    onFocusedItemChange={setFocusedItemId}
+                    onRefresh={refreshItems}
+                    onOpenReader={(item) => {
+                      setReaderHighlightId(null);
+                      setReaderItem(item);
+                    }}
+                  />
+                </>
+              )}
             </div>
-            <h2 className="font-serif text-lg font-semibold tracking-tight text-foreground">
-              No groups in this project
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground max-w-sm">
-              Press{" "}
-              <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted/50 font-mono text-[10px]">
-                n
-              </kbd>{" "}
-              while focused on the sidebar to create a group.
-            </p>
-          </div>
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-            <div className="size-12 rounded-xl bg-muted/60 flex items-center justify-center text-muted-foreground mb-3">
-              <StickyNote className="size-6 stroke-[1.5]" />
+          ) : !hasProjects ? (
+            <div className="flex flex-1 items-center justify-center">
+              <EmptyState
+                icon={Layers}
+                title="Start your first project"
+                description="Create your first project to start collecting sources. A project holds the groups and sources for one video or topic."
+                actions={<Button onClick={() => setProjectSwitcherOpen(true)}>New project</Button>}
+              />
             </div>
-            <h2 className="font-serif text-lg font-semibold tracking-tight text-foreground">
-              No group selected
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground max-w-sm">
-              Select a group from the sidebar to view, manage, and capture research sources.
-            </p>
-          </div>
-        )}
-      </main>
+          ) : isProjectWithNoGroups ? (
+            <div className="flex flex-1 items-center justify-center">
+              <EmptyState
+                icon={FolderPlus}
+                title="This project has no groups yet"
+                description="Create a group, for example “Engines”, then add links to it."
+                actions={
+                  <Button
+                    onClick={() => {
+                      if (!sidebar.docked) sidebar.toggle();
+                      requestNewGroup();
+                    }}
+                  >
+                    New group
+                  </Button>
+                }
+              />
+            </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center">
+              <EmptyState
+                icon={FolderOpen}
+                title="Open a group"
+                description="Pick a group in the sidebar to see its sources and highlights."
+                actions={
+                  !sidebar.docked ? (
+                    <Button variant="outline" onClick={sidebar.toggle}>
+                      Show groups
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* Modal Dialogs */}
       <CommandPalette

@@ -15,10 +15,12 @@
         "title": "Sourcefold",
         "width": 1280,
         "height": 840,
-        "minWidth": 900,
-        "minHeight": 600,
+        "minWidth": 720,
+        "minHeight": 520,
         "center": true,
-        "decorations": true
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {

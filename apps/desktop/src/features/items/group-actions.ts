@@ -24,3 +24,10 @@ export function onGroupAction(handler: (action: GroupAction) => void): () => voi
   window.addEventListener(GROUP_ACTION_EVENT, listener);
   return () => window.removeEventListener(GROUP_ACTION_EVENT, listener);
 }
+
+/** Asks the group tree to open its "New group" dialog (from empty states and the top bar). */
+export const NEW_GROUP_EVENT = "sourcefold:new-group";
+
+export function requestNewGroup(): void {
+  window.dispatchEvent(new Event(NEW_GROUP_EVENT));
+}

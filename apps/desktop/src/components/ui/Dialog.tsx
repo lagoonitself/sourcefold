@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 interface DialogContextType {
@@ -160,54 +161,61 @@ export function DialogContent({
     }
   };
 
-  if (!open) return null;
-
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150"
-      onClick={(e) => {
-        if (contentRef.current && !contentRef.current.contains(e.target as Node)) {
-          onOpenChange(false);
-        }
-      }}
-    >
-      <div
-        ref={contentRef}
-        role="dialog"
-        aria-modal="true"
-        onKeyDown={handleKeyDownTrap}
-        className={cn(
-          "relative w-full max-w-lg rounded-[10px] border border-border bg-card p-6 shadow-float transition-all",
-          "animate-in zoom-in-95 duration-150",
-          className,
-        )}
-      >
-        <button
-          type="button"
-          onClick={() => onOpenChange(false)}
-          className="absolute right-4 top-4 rounded-[4px] p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Close"
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="dialog-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-[2px]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.14 } }}
+          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+          onClick={(e) => {
+            if (contentRef.current && !contentRef.current.contains(e.target as Node)) {
+              onOpenChange(false);
+            }
+          }}
         >
-          <X className="size-4" />
-        </button>
-        {children}
-      </div>
-    </div>,
+          <motion.div
+            ref={contentRef}
+            role="dialog"
+            aria-modal="true"
+            onKeyDown={handleKeyDownTrap}
+            initial={{ opacity: 0, y: 10, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.985, transition: { duration: 0.12 } }}
+            transition={{ duration: 0.26, ease: [0.32, 0.72, 0, 1] }}
+            className={cn(
+              "relative max-h-[calc(100dvh-32px)] w-full max-w-lg overflow-y-auto rounded-[16px] bg-card p-6 text-card-foreground shadow-float",
+              className,
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="absolute right-3.5 top-3.5 z-10 flex size-7 cursor-pointer items-center justify-center rounded-[7px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+              aria-label="Close"
+            >
+              <X className="size-4" />
+            </button>
+            {children}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   );
 }
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col space-y-1.5 text-left mb-4", className)} {...props} />;
+  return <div className={cn("mb-5 flex flex-col gap-1.5 pr-8 text-left", className)} {...props} />;
 }
 
 export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn(
-        "flex flex-row items-center justify-end space-x-2 pt-4 mt-2 border-t border-border",
-        className,
-      )}
+      className={cn("mt-6 flex flex-row flex-wrap items-center justify-end gap-2", className)}
       {...props}
     />
   );
@@ -217,7 +225,7 @@ export function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHe
   return (
     <h2
       className={cn(
-        "font-serif text-lg font-semibold leading-none tracking-tight text-foreground",
+        "font-serif text-[22px] font-medium leading-[28px] tracking-[-0.012em] text-foreground",
         className,
       )}
       {...props}
@@ -229,5 +237,7 @@ export function DialogDescription({
   className,
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-xs text-muted-foreground", className)} {...props} />;
+  return (
+    <p className={cn("text-[13px] leading-[19px] text-muted-foreground", className)} {...props} />
+  );
 }

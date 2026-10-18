@@ -13,6 +13,8 @@ export interface KeyboardShortcutHandlers {
   onNewNote?: () => void;
   /** Save to Google Drive ('Mod+S') */
   onSaveToGoogleDrive?: () => void;
+  /** Show or hide the sidebar ('Mod+B') */
+  onToggleSidebar?: () => void;
   /** Open Settings ('Mod+,') */
   onSettings?: () => void;
   /** Open Project switcher ('p' or 'Mod+P') */
@@ -94,6 +96,13 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions): void
       if (matchesKeyCombo(e, "Mod+,")) {
         e.preventDefault();
         currentHandlers.onSettings?.();
+        return;
+      }
+
+      // Sidebar: Mod+B (available everywhere)
+      if (matchesKeyCombo(e, "Mod+B")) {
+        e.preventDefault();
+        currentHandlers.onToggleSidebar?.();
         return;
       }
 

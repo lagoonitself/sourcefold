@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./capture": "./src/capture.ts",
-    "./server": "./src/server.ts"
+    "./server": "./src/server.ts",
+    "./reader": "./src/reader/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,7 @@
     "@mozilla/readability": "^0.6.0",
     "defuddle": "^0.19.5",
     "linkedom": "^0.18.13",
+    "marked": "^15.0.7",
     "pdfjs-dist": "^6.4.299",
     "turndown": "^7.2.4"
   }

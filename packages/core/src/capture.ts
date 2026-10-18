@@ -13,10 +13,16 @@ export {
 } from "./wikipedia/fetch";
 export { fetchSourceCapture, type SourceCaptureDeps } from "./sources";
 export {
+  YOUTUBE_GAP_MS,
   YOUTUBE_NO_CAPTIONS_REASON,
+  YOUTUBE_RATE_LIMIT_WAITS_MS,
   fetchYouTubeCapture,
+  formatWait,
   isYouTubeRateLimit,
+  isYouTubeVideoLink,
   listYouTubeVideos,
+  waitUnlessStopped,
+  youTubeGapMs,
   type YouTubeFetchOptions,
   type YouTubeListOptions,
   type YouTubeListedVideo,

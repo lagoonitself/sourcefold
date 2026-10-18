@@ -21,3 +21,11 @@ export {
   type CaptionChoice,
   type CaptionTrack,
 } from "./tracks";
+export {
+  YOUTUBE_GAP_MS,
+  YOUTUBE_RATE_LIMIT_WAITS_MS,
+  formatWait,
+  isYouTubeVideoLink,
+  waitUnlessStopped,
+  youTubeGapMs,
+} from "./pacing";

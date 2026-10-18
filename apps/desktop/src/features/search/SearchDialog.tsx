@@ -3,7 +3,7 @@ import { ExternalLink, MessageSquare, Search } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Kbd } from "@/components/ui/Kbd";
-import { getSourceKind } from "@/features/items/source-kinds";
+import { getSourceKind, SourceTile } from "@/features/items/source-kinds";
 import type { Folder, Item } from "@/lib/types";
 import { isTauri } from "@/lib/api";
 import { openUrl, cn } from "@/lib/utils";
@@ -30,23 +30,6 @@ const rowClass = (selected: boolean) =>
     "relative flex min-h-[52px] cursor-pointer select-none items-start justify-between gap-3 rounded-[10px] px-2.5 py-2 transition-colors duration-100",
     selected ? "bg-accent" : "hover:bg-muted",
   );
-
-/** The tinted tile that stands for a source type; the kind's name is always written on the row too. */
-function KindTile({ kind }: { kind: string }) {
-  const { Icon, colorVar } = getSourceKind(kind);
-  return (
-    <span
-      aria-hidden="true"
-      className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[8px]"
-      style={{
-        backgroundColor: `color-mix(in oklab, ${colorVar} 12%, transparent)`,
-        color: colorVar,
-      }}
-    >
-      <Icon className="size-4" aria-hidden={true} />
-    </span>
-  );
-}
 
 /** The 2px ink bar on the left of the row the arrow keys are on. */
 function ActiveBar() {
@@ -116,7 +99,7 @@ function SourceRowView({
   return (
     <>
       {selected && <ActiveBar />}
-      <KindTile kind={item.kind} />
+      <SourceTile kind={item.kind} className="mt-0.5" />
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-2">
           <span className="truncate font-serif text-[15px] font-medium leading-[22px] tracking-[-0.005em] text-foreground">
@@ -165,7 +148,7 @@ function HitRowView({
   return (
     <>
       {selected && <ActiveBar />}
-      <KindTile kind={hit.kind} />
+      <SourceTile kind={hit.kind} className="mt-0.5" />
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-baseline justify-between gap-3">
           <span className="truncate font-serif text-[15px] font-medium leading-[22px] tracking-[-0.005em] text-foreground">
@@ -225,7 +208,10 @@ export function SearchDialog({
   React.useEffect(() => {
     // The first row sits under its section label; scrolling to the top keeps the label in view.
     if (selectedIndex === 0 && listRef.current) listRef.current.scrollTop = 0;
-    else document.getElementById(`search-row-${selectedIndex}`)?.scrollIntoView?.({ block: "nearest" });
+    else
+      document
+        .getElementById(`search-row-${selectedIndex}`)
+        ?.scrollIntoView?.({ block: "nearest" });
   }, [selectedIndex, rows]);
 
   const openRow = (row: SearchRow) => {

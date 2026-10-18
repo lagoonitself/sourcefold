@@ -122,7 +122,7 @@ impl VectorCache {
     /// be normalized.
     pub fn top(&self, query: &[f32], body: bool, k: usize) -> Vec<(i64, f32)> {
         let mut scored: Vec<(f32, usize)> = Vec::new();
-        for (index, row) in self.data.chunks_exact(VECTOR_DIMS).enumerate() {
+        for (index, row) in self.data.as_chunks::<VECTOR_DIMS>().0.iter().enumerate() {
             if self.is_body[index] != body {
                 continue;
             }
@@ -164,7 +164,7 @@ fn blob_to_vector(blob: &[u8]) -> Option<Vec<f32>> {
     if blob.len() != VECTOR_DIMS * 4 {
         return None;
     }
-    Some(blob.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect())
+    Some(blob.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect())
 }
 
 const SCHEMA: &str = "

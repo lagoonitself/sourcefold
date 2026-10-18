@@ -1,16 +1,15 @@
 import * as React from "react";
-import { AlertCircle, Copy, StickyNote, Trash2 } from "lucide-react";
+import { AlertCircle, Copy, Highlighter, Link2, StickyNote, Trash2 } from "lucide-react";
+import { motion } from "motion/react";
 import { formatHighlightTime, youtubeTimestampUrl, type Highlight } from "@sourcefold/core";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { cn, openUrl } from "@/lib/utils";
 import { domainOf } from "./extract";
 import { NoteEditor } from "./NoteEditor";
 import type { ReaderItem } from "./types";
 import type { ReaderHighlightsController } from "./useReaderHighlights";
 import { urlKey } from "./url-key";
-
-const TAB =
-  "cursor-pointer border-b-2 px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-2";
 
 /** The 320px side panel: the highlights in reading order, and the sources an article cites. */
 export function HighlightsPanel({
@@ -26,12 +25,20 @@ export function HighlightsPanel({
   const tab = hasReferences ? panelTab : "highlights";
 
   return (
-    <aside
+    <motion.aside
       data-reader-ui
       aria-label="Highlights panel"
-      className="flex w-80 shrink-0 flex-col border-l border-border bg-background font-sans"
+      initial={{ x: "100%", opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: "100%", opacity: 0, transition: { duration: 0.18, ease: [0.16, 1, 0.3, 1] } }}
+      transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+      className="flex w-80 shrink-0 flex-col border-l border-border bg-desk font-sans select-none max-[899px]:absolute max-[899px]:right-0 max-[899px]:inset-y-0 max-[899px]:z-30 max-[899px]:shadow-float @[900px]/reader:relative @[900px]/reader:shadow-none"
     >
-      <div role="tablist" aria-label="Panel" className="flex shrink-0 border-b border-border px-1">
+      <div
+        role="tablist"
+        aria-label="Panel"
+        className="relative flex shrink-0 border-b border-border px-2"
+      >
         <button
           type="button"
           role="tab"
@@ -40,15 +47,24 @@ export function HighlightsPanel({
           aria-controls="reader-tabpanel"
           onClick={() => setPanelTab("highlights")}
           className={cn(
-            TAB,
+            "relative cursor-pointer px-3 py-2.5 text-[13px] font-medium transition-colors focus-visible:outline-2",
             tab === "highlights"
-              ? "border-primary text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground",
+              ? "text-foreground"
+              : "text-muted-foreground hover:text-foreground",
           )}
         >
-          Highlights{" "}
+          <span>Highlights</span>
           {highlights.length > 0 && (
-            <span className="text-muted-foreground">{highlights.length}</span>
+            <span className="ml-1.5 rounded-[6px] bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+              {highlights.length}
+            </span>
+          )}
+          {tab === "highlights" && (
+            <motion.div
+              layoutId="reader-panel-tab"
+              className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground"
+              transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+            />
           )}
         </button>
         {hasReferences && (
@@ -60,13 +76,21 @@ export function HighlightsPanel({
             aria-controls="reader-tabpanel"
             onClick={() => setPanelTab("cited")}
             className={cn(
-              TAB,
-              tab === "cited"
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
+              "relative cursor-pointer px-3 py-2.5 text-[13px] font-medium transition-colors focus-visible:outline-2",
+              tab === "cited" ? "text-foreground" : "text-muted-foreground hover:text-foreground",
             )}
           >
-            Cited sources <span className="text-muted-foreground">{references.length}</span>
+            <span>Cited sources</span>
+            <span className="ml-1.5 rounded-[6px] bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+              {references.length}
+            </span>
+            {tab === "cited" && (
+              <motion.div
+                layoutId="reader-panel-tab"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground"
+                transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+              />
+            )}
           </button>
         )}
       </div>
@@ -75,7 +99,7 @@ export function HighlightsPanel({
         id="reader-tabpanel"
         role="tabpanel"
         aria-labelledby={tab === "cited" ? "reader-tab-cited" : "reader-tab-highlights"}
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-y-auto p-2"
       >
         {tab === "highlights" ? (
           <HighlightList item={item} itemUrl={itemUrl} controller={controller} />
@@ -83,7 +107,7 @@ export function HighlightsPanel({
           <CitedList controller={controller} />
         )}
       </div>
-    </aside>
+    </motion.aside>
   );
 }
 
@@ -109,22 +133,31 @@ function HighlightList({
 
   if (loadState === "error") {
     return (
-      <p className="p-4 text-[13px] leading-[18px] text-muted-foreground">
-        Couldn't load your highlights. Close this source and open it again.
-      </p>
+      <div className="py-6">
+        <EmptyState
+          compact
+          icon={AlertCircle}
+          title="Couldn't load highlights"
+          description="Close this source and open it again."
+        />
+      </div>
     );
   }
   if (loadState === "ready" && ordered.length === 0) {
     return (
-      <p className="p-4 text-[13px] leading-[18px] text-muted-foreground">
-        No highlights yet. Select text in the article to highlight it, or press j to focus a
-        paragraph and h to highlight it.
-      </p>
+      <div className="py-6">
+        <EmptyState
+          compact
+          icon={Highlighter}
+          title="No highlights yet"
+          description="Select text in the article to highlight it, or press j to focus a paragraph and h to highlight it."
+        />
+      </div>
     );
   }
 
   return (
-    <ul className="divide-y divide-border">
+    <ul className="flex flex-col gap-1">
       {ordered.map((h) => (
         <HighlightRow
           key={h.id}
@@ -158,7 +191,18 @@ function HighlightRow({
   const timeUrl = h.seconds !== null ? youtubeTimestampUrl(itemUrl, h.seconds) : null;
 
   return (
-    <li className={cn("px-3 py-2.5", current && "bg-accent")}>
+    <li
+      className={cn(
+        "group relative rounded-[10px] px-3 py-2.5 transition-colors",
+        current ? "bg-sidebar-accent shadow-raised" : "hover:bg-sidebar-accent",
+      )}
+    >
+      {current && (
+        <span
+          className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-foreground"
+          aria-hidden="true"
+        />
+      )}
       <button
         type="button"
         disabled={!placed}
@@ -172,15 +216,17 @@ function HighlightRow({
             alt={h.quote}
             loading="lazy"
             referrerPolicy="no-referrer"
-            className="max-h-20 max-w-full rounded-[4px]"
+            className="max-h-20 max-w-full rounded-[8px]"
           />
         ) : (
-          <span className="line-clamp-4 text-[13px] leading-[18px] text-foreground">{h.quote}</span>
+          <span className="line-clamp-4 font-serif text-[13.5px] leading-[19px] text-foreground">
+            {h.quote}
+          </span>
         )}
       </button>
 
       {!placed && (
-        <p className="mt-1 flex items-start gap-1 text-[12px] leading-4 text-muted-foreground">
+        <p className="mt-1 flex items-start gap-1 text-[12px] leading-4 text-warning">
           <AlertCircle className="mt-px size-3 shrink-0" aria-hidden="true" />
           Couldn't find this passage in the current text
         </p>
@@ -193,13 +239,13 @@ function HighlightRow({
               <button
                 type="button"
                 onClick={() => void openUrl(timeUrl)}
-                className="cursor-pointer text-primary hover:underline"
+                className="cursor-pointer text-foreground hover:underline font-mono text-[11px]"
                 title="Open the video at this time"
               >
                 {formatHighlightTime(h.seconds)}
               </button>
             ) : (
-              <span>{formatHighlightTime(h.seconds)}</span>
+              <span className="font-mono text-[11px]">{formatHighlightTime(h.seconds)}</span>
             ))}
           {h.cited.length > 0 && (
             <span>Cited: {h.cited.map((c) => domainOf(c.url)).join(", ")}</span>
@@ -216,13 +262,13 @@ function HighlightRow({
         />
       ) : (
         h.note && (
-          <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-[18px] text-muted-foreground">
+          <p className="mt-1.5 whitespace-pre-wrap rounded-[6px] bg-background/60 p-2 text-[12.5px] leading-[17px] text-muted-foreground border border-border">
             {h.note}
           </p>
         )
       )}
 
-      <div className="mt-1.5 flex items-center gap-0.5">
+      <div className="mt-2 flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity">
         <PanelIconButton
           label="Edit note"
           onClick={() => controller.startPanelNote(h.id)}
@@ -236,7 +282,7 @@ function HighlightRow({
         <PanelIconButton
           label="Delete highlight"
           onClick={() => controller.removeHighlight(h.id)}
-          icon={<Trash2 className="size-3.5" aria-hidden="true" />}
+          icon={<Trash2 className="size-3.5 text-destructive" aria-hidden="true" />}
         />
       </div>
     </li>
@@ -258,7 +304,7 @@ function PanelIconButton({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="inline-flex size-7 cursor-pointer items-center justify-center rounded-[6px] text-muted-foreground hover:bg-muted hover:text-foreground"
+      className="inline-flex size-7 cursor-pointer items-center justify-center rounded-[7px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus-visible:outline-2 focus-visible:outline-ring"
     >
       {icon}
     </button>
@@ -278,9 +324,14 @@ function CitedList({ controller }: { controller: ReaderHighlightsController }) {
 
   if (references.length === 0) {
     return (
-      <p className="p-4 text-[13px] leading-[18px] text-muted-foreground">
-        This article has no references with links.
-      </p>
+      <div className="py-6">
+        <EmptyState
+          compact
+          icon={Link2}
+          title="No cited sources"
+          description="This article has no references with links."
+        />
+      </div>
     );
   }
 
@@ -294,12 +345,15 @@ function CitedList({ controller }: { controller: ReaderHighlightsController }) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <ul className="flex-1 divide-y divide-border">
+      <ul className="flex-1 flex flex-col gap-1">
         {references.map((r) => {
           const saved = isSaved(r.url);
           const id = `reader-ref-${r.label}`;
           return (
-            <li key={r.label} className="flex items-start gap-2 px-3 py-2">
+            <li
+              key={r.label}
+              className="flex items-start gap-2 rounded-[10px] px-2.5 py-2 hover:bg-sidebar-accent transition-colors"
+            >
               {canSaveLinks && (
                 <input
                   id={id}
@@ -317,12 +371,16 @@ function CitedList({ controller }: { controller: ReaderHighlightsController }) {
                   onClick={() => void openUrl(r.url)}
                   className="block w-full cursor-pointer text-left text-[13px] leading-[18px] text-foreground hover:underline"
                 >
-                  <span className="text-muted-foreground">[{r.label}]</span>{" "}
+                  <span className="text-muted-foreground font-mono text-[11px]">[{r.label}]</span>{" "}
                   {r.title ?? domainOf(r.url)}
                 </button>
                 <p className="truncate text-[12px] leading-4 text-muted-foreground">
                   {domainOf(r.url)}
-                  {saved && <span> · Saved in this group</span>}
+                  {saved && (
+                    <span className="ml-1.5 text-muted-foreground font-medium">
+                      , saved in this group
+                    </span>
+                  )}
                 </p>
               </div>
             </li>
@@ -331,7 +389,7 @@ function CitedList({ controller }: { controller: ReaderHighlightsController }) {
       </ul>
 
       {canSaveLinks && (
-        <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-border bg-background px-3 py-2">
+        <div className="sticky bottom-0 mt-auto flex items-center justify-between gap-2 border-t border-border bg-desk p-3">
           <button
             type="button"
             onClick={() =>

@@ -1,10 +1,10 @@
-/* Reader prose typography. Colors are the tokens from index.css; fonts come from the article. */
+/* Reader prose typography. Colors are the tokens from index.css. */
 .reader-prose {
   color: var(--foreground);
   overflow-wrap: break-word;
   user-select: text;
-  font-size: 1.0625rem;
-  line-height: 1.75;
+  font-size: 18px;
+  line-height: 1.65;
 }
 
 .reader-prose-serif {
@@ -13,11 +13,11 @@
 
 .reader-prose-sans {
   font-family: var(--font-sans);
-  font-size: 0.9375rem;
-  line-height: 1.65;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
-/* Headings */
+/* Headings: Newsreader 500 with tight tracking */
 .reader-prose h1,
 .reader-prose h2,
 .reader-prose h3,
@@ -26,19 +26,20 @@
 .reader-prose h6 {
   font-family: var(--font-serif);
   color: var(--foreground);
-  font-weight: 600;
-  line-height: 1.3;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
   margin-top: 2rem;
   margin-bottom: 0.85rem;
 }
 
 .reader-prose h1 {
-  font-size: 1.85rem;
+  font-size: 2rem;
   letter-spacing: -0.025em;
 }
 
 .reader-prose h2 {
-  font-size: 1.45rem;
+  font-size: 1.5rem;
   letter-spacing: -0.02em;
   border-bottom: 1px solid var(--border);
   padding-bottom: 0.5rem;
@@ -67,22 +68,23 @@
   margin: 0 0 1.4rem;
 }
 
-/* Links */
+/* Links: ink with a --border-strong underline that turns ink on hover */
 .reader-prose a {
-  color: var(--primary);
+  color: var(--foreground);
   text-decoration: underline;
   text-underline-offset: 3px;
-  text-decoration-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  text-decoration-color: var(--border-strong);
   cursor: pointer;
+  transition: text-decoration-color 150ms ease;
 }
 
 .reader-prose a:hover {
-  text-decoration-color: var(--primary);
+  text-decoration-color: var(--foreground);
 }
 
-/* Blockquotes. X threads nest them: one level per reply. */
+/* Blockquotes: 2px --border-strong left rule. X threads nest them: one level per reply. */
 .reader-prose blockquote {
-  border-left: 3px solid var(--border);
+  border-left: 2px solid var(--border-strong);
   padding: 0.15rem 0 0.15rem 1.1rem;
   margin: 1.5rem 0;
 }
@@ -95,19 +97,19 @@
   margin-bottom: 0;
 }
 
-/* Code */
+/* Code: Geist Mono on bg-muted */
 .reader-prose code {
   font-family: var(--font-mono);
   font-size: 0.875em;
   background-color: var(--muted);
   padding: 0.15rem 0.4rem;
-  border-radius: 4px;
+  border-radius: 5px;
 }
 
 .reader-prose pre {
   background-color: var(--muted);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 1rem 1.25rem;
   margin: 1.5rem 0;
   overflow-x: auto;
@@ -144,7 +146,7 @@
   margin-bottom: 0.4rem;
 }
 
-/* Tables */
+/* Tables with hairlines */
 .reader-prose table {
   width: 100%;
   border-collapse: collapse;
@@ -161,7 +163,7 @@
 
 .reader-prose th {
   background-color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .reader-prose hr {
@@ -170,13 +172,13 @@
   margin: 2.5rem 0;
 }
 
-/* Images fill the column; the caption (an italic paragraph after the image) sits under it. */
+/* Images fill the column: radius 10px; the caption sits under it */
 .reader-prose img {
   display: block;
   width: 100%;
   max-width: 100%;
   height: auto;
-  border-radius: 6px;
+  border-radius: 10px;
   margin: 1.75rem 0 0.75rem;
 }
 
@@ -196,7 +198,7 @@
   font-weight: 600;
 }
 
-/* Footnotes: [76] markers in the text, the list at the end */
+/* Footnotes small: [76] markers in the text, the list at the end */
 .reader-prose .fn-ref {
   font-family: var(--font-sans);
   font-size: 0.7em;
@@ -244,24 +246,33 @@
   margin-bottom: 0;
 }
 
-/* Highlights: soft green from the accent token, a stronger bottom edge, readable in both themes. */
+/*
+ * Highlights render as --marker-soft with a slightly stronger bottom edge (like a real highlighter;
+ * in dark mode --marker-soft with light text).
+ */
 .reader-prose mark.reader-highlight {
-  background-color: color-mix(in srgb, var(--primary) 14%, var(--accent));
+  background-color: var(--marker-soft);
   color: inherit;
-  border-bottom: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  border-bottom: 2px solid var(--marker);
   border-radius: 2px;
   cursor: pointer;
   padding: 0;
 }
 
+.dark .reader-prose mark.reader-highlight {
+  background-color: var(--marker-soft);
+  color: var(--foreground);
+  border-bottom: 2px solid var(--marker);
+}
+
 .reader-prose mark.reader-highlight.is-current {
-  background-color: color-mix(in srgb, var(--primary) 30%, var(--accent));
-  border-bottom-color: var(--primary);
+  background-color: var(--marker);
+  border-bottom-color: var(--marker-strong);
 }
 
 .reader-prose mark.reader-highlight.is-flash,
 .reader-prose img.reader-image-highlight.is-flash {
-  background-color: color-mix(in srgb, var(--primary) 38%, var(--accent));
+  background-color: var(--marker-strong);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -271,16 +282,16 @@
 }
 
 .reader-prose img.reader-image-highlight {
-  outline: 3px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  outline: 3px solid var(--marker);
   outline-offset: 2px;
   cursor: pointer;
 }
 
 .reader-prose img.reader-image-highlight.is-current {
-  outline-color: var(--primary);
+  outline-color: var(--marker-strong);
 }
 
-/* Keyboard focus: a 2px bar of the primary colour to the left of the block (j / k). */
+/* Keyboard focus: a 2px ink bar in the left margin (j / k). */
 .reader-prose .reader-block-focus {
   position: relative;
   scroll-margin-block: 3rem;
@@ -294,7 +305,7 @@
   bottom: 0.15em;
   width: 2px;
   border-radius: 1px;
-  background-color: var(--primary);
+  background-color: var(--foreground);
 }
 
 .reader-prose li.reader-block-focus::before {
@@ -302,7 +313,7 @@
 }
 
 .reader-prose img.reader-block-focus {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--foreground);
   outline-offset: 4px;
 }
 
@@ -312,27 +323,29 @@
 }
 
 .reader-prose tr.reader-block-focus > :first-child {
-  box-shadow: inset 2px 0 0 var(--primary);
+  box-shadow: inset 2px 0 0 var(--foreground);
 }
 
-/* Find in this source (Mod+F) and the words a search found. These are not highlights: they use the
-   warning amber, are never saved, and go away when the find bar closes. */
+/*
+ * Find matches use --marker and the current match --marker-strong with --marker-strong-foreground text.
+ */
 .reader-prose mark.reader-find {
-  background-color: color-mix(in srgb, var(--warning) 26%, transparent);
-  color: inherit;
+  background-color: var(--marker);
+  color: var(--foreground);
   border-radius: 2px;
   padding: 0;
 }
 
 .reader-prose mark.reader-find.is-find-current {
-  background-color: color-mix(in srgb, var(--warning) 55%, transparent);
-  outline: 2px solid color-mix(in srgb, var(--warning) 70%, transparent);
+  background-color: var(--marker-strong);
+  color: var(--marker-strong-foreground);
+  outline: 2px solid var(--marker-strong);
   outline-offset: 0;
 }
 
 /* The paragraph a search landed on fades from a faint tint. */
 .reader-prose .reader-find-flash {
-  background-color: color-mix(in srgb, var(--warning) 12%, transparent);
+  background-color: var(--marker-soft);
   border-radius: 2px;
 }
 
@@ -344,7 +357,7 @@
 
 @keyframes reader-find-flash {
   from {
-    background-color: color-mix(in srgb, var(--warning) 28%, transparent);
+    background-color: var(--marker-soft);
   }
   to {
     background-color: transparent;

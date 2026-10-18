@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  AlertCircle,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -9,7 +10,6 @@ import {
   ExternalLink,
   FileText,
   Highlighter,
-  Loader2,
   Maximize2,
   Minimize2,
   PanelRight,
@@ -17,16 +17,18 @@ import {
   StickyNote,
   X,
 } from "lucide-react";
+import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
-import { getSourceKind } from "@/features/items/source-kinds";
-import { openUrl, cn } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SourceTile, getSourceKind, formatSavedDate } from "@/features/items/source-kinds";
+import { cn, openUrl } from "@/lib/utils";
 import { HighlightMenu } from "./HighlightMenu";
 import { HighlightsPanel } from "./HighlightsPanel";
 import { buildReaderHeader, calculateReadingTime } from "./reader-meta";
 import { useReaderContent } from "./use-reader-content";
-import type { ReaderFindController, ReaderTypography, ReaderViewProps } from "./types";
 import "./reader.css";
+import type { ReaderFindController, ReaderTypography, ReaderViewProps } from "./types";
 
 export { getReaderAuthor } from "./reader-meta";
 
@@ -45,117 +47,19 @@ function handleContentClick(event: React.MouseEvent<HTMLElement>) {
 
 const noBodyRef: React.RefObject<HTMLDivElement | null> = { current: null };
 
-function StatusMessage({
-  icon,
-  title,
-  detail,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  detail?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground font-sans">
-      {icon}
-      <p className="text-sm font-medium text-foreground">{title}</p>
-      {detail && <p className="mt-1 max-w-sm text-[13px] leading-[18px]">{detail}</p>}
-      {children && <div className="mt-4 flex items-center gap-2">{children}</div>}
-    </div>
-  );
-}
-
-function FindBar({ find }: { find: ReaderFindController }) {
-  const hasQuery = find.query.trim() !== "";
-  const label = !hasQuery
-    ? ""
-    : find.count === 0
-      ? "No matches"
-      : `${find.position} of ${find.count}`;
-  return (
-    <div
-      data-reader-ui
-      role="search"
-      className="absolute right-6 top-3 z-10 flex items-center gap-1 rounded-[10px] border border-border bg-card py-1 pl-3 pr-1 shadow-float font-sans"
-    >
-      <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <input
-        ref={find.inputRef}
-        value={find.query}
-        onChange={(event) => find.setQuery(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            if (event.shiftKey) find.previous();
-            else find.next();
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            find.closeBar();
-          }
-        }}
-        placeholder="Find in this source"
-        aria-label="Find in this source"
-        spellCheck={false}
-        className="h-7 w-48 bg-transparent px-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-      />
-      <span
-        aria-live="polite"
-        className="min-w-[4.5rem] text-right text-[13px] tabular-nums text-muted-foreground"
-      >
-        {label}
-      </span>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7"
-        onClick={find.previous}
-        disabled={find.count === 0}
-        title="Previous match (Shift+Enter)"
-        aria-label="Previous match"
-      >
-        <ChevronUp className="size-4" aria-hidden="true" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7"
-        onClick={find.next}
-        disabled={find.count === 0}
-        title="Next match (Enter)"
-        aria-label="Next match"
-      >
-        <ChevronDown className="size-4" aria-hidden="true" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-7"
-        onClick={find.closeBar}
-        title="Close find (Esc)"
-        aria-label="Close find"
-      >
-        <X className="size-4" aria-hidden="true" />
-      </Button>
-    </div>
-  );
-}
-
 export function ReaderView({
   item,
   state,
   onRetry,
   onClose,
-  className,
   scrollRef,
+  className,
   initialTypography = "serif",
   content,
   highlights,
   bodyRef,
   find,
 }: ReaderViewProps) {
-  const articleRef = React.useRef<HTMLElement | null>(null);
   const [typography, setTypography] = React.useState<ReaderTypography>(() => {
     try {
       const saved = localStorage.getItem("sourcefold:reader:typography");
@@ -164,9 +68,6 @@ export function ReaderView({
     return initialTypography;
   });
 
-  const [copied, setCopied] = React.useState(false);
-  const [isFullscreen, setIsFullscreen] = React.useState(false);
-
   const handleTypographyChange = (next: ReaderTypography) => {
     setTypography(next);
     try {
@@ -174,8 +75,10 @@ export function ReaderView({
     } catch {}
   };
 
+  const [copied, setCopied] = React.useState(false);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+
   const kind = getSourceKind(item.kind);
-  const KindIcon = kind.Icon;
 
   const text = state.status === "ready" ? state.text : null;
   const own = useReaderContent(content ? null : text);
@@ -190,140 +93,158 @@ export function ReaderView({
   const readingTime = body ? calculateReadingTime(body) : null;
 
   const handleCopyMarkdown = async () => {
+    if (!body) return;
     try {
       await navigator.clipboard.writeText(body);
       setCopied(true);
       toast.success("Markdown copied to clipboard");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Failed to copy markdown");
+      toast.error("Failed to copy Markdown");
     }
   };
 
   const handleOpenSource = () => {
-    if (targetUrl) {
-      void openUrl(targetUrl);
-    }
+    if (!targetUrl) return;
+    void openUrl(targetUrl);
   };
+
+  const articleRef = React.useRef<HTMLElement | null>(null);
+
+  const savedDate = header.dateLabel || formatSavedDate(item.created_at);
 
   const openInBrowserButton = targetUrl ? (
     <Button variant="outline" size="sm" onClick={handleOpenSource}>
-      <ExternalLink className="size-3.5" aria-hidden="true" />
-      <span>Open in browser</span>
+      <ExternalLink className="size-3.5 mr-1.5" aria-hidden="true" />
+      Open original
     </Button>
   ) : null;
 
-  const metaParts = [
-    header.author,
-    header.publication,
-    header.dateLabel,
-    header.domain,
-    readingTime,
-  ].filter((part): part is string => Boolean(part));
-
   return (
-    <div className={cn("flex h-full w-full flex-col bg-background text-foreground", className)}>
-      {/* Sticky Reader Toolbar */}
+    <div
+      className={cn(
+        "@container/reader flex h-full w-full flex-col bg-background text-foreground select-none",
+        className,
+      )}
+    >
+      {/*
+        Toolbar (52px, drag region on macOS: data-tauri-drag-region, and 78px left padding
+        under .platform-mac since the traffic lights sit there): close (X, Esc), the source
+        tile and source name, "3 of 24" with prev/next buttons ([/]), then right: find,
+        highlighter toggle, typography, panel toggle, Open original.
+      */}
       <header
         data-reader-ui
-        className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/80 select-none"
+        data-tauri-drag-region
+        className="sticky top-0 z-20 flex h-[52px] shrink-0 items-center justify-between border-b border-border bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 select-none [.platform-mac_&]:pl-[78px]"
       >
-        <div className="flex items-center gap-2 overflow-hidden mr-4">
-          <span
-            className="inline-flex shrink-0 items-center gap-1 rounded-[4px] px-2 py-0.5 text-xs font-medium"
-            style={{
-              color: kind.colorVar,
-              backgroundColor: `color-mix(in srgb, ${kind.colorVar} 12%, transparent)`,
-              border: `1px solid color-mix(in srgb, ${kind.colorVar} 30%, transparent)`,
-            }}
-          >
-            <KindIcon className="size-3" aria-hidden="true" />
-            <span>{kind.name}</span>
-          </span>
+        {/* Left: Close button, Source Tile, Source name, "3 of 24" with prev/next */}
+        <div className="flex items-center gap-2 overflow-hidden mr-3">
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              title="Close reader (Esc)"
+              aria-label="Close reader"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" aria-hidden="true" />
+            </Button>
+          )}
 
-          <span className="truncate text-xs font-medium text-muted-foreground" title={item.title}>
+          <SourceTile kind={item.kind} className="size-7 rounded-[7px] shrink-0" />
+
+          <span
+            className="truncate text-[13px] font-medium text-foreground max-w-[280px]"
+            title={item.title}
+          >
             {item.title}
           </span>
 
           {highlights?.position && highlights.position.total > 1 && (
-            <span className="shrink-0 font-sans text-xs tabular-nums text-muted-foreground">
-              {highlights.position.index} of {highlights.position.total}
-            </span>
+            <div className="flex items-center gap-1 pl-1">
+              <span className="shrink-0 font-sans text-xs tabular-nums text-muted-foreground">
+                {highlights.position.index} of {highlights.position.total}
+              </span>
+              <div className="flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => highlights.navigate(-1)}
+                  disabled={highlights.position.index <= 1}
+                  title="Previous source ([)"
+                  aria-label="Previous source"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => highlights.navigate(1)}
+                  disabled={highlights.position.index >= highlights.position.total}
+                  title="Next source (])"
+                  aria-label="Next source"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronRight className="size-4" aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
           )}
         </div>
 
-        {/* Action Controls */}
+        {/* Right: find, highlighter toggle, typography, panel toggle, copy markdown, open original, full width */}
         <div className="flex items-center gap-1 shrink-0">
-          {highlights?.position && highlights.position.total > 1 && (
-            <div className="mr-1 flex items-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => highlights.navigate(-1)}
-                disabled={highlights.position.index <= 1}
-                title="Previous source ([)"
-                aria-label="Previous source"
-              >
-                <ChevronLeft className="size-4" aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => highlights.navigate(1)}
-                disabled={highlights.position.index >= highlights.position.total}
-                title="Next source (])"
-                aria-label="Next source"
-              >
-                <ChevronRight className="size-4" aria-hidden="true" />
-              </Button>
-            </div>
+          {find && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => (find.barOpen ? find.closeBar() : find.openBar())}
+              aria-pressed={find.barOpen}
+              title="Find in this source (Mod+F)"
+              aria-label="Find in this source"
+              className={cn(
+                "text-muted-foreground hover:text-foreground",
+                find.barOpen && "bg-accent text-accent-foreground",
+              )}
+            >
+              <Search className="size-4" aria-hidden="true" />
+            </Button>
           )}
 
           {highlights && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => highlights.setAutoHighlight(!highlights.autoHighlight)}
-                aria-pressed={highlights.autoHighlight}
-                aria-label="Highlight when I select text"
-                title={
-                  highlights.autoHighlight
-                    ? "Selecting text highlights it. Hold Alt to select only. Click to turn off."
-                    : "Selecting text does not highlight. Press h to highlight. Click to turn on."
-                }
-                className={cn(highlights.autoHighlight && "bg-accent text-accent-foreground")}
-              >
-                <Highlighter className="size-4" aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={highlights.togglePanel}
-                aria-pressed={highlights.panelOpen}
-                aria-label={`Highlights panel, ${highlights.highlights.length} highlights`}
-                title="Highlights panel (Shift+H)"
-                className={cn(
-                  "mr-1 h-8 gap-1.5 px-2 text-xs",
-                  highlights.panelOpen && "bg-accent text-accent-foreground",
-                )}
-              >
-                <PanelRight className="size-3.5" aria-hidden="true" />
-                <span className="tabular-nums">{highlights.highlights.length}</span>
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => highlights.setAutoHighlight(!highlights.autoHighlight)}
+              aria-pressed={highlights.autoHighlight}
+              aria-label="Highlight when I select text"
+              title={
+                highlights.autoHighlight
+                  ? "Selecting text highlights it. Hold Alt to select only. Click to turn off."
+                  : "Selecting text does not highlight. Press h to highlight. Click to turn on."
+              }
+              className={cn(
+                "text-muted-foreground hover:text-foreground",
+                highlights.autoHighlight && "bg-accent text-accent-foreground",
+              )}
+            >
+              <Highlighter className="size-4" aria-hidden="true" />
+            </Button>
           )}
 
           {/* Typography toggle */}
-          <div className="flex items-center rounded-md border border-border bg-muted/40 p-0.5 mr-2">
+          <div className="flex items-center rounded-[8px] border border-border bg-muted/60 p-0.5">
             <button
               type="button"
               onClick={() => handleTypographyChange("serif")}
               title="Serif font"
               className={cn(
-                "rounded px-2 py-1 font-serif text-xs font-semibold transition-colors cursor-pointer",
+                "rounded-[6px] px-2 py-0.5 font-serif text-xs font-medium transition-colors cursor-pointer",
                 typography === "serif"
-                  ? "bg-background text-foreground shadow-xs"
+                  ? "bg-background text-foreground shadow-raised"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -334,9 +255,9 @@ export function ReaderView({
               onClick={() => handleTypographyChange("sans")}
               title="Sans-serif font"
               className={cn(
-                "rounded px-2 py-1 font-sans text-xs font-semibold transition-colors cursor-pointer",
+                "rounded-[6px] px-2 py-0.5 font-sans text-xs font-medium transition-colors cursor-pointer",
                 typography === "sans"
-                  ? "bg-background text-foreground shadow-xs"
+                  ? "bg-background text-foreground shadow-raised"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -344,25 +265,42 @@ export function ReaderView({
             </button>
           </div>
 
-          {/* Copy markdown (the body, without the front matter) */}
+          {highlights && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={highlights.togglePanel}
+              aria-pressed={highlights.panelOpen}
+              aria-label={`Highlights panel, ${highlights.highlights.length} highlights`}
+              title="Highlights panel (Shift+H)"
+              className={cn(
+                "relative text-muted-foreground hover:text-foreground",
+                highlights.panelOpen && "bg-accent text-accent-foreground",
+              )}
+            >
+              <PanelRight className="size-4" aria-hidden="true" />
+              {highlights.highlights.length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-semibold tabular-nums text-foreground border border-border shadow-raised">
+                  {highlights.highlights.length}
+                </span>
+              )}
+            </Button>
+          )}
+
+          {/* Copy Markdown */}
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={handleCopyMarkdown}
             disabled={!body}
-            className="h-8 gap-1.5 px-2 text-xs"
             title="Copy Markdown"
+            aria-label="Copy Markdown"
+            className="text-muted-foreground hover:text-foreground"
           >
             {copied ? (
-              <>
-                <Check className="size-3.5 text-primary" />
-                <span className="hidden sm:inline text-primary">Copied</span>
-              </>
+              <Check className="size-4 text-primary" aria-hidden="true" />
             ) : (
-              <>
-                <Copy className="size-3.5" />
-                <span className="hidden sm:inline">Copy markdown</span>
-              </>
+              <Copy className="size-4" aria-hidden="true" />
             )}
           </Button>
 
@@ -370,91 +308,84 @@ export function ReaderView({
           {targetUrl && (
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={handleOpenSource}
-              className="h-8 gap-1.5 px-2 text-xs"
               title="Open in browser (o)"
+              aria-label="Open in browser"
+              className="text-muted-foreground hover:text-foreground"
             >
-              <ExternalLink className="size-3.5" />
-              <span className="hidden sm:inline">Open in browser</span>
-              <kbd className="hidden lg:inline text-[9px] opacity-60">o</kbd>
+              <ExternalLink className="size-4" aria-hidden="true" />
             </Button>
           )}
 
-          {/* Fullscreen toggle */}
+          {/* Full width toggle */}
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={() => setIsFullscreen((prev) => !prev)}
-            className="h-8 px-2 text-xs"
             title={isFullscreen ? "Exit full width" : "Full width"}
             aria-label={isFullscreen ? "Exit full width" : "Full width"}
+            className="text-muted-foreground hover:text-foreground"
           >
-            {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+            {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
           </Button>
-
-          {/* Close button */}
-          {onClose && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="h-8 px-2 text-xs ml-1"
-              title="Close reader (Esc)"
-              aria-label="Close reader"
-            >
-              <X className="size-4" />
-            </Button>
-          )}
         </div>
       </header>
 
       {/* Reader Body / Scroll Area, with the highlights panel beside it */}
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div className="relative min-w-0 flex-1">
           {find?.barOpen && <FindBar find={find} />}
           <div
             ref={scrollRef}
             tabIndex={0}
-            className="h-full w-full overflow-y-auto px-6 py-10 outline-none focus:ring-0 focus-visible:outline-none"
+            className="h-full w-full overflow-y-auto px-6 py-10 outline-none focus:ring-0 focus-visible:outline-none select-text"
           >
             <article
               ref={articleRef}
               className={cn(
                 "relative mx-auto transition-all",
-                isFullscreen ? "max-w-4xl" : "max-w-[700px]",
+                isFullscreen ? "max-w-4xl" : "max-w-[66ch]",
                 typography === "serif" ? "font-serif" : "font-sans",
               )}
             >
-              {/* Article Header Metadata */}
-              <header className="mb-8 border-b border-border/60 pb-6">
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl leading-tight">
+              {/* Title block: source tile + source name + date in muted, then the title in Newsreader 40/46 weight 500 */}
+              <header className="mb-8 border-b border-border pb-6 select-none">
+                <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground font-sans">
+                  <SourceTile kind={item.kind} className="size-6 rounded-[6px] shrink-0" />
+                  <span className="font-medium text-foreground">{kind.name}</span>
+                  {savedDate && (
+                    <>
+                      <span>,</span>
+                      <span>{savedDate}</span>
+                    </>
+                  )}
+                  {header.author && (
+                    <>
+                      <span>,</span>
+                      <span>{header.author}</span>
+                    </>
+                  )}
+                  {readingTime && (
+                    <>
+                      <span>,</span>
+                      <span>{readingTime}</span>
+                    </>
+                  )}
+                </div>
+
+                <h1 className="font-serif text-[40px] font-medium leading-[46px] tracking-[-0.02em] text-foreground">
                   {item.title}
                 </h1>
 
                 {header.subtitle && (
-                  <p className="mt-3 text-lg italic leading-snug text-muted-foreground">
+                  <p className="mt-3 font-serif text-lg italic leading-snug text-muted-foreground">
                     {header.subtitle}
                   </p>
                 )}
 
-                {metaParts.length > 0 && (
-                  <div className="mt-4 flex flex-wrap items-center gap-y-1.5 gap-x-2 text-[13px] text-muted-foreground font-sans">
-                    {metaParts.map((part, index) => (
-                      <React.Fragment key={`${index}-${part}`}>
-                        {index > 0 && <span aria-hidden="true">·</span>}
-                        <span
-                          className={index === 0 && part === header.author ? "text-foreground" : ""}
-                        >
-                          {part}
-                        </span>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                )}
-
                 {targetUrl && (
-                  <div className="mt-2 text-xs text-muted-foreground truncate font-sans">
+                  <div className="mt-3 truncate text-xs text-muted-foreground font-sans">
                     <a
                       href={targetUrl}
                       onClick={(event) => {
@@ -469,33 +400,57 @@ export function ReaderView({
                 )}
               </header>
 
+              {/* Loading state: .skeleton lines shaped like a title and paragraphs */}
               {state.status === "loading" && (
-                <StatusMessage
-                  icon={
-                    <Loader2
-                      className="mb-3 size-8 stroke-[1.4] opacity-60 motion-safe:animate-spin"
-                      aria-hidden="true"
-                    />
-                  }
-                  title="Loading"
-                />
+                <div
+                  className="py-6 space-y-8 select-none"
+                  aria-busy="true"
+                  aria-label="Loading source"
+                >
+                  <div className="space-y-3">
+                    <div className="skeleton h-5 w-48" />
+                    <div className="skeleton h-10 w-4/5" />
+                    <div className="skeleton h-4 w-1/3" />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="skeleton h-4 w-full" />
+                    <div className="skeleton h-4 w-full" />
+                    <div className="skeleton h-4 w-5/6" />
+                    <div className="skeleton h-4 w-3/4" />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="skeleton h-4 w-full" />
+                    <div className="skeleton h-4 w-11/12" />
+                    <div className="skeleton h-4 w-4/5" />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="skeleton h-4 w-full" />
+                    <div className="skeleton h-4 w-full" />
+                    <div className="skeleton h-4 w-2/3" />
+                  </div>
+                </div>
               )}
 
+              {/* Error state: EmptyState compact with the error and a Retry button */}
               {state.status === "error" && (
-                <StatusMessage
-                  icon={
-                    <FileText className="mb-3 size-10 stroke-[1.2] opacity-40" aria-hidden="true" />
-                  }
-                  title="Couldn't load this source"
-                  detail={state.message}
-                >
-                  {onRetry && (
-                    <Button variant="outline" size="sm" onClick={onRetry}>
-                      Try again
-                    </Button>
-                  )}
-                  {openInBrowserButton}
-                </StatusMessage>
+                <div className="py-12 select-none">
+                  <EmptyState
+                    compact
+                    icon={AlertCircle}
+                    title="Couldn't load this source"
+                    description={state.message}
+                    actions={
+                      <div className="flex items-center gap-2">
+                        {onRetry && (
+                          <Button variant="outline" size="sm" onClick={onRetry}>
+                            Try again
+                          </Button>
+                        )}
+                        {openInBrowserButton}
+                      </div>
+                    }
+                  />
+                </div>
               )}
 
               {state.status === "ready" && (
@@ -516,27 +471,26 @@ export function ReaderView({
                     />
                   ) : (
                     !noteHtml && (
-                      <StatusMessage
-                        icon={
-                          <FileText
-                            className="mb-3 size-10 stroke-[1.2] opacity-40"
-                            aria-hidden="true"
-                          />
-                        }
-                        title="No saved text"
-                        detail={targetUrl ? "Open the original page in your browser." : undefined}
-                      >
-                        {openInBrowserButton}
-                      </StatusMessage>
+                      <div className="py-12 select-none">
+                        <EmptyState
+                          compact
+                          icon={FileText}
+                          title="No saved text"
+                          description={
+                            targetUrl ? "Open the original page in your browser." : undefined
+                          }
+                          actions={openInBrowserButton}
+                        />
+                      </div>
                     )
                   )}
 
                   {noteHtml && (
                     <section
                       aria-label="My note"
-                      className="mt-10 rounded-[6px] border border-border bg-muted/40 p-5 font-sans"
+                      className="mt-10 rounded-[10px] border border-border bg-muted/40 p-5 font-sans"
                     >
-                      <div className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+                      <div className="mb-2 flex items-center gap-1.5 text-[13px] font-medium text-foreground">
                         <StickyNote className="size-3.5" aria-hidden="true" />
                         <span>My note</span>
                       </div>
@@ -565,10 +519,95 @@ export function ReaderView({
           </div>
         </div>
 
-        {highlights?.panelOpen && (
-          <HighlightsPanel item={item} itemUrl={targetUrl} controller={highlights} />
-        )}
+        {/* Highlights panel: slides in from right; overlays body on <900px */}
+        <AnimatePresence>
+          {highlights?.panelOpen && (
+            <HighlightsPanel item={item} itemUrl={targetUrl} controller={highlights} />
+          )}
+        </AnimatePresence>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Floating find pill under the toolbar, right-aligned: input, "3 of 17", up/down, close.
+ */
+function FindBar({ find }: { find: ReaderFindController }) {
+  const hasQuery = find.query.trim() !== "";
+  const label = !hasQuery
+    ? ""
+    : find.count === 0
+      ? "No matches"
+      : `${find.position} of ${find.count}`;
+
+  return (
+    <div
+      data-reader-ui
+      role="search"
+      className="animate-pop-in absolute right-6 top-3 z-30 flex items-center gap-1 rounded-full border border-border bg-card py-1 pl-3.5 pr-1.5 shadow-float font-sans select-none"
+    >
+      <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <input
+        ref={find.inputRef}
+        value={find.query}
+        onChange={(event) => find.setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            if (event.shiftKey) find.previous();
+            else find.next();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            find.closeBar();
+          }
+        }}
+        placeholder="Find in this source"
+        aria-label="Find in this source"
+        spellCheck={false}
+        className="h-7 w-48 bg-transparent px-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+      />
+      {label && (
+        <span
+          aria-live="polite"
+          className="min-w-[4rem] text-right text-[12.5px] tabular-nums text-muted-foreground"
+        >
+          {label}
+        </span>
+      )}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={find.previous}
+        disabled={find.count === 0}
+        title="Previous match (Shift+Enter)"
+        aria-label="Previous match"
+        className="text-muted-foreground hover:text-foreground"
+      >
+        <ChevronUp className="size-4" aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={find.next}
+        disabled={find.count === 0}
+        title="Next match (Enter)"
+        aria-label="Next match"
+        className="text-muted-foreground hover:text-foreground"
+      >
+        <ChevronDown className="size-4" aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={find.closeBar}
+        title="Close find (Esc)"
+        aria-label="Close find"
+        className="text-muted-foreground hover:text-foreground"
+      >
+        <X className="size-4" aria-hidden="true" />
+      </Button>
     </div>
   );
 }

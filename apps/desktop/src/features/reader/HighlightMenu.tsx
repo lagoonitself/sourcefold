@@ -1,7 +1,9 @@
 import * as React from "react";
 import { Copy, StickyNote, Trash2 } from "lucide-react";
 import type { Highlight } from "@sourcefold/core";
-import { openUrl } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { Kbd } from "@/components/ui/Kbd";
+import { cn, openUrl } from "@/lib/utils";
 import { elementsForHighlight } from "./dom-anchoring";
 import { domainOf } from "./extract";
 import { NoteEditor } from "./NoteEditor";
@@ -71,24 +73,24 @@ export function HighlightMenu({
       aria-label="Highlight"
       data-reader-ui
       style={{ top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? "visible" : "hidden" }}
-      className="absolute z-30 w-[340px] max-w-full rounded-[10px] border border-border bg-background p-1.5 font-sans shadow-float"
+      className="animate-pop-in absolute z-30 w-[340px] max-w-full rounded-[12px] border border-border bg-popover p-1.5 font-sans shadow-float text-popover-foreground select-none"
     >
       <div className="flex items-center gap-0.5">
         <MenuButton
           label="Note"
           hint="n"
-          icon={<StickyNote className="size-3.5" aria-hidden="true" />}
+          icon={<StickyNote className="size-3.5 text-muted-foreground" aria-hidden="true" />}
           onClick={() => controller.openMenu(highlight.id, true)}
         />
         <MenuButton
           label="Copy with source"
           hint="c"
-          icon={<Copy className="size-3.5" aria-hidden="true" />}
+          icon={<Copy className="size-3.5 text-muted-foreground" aria-hidden="true" />}
           onClick={() => copyHighlight(highlight.id)}
         />
         <MenuButton
           label="Delete"
-          hint="Backspace"
+          hint="⌫"
           icon={<Trash2 className="size-3.5" aria-hidden="true" />}
           onClick={() => removeHighlight(highlight.id)}
           danger
@@ -104,7 +106,7 @@ export function HighlightMenu({
         />
       ) : (
         highlight.note && (
-          <p className="mt-1.5 whitespace-pre-wrap px-2 text-[13px] leading-[18px] text-foreground">
+          <p className="mt-1.5 whitespace-pre-wrap rounded-[6px] bg-muted/40 p-2 text-[12.5px] leading-[17px] text-foreground">
             {highlight.note}
           </p>
         )
@@ -112,7 +114,7 @@ export function HighlightMenu({
 
       {highlight.cited.length > 0 && (
         <div className="mt-1.5 border-t border-border px-1 pt-1.5">
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[12px] font-medium leading-4 text-muted-foreground">Cited:</span>
             {highlight.cited.map((c) => (
               <button
@@ -120,7 +122,7 @@ export function HighlightMenu({
                 type="button"
                 onClick={() => void openUrl(c.url)}
                 title={c.title ?? c.url}
-                className="max-w-[140px] cursor-pointer truncate rounded-[4px] border border-border bg-muted px-1.5 py-0.5 text-[12px] leading-4 text-foreground hover:bg-accent"
+                className="max-w-[140px] cursor-pointer truncate rounded-[6px] border border-border bg-muted px-2 py-0.5 text-[12px] leading-4 text-foreground transition-colors hover:bg-accent"
               >
                 {domainOf(c.url)}
               </button>
@@ -128,15 +130,18 @@ export function HighlightMenu({
           </div>
           {controller.canSaveLinks &&
             (unsaved.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => saveLinks(unsaved.map((c) => c.url))}
-                className="mt-1.5 cursor-pointer rounded-[6px] px-1.5 py-1 text-[13px] font-medium text-primary hover:bg-accent"
-              >
-                Save to group
-              </button>
+              <div className="mt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => saveLinks(unsaved.map((c) => c.url))}
+                  className="text-xs"
+                >
+                  Save to group
+                </Button>
+              </div>
             ) : (
-              <p className="mt-1.5 px-1.5 text-[12px] leading-4 text-muted-foreground">
+              <p className="mt-1.5 px-1 text-[12px] leading-4 text-muted-foreground">
                 Saved in this group
               </p>
             ))}
@@ -164,13 +169,14 @@ function MenuButton({
       type="button"
       onClick={onClick}
       title={`${label} (${hint})`}
-      className={
-        "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[6px] px-2 text-[13px] font-medium hover:bg-muted " +
-        (danger ? "text-destructive" : "text-foreground")
-      }
+      className={cn(
+        "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[8px] px-2 text-[13px] font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
+        danger ? "text-destructive hover:bg-destructive/10" : "text-foreground",
+      )}
     >
       {icon}
       <span>{label}</span>
+      <Kbd className="ml-0.5">{hint}</Kbd>
     </button>
   );
 }

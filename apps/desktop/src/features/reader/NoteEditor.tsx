@@ -1,5 +1,6 @@
 import * as React from "react";
 import { HIGHLIGHT_LIMITS } from "@sourcefold/core";
+import { Kbd } from "@/components/ui/Kbd";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,7 +29,7 @@ export function NoteEditor({
   }, []);
 
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
+    <div className={cn("flex flex-col gap-1.5", className)}>
       <textarea
         ref={ref}
         value={value}
@@ -48,11 +49,18 @@ export function NoteEditor({
             onCancel();
           }
         }}
-        className="w-full resize-none rounded-[6px] border border-input bg-background px-2 py-1.5 font-sans text-[13px] leading-[18px] text-foreground placeholder:text-muted-foreground"
+        className="w-full resize-none rounded-[8px] border border-input bg-background p-2.5 font-sans text-[13px] leading-[18px] text-foreground placeholder:text-muted-foreground transition-colors focus-visible:outline-2 focus-visible:outline-ring"
       />
-      <span className="font-sans text-[12px] leading-4 text-muted-foreground">
-        Enter saves, Shift+Enter adds a line, Esc cancels
-      </span>
+      <div className="flex flex-wrap items-center gap-1 font-sans text-[12px] leading-4 text-muted-foreground">
+        <Kbd>Enter</Kbd>
+        <span>saves,</span>
+        <Kbd>Shift</Kbd>
+        <span className="-mx-0.5">+</span>
+        <Kbd>Enter</Kbd>
+        <span>adds a line,</span>
+        <Kbd>Esc</Kbd>
+        <span>cancels</span>
+      </div>
     </div>
   );
 }

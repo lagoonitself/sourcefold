@@ -1,7 +1,8 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { loadReaderText } from "@/lib/api";
+import { AnimatePresence, motion } from "motion/react";
 import { registerModalLayer } from "@/components/ui/Dialog";
+import { loadReaderText } from "@/lib/api";
 import { errorMessage, openUrl } from "@/lib/utils";
 import { ReaderView } from "./ReaderView";
 import type { ReaderLoadState, ReaderModalProps } from "./types";
@@ -16,6 +17,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable;
 }
 
+/**
+ * Full-sheet reader modal for a single source.
+ * Opens as a full-window sheet over the app: the desk shows as an 8px frame (like the main sheet),
+ * and the sheet rises in (y 16px -> 0, opacity, 320ms spring).
+ * Close reverses quickly via motion AnimatePresence.
+ */
 export function ReaderModal({
   item,
   open,
@@ -39,6 +46,13 @@ export function ReaderModal({
   const itemRef = React.useRef(item);
   itemRef.current = item;
   const itemId = item?.id ?? null;
+
+  // Preserve the last non-null item so exit animation can render cleanly without null pointer issues
+  const [displayItem, setDisplayItem] = React.useState(item);
+  if (item && item !== displayItem) {
+    setDisplayItem(item);
+  }
+  const currentItem = item ?? displayItem;
 
   React.useEffect(() => {
     if (!open || !itemId) return;
@@ -70,6 +84,7 @@ export function ReaderModal({
   }, [open]);
 
   const content = useReaderContent(state.status === "ready" ? state.text : null);
+
   const highlights = useReaderHighlights({
     item,
     open,
@@ -82,8 +97,7 @@ export function ReaderModal({
     onSaveLinks,
     onHighlightsChanged,
   });
-  const highlightsRef = React.useRef(highlights);
-  highlightsRef.current = highlights;
+
   const find = useReaderFind({
     open,
     itemId,
@@ -94,13 +108,19 @@ export function ReaderModal({
     scrollRef,
     initialSearch,
   });
+
+  const handleClose = React.useCallback(() => {
+    onClose?.();
+    onOpenChange(false);
+  }, [onClose, onOpenChange]);
+
+  // Keep latest handlers in refs for the global key listener
+  const highlightsRef = React.useRef(highlights);
+  highlightsRef.current = highlights;
   const findRef = React.useRef(find);
   findRef.current = find;
 
-  const handleClose = React.useCallback(() => {
-    onOpenChange(false);
-    onClose?.();
-  }, [onOpenChange, onClose]);
+  const isShown = open && item !== null;
 
   // Focus the scroll container when the modal opens so j/k/Space shortcuts work immediately
   React.useEffect(() => {
@@ -112,7 +132,7 @@ export function ReaderModal({
     }
   }, [open, itemId, state.status]);
 
-  const isShown = open && item !== null;
+  // Register on the modal stack so overlays (search, command palette) pause background actions
   React.useEffect(() => {
     if (!isShown) return;
     return registerModalLayer();
@@ -125,11 +145,12 @@ export function ReaderModal({
   // - ArrowDown / ArrowUp: scroll
   // - Space / Shift+Space: page down / page up
   React.useEffect(() => {
-    if (!open || !item) return;
+    if (!isShown) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
+        e.stopPropagation();
         findRef.current.openBar();
         return;
       }
@@ -138,9 +159,13 @@ export function ReaderModal({
 
       if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         if (highlightsRef.current.handleEscape()) return;
-        if (findRef.current.barOpen) findRef.current.closeBar();
-        else handleClose();
+        if (findRef.current.barOpen) {
+          findRef.current.closeBar();
+          return;
+        }
+        handleClose();
         return;
       }
 
@@ -162,61 +187,80 @@ export function ReaderModal({
       if (e.target instanceof HTMLButtonElement && (e.key === " " || e.key === "Enter")) return;
 
       if (e.key === "o" || e.key === "O") {
-        const url = item.source_url || item.canonical_url;
+        const url = itemRef.current?.source_url || itemRef.current?.canonical_url;
         if (url) {
           e.preventDefault();
           void openUrl(url);
+          return;
         }
-        return;
       }
+
+      const scroller = scrollRef.current;
+      if (!scroller) return;
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        scrollRef.current?.scrollBy({ top: 160, behavior: "smooth" });
+        scroller.scrollBy({ top: 80, behavior: "smooth" });
         return;
       }
 
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        scrollRef.current?.scrollBy({ top: -160, behavior: "smooth" });
+        scroller.scrollBy({ top: -80, behavior: "smooth" });
         return;
       }
 
       if (e.key === " ") {
         e.preventDefault();
-        const delta = e.shiftKey ? -350 : 350;
-        scrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
+        const delta = (scroller.clientHeight - 80) * (e.shiftKey ? -1 : 1);
+        scroller.scrollBy({ top: delta, behavior: "smooth" });
         return;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, item, handleClose]);
-
-  if (!open || !item) return null;
+  }, [isShown, handleClose]);
 
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Reader: ${item.title}`}
-      className="fixed inset-0 z-50 flex flex-col bg-background animate-in fade-in duration-150"
-    >
-      <ReaderView
-        item={item}
-        state={state}
-        onRetry={() => setAttempt((n) => n + 1)}
-        onClose={handleClose}
-        scrollRef={scrollRef}
-        className={className}
-        initialTypography={initialTypography}
-        content={content}
-        highlights={highlights}
-        bodyRef={bodyRef}
-        find={find}
-      />
-    </div>,
+    <AnimatePresence>
+      {isShown && currentItem && (
+        <motion.div
+          key="reader-desk-backdrop"
+          className="desk-grain fixed inset-0 z-50 flex flex-col p-2 select-none bg-desk"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.12, ease: [0.16, 1, 0.3, 1] } }}
+          transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <motion.div
+            key="reader-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Reader: ${currentItem.title}`}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8, transition: { duration: 0.12, ease: [0.16, 1, 0.3, 1] } }}
+            transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
+            className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] bg-background text-foreground shadow-sheet"
+          >
+            <ReaderView
+              item={currentItem}
+              state={state}
+              onRetry={() => setAttempt((n) => n + 1)}
+              onClose={handleClose}
+              scrollRef={scrollRef}
+              className={className}
+              initialTypography={initialTypography}
+              content={content}
+              highlights={highlights}
+              bodyRef={bodyRef}
+              find={find}
+            />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   );
 }

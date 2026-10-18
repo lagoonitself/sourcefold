@@ -102,3 +102,16 @@ Files: `src/features/settings/SettingsDialog.tsx`, `src/features/search/SearchSe
 - SearchSettings / LocalCopySettings / SubstackCookieSettings: fit the row layout above; progress bars thin (4px) ink on `bg-muted`; status lines muted with an icon.
 - KeyboardShortcutsDialog: 720px, a search field at the top only if it exists already; groups in two columns at ≥ 720px window width (one below), group titles 12px/500 muted, rows: description left, keys right as `Kbd`s (one `Kbd` per key, joined by a thin space).
 - NoteDialog, MoveItemDialog: primitives, Newsreader titles, textarea with the `Input` look (min 140px), move list rows per "Rows" with folder tiles and indent, the current folder muted with "Current".
+
+### G. Highlights tab
+
+Files: `src/features/highlights/HighlightsList.tsx`.
+
+- The same rows, toolbar and floating selection bar as package B's source list (DESIGN.md "Rows"): source tile (or the image thumbnail, radius 8px) on the left, the quote in Newsreader 16/24 with a `--marker-soft` background behind the text (like the reader's highlights, `box-decoration-break: clone`), up to three lines, then a muted line: timestamp button (ink, tabular, underline on hover), source title, cited label, note.
+- Loading: three `.skeleton` rows. Error: `EmptyState compact` with the message and "Try again". Empty: `EmptyState compact`, icon `Highlighter`, title "No highlights yet", description "Open a source with Enter and select text to highlight it."
+- Keep every key, selection rule, copy and delete behaviour, and `data-highlight-id`.
+
+## Status (2026-10-18)
+
+- Done: foundation, shell, icon, package F.
+- The first agents for A to E hit the Claude rate limit mid-way; their partial work is committed (`9f30339`). A later agent continuing a package should run `git diff f7c867b -- <file>` to see what was already done, then finish the package.

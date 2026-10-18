@@ -5,7 +5,6 @@ import {
   Check,
   ChevronDown,
   ChevronsUpDown,
-  FolderOpen,
   FolderPlus,
   Pencil,
   Trash2,
@@ -21,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
+import { Kbd } from "@/components/ui/Kbd";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +40,7 @@ export interface ProjectSwitcherProps {
   onRefresh: () => Promise<void>;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  folders?: Folder[];
 }
 
 export function ProjectSwitcher({
@@ -49,6 +50,7 @@ export function ProjectSwitcher({
   onRefresh,
   open,
   onOpenChange,
+  folders,
 }: ProjectSwitcherProps) {
   const [newProjectOpen, setNewProjectOpen] = React.useState(false);
   const [newProjectName, setNewProjectName] = React.useState("");
@@ -64,6 +66,10 @@ export function ProjectSwitcher({
 
   const currentProject =
     projects.find((p) => p.id === activeProjectId) || activeProjects[0] || null;
+
+  const groupCount = folders
+    ? folders.filter((f) => f.parent_id === currentProject?.id && !f.deleted_at).length
+    : null;
 
   const handleCreateProject = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -146,24 +152,40 @@ export function ProjectSwitcher({
       <DropdownMenu open={open} onOpenChange={onOpenChange}>
         <DropdownMenuTrigger
           title={`Switch project (${isMac ? "p / ⌘P" : "p / Ctrl+P"})`}
-          className="flex h-9 w-full items-center justify-between gap-2 rounded-[6px] border border-border bg-background px-3 py-1.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+          className={cn(
+            "group flex h-10 w-full cursor-pointer select-none items-center gap-2.5 rounded-[9px] px-2.5 text-left transition-colors duration-150 outline-none",
+            "hover:bg-sidebar-accent",
+            "aria-expanded:bg-sidebar-accent aria-expanded:shadow-raised",
+            open && "bg-sidebar-accent shadow-raised",
+          )}
         >
-          <div className="flex min-w-0 items-center gap-2">
-            <FolderOpen className="size-4 shrink-0 text-primary" />
-            <span className="truncate font-medium">
-              {currentProject ? currentProject.name : "Select Project"}
+          {/* 24px ink tile with project's first letter */}
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-[6px] bg-foreground font-serif text-[13px] font-medium leading-none text-background shadow-raised">
+            {(currentProject?.name?.trim()[0] || "P").toUpperCase()}
+          </span>
+
+          {/* Project name and optional group count */}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13.5px] font-medium leading-4 text-foreground">
+              {currentProject ? currentProject.name : "Select project"}
             </span>
-          </div>
-          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+            {groupCount !== null && (
+              <span className="block truncate text-[11.5px] leading-4 text-muted-foreground">
+                {groupCount} {groupCount === 1 ? "group" : "groups"}
+              </span>
+            )}
+          </span>
+
+          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start" className="w-64 p-1.5">
-          <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center justify-between px-2.5 py-1 text-[12px] font-medium text-muted-foreground">
             <span>Projects</span>
-            <span className="text-[10px] font-mono lowercase">Alt+1…9</span>
+            <span className="font-mono text-[11px] text-muted-foreground">Alt+1…9</span>
           </div>
 
-          <div className="max-h-56 overflow-y-auto space-y-0.5">
+          <div className="max-h-56 space-y-0.5 overflow-y-auto">
             {activeProjects.map((project, idx) => {
               const isSelected = project.id === currentProject?.id;
               return (
@@ -171,18 +193,17 @@ export function ProjectSwitcher({
                   key={project.id}
                   onClick={() => onSelectProject(project.id)}
                   className={cn(
-                    "flex items-center justify-between gap-2 rounded-[4px] px-2 py-1.5 text-xs",
-                    isSelected && "bg-accent text-accent-foreground font-semibold",
+                    "flex items-center gap-2 rounded-[8px] px-2 py-1.5 text-[13px]",
+                    isSelected && "bg-accent font-medium text-accent-foreground",
                   )}
                 >
-                  <span className="truncate flex-1">{project.name}</span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {idx < 9 && (
-                      <kbd className="rounded border border-border bg-muted/60 px-1 py-0.2 font-mono text-[9px] text-muted-foreground">
-                        Alt+{idx + 1}
-                      </kbd>
-                    )}
-                    {isSelected && <Check className="size-3.5 text-primary" />}
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-foreground font-serif text-[11px] font-medium leading-none text-background">
+                    {(project.name.trim()[0] || "P").toUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                  <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                    {idx < 9 && <Kbd>Alt+{idx + 1}</Kbd>}
+                    {isSelected && <Check className="size-4 shrink-0 !text-foreground" />}
                   </div>
                 </DropdownMenuItem>
               );
@@ -194,51 +215,60 @@ export function ProjectSwitcher({
               <button
                 type="button"
                 onClick={() => setShowArchived(!showArchived)}
-                className="flex w-full items-center justify-between px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+                className="flex w-full cursor-pointer items-center justify-between rounded-[6px] px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <span>Archived ({archivedProjects.length})</span>
                 <ChevronDown
-                  className={cn("size-3 transition-transform", showArchived && "rotate-180")}
+                  className={cn(
+                    "size-3.5 transition-transform duration-150",
+                    showArchived && "rotate-180",
+                  )}
                 />
               </button>
               {showArchived && (
-                <div className="max-h-40 overflow-y-auto space-y-0.5 pt-0.5">
+                <div className="max-h-40 space-y-0.5 overflow-y-auto pt-0.5">
                   {archivedProjects.map((project) => {
                     const isSelected = project.id === currentProject?.id;
                     return (
                       <div
                         key={project.id}
                         className={cn(
-                          "flex items-center justify-between gap-2 rounded-[4px] px-2 py-1.5 text-xs text-muted-foreground",
-                          isSelected && "bg-accent text-accent-foreground font-semibold",
+                          "group flex items-center justify-between gap-2 rounded-[8px] px-2 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-muted",
+                          isSelected && "bg-accent font-medium text-accent-foreground",
                         )}
                       >
                         <button
                           type="button"
-                          className="truncate text-left flex-1 cursor-pointer hover:text-foreground"
+                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-left hover:text-foreground"
                           onClick={() => onSelectProject(project.id)}
                         >
-                          {project.name}
+                          <span className="flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-muted font-serif text-[11px] font-medium leading-none text-muted-foreground">
+                            {(project.name.trim()[0] || "P").toUpperCase()}
+                          </span>
+                          <span className="truncate">{project.name}</span>
                         </button>
-                        {isSelected && <Check className="size-3.5 shrink-0 text-primary" />}
-                        <button
-                          type="button"
-                          title="Restore project"
-                          className="shrink-0 rounded-[3px] p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              await archiveProject(project.id, false);
-                              toast.success(`Project "${project.name}" restored`);
-                              await onRefresh();
-                              if (!isSelected) onSelectProject(project.id);
-                            } catch (err: any) {
-                              toast.error(err?.message || "Failed to restore project");
-                            }
-                          }}
-                        >
-                          <ArchiveRestore className="size-3.5" />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {isSelected && <Check className="size-4 text-foreground" />}
+                          <button
+                            type="button"
+                            title="Restore project"
+                            aria-label={`Restore ${project.name}`}
+                            className="flex size-6 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await archiveProject(project.id, false);
+                                toast.success(`Project "${project.name}" restored`);
+                                await onRefresh();
+                                if (!isSelected) onSelectProject(project.id);
+                              } catch (err: any) {
+                                toast.error(err?.message || "Failed to restore project");
+                              }
+                            }}
+                          >
+                            <ArchiveRestore className="size-3.5" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -250,8 +280,8 @@ export function ProjectSwitcher({
           <DropdownMenuSeparator />
 
           <DropdownMenuItem onClick={() => setNewProjectOpen(true)}>
-            <FolderPlus className="mr-2 size-3.5" />
-            <span>New project...</span>
+            <FolderPlus className="size-4" />
+            <span>New project</span>
           </DropdownMenuItem>
 
           {currentProject && (
@@ -262,36 +292,29 @@ export function ProjectSwitcher({
                   setRenameOpen(true);
                 }}
               >
-                <Pencil className="mr-2 size-3.5" />
+                <Pencil className="size-4" />
                 <span>Rename project</span>
               </DropdownMenuItem>
 
-              <DropdownMenuItem
-                onClick={handleToggleArchive}
-                className="flex items-center justify-between"
-              >
-                <div className="flex items-center">
-                  {currentProject.archived_at ? (
-                    <>
-                      <ArchiveRestore className="mr-2 size-3.5" />
-                      <span>Unarchive project</span>
-                    </>
-                  ) : (
-                    <>
-                      <Archive className="mr-2 size-3.5" />
-                      <span>Archive project</span>
-                    </>
-                  )}
-                </div>
-                <kbd className="ml-2 rounded border border-border bg-muted/60 px-1 py-0.2 font-mono text-[9px] text-muted-foreground">
-                  {isMac ? "⌘⇧A" : "Ctrl+Shift+A"}
-                </kbd>
+              <DropdownMenuItem onClick={handleToggleArchive}>
+                {currentProject.archived_at ? (
+                  <>
+                    <ArchiveRestore className="size-4" />
+                    <span>Unarchive project</span>
+                  </>
+                ) : (
+                  <>
+                    <Archive className="size-4" />
+                    <span>Archive project</span>
+                  </>
+                )}
+                <Kbd>{isMac ? "⇧⌘A" : "Ctrl+Shift+A"}</Kbd>
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
               <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-                <Trash2 className="mr-2 size-3.5" />
+                <Trash2 className="size-4" />
                 <span>Delete project</span>
               </DropdownMenuItem>
             </>
@@ -341,6 +364,7 @@ export function ProjectSwitcher({
           <form onSubmit={handleRenameProject}>
             <DialogHeader>
               <DialogTitle>Rename project</DialogTitle>
+              <DialogDescription>Give this project a new name.</DialogDescription>
             </DialogHeader>
             <div className="py-2">
               <Input

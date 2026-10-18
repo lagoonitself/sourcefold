@@ -1,14 +1,5 @@
 import * as React from "react";
-import {
-  ChevronRight,
-  Folder as FolderIcon,
-  FolderOpen,
-  FolderPlus,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ChevronRight, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   DndContext,
   type DragEndEvent,
@@ -695,7 +686,7 @@ export function FolderTree({
             <DialogTitle>Delete group</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete &ldquo;{deleteTarget?.name}&rdquo;? Any subgroups and
-              saved items within it will also be deleted.
+              saved sources within it will also be deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -800,7 +791,7 @@ function TreeNodeItem({
     <div className="flex flex-col">
       {/* Drop Before Indicator */}
       {isDropTarget && dropPosition === "before" && (
-        <div className="h-0.5 w-full bg-primary my-0.5 rounded-full" />
+        <div className="my-0.5 h-0.5 w-full rounded-full bg-foreground" />
       )}
 
       <div
@@ -808,38 +799,51 @@ function TreeNodeItem({
         {...attributes}
         {...listeners}
         onClick={() => onSelect(node.id)}
-        style={{ paddingLeft: `${depth * 16 + 6}px` }}
+        style={{ paddingLeft: `${depth * 14 + 6}px` }}
         className={cn(
-          "group relative flex h-8 items-center gap-1.5 rounded-[4px] pr-2 text-xs font-medium cursor-pointer transition-colors",
-          isSelected
-            ? "bg-accent text-accent-foreground font-semibold"
-            : "text-foreground hover:bg-muted/70",
-          isFocusedRow && isFocusedRegion && "ring-2 ring-primary ring-inset",
-          isFocusedRow && !isFocusedRegion && "border-l-2 border-primary/50",
+          "group relative flex h-[30px] cursor-pointer items-center gap-1.5 rounded-[8px] pr-1.5 text-[13px] transition-colors duration-100",
+          !isSelected && "text-foreground hover:bg-sidebar-accent",
+          isFocusedRow && isFocusedRegion && !isSelected && "bg-sidebar-accent",
           isDragging && "opacity-40",
-          isDropTarget && dropPosition === "inside" && "ring-2 ring-primary ring-inset",
+          isDropTarget && dropPosition === "inside" && "bg-marker-soft",
         )}
       >
+        {/* Open group background pill (slides with layoutId) */}
+        {isSelected && (
+          <motion.div
+            layoutId="sidebar-active-group"
+            className="pointer-events-none absolute inset-0 rounded-[8px] bg-sidebar-accent shadow-raised"
+            transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+          />
+        )}
+
+        {/* Keyboard focus 2px ink bar on the left */}
+        {isFocusedRow && isFocusedRegion && (
+          <span
+            className="pointer-events-none absolute left-0.5 top-1.5 bottom-1.5 z-20 w-[2px] rounded-full bg-foreground"
+            aria-hidden="true"
+          />
+        )}
+
         {/* Expand / Collapse Chevron */}
         <button
           type="button"
           onClick={(e) => toggleExpand(node.id, e)}
           className={cn(
-            "flex size-4 shrink-0 items-center justify-center rounded-[2px] text-muted-foreground hover:text-foreground",
-            !hasChildren && "invisible",
+            "relative z-10 flex size-4 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground hover:text-foreground",
+            !hasChildren && "invisible pointer-events-none",
           )}
+          aria-label={isExpanded ? "Collapse group" : "Expand group"}
+          tabIndex={-1}
         >
-          <ChevronRight
-            className={cn("size-3.5 transition-transform duration-150", isExpanded && "rotate-90")}
-          />
+          <motion.div
+            animate={{ rotate: isExpanded ? 90 : 0 }}
+            transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+            className="flex items-center justify-center"
+          >
+            <ChevronRight className="size-3.5" />
+          </motion.div>
         </button>
-
-        {/* Folder Icon */}
-        {isExpanded ? (
-          <FolderOpen className="size-4 shrink-0 text-primary" />
-        ) : (
-          <FolderIcon className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
-        )}
 
         {/* Folder Name / Inline Rename Input */}
         {isInlineEditing ? (
@@ -860,55 +864,52 @@ function TreeNodeItem({
             }}
             onBlur={() => onInlineRenameSave(node.id)}
             onClick={(e) => e.stopPropagation()}
-            className="h-6 flex-1 rounded border border-primary bg-background px-1.5 text-xs text-foreground outline-none"
+            className="relative z-10 h-[26px] flex-1 rounded-[6px] border border-input bg-background px-2 text-[13px] text-foreground focus-visible:border-foreground/40 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--foreground)_10%,transparent)]"
           />
         ) : (
-          <span className="truncate flex-1 text-left">{node.name}</span>
+          <span className="relative z-10 min-w-0 flex-1 truncate text-left text-[13px] leading-none text-foreground">
+            {isSelected ? <span className="marker font-medium">{node.name}</span> : node.name}
+          </span>
         )}
 
         {/* Item count */}
         {node.itemCount > 0 && !isInlineEditing && (
-          <span className="text-[11px] tabular-nums text-muted-foreground shrink-0">
+          <span className="relative z-10 shrink-0 text-[12px] tabular-nums text-muted-foreground">
             {node.itemCount}
           </span>
         )}
 
         {/* Row Action Menu */}
         {!isInlineEditing && (
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="relative z-10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100">
             <DropdownMenu>
               <DropdownMenuTrigger
                 onClick={(e) => e.stopPropagation()}
-                className="flex size-6 items-center justify-center rounded-[3px] text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 outline-none cursor-pointer"
+                className="flex size-6 cursor-pointer items-center justify-center rounded-[6px] text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                aria-label="Group options"
               >
                 <MoreHorizontal className="size-3.5" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
                     onNewSubgroup(node);
                   }}
-                  className="flex items-center justify-between"
                 >
-                  <div className="flex items-center">
-                    <Plus className="mr-2 size-3.5" />
-                    <span>New subgroup</span>
-                  </div>
-                  <kbd className="text-[9px] font-mono text-muted-foreground">⇧N</kbd>
+                  <Plus className="size-3.5" />
+                  <span>New subgroup</span>
+                  <Kbd>⇧N</Kbd>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
                     onRename(node);
                   }}
-                  className="flex items-center justify-between"
                 >
-                  <div className="flex items-center">
-                    <Pencil className="mr-2 size-3.5" />
-                    <span>Rename</span>
-                  </div>
-                  <kbd className="text-[9px] font-mono text-muted-foreground">r / F2</kbd>
+                  <Pencil className="size-3.5" />
+                  <span>Rename</span>
+                  <Kbd>r</Kbd>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -917,15 +918,10 @@ function TreeNodeItem({
                     e.stopPropagation();
                     onDelete(node);
                   }}
-                  className="flex items-center justify-between"
                 >
-                  <div className="flex items-center">
-                    <Trash2 className="mr-2 size-3.5" />
-                    <span>Delete</span>
-                  </div>
-                  <kbd className="text-[9px] font-mono text-muted-foreground">
-                    {isMac ? "⌦" : "Del"}
-                  </kbd>
+                  <Trash2 className="size-3.5" />
+                  <span>Delete</span>
+                  <Kbd>{isMac ? "⌫" : "Del"}</Kbd>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -935,38 +931,48 @@ function TreeNodeItem({
 
       {/* Drop After Indicator */}
       {isDropTarget && dropPosition === "after" && (
-        <div className="h-0.5 w-full bg-primary my-0.5 rounded-full" />
+        <div className="my-0.5 h-0.5 w-full rounded-full bg-foreground" />
       )}
 
       {/* Children Subgroups */}
-      {hasChildren && isExpanded && (
-        <div className="flex flex-col">
-          {node.children.map((child) => (
-            <TreeNodeItem
-              key={child.id}
-              node={child}
-              depth={depth + 1}
-              activeFolderId={activeFolderId}
-              focusedFolderId={focusedFolderId}
-              isFocusedRegion={isFocusedRegion}
-              expandedIds={expandedIds}
-              toggleExpand={toggleExpand}
-              onSelect={onSelect}
-              onNewSubgroup={onNewSubgroup}
-              onRename={onRename}
-              onDelete={onDelete}
-              inlineRenameId={inlineRenameId}
-              inlineRenameValue={inlineRenameValue}
-              onInlineRenameChange={onInlineRenameChange}
-              onInlineRenameSave={onInlineRenameSave}
-              onInlineRenameCancel={onInlineRenameCancel}
-              activeDragId={activeDragId}
-              dropIndicator={dropIndicator}
-              isMac={isMac}
-            />
-          ))}
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {hasChildren && isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-col space-y-0.5 pt-0.5">
+              {node.children.map((child) => (
+                <TreeNodeItem
+                  key={child.id}
+                  node={child}
+                  depth={depth + 1}
+                  activeFolderId={activeFolderId}
+                  focusedFolderId={focusedFolderId}
+                  isFocusedRegion={isFocusedRegion}
+                  expandedIds={expandedIds}
+                  toggleExpand={toggleExpand}
+                  onSelect={onSelect}
+                  onNewSubgroup={onNewSubgroup}
+                  onRename={onRename}
+                  onDelete={onDelete}
+                  inlineRenameId={inlineRenameId}
+                  inlineRenameValue={inlineRenameValue}
+                  onInlineRenameChange={onInlineRenameChange}
+                  onInlineRenameSave={onInlineRenameSave}
+                  onInlineRenameCancel={onInlineRenameCancel}
+                  activeDragId={activeDragId}
+                  dropIndicator={dropIndicator}
+                  isMac={isMac}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

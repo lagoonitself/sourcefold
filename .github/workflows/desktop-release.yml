@@ -71,13 +71,13 @@ jobs:
             platform: windows-latest
             args: "--bundles nsis"
             rust-targets: ""
-            pattern: "*_x64-setup.exe"
+            suffix: "_x64-setup.exe"
             asset: Sourcefold-Windows-Setup.exe
           - name: Mac
             platform: macos-latest
             args: "--target universal-apple-darwin --bundles dmg"
             rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
-            pattern: "*_universal.dmg"
+            suffix: "_universal.dmg"
             asset: Sourcefold-Mac.dmg
     steps:
       - name: Checkout
@@ -114,8 +114,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          FILE=$(find apps/desktop/src-tauri/target -path '*/release/bundle/*' -name '${{ matrix.pattern }}' | head -n 1)
-          if [ -z "$FILE" ]; then echo "No installer matching ${{ matrix.pattern }} was built"; exit 1; fi
+          # Match this tag's version: the cargo cache can keep older installers in the bundle
+          # folder, and a version that doesn't match the tag fails here instead of shipping.
+          NAME="Sourcefold_${TAG#v}${{ matrix.suffix }}"
+          FILE=$(find apps/desktop/src-tauri/target -path '*/release/bundle/*' -name "$NAME" | head -n 1)
+          if [ -z "$FILE" ]; then echo "$NAME wasn't built. Does tauri.conf.json have the tag's version?"; exit 1; fi
           echo "Built $FILE"
           cp "$FILE" "${{ matrix.asset }}"
           gh release upload "$TAG" "${{ matrix.asset }}" --clobber

@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Check, Copy, Trash2 } from "lucide-react";
+import { Check, CircleAlert, Copy, Highlighter, Trash2 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 import {
   copySourceFromItem,
@@ -10,11 +11,12 @@ import {
 } from "@sourcefold/core";
 import { Button } from "@/components/ui/Button";
 import { isAnyDialogOpen } from "@/components/ui/Dialog";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Kbd } from "@/components/ui/Kbd";
 import type { Item } from "@/lib/types";
 import { deleteHighlight, putHighlight } from "@/lib/api";
 import { cn, errorMessage, openUrl } from "@/lib/utils";
-import { getSourceKind } from "../items/source-kinds";
+import { getSourceKind, SourceTile } from "../items/source-kinds";
 import { onGroupAction } from "../items/group-actions";
 import { hasTextSelection, isTypingContext } from "../shortcuts/key-utils";
 import {
@@ -271,60 +273,69 @@ export function HighlightsList({
 
   if (loading) {
     return (
-      <div role="status" className="py-12 font-sans text-sm text-muted-foreground">
-        Loading highlights…
+      <div role="status" aria-label="Loading highlights" className="flex flex-col gap-1 py-2">
+        <span className="sr-only">Loading highlights…</span>
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="-mx-2.5 flex items-start gap-3 rounded-[10px] px-2.5 py-3"
+            aria-hidden="true"
+          >
+            <div className="skeleton size-8 shrink-0 rounded-[8px]" />
+            <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+              <div
+                className="skeleton h-4.5 rounded"
+                style={{ width: i === 0 ? "78%" : i === 1 ? "92%" : "64%" }}
+              />
+              <div
+                className="skeleton h-3.5 rounded"
+                style={{ width: i === 0 ? "36%" : i === 1 ? "44%" : "28%" }}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
 
   if (error && rows.length === 0) {
     return (
-      <div className="flex items-center gap-3 py-12 font-sans text-sm text-destructive">
-        <span>{error}</span>
-        <Button variant="outline" size="sm" onClick={() => void onRefresh()}>
-          Try again
-        </Button>
-      </div>
+      <EmptyState
+        compact
+        icon={CircleAlert}
+        title="Couldn't load highlights"
+        description={error}
+        actions={
+          <Button variant="outline" size="sm" onClick={() => void onRefresh()}>
+            Try again
+          </Button>
+        }
+      />
     );
   }
 
   if (rows.length === 0) {
     return (
-      <div className="py-12 font-sans text-sm text-muted-foreground">
-        No highlights yet. Open a source with Enter and select text to highlight it.
-      </div>
+      <EmptyState
+        compact
+        icon={Highlighter}
+        title="No highlights yet"
+        description="Open a source with Enter and select text to highlight it."
+      />
     );
   }
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-1 select-none flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-3 border-b border-border">
-        {selectionMode && (
-          <>
-            <label className="ml-[3px] flex w-9 shrink-0 cursor-pointer items-center justify-center">
-              <input
-                ref={selectAllRef}
-                type="checkbox"
-                checked={allSelected}
-                onChange={() => setSelectedIds(allSelected ? new Set() : new Set(orderedIds))}
-                aria-label="Select all highlights"
-                className="size-4 cursor-pointer accent-primary"
-              />
-            </label>
-            <span className="font-sans text-[13px] leading-[18px] text-muted-foreground tabular-nums">
-              {selectedCount > 0 ? `${selectedCount} selected` : "Select highlights"}
-            </span>
-          </>
-        )}
-        <div className="mr-2 ml-auto flex items-center gap-2">
-          {!selectionMode && (
-            <Button variant="outline" size="sm" onClick={toggleSelecting} title="Select (s)">
-              <span>Select</span>
-              <Kbd>s</Kbd>
-            </Button>
-          )}
+    <div ref={containerRef} className="relative flex min-h-0 flex-1 select-none flex-col">
+      {/* 44px toolbar outside select mode */}
+      {!selectionMode && (
+        <div className="flex h-11 shrink-0 items-center justify-end gap-2 border-b border-border">
+          <Button variant="ghost" size="sm" onClick={toggleSelecting} title="Select (s)">
+            <span>Select</span>
+            <Kbd>s</Kbd>
+          </Button>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => void handleCopy()}
             title={
@@ -339,33 +350,86 @@ export function HighlightsList({
             <span>{copied ? "Copied" : "Copy with sources"}</span>
             {!copied && <Kbd>y</Kbd>}
           </Button>
-          {selectionMode && (
-            <>
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={selectedCount === 0}
-                onClick={() =>
-                  void handleDelete(rows.filter((r) => selectedIds.has(r.highlight.id)))
-                }
-                title="Delete (Delete)"
-              >
-                <Trash2 className="size-3.5" aria-hidden="true" />
-                <span>Delete</span>
-              </Button>
-              <Button variant="ghost" size="sm" onClick={stopSelecting} title="Cancel (Esc)">
-                <span>Cancel</span>
-                <Kbd>Esc</Kbd>
-              </Button>
-            </>
-          )}
         </div>
-      </div>
+      )}
 
-      <ul role="list" className="flex-1 divide-y divide-border overflow-y-auto">
-        {rows.map((row) => (
+      {/* Floating selection bar in select mode */}
+      <AnimatePresence>
+        {selectionMode && (
+          <motion.div
+            role="toolbar"
+            aria-label="Bulk actions"
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.96 }}
+            transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+            className="shadow-float absolute bottom-4 left-1/2 z-30 flex h-11 max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-[12px] border border-border bg-popover px-3.5 text-popover-foreground"
+          >
+            <label className="flex cursor-pointer select-none items-center gap-2 pr-1">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allSelected}
+                onChange={() => setSelectedIds(allSelected ? new Set() : new Set(orderedIds))}
+                aria-label="Select all highlights"
+                className="size-4 cursor-pointer accent-primary"
+              />
+              <span className="font-sans text-[13px] font-medium tabular-nums text-foreground">
+                {selectedCount > 0 ? `${selectedCount} selected` : "Select highlights"}
+              </span>
+            </label>
+
+            <div className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleCopy()}
+              title={
+                selectedCount > 0 ? "Copy selected with sources (y)" : "Copy all with sources (y)"
+              }
+              disabled={rows.length === 0}
+            >
+              {copied ? (
+                <Check className="size-3.5 text-primary" aria-hidden="true" />
+              ) : (
+                <Copy className="size-3.5" aria-hidden="true" />
+              )}
+              <span>{copied ? "Copied" : "Copy with sources"}</span>
+              {!copied && <Kbd>y</Kbd>}
+            </Button>
+
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={selectedCount === 0}
+              onClick={() => void handleDelete(rows.filter((r) => selectedIds.has(r.highlight.id)))}
+              title="Delete (Delete)"
+            >
+              <Trash2 className="size-3.5" aria-hidden="true" />
+              <span>Delete</span>
+            </Button>
+
+            <Button variant="ghost" size="sm" onClick={stopSelecting} title="Cancel (Esc)">
+              <span>Cancel</span>
+              <Kbd>Esc</Kbd>
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Highlight rows */}
+      <ul
+        role="list"
+        className={cn(
+          "flex-1 overflow-y-auto overflow-x-hidden px-2.5 py-1",
+          selectionMode && "pb-20",
+        )}
+      >
+        {rows.map((row, index) => (
           <HighlightRowView
             key={row.highlight.id}
+            index={index}
             row={row}
             isSelected={selectedIds.has(row.highlight.id)}
             isFocused={row.highlight.id === focusedId}
@@ -389,6 +453,7 @@ export function HighlightsList({
 }
 
 interface HighlightRowViewProps {
+  index: number;
   row: HighlightRow<Item>;
   isSelected: boolean;
   isFocused: boolean;
@@ -400,6 +465,7 @@ interface HighlightRowViewProps {
 }
 
 function HighlightRowView({
+  index,
   row,
   isSelected,
   isFocused,
@@ -410,7 +476,6 @@ function HighlightRowView({
   onTimestamp,
 }: HighlightRowViewProps) {
   const { highlight, item } = row;
-  const kind = getSourceKind(item.kind);
   const [imageFailed, setImageFailed] = React.useState(false);
   const cited = citedLabel(highlight.cited);
   const note = highlight.note?.trim() ? highlight.note.trim() : null;
@@ -418,20 +483,38 @@ function HighlightRowView({
   const showImage = highlight.kind === "image" && highlight.image_src && !imageFailed;
 
   return (
-    <li
+    <motion.li
       data-highlight-id={highlight.id}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.32,
+        ease: [0.16, 1, 0.3, 1],
+        delay: index < 12 ? index * 0.02 : 0,
+      }}
       onClick={onClick}
       className={cn(
-        "relative flex min-h-[48px] cursor-pointer items-stretch transition-colors",
-        isSelected ? "bg-accent" : "hover:bg-muted",
-        isFocused && !isSelected && !isFocusedRegion && "bg-muted",
-        isFocused && isFocusedRegion && "ring-2 ring-primary ring-inset",
+        "group relative -mx-2.5 flex cursor-pointer select-none items-start gap-3 rounded-[10px] px-2.5 py-2.5 transition-[background-color] duration-150",
+        isSelected
+          ? "bg-marker-soft"
+          : isFocused && isFocusedRegion
+            ? "bg-accent"
+            : isFocused
+              ? "bg-muted/60"
+              : "hover:bg-muted",
       )}
     >
-      <span className={cn("w-[3px] shrink-0 self-stretch", kind.barClass)} aria-hidden="true" />
+      {/* 2px ink bar on the left for keyboard focus */}
+      {isFocused && isFocusedRegion && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-2.5 left-0 w-[2px] rounded-full bg-foreground"
+        />
+      )}
 
+      {/* Selection checkbox */}
       {selectionMode && (
-        <div className="flex w-9 shrink-0 items-center justify-center">
+        <div className="flex w-7 shrink-0 items-center justify-center pt-1.5">
           <input
             type="checkbox"
             checked={isSelected}
@@ -446,40 +529,45 @@ function HighlightRowView({
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 items-start gap-3 py-3 pl-3 pr-3">
-        {showImage && (
-          <img
-            src={highlight.image_src ?? undefined}
-            alt={highlight.quote}
-            loading="lazy"
-            onError={() => setImageFailed(true)}
-            className="size-14 shrink-0 rounded-[4px] border border-border object-cover"
-          />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="line-clamp-3 font-serif text-[15px] font-medium leading-[22px] text-foreground">
+      {/* Left thumbnail or source tile */}
+      {showImage ? (
+        <img
+          src={highlight.image_src ?? undefined}
+          alt={highlight.quote || "Highlighted image"}
+          loading="lazy"
+          onError={() => setImageFailed(true)}
+          className="shadow-raised mt-0.5 size-8 shrink-0 rounded-[8px] border border-border/80 object-cover"
+        />
+      ) : (
+        <SourceTile kind={item.kind} className="mt-0.5" />
+      )}
+
+      {/* Quote and metadata */}
+      <div className="min-w-0 flex-1">
+        <p className="line-clamp-3 font-serif text-[16px] font-medium leading-[24px] text-foreground">
+          <span className="rounded-[3px] bg-marker-soft px-1 py-0.5 [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">
             {highlight.quote || (highlight.kind === "image" ? "Image" : "")}
-          </p>
-          <p className="mt-1 flex flex-wrap items-baseline gap-x-2 font-sans text-[13px] leading-[18px] text-muted-foreground">
-            {seconds !== null && seconds !== undefined && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTimestamp();
-                }}
-                title="Open the video at this time"
-                className="cursor-pointer rounded-sm tabular-nums text-primary hover:underline"
-              >
-                {formatHighlightTime(seconds)}
-              </button>
-            )}
-            <span className="min-w-0 truncate">{item.title}</span>
-            {cited && <span className="truncate">{cited}</span>}
-            {note && <span className="min-w-0 truncate">Note: {note}</span>}
-          </p>
-        </div>
+          </span>
+        </p>
+        <p className="mt-1 flex flex-wrap items-baseline gap-x-2 font-sans text-[12.5px] leading-[18px] text-muted-foreground">
+          {seconds !== null && seconds !== undefined && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTimestamp();
+              }}
+              title="Open the video at this time"
+              className="cursor-pointer rounded-[3px] font-sans font-medium tabular-nums text-foreground hover:underline"
+            >
+              {formatHighlightTime(seconds)}
+            </button>
+          )}
+          <span className="min-w-0 truncate">{item.title}</span>
+          {cited && <span className="shrink-0 truncate">{cited}</span>}
+          {note && <span className="min-w-0 truncate">Note: {note}</span>}
+        </p>
       </div>
-    </li>
+    </motion.li>
   );
 }

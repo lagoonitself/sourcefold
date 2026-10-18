@@ -152,7 +152,30 @@ impl Database {
         )?;
 
         Self::migrate_to_projects_and_groups(&conn)?;
+        Self::add_local_copy_search_columns(&conn)?;
 
+        Ok(())
+    }
+
+    /// The search index needs to know which project a local copy file belongs to
+    /// (docs/handoff-search.md). Older databases get the columns added; idempotent.
+    fn add_local_copy_search_columns(conn: &Connection) -> Result<()> {
+        let mut existing: Vec<String> = Vec::new();
+        {
+            let mut stmt = conn.prepare("PRAGMA table_info(local_copy_files)")?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+            for name in rows {
+                existing.push(name?);
+            }
+        }
+        for column in ["project_id", "folder_id", "title", "kind"] {
+            if !existing.iter().any(|c| c == column) {
+                conn.execute_batch(&format!(
+                    "ALTER TABLE local_copy_files ADD COLUMN {} TEXT",
+                    column
+                ))?;
+            }
+        }
         Ok(())
     }
 
@@ -1267,6 +1290,117 @@ impl Database {
         };
         conn.execute("DELETE FROM local_copy_files WHERE item_id = ?1", params![item_id])?;
         Ok(())
+    }
+
+    /// Remembers which project, group, title and kind the web app gave a local copy file. Only
+    /// rows that exist are changed. `entries` are `(key, project_id, folder_id, title, kind)`.
+    #[allow(clippy::type_complexity)]
+    pub fn set_local_copy_meta(
+        &self,
+        entries: &[(String, Option<String>, Option<String>, Option<String>, String)],
+    ) -> Result<()> {
+        let mut conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let tx = conn.transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "UPDATE local_copy_files
+                 SET project_id = ?2, folder_id = ?3, title = ?4, kind = ?5
+                 WHERE item_id = ?1
+                   AND (project_id IS NOT ?2 OR folder_id IS NOT ?3 OR title IS NOT ?4 OR kind IS NOT ?5)",
+            )?;
+            for (key, project_id, folder_id, title, kind) in entries {
+                stmt.execute(params![key, project_id, folder_id, title, kind])?;
+            }
+        }
+        tx.commit()
+    }
+
+    /// Rows for the search catalog (signed in): text files the web app described.
+    /// `(key, path, project_id, folder_id, title, kind)`; image and Word copy rows are left out.
+    #[allow(clippy::type_complexity)]
+    pub fn search_local_copy_rows(
+        &self,
+    ) -> Result<Vec<(String, String, Option<String>, Option<String>, Option<String>, String)>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let mut stmt = conn.prepare(
+            "SELECT item_id, path, project_id, folder_id, title, kind FROM local_copy_files
+             WHERE kind IS NOT NULL AND kind <> 'image' AND path NOT LIKE '%.docx'",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))
+        })?;
+        rows.collect()
+    }
+
+    /// How the local copy rows look to the search catalog:
+    /// `(text files with a project, text files without one, rows the web app hasn't described yet)`.
+    pub fn search_local_copy_counts(&self) -> Result<(i64, i64, i64)> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        conn.query_row(
+            "SELECT
+               COALESCE(SUM(CASE WHEN kind IS NOT NULL AND kind <> 'image' AND project_id IS NOT NULL THEN 1 ELSE 0 END), 0),
+               COALESCE(SUM(CASE WHEN kind IS NOT NULL AND kind <> 'image' AND project_id IS NULL THEN 1 ELSE 0 END), 0),
+               COALESCE(SUM(CASE WHEN kind IS NULL AND path NOT LIKE '%.docx' THEN 1 ELSE 0 END), 0)
+             FROM local_copy_files",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+    }
+
+    /// `(id, parent_id, deleted_at)` of every folder, for working out an item's project.
+    #[allow(clippy::type_complexity)]
+    pub fn search_folder_rows(&self) -> Result<Vec<(String, Option<String>, Option<String>)>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let mut stmt = conn.prepare("SELECT id, parent_id, deleted_at FROM folders")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        rows.collect()
+    }
+
+    /// Saved text items that have a file: `(id, folder_id, kind, title, url, storage_path)`.
+    #[allow(clippy::type_complexity)]
+    pub fn search_item_rows(
+        &self,
+    ) -> Result<Vec<(String, String, String, String, Option<String>, String)>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let mut stmt = conn.prepare(
+            "SELECT id, folder_id, kind, title, COALESCE(canonical_url, source_url), storage_path
+             FROM items
+             WHERE deleted_at IS NULL AND status = 'saved' AND kind <> 'image'
+               AND storage_path IS NOT NULL AND storage_path <> ''",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))
+        })?;
+        rows.collect()
     }
 
     pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {

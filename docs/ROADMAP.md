@@ -118,8 +118,10 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
 
 - **Reader, highlights and search (planned 2026-10-17, `docs/PLAN-reader-search.md`):**
   - [x] Phase 1 (built 2026-10-17, migration applied; [ ] owner's check): highlights in the desktop reader (select to highlight, notes, copy with source, YouTube timestamps, Grokipedia and Wikipedia references kept), side panel, cited sources saved to a group, next/previous source, group Highlights tab with Copy with sources. `highlights` table in Supabase and SQLite.
-  - [ ] Phase 2: keyword search inside every source (SQLite FTS5 over passages from the local copy or offline storage), results open the reader at the passage.
-  - [ ] Phase 3: search by meaning on this computer with EmbeddingGemma 2 (text and images), hybrid with keyword search, Find in other sources on a highlight. Runtime spike first.
+  - [x] Phase 2 (built 2026-10-18, contract `docs/handoff-search.md`; [ ] web deploy, [ ] owner's check): keyword search inside every source (SQLite FTS5 over passages from the local copy or offline storage), one index file per project, "This project" / "All projects" on `Tab`, results open the reader at the passage with the words marked, `Mod+F` find in the reader.
+  - [x] Phase 3, text part (built 2026-10-18, same contract; [ ] owner's check): search by meaning on this computer with EmbeddingGemma 2 (WebGPU, WASM fallback), merged with keyword results by Reciprocal Rank Fusion, off until turned on in Settings → Search.
+  - [ ] Phase 3, rest: images inside sources, **Find in other sources** (`f`) on a highlight.
+  - [ ] Serve the ONNX Runtime files from the app instead of `cdn.jsdelivr.net` (set `env.backends.onnx.wasm.wasmPaths`), and drop the unused 27 MB asyncify `.wasm` from the build.
 
 ## Later
 
@@ -129,4 +131,3 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
 - [ ] Pasted links for pages that build their text with JavaScript (DeepMind, Meta AI): render them in a hidden desktop window first. The extension already handles them.
 - [ ] More dedicated sources: GitHub (README, issues, PRs), Semantic Scholar, PubMed, bioRxiv, OpenReview, Stack Overflow, Threads, Mastodon, podcast transcripts.
 - [ ] Speech-to-text (Whisper) for YouTube videos without captions.
-- [ ] Full-text search: see phase 2 of `docs/PLAN-reader-search.md`.

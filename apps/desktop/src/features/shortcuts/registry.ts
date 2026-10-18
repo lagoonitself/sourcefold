@@ -24,7 +24,7 @@ export const SHORTCUT_COMMANDS: ReadonlyArray<ShortcutCommand> = [
   {
     id: "app.search",
     title: "Search sources",
-    description: "Search across titles, notes, and URLs",
+    description: "Search titles and the text of every source",
     group: "App",
     combos: ["/"],
     when: "global",
@@ -524,6 +524,30 @@ export const READER_COMMANDS: ReadonlyArray<ShortcutCommand> = [
     when: "reader",
   },
   {
+    id: "reader.find",
+    title: "Find in this source",
+    description: "Open the find bar and mark every match in the text",
+    group: "Reader",
+    combos: ["Mod+F"],
+    when: "reader",
+  },
+  {
+    id: "reader.find-next",
+    title: "Next match",
+    description: "Go to the next match while the find bar is open",
+    group: "Reader",
+    combos: ["Enter"],
+    when: "reader",
+  },
+  {
+    id: "reader.find-previous",
+    title: "Previous match",
+    description: "Go to the previous match while the find bar is open",
+    group: "Reader",
+    combos: ["Shift+Enter"],
+    when: "reader",
+  },
+  {
     id: "reader.highlight",
     title: "Highlight",
     description: "Highlight the selection, or the focused paragraph or image",
@@ -605,6 +629,21 @@ export const READER_COMMANDS: ReadonlyArray<ShortcutCommand> = [
   },
 ];
 
+/**
+ * Keys inside the search box. The box handles them itself, so they are kept out of
+ * SHORTCUT_COMMANDS; they only appear on the `?` sheet.
+ */
+export const SEARCH_BOX_COMMANDS: ReadonlyArray<ShortcutCommand> = [
+  {
+    id: "search.switch-scope",
+    title: "Switch search scope",
+    description: "In the search box, switch between This project and All projects",
+    group: "App",
+    combos: ["Tab"],
+    when: "global",
+  },
+];
+
 export function getCommandsByGroup(): Record<ShortcutGroup, ShortcutCommand[]> {
   const map: Record<ShortcutGroup, ShortcutCommand[]> = {
     Navigation: [],
@@ -614,7 +653,7 @@ export function getCommandsByGroup(): Record<ShortcutGroup, ShortcutCommand[]> {
     Reader: [],
     App: [],
   };
-  for (const cmd of [...SHORTCUT_COMMANDS, ...READER_COMMANDS]) {
+  for (const cmd of [...SHORTCUT_COMMANDS, ...SEARCH_BOX_COMMANDS, ...READER_COMMANDS]) {
     map[cmd.group].push(cmd);
   }
   return map;

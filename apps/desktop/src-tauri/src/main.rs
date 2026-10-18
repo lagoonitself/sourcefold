@@ -2,7 +2,7 @@
 
 use std::env;
 use std::sync::{Arc, Mutex};
-use sourcefold_desktop::{commands, db::Database, native_host, native_installer, server};
+use sourcefold_desktop::{commands, db::Database, native_host, native_installer, search, server};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -74,6 +74,8 @@ fn main() {
     // Spawn background HTTP server for local extension fallback (127.0.0.1:23456)
     let server_db = Arc::new(Mutex::new(db.clone()));
 
+    let search_db = db.clone();
+
     let auth_flow_state = Arc::new(commands::auth::AuthFlowState::default());
 
     // Build and run Tauri application
@@ -84,6 +86,8 @@ fn main() {
         .setup(move |_app| {
             let handle = _app.handle().clone();
             server::start_local_server(server_db, server::DEFAULT_PORT, Some(handle));
+            // The search indexer lives in the app process only, never in the native-host one.
+            search::start(search_db);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -131,6 +135,14 @@ fn main() {
             commands::put_highlight,
             commands::update_highlight_note,
             commands::delete_highlight,
+            commands::search_query,
+            commands::search_status,
+            commands::search_reindex_now,
+            commands::search_set_paused,
+            commands::search_delete_index,
+            commands::search_embed_jobs,
+            commands::search_put_vectors,
+            commands::search_delete_vectors,
         ])
         .run(tauri::generate_context!())
         .expect("error while running sourcefold desktop application");

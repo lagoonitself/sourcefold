@@ -17,6 +17,8 @@ export {
 
 export {
   SHORTCUT_COMMANDS,
+  READER_COMMANDS,
+  SEARCH_BOX_COMMANDS,
   getCommandsByGroup,
   findCommandById,
   type ShortcutCommand,

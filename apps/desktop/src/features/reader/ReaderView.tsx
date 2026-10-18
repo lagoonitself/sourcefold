@@ -1,8 +1,10 @@
 import * as React from "react";
 import {
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Copy,
   ExternalLink,
   FileText,
@@ -11,6 +13,7 @@ import {
   Maximize2,
   Minimize2,
   PanelRight,
+  Search,
   StickyNote,
   X,
 } from "lucide-react";
@@ -22,7 +25,7 @@ import { HighlightMenu } from "./HighlightMenu";
 import { HighlightsPanel } from "./HighlightsPanel";
 import { buildReaderHeader, calculateReadingTime } from "./reader-meta";
 import { useReaderContent } from "./use-reader-content";
-import type { ReaderTypography, ReaderViewProps } from "./types";
+import type { ReaderFindController, ReaderTypography, ReaderViewProps } from "./types";
 import "./reader.css";
 
 export { getReaderAuthor } from "./reader-meta";
@@ -63,6 +66,82 @@ function StatusMessage({
   );
 }
 
+function FindBar({ find }: { find: ReaderFindController }) {
+  const hasQuery = find.query.trim() !== "";
+  const label = !hasQuery
+    ? ""
+    : find.count === 0
+      ? "No matches"
+      : `${find.position} of ${find.count}`;
+  return (
+    <div
+      data-reader-ui
+      role="search"
+      className="absolute right-6 top-3 z-10 flex items-center gap-1 rounded-[10px] border border-border bg-card py-1 pl-3 pr-1 shadow-float font-sans"
+    >
+      <Search className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <input
+        ref={find.inputRef}
+        value={find.query}
+        onChange={(event) => find.setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            if (event.shiftKey) find.previous();
+            else find.next();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            find.closeBar();
+          }
+        }}
+        placeholder="Find in this source"
+        aria-label="Find in this source"
+        spellCheck={false}
+        className="h-7 w-48 bg-transparent px-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+      />
+      <span
+        aria-live="polite"
+        className="min-w-[4.5rem] text-right text-[13px] tabular-nums text-muted-foreground"
+      >
+        {label}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7"
+        onClick={find.previous}
+        disabled={find.count === 0}
+        title="Previous match (Shift+Enter)"
+        aria-label="Previous match"
+      >
+        <ChevronUp className="size-4" aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7"
+        onClick={find.next}
+        disabled={find.count === 0}
+        title="Next match (Enter)"
+        aria-label="Next match"
+      >
+        <ChevronDown className="size-4" aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7"
+        onClick={find.closeBar}
+        title="Close find (Esc)"
+        aria-label="Close find"
+      >
+        <X className="size-4" aria-hidden="true" />
+      </Button>
+    </div>
+  );
+}
+
 export function ReaderView({
   item,
   state,
@@ -74,6 +153,7 @@ export function ReaderView({
   content,
   highlights,
   bodyRef,
+  find,
 }: ReaderViewProps) {
   const articleRef = React.useRef<HTMLElement | null>(null);
   const [typography, setTypography] = React.useState<ReaderTypography>(() => {
@@ -331,154 +411,158 @@ export function ReaderView({
 
       {/* Reader Body / Scroll Area, with the highlights panel beside it */}
       <div className="flex min-h-0 flex-1">
-        <div
-          ref={scrollRef}
-          tabIndex={0}
-          className="min-w-0 flex-1 overflow-y-auto px-6 py-10 outline-none focus:ring-0 focus-visible:outline-none"
-        >
-          <article
-            ref={articleRef}
-            className={cn(
-              "relative mx-auto transition-all",
-              isFullscreen ? "max-w-4xl" : "max-w-[700px]",
-              typography === "serif" ? "font-serif" : "font-sans",
-            )}
+        <div className="relative min-w-0 flex-1">
+          {find?.barOpen && <FindBar find={find} />}
+          <div
+            ref={scrollRef}
+            tabIndex={0}
+            className="h-full w-full overflow-y-auto px-6 py-10 outline-none focus:ring-0 focus-visible:outline-none"
           >
-            {/* Article Header Metadata */}
-            <header className="mb-8 border-b border-border/60 pb-6">
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl leading-tight">
-                {item.title}
-              </h1>
-
-              {header.subtitle && (
-                <p className="mt-3 text-lg italic leading-snug text-muted-foreground">
-                  {header.subtitle}
-                </p>
+            <article
+              ref={articleRef}
+              className={cn(
+                "relative mx-auto transition-all",
+                isFullscreen ? "max-w-4xl" : "max-w-[700px]",
+                typography === "serif" ? "font-serif" : "font-sans",
               )}
+            >
+              {/* Article Header Metadata */}
+              <header className="mb-8 border-b border-border/60 pb-6">
+                <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl leading-tight">
+                  {item.title}
+                </h1>
 
-              {metaParts.length > 0 && (
-                <div className="mt-4 flex flex-wrap items-center gap-y-1.5 gap-x-2 text-[13px] text-muted-foreground font-sans">
-                  {metaParts.map((part, index) => (
-                    <React.Fragment key={`${index}-${part}`}>
-                      {index > 0 && <span aria-hidden="true">·</span>}
-                      <span
-                        className={index === 0 && part === header.author ? "text-foreground" : ""}
-                      >
-                        {part}
-                      </span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              )}
-
-              {targetUrl && (
-                <div className="mt-2 text-xs text-muted-foreground truncate font-sans">
-                  <a
-                    href={targetUrl}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      handleOpenSource();
-                    }}
-                    className="hover:underline hover:text-foreground"
-                  >
-                    {targetUrl}
-                  </a>
-                </div>
-              )}
-            </header>
-
-            {state.status === "loading" && (
-              <StatusMessage
-                icon={
-                  <Loader2
-                    className="mb-3 size-8 stroke-[1.4] opacity-60 motion-safe:animate-spin"
-                    aria-hidden="true"
-                  />
-                }
-                title="Loading"
-              />
-            )}
-
-            {state.status === "error" && (
-              <StatusMessage
-                icon={
-                  <FileText className="mb-3 size-10 stroke-[1.2] opacity-40" aria-hidden="true" />
-                }
-                title="Couldn't load this source"
-                detail={state.message}
-              >
-                {onRetry && (
-                  <Button variant="outline" size="sm" onClick={onRetry}>
-                    Try again
-                  </Button>
+                {header.subtitle && (
+                  <p className="mt-3 text-lg italic leading-snug text-muted-foreground">
+                    {header.subtitle}
+                  </p>
                 )}
-                {openInBrowserButton}
-              </StatusMessage>
-            )}
 
-            {state.status === "ready" && (
-              <>
-                {bodyHtml ? (
-                  <div
-                    className={cn(
-                      "reader-prose",
-                      typography === "serif" ? "reader-prose-serif" : "reader-prose-sans",
-                    )}
-                    ref={bodyRef}
-                    onClick={(event) => {
-                      if (highlights?.handleBodyClick(event)) return;
-                      handleContentClick(event);
-                    }}
-                    onAuxClick={handleContentClick}
-                    dangerouslySetInnerHTML={{ __html: bodyHtml }}
-                  />
-                ) : (
-                  !noteHtml && (
-                    <StatusMessage
-                      icon={
-                        <FileText
-                          className="mb-3 size-10 stroke-[1.2] opacity-40"
-                          aria-hidden="true"
-                        />
-                      }
-                      title="No saved text"
-                      detail={targetUrl ? "Open the original page in your browser." : undefined}
+                {metaParts.length > 0 && (
+                  <div className="mt-4 flex flex-wrap items-center gap-y-1.5 gap-x-2 text-[13px] text-muted-foreground font-sans">
+                    {metaParts.map((part, index) => (
+                      <React.Fragment key={`${index}-${part}`}>
+                        {index > 0 && <span aria-hidden="true">·</span>}
+                        <span
+                          className={index === 0 && part === header.author ? "text-foreground" : ""}
+                        >
+                          {part}
+                        </span>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
+
+                {targetUrl && (
+                  <div className="mt-2 text-xs text-muted-foreground truncate font-sans">
+                    <a
+                      href={targetUrl}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        handleOpenSource();
+                      }}
+                      className="hover:underline hover:text-foreground"
                     >
-                      {openInBrowserButton}
-                    </StatusMessage>
-                  )
+                      {targetUrl}
+                    </a>
+                  </div>
                 )}
+              </header>
 
-                {noteHtml && (
-                  <section
-                    aria-label="My note"
-                    className="mt-10 rounded-[6px] border border-border bg-muted/40 p-5 font-sans"
-                  >
-                    <div className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-                      <StickyNote className="size-3.5" aria-hidden="true" />
-                      <span>My note</span>
-                    </div>
-                    <div
-                      className="reader-prose reader-prose-sans reader-note"
-                      onClick={handleContentClick}
-                      onAuxClick={handleContentClick}
-                      dangerouslySetInnerHTML={{ __html: noteHtml }}
+              {state.status === "loading" && (
+                <StatusMessage
+                  icon={
+                    <Loader2
+                      className="mb-3 size-8 stroke-[1.4] opacity-60 motion-safe:animate-spin"
+                      aria-hidden="true"
                     />
-                  </section>
-                )}
-              </>
-            )}
+                  }
+                  title="Loading"
+                />
+              )}
 
-            {highlights?.menu && menuHighlight && (
-              <HighlightMenu
-                highlight={menuHighlight}
-                editing={highlights.menu.editing}
-                controller={highlights}
-                bodyRef={bodyRef ?? noBodyRef}
-                wrapperRef={articleRef}
-              />
-            )}
-          </article>
+              {state.status === "error" && (
+                <StatusMessage
+                  icon={
+                    <FileText className="mb-3 size-10 stroke-[1.2] opacity-40" aria-hidden="true" />
+                  }
+                  title="Couldn't load this source"
+                  detail={state.message}
+                >
+                  {onRetry && (
+                    <Button variant="outline" size="sm" onClick={onRetry}>
+                      Try again
+                    </Button>
+                  )}
+                  {openInBrowserButton}
+                </StatusMessage>
+              )}
+
+              {state.status === "ready" && (
+                <>
+                  {bodyHtml ? (
+                    <div
+                      className={cn(
+                        "reader-prose",
+                        typography === "serif" ? "reader-prose-serif" : "reader-prose-sans",
+                      )}
+                      ref={bodyRef}
+                      onClick={(event) => {
+                        if (highlights?.handleBodyClick(event)) return;
+                        handleContentClick(event);
+                      }}
+                      onAuxClick={handleContentClick}
+                      dangerouslySetInnerHTML={{ __html: bodyHtml }}
+                    />
+                  ) : (
+                    !noteHtml && (
+                      <StatusMessage
+                        icon={
+                          <FileText
+                            className="mb-3 size-10 stroke-[1.2] opacity-40"
+                            aria-hidden="true"
+                          />
+                        }
+                        title="No saved text"
+                        detail={targetUrl ? "Open the original page in your browser." : undefined}
+                      >
+                        {openInBrowserButton}
+                      </StatusMessage>
+                    )
+                  )}
+
+                  {noteHtml && (
+                    <section
+                      aria-label="My note"
+                      className="mt-10 rounded-[6px] border border-border bg-muted/40 p-5 font-sans"
+                    >
+                      <div className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+                        <StickyNote className="size-3.5" aria-hidden="true" />
+                        <span>My note</span>
+                      </div>
+                      <div
+                        ref={find?.noteRef}
+                        className="reader-prose reader-prose-sans reader-note"
+                        onClick={handleContentClick}
+                        onAuxClick={handleContentClick}
+                        dangerouslySetInnerHTML={{ __html: noteHtml }}
+                      />
+                    </section>
+                  )}
+                </>
+              )}
+
+              {highlights?.menu && menuHighlight && (
+                <HighlightMenu
+                  highlight={menuHighlight}
+                  editing={highlights.menu.editing}
+                  controller={highlights}
+                  bodyRef={bodyRef ?? noBodyRef}
+                  wrapperRef={articleRef}
+                />
+              )}
+            </article>
+          </div>
         </div>
 
         {highlights?.panelOpen && (

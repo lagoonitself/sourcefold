@@ -989,6 +989,7 @@ pub fn write_item_file_to_disk(
     let rel_str = rel_path.to_string_lossy().replace('\\', "/");
     let _ = db.update_item_storage_path(item_id, &rel_str);
 
+    crate::search::notify();
     Ok((file_path, rel_str))
 }
 
@@ -3538,6 +3539,7 @@ pub fn rename_item(db: &Database, id: &str, new_title: &str) -> Result<(), Servi
         let _ = db.update_item_content(id, Some(&safe_t), &updated_md);
     }
 
+    crate::search::notify();
     Ok(())
 }
 
@@ -3602,6 +3604,7 @@ pub fn move_item(db: &Database, id: &str, new_folder_id: &str) -> Result<(), Ser
         let _ = db.update_item_content(id, None, &updated_md);
     }
 
+    crate::search::notify();
     Ok(())
 }
 
@@ -3628,6 +3631,7 @@ pub fn delete_item(db: &Database, id: &str) -> Result<(), ServiceError> {
         }
     }
 
+    crate::search::notify();
     Ok(())
 }
 
@@ -3696,6 +3700,7 @@ pub fn rename_folder(db: &Database, id: &str, new_name: &str) -> Result<(), Serv
 
     let _ = sync_folder_items_paths(db, id);
 
+    crate::search::notify();
     Ok(())
 }
 
@@ -3730,6 +3735,7 @@ pub fn move_folder(
 
     let _ = sync_folder_items_paths(db, id);
 
+    crate::search::notify();
     Ok(())
 }
 
@@ -3792,6 +3798,7 @@ pub fn delete_folder(db: &Database, id: &str) -> Result<(), ServiceError> {
         }
     }
 
+    crate::search::notify();
     Ok(())
 }
 

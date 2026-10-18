@@ -28,6 +28,9 @@ describe("buildMirrorManifest", () => {
         format: "file",
         id: "i1",
         kind: "grokipedia",
+        folder_id: "g",
+        project_id: "p",
+        title: "Turbo",
         path: "Cars/Engines - V8/Turbo.md",
         version: "2026-10-03T00:00:00Z|Cars/Engines - V8/Turbo.md",
       },
@@ -54,6 +57,15 @@ describe("buildMirrorManifest", () => {
     ]);
     expect(files).toEqual([]);
   });
+
+  it("names the project of an item in a nested group", () => {
+    const nested: MirrorFolder[] = [
+      ...folders,
+      { id: "d", parent_id: "g", name: "Diesel", updated_at: "2026-10-01T00:00:00Z" },
+    ];
+    const [file] = buildMirrorManifest(nested, [item({ folder_id: "d" })]);
+    expect(file).toMatchObject({ folder_id: "d", project_id: "p", title: "Turbo" });
+  });
 });
 
 describe("buildMirrorManifest, Word copies", () => {
@@ -71,6 +83,9 @@ describe("buildMirrorManifest, Word copies", () => {
         format: "file",
         id: "i1",
         kind: "grokipedia",
+        folder_id: "g",
+        project_id: "p",
+        title: "Turbo",
         path: "Cars/Engines - V8/Turbo.md",
         version: "2026-10-03T00:00:00Z|Cars/Engines - V8/Turbo.md",
       },
@@ -79,6 +94,9 @@ describe("buildMirrorManifest, Word copies", () => {
         format: "docx",
         id: "i1",
         kind: "grokipedia",
+        folder_id: "g",
+        project_id: "p",
+        title: "Turbo",
         path: "Cars/Engines - V8/Turbo.docx",
         // Follows the Drive save, since the Doc only changes then.
         version: "2026-10-04T00:00:00Z|Cars/Engines - V8/Turbo.docx",
@@ -88,6 +106,9 @@ describe("buildMirrorManifest, Word copies", () => {
         format: "file",
         id: "note",
         kind: "note",
+        folder_id: "g",
+        project_id: "p",
+        title: "Idea",
         path: "Cars/Engines - V8/Idea.md",
         version: "2026-10-03T00:00:00Z|Cars/Engines - V8/Idea.md",
       },
@@ -96,6 +117,9 @@ describe("buildMirrorManifest, Word copies", () => {
         format: "docx",
         id: "note",
         kind: "note",
+        folder_id: "g",
+        project_id: "p",
+        title: "Idea",
         path: "Cars/Engines - V8/Idea.docx",
         version: "2026-10-04T00:00:00Z|Cars/Engines - V8/Idea.docx",
       },

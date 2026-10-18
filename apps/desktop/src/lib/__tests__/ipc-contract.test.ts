@@ -212,6 +212,64 @@ describe("IPC contract: tauriInvoke calls match the Rust commands", () => {
   });
 });
 
+const SEARCH_COMMANDS = [
+  "search_query",
+  "search_status",
+  "search_reindex_now",
+  "search_set_paused",
+  "search_delete_index",
+  "search_embed_jobs",
+  "search_put_vectors",
+  "search_delete_vectors",
+];
+
+describe("IPC contract: the search index commands", () => {
+  const searchApi = "features/search/search-api.ts";
+  const calls = () =>
+    extractInvokeCalls(searchApi, readFileSync(path.join(srcDir, searchApi), "utf8"));
+
+  it("search-api.ts calls every search command, with an object literal for its arguments", () => {
+    const found = calls();
+    expect(found.map((c) => c.command).sort()).toEqual([...SEARCH_COMMANDS].sort());
+    for (const call of found) expect(call.usesObjectLiteral).toBe(true);
+  });
+
+  it("passes the argument keys the Rust commands take", () => {
+    const keysOf = (command: string) => calls().find((c) => c.command === command)?.keys;
+    expect(keysOf("search_query")).toEqual(["request"]);
+    expect(keysOf("search_status")).toEqual(["projectId", "model"]);
+    expect(keysOf("search_reindex_now")).toEqual([]);
+    expect(keysOf("search_set_paused")).toEqual(["paused"]);
+    expect(keysOf("search_delete_index")).toEqual([]);
+    expect(keysOf("search_embed_jobs")).toEqual(["model", "limit", "preferProjectId"]);
+    expect(keysOf("search_put_vectors")).toEqual(["model", "vectors"]);
+    expect(keysOf("search_delete_vectors")).toEqual([]);
+  });
+
+  it("are registered in main.rs, with the Rust parameters the contract lists", () => {
+    const { registered, registry } = loadRealRegistry();
+    for (const command of SEARCH_COMMANDS) expect(registered).toContain(command);
+    expect(registry.get("search_query")).toEqual([{ name: "request", required: true }]);
+    expect(registry.get("search_status")).toEqual([
+      { name: "projectId", required: false },
+      { name: "model", required: false },
+    ]);
+    expect(registry.get("search_reindex_now")).toEqual([]);
+    expect(registry.get("search_set_paused")).toEqual([{ name: "paused", required: true }]);
+    expect(registry.get("search_delete_index")).toEqual([]);
+    expect(registry.get("search_embed_jobs")).toEqual([
+      { name: "model", required: true },
+      { name: "limit", required: true },
+      { name: "preferProjectId", required: false },
+    ]);
+    expect(registry.get("search_put_vectors")).toEqual([
+      { name: "model", required: true },
+      { name: "vectors", required: true },
+    ]);
+    expect(registry.get("search_delete_vectors")).toEqual([]);
+  });
+});
+
 describe("IPC contract checker", () => {
   const registry: CommandRegistry = new Map([
     [

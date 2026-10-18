@@ -25,6 +25,8 @@ import { GroupHeader, SubgroupList } from "@/features/items/GroupHeader";
 import { dispatchGroupAction, groupActionForCommand } from "@/features/items/group-actions";
 import { AddLinksDialog } from "@/features/grokipedia/AddLinksDialog";
 import { SearchDialog } from "@/features/search/SearchDialog";
+import { MeaningIndexer } from "@/features/search/embedding";
+import type { NoteHit, PassageHit } from "@/features/search/search-api";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { NoteDialog } from "@/features/items/NoteDialog";
 import { HighlightsList } from "@/features/highlights/HighlightsList";
@@ -36,7 +38,7 @@ import { CommandPalette } from "@/features/command-palette/CommandPalette";
 import { KeyboardShortcutsDialog, useKeyboardShortcuts } from "@/features/shortcuts";
 import { isMacPlatform, matchesKeyCombo } from "@/features/shortcuts/key-utils";
 import type { Folder, Item } from "@/lib/types";
-import { archiveProject, getFolders, getItems, openImage } from "@/lib/api";
+import { archiveProject, getFolders, getItem, getItems, openImage } from "@/lib/api";
 import { isSessionExpiredError } from "@/lib/remote-client";
 import { triggerDriveSave } from "@/features/drive/drive-api";
 import { openUrl, cn, errorMessage } from "@/lib/utils";
@@ -104,6 +106,12 @@ export function App() {
   const [readerItem, setReaderItem] = React.useState<Item | null>(null);
   // Set when the reader is opened from the Highlights tab; cleared by any other way of opening it.
   const [readerHighlightId, setReaderHighlightId] = React.useState<string | null>(null);
+  // Set when the reader is opened from the search box on a passage; it belongs to that source only.
+  const [readerSearch, setReaderSearch] = React.useState<{
+    itemId: string;
+    query: string;
+    passageStart: string;
+  } | null>(null);
   // Links the reader asked to save (one per line), and the group they go to.
   const [addLinksText, setAddLinksText] = React.useState("");
   const [addLinksFolderId, setAddLinksFolderId] = React.useState<string | null>(null);
@@ -123,6 +131,31 @@ export function App() {
     [groupHighlights.highlights, items],
   );
   const refreshHighlights = groupHighlights.refresh;
+
+  // Any other way of opening (or closing) the reader drops the search landing.
+  React.useEffect(() => {
+    if (readerSearch && readerItem?.id !== readerSearch.itemId) setReaderSearch(null);
+  }, [readerSearch, readerItem]);
+  const initialSearch = React.useMemo(
+    () =>
+      readerSearch && readerItem?.id === readerSearch.itemId
+        ? { query: readerSearch.query, passageStart: readerSearch.passageStart }
+        : null,
+    [readerSearch, readerItem?.id],
+  );
+
+  // A passage, highlight or note from the search box opens the reader on its source at that place,
+  // in any project; the open project and group stay as they are.
+  const openSearchHit = React.useCallback(async (hit: PassageHit | NoteHit, query: string) => {
+    try {
+      const source = await getItem(hit.item_id);
+      setReaderHighlightId(null);
+      setReaderSearch({ itemId: source.id, query, passageStart: hit.passage_start });
+      setReaderItem(source);
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't open that source."));
+    }
+  }, []);
 
   // Archive project confirm dialog
   const [archiveConfirmOpen, setArchiveConfirmOpen] = React.useState(false);
@@ -718,6 +751,7 @@ export function App() {
         onOpenChange={setSearchOpen}
         folders={folders}
         currentProjectId={activeProjectId}
+        onOpenHit={(hit, query) => void openSearchHit(hit, query)}
         onSelectItem={(item) => {
           setActiveFolderId(item.folder_id);
           setFocusedFolderId(item.folder_id);
@@ -782,6 +816,7 @@ export function App() {
           setReaderItem(items.find((i) => i.id === next.id) ?? (next as unknown as Item));
         }}
         initialHighlightId={readerHighlightId}
+        initialSearch={initialSearch}
         onHighlightsChanged={() => void refreshHighlights()}
         onSaveLinks={(urls, folderId) => {
           setAddLinksText(urls.join("\n"));
@@ -789,6 +824,8 @@ export function App() {
           setAddLinksOpen(true);
         }}
       />
+
+      <MeaningIndexer currentProjectId={activeProjectId} />
 
       <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 

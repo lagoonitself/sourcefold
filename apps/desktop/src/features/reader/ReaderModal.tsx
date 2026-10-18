@@ -6,6 +6,7 @@ import { errorMessage, openUrl } from "@/lib/utils";
 import { ReaderView } from "./ReaderView";
 import type { ReaderLoadState, ReaderModalProps } from "./types";
 import { useReaderContent } from "./use-reader-content";
+import { useReaderFind } from "./use-reader-find";
 import { useReaderHighlights } from "./useReaderHighlights";
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -25,6 +26,7 @@ export function ReaderModal({
   groupItems,
   onNavigate,
   initialHighlightId,
+  initialSearch,
   onSaveLinks,
   onHighlightsChanged,
 }: ReaderModalProps) {
@@ -44,14 +46,14 @@ export function ReaderModal({
     setState({ status: "loading" });
     loadReaderText(itemId)
       .then((text) => {
-        if (!cancelled) setState({ status: "ready", text });
+        if (!cancelled) setState({ status: "ready", text, itemId });
       })
       .catch((err) => {
         if (cancelled) return;
         // Text the list already holds (a note) beats an error.
         const fallback = itemRef.current?.markdown;
         if (fallback && fallback.trim()) {
-          setState({ status: "ready", text: fallback });
+          setState({ status: "ready", text: fallback, itemId });
         } else {
           setState({ status: "error", message: errorMessage(err, "Couldn't load this source.") });
         }
@@ -60,6 +62,12 @@ export function ReaderModal({
       cancelled = true;
     };
   }, [open, itemId, attempt]);
+
+  // Closed: forget the text, so the next time this source opens it is not shown stale while the
+  // fresh copy loads (the search landing waits for the fresh one).
+  React.useEffect(() => {
+    if (!open) setState({ status: "loading" });
+  }, [open]);
 
   const content = useReaderContent(state.status === "ready" ? state.text : null);
   const highlights = useReaderHighlights({
@@ -76,6 +84,18 @@ export function ReaderModal({
   });
   const highlightsRef = React.useRef(highlights);
   highlightsRef.current = highlights;
+  const find = useReaderFind({
+    open,
+    itemId,
+    readyItemId: state.status === "ready" ? (state.itemId ?? null) : null,
+    bodyHtml: content.bodyHtml,
+    noteHtml: content.noteHtml,
+    bodyRef,
+    scrollRef,
+    initialSearch,
+  });
+  const findRef = React.useRef(find);
+  findRef.current = find;
 
   const handleClose = React.useCallback(() => {
     onOpenChange(false);
@@ -99,7 +119,8 @@ export function ReaderModal({
   }, [isShown]);
 
   // Keyboard shortcuts (the highlight keys live in useReaderHighlights):
-  // - Escape: close the small menu, then a panel note field, then the reader
+  // - Mod+F: find in this source; Enter / Shift+Enter move between matches while the bar is open
+  // - Escape: close the small menu, then a panel note field, then the find bar, then the reader
   // - o / O: open original source URL in browser
   // - ArrowDown / ArrowUp: scroll
   // - Space / Shift+Space: page down / page up
@@ -107,16 +128,35 @@ export function ReaderModal({
     if (!open || !item) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        findRef.current.openBar();
+        return;
+      }
+
       if (isEditableTarget(e.target)) return;
 
       if (e.key === "Escape") {
         e.preventDefault();
-        if (!highlightsRef.current.handleEscape()) handleClose();
+        if (highlightsRef.current.handleEscape()) return;
+        if (findRef.current.barOpen) findRef.current.closeBar();
+        else handleClose();
         return;
       }
 
       if (highlightsRef.current.handleKey(e)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (
+        e.key === "Enter" &&
+        findRef.current.barOpen &&
+        !(e.target instanceof HTMLButtonElement)
+      ) {
+        e.preventDefault();
+        if (e.shiftKey) findRef.current.previous();
+        else findRef.current.next();
+        return;
+      }
 
       // Space and Enter on a focused button press that button.
       if (e.target instanceof HTMLButtonElement && (e.key === " " || e.key === "Enter")) return;
@@ -174,6 +214,7 @@ export function ReaderModal({
         content={content}
         highlights={highlights}
         bodyRef={bodyRef}
+        find={find}
       />
     </div>,
     document.body,

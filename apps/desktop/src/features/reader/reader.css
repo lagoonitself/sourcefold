@@ -314,3 +314,39 @@
 .reader-prose tr.reader-block-focus > :first-child {
   box-shadow: inset 2px 0 0 var(--primary);
 }
+
+/* Find in this source (Mod+F) and the words a search found. These are not highlights: they use the
+   warning amber, are never saved, and go away when the find bar closes. */
+.reader-prose mark.reader-find {
+  background-color: color-mix(in srgb, var(--warning) 26%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0;
+}
+
+.reader-prose mark.reader-find.is-find-current {
+  background-color: color-mix(in srgb, var(--warning) 55%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--warning) 70%, transparent);
+  outline-offset: 0;
+}
+
+/* The paragraph a search landed on fades from a faint tint. */
+.reader-prose .reader-find-flash {
+  background-color: color-mix(in srgb, var(--warning) 12%, transparent);
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reader-prose .reader-find-flash {
+    animation: reader-find-flash 1.6s ease-out;
+  }
+}
+
+@keyframes reader-find-flash {
+  from {
+    background-color: color-mix(in srgb, var(--warning) 28%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}

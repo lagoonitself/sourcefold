@@ -31,6 +31,7 @@ import {
 import { cn } from "@/lib/utils";
 import { SubstackCookieSettings } from "../substack/SubstackCookieSettings";
 import { LocalCopySettings } from "../local-copy/LocalCopySettings";
+import { SearchSettings } from "../search/SearchSettings";
 
 export interface SettingsDialogProps {
   open: boolean;
@@ -267,6 +268,8 @@ export function SettingsDialog({
             </div>
 
             <LocalCopySettings open={open} signedIn={Boolean(session) && !isOffline} />
+
+            <SearchSettings open={open} />
 
             {/* Native Messaging Host Installer */}
             <div className="flex flex-col gap-2 rounded-[6px] border border-border p-3 bg-muted/20">

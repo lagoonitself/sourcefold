@@ -4,6 +4,7 @@ pub mod models;
 pub mod local_copy;
 pub mod native_host;
 pub mod native_installer;
+pub mod search;
 pub mod server;
 pub mod service;
 pub mod session;

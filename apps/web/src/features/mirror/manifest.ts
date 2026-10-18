@@ -35,9 +35,26 @@ export interface MirrorEntry {
   /** The item the file belongs to. */
   id: string;
   kind: string;
+  /** The item's group, its project (the top-level folder) and its title, for the desktop's search
+   * index, which keeps one index per project. */
+  folder_id: string;
+  project_id: string;
+  title: string;
   /** Relative to the Sourcefold folder, `/`-separated, e.g. `Cars/Engines/Title.md`. */
   path: string;
   version: string;
+}
+
+function projectIdOf(folderId: string, foldersById: Map<string, FolderRef>): string {
+  let current = foldersById.get(folderId);
+  const visited = new Set<string>();
+  while (current?.parent_id && !visited.has(current.id)) {
+    visited.add(current.id);
+    const parent = foldersById.get(current.parent_id);
+    if (!parent) break;
+    current = parent;
+  }
+  return current?.id ?? folderId;
 }
 
 export function buildMirrorManifest(folders: MirrorFolder[], items: MirrorItem[]): MirrorEntry[] {
@@ -64,12 +81,18 @@ export function buildMirrorManifest(folders: MirrorFolder[], items: MirrorItem[]
       item.created_at,
     );
     const path = `${folderPath}/${name}`;
+    const owner = {
+      folder_id: item.folder_id,
+      project_id: projectIdOf(item.folder_id, foldersById),
+      title: item.title,
+    };
     // The front matter holds the folder path, so a rename up the tree changes the file too.
     entries.push({
       key: item.id,
       format: "file",
       id: item.id,
       kind: item.kind,
+      ...owner,
       path,
       version: `${item.updated_at}|${path}`,
     });
@@ -83,6 +106,7 @@ export function buildMirrorManifest(folders: MirrorFolder[], items: MirrorItem[]
         format: "docx",
         id: item.id,
         kind: item.kind,
+        ...owner,
         path: docxPath,
         version: `${item.drive_synced_at ?? item.updated_at}|${docxPath}`,
       });

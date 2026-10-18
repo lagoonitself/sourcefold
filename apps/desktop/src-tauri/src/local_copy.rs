@@ -37,6 +37,14 @@ pub struct RemoteFile {
     /// "file" (the item's own file) or "docx" (the Word copy of a text file).
     #[serde(default)]
     pub format: String,
+    /// The item's group, its project (the top-level folder) and its title, for the search index.
+    /// Older web apps send none of these.
+    #[serde(default)]
+    pub folder_id: Option<String>,
+    #[serde(default)]
+    pub project_id: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 impl RemoteFile {
@@ -52,6 +60,29 @@ impl RemoteFile {
     pub fn is_docx(&self) -> bool {
         self.format == "docx"
     }
+}
+
+fn non_empty(value: &Option<String>) -> Option<String> {
+    value.as_ref().filter(|v| !v.is_empty()).cloned()
+}
+
+/// Remembers the project, group, title and kind of every text file in the manifest, so the
+/// search index knows where each file belongs. Word copies don't count.
+fn store_search_meta(db: &Database, remote: &[RemoteFile]) {
+    let entries: Vec<_> = remote
+        .iter()
+        .filter(|f| !f.is_docx())
+        .map(|f| {
+            (
+                f.key().to_string(),
+                non_empty(&f.project_id),
+                non_empty(&f.folder_id),
+                non_empty(&f.title),
+                f.kind.clone(),
+            )
+        })
+        .collect();
+    let _ = db.set_local_copy_meta(&entries);
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -302,6 +333,7 @@ pub async fn sync(db: &Database) -> LocalCopyReport {
         report.failed.push(LocalCopyFailure { path: String::new(), message });
     }
     report.status = "done".into();
+    crate::search::notify();
     report
 }
 
@@ -330,6 +362,8 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
         let _ = db.remove_local_copy_file(&key);
         report.removed += 1;
     }
+
+    store_search_meta(db, &remote);
 
     let mut downloads = Vec::new();
     for (file, step) in plan(root, &remote, &tracked) {
@@ -415,6 +449,7 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
             report.written += 1;
         }
     }
+    store_search_meta(db, &remote);
     Ok(())
 }
 
@@ -668,6 +703,9 @@ mod tests {
             path: path.into(),
             version: version.into(),
             format: String::new(),
+            folder_id: None,
+            project_id: None,
+            title: None,
         }
     }
 

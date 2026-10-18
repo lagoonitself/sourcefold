@@ -1,4 +1,4 @@
-// Highlights: the shared shape and the formatting helpers (docs/handoff-highlights.md).
+// Highlights: the shared shape and the formatting helpers (docs/dev/handoff-highlights.md).
 // Pure and browser-safe: no Node APIs.
 
 export type HighlightKind = "text" | "image";

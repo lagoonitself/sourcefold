@@ -1,4 +1,4 @@
-//! Answering a search (docs/handoff-search.md, "Query").
+//! Answering a search (docs/dev/handoff-search.md, "Query").
 //!
 //! Each project is asked on its own: keywords through FTS5 (bm25) and, when the caller sent a
 //! query vector, meaning through a dot product over that project's vectors. The answers of the

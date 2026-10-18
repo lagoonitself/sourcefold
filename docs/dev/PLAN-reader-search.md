@@ -69,7 +69,7 @@ Copy format, one quote:
 - Offline: the same table in `sourcefold.db`.
 - Anchoring: find the highlight by `start`/`end` first; if the text there doesn't match `quote`, search for `prefix + quote + suffix`; if that fails, show the highlight in the panel as "Couldn't find this passage in the current text" and keep it.
 - Highlights are small text, so they stay in Supabase like notes; they are not cleared after the Drive push.
-- They are also written into the source's own `.md` file as a `## My highlights` section (Drive, local copy and offline files), so any Markdown app can read them. The exact build contract is `docs/handoff-highlights.md`.
+- They are also written into the source's own `.md` file as a `## My highlights` section (Drive, local copy and offline files), so any Markdown app can read them. The exact build contract is `docs/dev/handoff-highlights.md`.
 
 ### Done when
 

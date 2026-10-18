@@ -25,7 +25,7 @@ const ICONS: Record<PageKind, LucideIcon> = {
   bluesky: Cloud,
 };
 
-/** The CSS color token for a source type (see "Source-type marks" in docs/DESIGN.md). */
+/** The CSS color token for a source type (see "Source-type marks" in docs/dev/DESIGN.md). */
 export function sourceColor(kind: PageKind | null): string {
   return kind ? `var(--source-${kind})` : "var(--border)";
 }

@@ -1,6 +1,6 @@
 # Rules for coding agents
 
-Read `docs/SPEC.md` before starting. For any UI work, also read `docs/DESIGN.md` and use only its tokens, fonts and copy rules. The spec, the design guide and this file are the authority. If a task brief conflicts with them, the task brief wins for that task. If something is unclear or a decision is not covered, stop and report the question instead of guessing.
+Read `docs/dev/SPEC.md` before starting. For any UI work, also read `docs/dev/DESIGN.md` and use only its tokens, fonts and copy rules. The spec, the design guide and this file are the authority. If a task brief conflicts with them, the task brief wins for that task. If something is unclear or a decision is not covered, stop and report the question instead of guessing.
 
 ## Working rules
 

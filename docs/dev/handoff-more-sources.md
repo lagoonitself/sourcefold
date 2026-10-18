@@ -1,12 +1,12 @@
 # Handoff: more source types (2026-10-16, done; kept for the decisions)
 
-**Status:** built, checked and committed on 2026-10-16. What's left is the owner's test and applying the migration; see `HANDOFF.md`. The rest of this file is the plan as it was written, kept because it records the decisions (file format, agent split).
+**Status:** built, checked and committed on 2026-10-16. What's left is the owner's test and applying the migration; see `docs/dev/HANDOFF.md`. The rest of this file is the plan as it was written, kept because it records the decisions (file format, agent split).
 
-Read this together with `HANDOFF.md`. It picks up the "more source types" work in the middle. Nothing here is committed yet. `main` is at `a0f8c7a` (committed, not pushed).
+Read this together with `docs/dev/HANDOFF.md`. It picks up the "more source types" work in the middle. Nothing here is committed yet. `main` is at `a0f8c7a` (committed, not pushed).
 
 ## The owner's request (2026-10-16)
 
-Add more source types. **YouTube transcripts matter most.** The owner pastes a YouTube link and Sourcefold saves the transcript. It must be **free**: no paid APIs and no API keys the owner has to buy. For every source, **use the best existing open-source project** instead of researching or writing from scratch, the way Substack support ported sbstck-dl (`packages/core/src/substack/`). Credit each one in `docs/open-source-references.md` and check its license is MIT/Apache/BSD (this repo is MIT).
+Add more source types. **YouTube transcripts matter most.** The owner pastes a YouTube link and Sourcefold saves the transcript. It must be **free**: no paid APIs and no API keys the owner has to buy. For every source, **use the best existing open-source project** instead of researching or writing from scratch, the way Substack support ported sbstck-dl (`packages/core/src/substack/`). Credit each one in `docs/dev/open-source-references.md` and check its license is MIT/Apache/BSD (this repo is MIT).
 
 Order:
 
@@ -32,7 +32,7 @@ How to work:
 - Give each agent strict file ownership, and paste the relevant rules from `AGENTS.md` into every brief (no git commands, only its own files, run lint/typecheck/test).
 - Review every change against HEAD for deleted functions or tests before accepting it (`git diff --stat`, then read the removals). This has bitten us twice.
 - Then run `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test`, and `cargo test` in `apps/desktop/src-tauri`.
-- Don't apply migrations to the owner's Supabase and don't push without asking. Don't launch the app; finish with manual test steps for the owner. Update `HANDOFF.md` and `docs/ROADMAP.md`, then commit.
+- Don't apply migrations to the owner's Supabase and don't push without asking. Don't launch the app; finish with manual test steps for the owner. Update `docs/dev/HANDOFF.md` and `docs/dev/ROADMAP.md`, then commit.
 
 Still open from the previous thread (ask the owner):
 

@@ -1,4 +1,4 @@
-// Plain-sentence errors for the people using the app (docs/DESIGN.md, "Writing").
+// Plain-sentence errors for the people using the app (docs/dev/DESIGN.md, "Writing").
 
 export const DOWNLOAD_ERROR = "Couldn't download the model. Check your connection and try again.";
 export const START_ERROR = "Couldn't run search by meaning. It will try again in a minute.";

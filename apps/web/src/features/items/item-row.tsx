@@ -52,7 +52,7 @@ const KIND_CONFIG: Record<string, KindConfig> = {
     barClass: "bg-source-substack",
     Icon: Newspaper,
   },
-  // docs/DESIGN.md has no color for Wikipedia yet, so it uses the neutral secondary-text color
+  // docs/dev/DESIGN.md has no color for Wikipedia yet, so it uses the neutral secondary-text color
   // (the desktop app does the same).
   wikipedia: {
     name: "Wikipedia",

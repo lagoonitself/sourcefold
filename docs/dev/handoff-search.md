@@ -1,6 +1,6 @@
 # Build contract: search inside sources, by keyword and by meaning
 
-Status: contract written 2026-10-17, built 2026-10-18 (see "Built: deviations" at the end). Desktop app only; the web keeps title search. This replaces phases 2 and 3 of `docs/PLAN-reader-search.md` where they differ (it builds both at once and leaves images and **Find in other sources** for later).
+Status: contract written 2026-10-17, built 2026-10-18 (see "Built: deviations" at the end). Desktop app only; the web keeps title search. This replaces phases 2 and 3 of `docs/dev/PLAN-reader-search.md` where they differ (it builds both at once and leaves images and **Find in other sources** for later).
 
 ## Owner's decisions (2026-10-17)
 

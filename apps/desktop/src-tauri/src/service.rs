@@ -3283,7 +3283,7 @@ pub fn get_item(db: &Database, id: &str) -> Result<Item, ServiceError> {
 }
 
 // -----------------------------------------------------------------------------
-// Highlights (offline mode; contract: docs/handoff-highlights.md)
+// Highlights (offline mode; contract: docs/dev/handoff-highlights.md)
 // -----------------------------------------------------------------------------
 
 pub const MAX_HIGHLIGHT_QUOTE: usize = 10_000;

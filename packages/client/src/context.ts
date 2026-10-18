@@ -1,5 +1,5 @@
 // Shared between the route modules (src/routes/**, owned by the routes agent) and the Drive
-// modules (src/drive/**, owned by the Drive agent). Contract: docs/handoff-no-website.md.
+// modules (src/drive/**, owned by the Drive agent). Contract: docs/dev/handoff-no-website.md.
 import type { LocalApiDeps, SourcefoldSupabase } from "./types";
 
 export interface RouteContext {

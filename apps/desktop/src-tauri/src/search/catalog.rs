@@ -1,4 +1,4 @@
-//! Which files belong to which project (docs/handoff-search.md, "Catalog").
+//! Which files belong to which project (docs/dev/handoff-search.md, "Catalog").
 //!
 //! Offline, the catalog comes from the `items` and `folders` tables: the project of an item is the
 //! top-level ancestor of its group, and an item with no group goes to `unsorted`. Signed in, it

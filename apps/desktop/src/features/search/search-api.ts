@@ -1,4 +1,4 @@
-// The desktop search index (docs/handoff-search.md). It always lives on this computer, so these
+// The desktop search index (docs/dev/handoff-search.md). It always lives on this computer, so these
 // calls go to the Rust side in both modes, signed in or offline. One index per project: a project
 // search never reads another project's index; "All projects" asks each one and merges.
 

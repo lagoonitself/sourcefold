@@ -1,9 +1,15 @@
 name: Release
 
-# Push a tag like v0.2.0 to build the Windows and macOS installers and the Chrome extension,
-# attach them to one GitHub Release, and publish it with the install guide
-# (.github/release-notes.md). Set the repository variable SOURCEFOLD_WEB_URL to the deployed
-# web app so the desktop app and the extension point at it out of the box.
+# Push a tag like v0.3.0 to build the Windows and Mac apps and the Chrome extension, attach them
+# to one GitHub Release, and publish it. The notes are .github/release-notes.md with the tag's
+# section of CHANGELOG.md filled in, so add that section before tagging.
+#
+# The three files keep the same names in every release, so
+# https://github.com/<repo>/releases/latest/download/<name> always points at the newest one:
+# Sourcefold-Windows-Setup.exe, Sourcefold-Mac.dmg and Sourcefold-Chrome-Extension.zip.
+#
+# Set the repository variable SOURCEFOLD_WEB_URL to the deployed website so the desktop app and
+# the extension point at it out of the box.
 
 on:
   push:
@@ -25,28 +31,35 @@ jobs:
   create-release:
     name: Create draft release
     runs-on: ubuntu-latest
-    outputs:
-      release_id: ${{ steps.create.outputs.release_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Create draft release
-        id: create
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           VERSION="${TAG#v}"
-          URL="${WEB_URL:-the Sourcefold web address you were given}"
+          awk -v v="$VERSION" '
+            index($0, "## " v " ") == 1 || $0 == "## " v { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > changes.md
+          if ! grep -q '[^[:space:]]' changes.md; then
+            echo "CHANGELOG.md has no section for $VERSION. Add '## $VERSION (date)' with the changes."
+            exit 1
+          fi
+          URL="${WEB_URL:-Ask whoever runs your Sourcefold for the address}"
           sed -e "s|{{WEB_URL}}|${URL}|g" -e "s|{{VERSION}}|${VERSION}|g" \
+            -e "s|{{TAG}}|${TAG}|g" -e "s|{{REPO}}|${REPO}|g" \
+            -e '/{{CHANGES}}/{r changes.md' -e 'd}' \
             .github/release-notes.md > notes.md
+          cat notes.md
           gh release create "$TAG" --draft --title "Sourcefold $TAG" --notes-file notes.md
-          ID=$(gh release view "$TAG" --json databaseId --jq .databaseId)
-          if [ -z "$ID" ]; then echo "Couldn't read the release ID"; exit 1; fi
-          echo "release_id=$ID" >> "$GITHUB_OUTPUT"
 
   desktop:
-    name: Desktop installer (${{ matrix.platform }})
+    name: Desktop app (${{ matrix.name }})
     needs: create-release
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 45
@@ -54,12 +67,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: windows-latest
-            args: ""
+          - name: Windows
+            platform: windows-latest
+            args: "--bundles nsis"
             rust-targets: ""
-          - platform: macos-latest
-            args: "--target universal-apple-darwin"
+            pattern: "*_x64-setup.exe"
+            asset: Sourcefold-Windows-Setup.exe
+          - name: Mac
+            platform: macos-latest
+            args: "--target universal-apple-darwin --bundles dmg"
             rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+            pattern: "*_universal.dmg"
+            asset: Sourcefold-Mac.dmg
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -83,16 +102,23 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
 
-      - name: Build and upload installer
-        uses: tauri-apps/tauri-action@v0
+      - name: Build
+        working-directory: apps/desktop
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
-        with:
-          projectPath: "./apps/desktop"
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          tagName: ${{ github.ref_name }}
-          args: ${{ matrix.args }}
+        run: npm run tauri -- build ${{ matrix.args }}
+
+      - name: Upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FILE=$(find apps/desktop/src-tauri/target -path '*/release/bundle/*' -name '${{ matrix.pattern }}' | head -n 1)
+          if [ -z "$FILE" ]; then echo "No installer matching ${{ matrix.pattern }} was built"; exit 1; fi
+          echo "Built $FILE"
+          cp "$FILE" "${{ matrix.asset }}"
+          gh release upload "$TAG" "${{ matrix.asset }}" --clobber
 
   extension:
     name: Chrome extension
@@ -123,9 +149,9 @@ jobs:
           cd apps/extension/.output
           rm -rf sourcefold-extension
           cp -r chrome-mv3 sourcefold-extension
-          zip -r ../../../sourcefold-extension-chrome.zip sourcefold-extension
+          zip -r ../../../Sourcefold-Chrome-Extension.zip sourcefold-extension
           cd ../../..
-          gh release upload "$TAG" sourcefold-extension-chrome.zip --clobber
+          gh release upload "$TAG" Sourcefold-Chrome-Extension.zip --clobber
 
   publish:
     name: Publish release
@@ -138,8 +164,8 @@ jobs:
         run: |
           ASSETS=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
           echo "$ASSETS"
-          for pattern in '_x64-setup[.]exe$' '_universal[.]dmg$' '^sourcefold-extension-chrome[.]zip$'; do
-            echo "$ASSETS" | grep -Eq "$pattern" || { echo "Missing a file matching $pattern"; exit 1; }
+          for name in Sourcefold-Windows-Setup.exe Sourcefold-Mac.dmg Sourcefold-Chrome-Extension.zip; do
+            echo "$ASSETS" | grep -qx "$name" || { echo "Missing $name"; exit 1; }
           done
 
       - name: Publish

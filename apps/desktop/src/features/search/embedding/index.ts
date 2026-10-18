@@ -1,4 +1,4 @@
-// Search by meaning: EmbeddingGemma 2 in a Web Worker (docs/handoff-search.md, "Embedding").
+// Search by meaning: EmbeddingGemma 2 in a Web Worker (docs/dev/handoff-search.md, "Embedding").
 
 import * as React from "react";
 import { isTauri } from "@/lib/api";

@@ -122,7 +122,7 @@ impl Database {
                 version TEXT NOT NULL
             );
 
-            -- Reader highlights (docs/handoff-highlights.md). Hidden with their item when it is
+            -- Reader highlights (docs/dev/handoff-highlights.md). Hidden with their item when it is
             -- soft-deleted; removed with it if the row is ever hard-deleted.
             CREATE TABLE IF NOT EXISTS highlights (
                 id TEXT PRIMARY KEY,
@@ -158,7 +158,7 @@ impl Database {
     }
 
     /// The search index needs to know which project a local copy file belongs to
-    /// (docs/handoff-search.md). Older databases get the columns added; idempotent.
+    /// (docs/dev/handoff-search.md). Older databases get the columns added; idempotent.
     fn add_local_copy_search_columns(conn: &Connection) -> Result<()> {
         let mut existing: Vec<String> = Vec::new();
         {

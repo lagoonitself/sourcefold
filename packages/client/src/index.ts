@@ -1,5 +1,5 @@
 // The Sourcefold API, run inside the desktop app and the extension instead of on the website.
-// Contract: docs/handoff-no-website.md. The exported names and shapes are fixed.
+// Contract: docs/dev/handoff-no-website.md. The exported names and shapes are fixed.
 import { createClient, type SupportedStorage } from "@supabase/supabase-js";
 import type { ClientConfig, LocalApi, LocalApiDeps, SourcefoldSupabase } from "./types";
 import type { Database } from "./database.types";

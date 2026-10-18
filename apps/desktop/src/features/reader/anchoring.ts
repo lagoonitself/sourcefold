@@ -1,5 +1,5 @@
 /**
- * Pure anchoring maths for highlights (docs/handoff-highlights.md, "Anchoring"). Offsets count
+ * Pure anchoring maths for highlights (docs/dev/handoff-highlights.md, "Anchoring"). Offsets count
  * characters of the rendered body's textContent. Nothing here touches the DOM, so it is unit tested.
  */
 

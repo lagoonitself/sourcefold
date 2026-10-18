@@ -1,6 +1,6 @@
 # Highlights: build contract (phase 1)
 
-This is the contract between the agents building phase 1 of `docs/PLAN-reader-search.md`. Every agent reads this file, `AGENTS.md`, `docs/DESIGN.md` (UI work) and its own brief. If something here is unclear, stop and report; don't invent a different shape.
+This is the contract between the agents building phase 1 of `docs/dev/PLAN-reader-search.md`. Every agent reads this file, `AGENTS.md`, `docs/dev/DESIGN.md` (UI work) and its own brief. If something here is unclear, stop and report; don't invent a different shape.
 
 ## Owner's decisions (2026-10-17)
 

@@ -1,6 +1,6 @@
 # Sourcefold roadmap
 
-Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`; the visual system is `docs/DESIGN.md`.
+Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS.md`; the visual system is `docs/dev/DESIGN.md`.
 
 ## Done
 
@@ -44,8 +44,8 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
 
 - **Second audit (2026-10-14):**
   - Speed: Vercel region `sin1`, `getClaims()` auth, cached per-request client, parallel queries, loading skeletons, SQL folder counts, new indexes, no status polling, lighter client bundle.
-  - Bugs fixed across core parsers, web API, UI, Drive sync and the extension (see HANDOFF.md).
-  - [x] Migrations applied (without the overload drops; see HANDOFF.md), pushed, deployed, CI green.
+  - Bugs fixed across core parsers, web API, UI, Drive sync and the extension (see docs/dev/HANDOFF.md).
+  - [x] Migrations applied (without the overload drops; see docs/dev/HANDOFF.md), pushed, deployed, CI green.
   - [ ] Drop the four old function overloads in the SQL editor.
 
 - **Drive and extension fixes (2026-10-14):**
@@ -68,7 +68,7 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] New sources are pushed to Drive automatically right after saving.
   - [x] Renames and moves rebuild the file from its Drive copy; images open from Drive.
   - [x] Migration applied to the owner's database.
-  - [ ] Confirm on the live app (see HANDOFF.md).
+  - [ ] Confirm on the live app (see docs/dev/HANDOFF.md).
 - **Archive projects (2026-10-14):**
   - [x] Archive and Unarchive in the project menu; archived projects are listed separately and hidden from pickers, the extension and search across projects.
   - [x] Migration applied to the owner's database.
@@ -116,12 +116,18 @@ Status as of 2026-10-15. The spec is `docs/SPEC.md`; agent rules are `AGENTS.md`
   - [x] Rust tests no longer write into the real `Documents/Sourcefold`.
   - [ ] Owner checks a real Grokipedia save in Drive and in desktop offline mode.
 
-- **Reader, highlights and search (planned 2026-10-17, `docs/PLAN-reader-search.md`):**
+- **Reader, highlights and search (planned 2026-10-17, `docs/dev/PLAN-reader-search.md`):**
   - [x] Phase 1 (built 2026-10-17, migration applied; [ ] owner's check): highlights in the desktop reader (select to highlight, notes, copy with source, YouTube timestamps, Grokipedia and Wikipedia references kept), side panel, cited sources saved to a group, next/previous source, group Highlights tab with Copy with sources. `highlights` table in Supabase and SQLite.
-  - [x] Phase 2 (built 2026-10-18, contract `docs/handoff-search.md`; [ ] web deploy, [ ] owner's check): keyword search inside every source (SQLite FTS5 over passages from the local copy or offline storage), one index file per project, "This project" / "All projects" on `Tab`, results open the reader at the passage with the words marked, `Mod+F` find in the reader.
+  - [x] Phase 2 (built 2026-10-18, contract `docs/dev/handoff-search.md`; [ ] web deploy, [ ] owner's check): keyword search inside every source (SQLite FTS5 over passages from the local copy or offline storage), one index file per project, "This project" / "All projects" on `Tab`, results open the reader at the passage with the words marked, `Mod+F` find in the reader.
   - [x] Phase 3, text part (built 2026-10-18, same contract; [ ] owner's check): search by meaning on this computer with EmbeddingGemma 2 (WebGPU, WASM fallback), merged with keyword results by Reciprocal Rank Fusion, off until turned on in Settings → Search.
   - [ ] Phase 3, rest: images inside sources, **Find in other sources** (`f`) on a highlight.
   - [ ] Serve the ONNX Runtime files from the app instead of `cdn.jsdelivr.net` (set `env.backends.onnx.wasm.wasmPaths`), and drop the unused 27 MB asyncify `.wasm` from the build.
+
+- **Tidy repository and v0.3.0 release (2026-10-18):**
+  - [x] README rewritten for users first (downloads, features, which part does what, supported sources); setup moved to `docs/SELF-HOSTING.md`, install steps to `docs/INSTALL.md`, developer docs to `docs/dev/`.
+  - [x] `CHANGELOG.md`; the release workflow puts the tagged version's section in the notes and refuses to release without one.
+  - [x] Releases carry three fixed-name files (`Sourcefold-Windows-Setup.exe`, `Sourcefold-Mac.dmg`, `Sourcefold-Chrome-Extension.zip`), so `releases/latest/download/…` links always work.
+  - [ ] Owner checks the release downloads on Windows and a friend's Mac.
 
 ## Later
 

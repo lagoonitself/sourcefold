@@ -29,7 +29,7 @@ export interface SourceKindConfig {
   Icon: IconComponent;
 }
 
-// Same kinds, colors and icons as the web app's item rows (see docs/DESIGN.md, "Source-type marks").
+// Same kinds, colors and icons as the web app's item rows (see docs/dev/DESIGN.md, "Source-type marks").
 const SOURCE_KINDS: Record<string, SourceKindConfig> = {
   grokipedia: {
     name: "Grokipedia",
@@ -61,7 +61,7 @@ const SOURCE_KINDS: Record<string, SourceKindConfig> = {
     colorVar: "var(--source-image)",
     Icon: ImageIcon,
   },
-  // No color of its own in docs/DESIGN.md yet, so it uses the neutral secondary-text color.
+  // No color of its own in docs/dev/DESIGN.md yet, so it uses the neutral secondary-text color.
   wikipedia: {
     name: "Wikipedia",
     barClass: "bg-muted-foreground",

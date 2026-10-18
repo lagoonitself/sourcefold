@@ -1,4 +1,4 @@
-//! Search inside sources, by keyword and by meaning (docs/handoff-search.md).
+//! Search inside sources, by keyword and by meaning (docs/dev/handoff-search.md).
 //!
 //! One SQLite index file per project (`store`), a background thread that keeps them in line with
 //! the files on disk (`indexer`, `catalog`), and the query side (`query`). The meaning vectors

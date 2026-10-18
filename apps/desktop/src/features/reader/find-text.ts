@@ -1,6 +1,6 @@
 /**
  * Pure text logic for "find in this source" and for landing on a search hit
- * (docs/handoff-search.md, "Reader"). Nothing here touches the DOM.
+ * (docs/dev/handoff-search.md, "Reader"). Nothing here touches the DOM.
  *
  * The search index is built from Markdown, but the reader shows rendered text, so the two differ in
  * punctuation, footnote marks and (for YouTube) timestamps. Matching therefore works on words:

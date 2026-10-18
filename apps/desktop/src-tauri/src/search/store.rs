@@ -1,4 +1,4 @@
-//! The index files: one SQLite file per project (docs/handoff-search.md, "Index file schema").
+//! The index files: one SQLite file per project (docs/dev/handoff-search.md, "Index file schema").
 //!
 //! A project's file is only opened when that project is searched or indexed. Every project has a
 //! writer connection (the indexer, vector writes) and a reader connection (queries) so a search

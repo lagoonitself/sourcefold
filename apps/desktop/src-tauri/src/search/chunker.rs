@@ -1,5 +1,5 @@
 //! Turns a Sourcefold Markdown file (docs/FILE-FORMAT.md) into passages for the search index
-//! (docs/handoff-search.md, "Passages").
+//! (docs/dev/handoff-search.md, "Passages").
 //!
 //! The front matter, the `# Title` line and the `> Saved from …` line are dropped. `## My note`
 //! and `## My highlights` are cut off the end and become `note` and `highlight` entries. The body

@@ -157,7 +157,7 @@ An item or folder needs saving when `drive_synced_at is null` or `updated_at > d
 
 ## 5. Markdown formats
 
-The canonical, cross-platform contract for file naming, folder naming, front matter schema, and body layout is specified in [FILE-FORMAT.md](./FILE-FORMAT.md).
+The canonical, cross-platform contract for file naming, folder naming, front matter schema, and body layout is specified in [FILE-FORMAT.md](../FILE-FORMAT.md).
 
 All files start with YAML front matter. Fields that do not apply are omitted. Below is an overview of the canonical formats:
 

@@ -324,7 +324,7 @@ export async function updateItemNote(id: string, note: string | null): Promise<v
 }
 
 // ----------------- HIGHLIGHTS -----------------
-// Contract: docs/handoff-highlights.md.
+// Contract: docs/dev/handoff-highlights.md.
 
 export async function getHighlights(
   scope: { itemId: string } | { folderId: string },

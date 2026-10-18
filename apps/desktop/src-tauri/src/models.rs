@@ -208,7 +208,7 @@ pub struct NativeHostStatus {
 }
 
 // -----------------------------------------------------------------------------
-// Highlights (contract: docs/handoff-highlights.md)
+// Highlights (contract: docs/dev/handoff-highlights.md)
 // -----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

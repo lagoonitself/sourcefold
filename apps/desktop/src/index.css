@@ -129,7 +129,7 @@
   --sidebar-accent-foreground: #8fd3bf;
   --sidebar-border: #2a323d;
   --sidebar-ring: #5fb39c;
-  /* Source-type marks, same values as docs/DESIGN.md and the web app */
+  /* Source-type marks, same values as docs/dev/DESIGN.md and the web app */
   --source-grokipedia: #9fa3f0;
   --source-substack: #f2a65a;
   --source-x: #e6eaf0;

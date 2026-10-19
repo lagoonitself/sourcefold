@@ -4,19 +4,25 @@ import {
   parseReaderFile,
   parseTimestampHref,
   renderMarkdown,
+  SOURCE_SPAN_ATTR,
   type FootnoteDef,
   type FootnoteRef,
+  type RenderedBlock,
   type TimestampMark,
 } from "@sourcefold/core/reader";
 import { parseHtmlOnServer } from "@sourcefold/core/server";
 
-// The text the desktop reader shows for a source, rebuilt here so highlights Claude makes have the
-// same offsets as highlights made in the reader. The reader renders the file's body with
+// The text the desktop reader shows for a source, rebuilt here so highlights and removals Claude
+// makes have the same offsets as the reader's own. The reader renders the file's body with
 // `renderMarkdown` into one element and counts characters of its `textContent`; its timestamp and
 // footnote lookups (apps/desktop/src/features/reader/dom-anchoring.ts) are mirrored below.
 
 export interface ReaderText {
+  /** The body as saved: the file without front matter, title, source line, highlights and note. */
+  body: string;
   text: string;
+  /** Each removable block (`data-sf-src`) and where its text starts in `text`. */
+  blocks: RenderedBlock[];
   /** [start, end) of each footnote marker (`[15]`) in `text`; quotes may leave them out. */
   footnoteMarkers: Array<[number, number]>;
   timestamps: { marks: TimestampMark[]; end: number };
@@ -25,7 +31,8 @@ export interface ReaderText {
 
 export function readerTextOf(file: string): ReaderText {
   const { body } = parseReaderFile(file);
-  const html = body.trim() ? renderMarkdown(body) : "";
+  // The source map only adds attributes, so the text is the same as the reader's.
+  const html = body.trim() ? renderMarkdown(body, { sourceMap: true }) : "";
   const doc = parseHtmlOnServer(
     `<!doctype html><html><body><div id="sf-root">${html}</div></body></html>`,
   );
@@ -90,7 +97,37 @@ export function readerTextOf(file: string): ReaderText {
     return [start, start + (sup.textContent ?? "").length];
   });
 
-  return { text, footnoteMarkers, timestamps: { marks, end }, footnotes: { refs, defs } };
+  // The removable blocks, as the reader's `renderedBlocks` finds them (features/reader/removal.ts).
+  const blocks: RenderedBlock[] = [];
+  for (const el of Array.from(root.querySelectorAll(`[${SOURCE_SPAN_ATTR}]`))) {
+    const [start, end] = (el.getAttribute(SOURCE_SPAN_ATTR) ?? "").split("-").map(Number);
+    if (!Number.isInteger(start) || !Number.isInteger(end)) continue;
+    blocks.push({ start: start!, end: end!, textStart: offsetOf(el), text: el.textContent ?? "" });
+  }
+
+  return {
+    body,
+    text,
+    blocks,
+    footnoteMarkers,
+    timestamps: { marks, end },
+    footnotes: { refs, defs },
+  };
+}
+
+/** The text the reader shows for a body, and the images in it. */
+export function renderedViewOf(body: string): { text: string; images: Set<string> } {
+  const html = body.trim() ? renderMarkdown(body) : "";
+  const doc = parseHtmlOnServer(
+    `<!doctype html><html><body><div id="sf-root">${html}</div></body></html>`,
+  );
+  const root = doc.getElementById("sf-root") as Element;
+  const images = new Set(
+    Array.from(root.querySelectorAll("img"))
+      .map((img) => img.getAttribute("src"))
+      .filter((src): src is string => Boolean(src)),
+  );
+  return { text: root.textContent ?? "", images };
 }
 
 // ----------------------------------------------------------------------------------------------

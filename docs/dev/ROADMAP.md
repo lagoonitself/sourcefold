@@ -127,6 +127,7 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
 - **Remove text from a saved source (built 2026-10-19; [ ] owner's check):**
   - [x] Desktop reader "Remove text" mode (`e`): select text then **Remove** / `Backspace`, or the trash button beside a block; **Edit as text**; Undo toast and `z`. `removeFromBody` and the `data-sf-src` source map are in `packages/core/src/reader`.
   - [x] Saving: `PATCH /api/items/[id]` takes `markdown` for text sources and starts a Drive push (Doc and local copy follow); offline, the `update_item_body` command rewrites the file on disk.
+  - [x] Claude can do it too: `remove_text` (a quote or a whole section) and `undo_remove_text` in the MCP server.
   - [ ] Not covered: the footnote/reference list at the end (use **Edit as text**), parts of a table, quote or multi-line list item (whole block only), X threads, the web app (it has no reader).
 
 - **Sourcefold for Claude, MCP server (built 2026-10-19, contract `docs/dev/handoff-mcp.md`; [ ] owner's check in Claude Desktop):**

@@ -9,6 +9,7 @@ import { registerLibraryTools } from "./tools/library";
 import { registerNotesTools } from "./tools/notes";
 import { registerOrganizeTools } from "./tools/organize";
 import { registerReadTools } from "./tools/read";
+import { registerRemoveTextTools } from "./tools/remove-text";
 
 declare const __SOURCEFOLD_VERSION__: string | undefined;
 export const VERSION =
@@ -26,7 +27,9 @@ Browse it the way a person would, one level at a time, and open only what you ne
 4. read_source: a short source comes back whole. A long one (a Grokipedia article is often 50,000 words) first comes back as an overview with a numbered outline; then read only the sections you need (section=N).
 find_sources finds titles, and passages inside sources when the desktop app is open; use it when you know what you're looking for.
 
-Changing things: move_sources, delete_sources, update_source, update_group and delete_group take an optional project (its name or id). When the user has told you to keep away from some projects, pass the project you mean to change: anything outside it is refused and left untouched. Every reply names the project and group of what changed.
+remove_text cuts text the user doesn't want out of a source (a passage, or a whole section from the outline); undo_remove_text puts it back. Only remove what the user asked for.
+
+Changing things: move_sources, delete_sources, update_source, update_group, delete_group and remove_text take an optional project (its name or id). When the user has told you to keep away from some projects, pass the project you mean to change: anything outside it is refused and left untouched. Every reply names the project and group of what changed.
 - add_links saves links in the background (YouTube is paced to avoid being blocked, so many videos take minutes). Check with get_add_progress.
 - The user's highlights are their own reading notes: list_highlights shows them.
 - show_in_app opens a group, source or highlight in the Sourcefold desktop app so the user can see it.
@@ -44,6 +47,7 @@ export function createServer(ctx: ToolContext): McpServer {
   registerOrganizeTools(server, ctx);
   registerNotesTools(server, ctx);
   registerHighlightsTools(server, ctx);
+  registerRemoveTextTools(server, ctx);
   registerAddTools(server, ctx);
   registerDriveTools(server, ctx);
   registerImagesTools(server, ctx);

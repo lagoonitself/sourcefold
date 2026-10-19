@@ -84,6 +84,11 @@ Ids are uuids. "Group id" means any folder id; a project is a folder without a p
 - `add_highlight` `{ source_id, quote, note? }` — finds the quote in the reader's text (the body rendered exactly as the reader renders it, `packages/core/src/reader`), whitespace-tolerant; stores offsets, prefix, suffix, YouTube seconds and cited references like the reader does. Fails with a clear message when the quote isn't in the source.
 - `update_highlight` `{ highlight_id, note }` (`null` clears), `delete_highlight` `{ highlight_id }`.
 
+### Removing text — `remove-text.ts` (added 2026-10-19)
+
+- `remove_text` `{ source_id, quote? | section?, project? }` — the reader's Remove text for Claude. The body is `parseReaderFile(file).body`, rendered with `{ sourceMap: true }` in linkedom (`readerTextOf` returns its blocks). A quote is found like `add_highlight`'s and turned into targets with `targetsForSelection`; a section (§N from `read_source`'s outline, counted over the body's own headings) becomes every block from its heading to the next heading at its level or above. `removeFromBody` makes the cut, refusing what it can't place exactly; `PATCH /api/items/[id] { markdown }` saves it. Highlights that no longer find their text are deleted, as the reader does. Notes, images and X threads are refused. `destructiveHint: true`.
+- `undo_remove_text` `{ source_id }` — puts back the last removal (a stack per source, in memory for the server's lifetime) and re-puts the deleted highlights. Refuses when the text changed some other way since.
+
 ### Adding — orchestrator, `add.ts`, `add-jobs.ts`
 
 - `add_links` `{ group_id, links: string[], limit_per_collection?: number = 50, published_after?, published_before?, wait_seconds?: number = 25 }` — starts a background job in this process and waits up to `wait_seconds` before answering with its progress and job id. Playlists, channels and Substack publications expand into their videos or posts. Grokipedia: `POST /api/grokipedia`; Wikipedia, YouTube, web, Reddit, PDF, arXiv, Hacker News, Bluesky, Substack: fetched here with the core extractors, saved with `POST /api/capture`. X: refused ("save X posts with the extension"). YouTube follows the desktop's pacing (2–5 s between videos, waits of 1 and 3 min on a rate limit). Duplicates are reported, not saved.

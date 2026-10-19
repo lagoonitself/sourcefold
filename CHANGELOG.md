@@ -6,9 +6,9 @@ Each release's downloads are on the [releases page](https://github.com/lagoonits
 
 ### New
 
-- **Sourcefold in Claude Desktop.** Add it from the desktop app (**Settings → Claude → Add to Claude Desktop**) or with `Sourcefold-Claude.mcpb`, then ask Claude to do what you do: browse your projects and groups and read your sources (long ones by section), add links, YouTube playlists and channels or a Substack publication to a group, rename, move, archive and delete, highlight passages and write notes, and save to Drive. It uses the desktop app's sign-in; with the app open, Claude can also search inside your sources and open things in the app for you.
+- **Sourcefold in Claude Desktop.** Add it from the desktop app (**Settings → Claude → Add to Claude Desktop**) or with `Sourcefold-Claude.mcpb`, then ask Claude to do what you do: browse your projects and groups and read your sources (long ones by section), add links, YouTube playlists and channels or a Substack publication to a group, rename, move, archive and delete, highlight passages, remove text you don't want, write notes, and save to Drive. It uses the desktop app's sign-in; with the app open, Claude can also search inside your sources and open things in the app for you.
 
-- **Remove text you don't want from a saved source.** In the desktop reader, press `e` (or the eraser button), then select text and press **Remove**, or use the trash button beside a paragraph, a heading, a list item or an image. It works on articles, transcripts, threads and PDFs. **Edit as text** opens the saved Markdown for finer cuts. The change goes to Drive, the Google Doc and the local copy; highlights inside removed text go with it, and **Undo** puts everything back.
+- **Remove text you don't want from a saved source.** In the desktop reader, press `e` (or the eraser button), then select text and press **Remove**, or use the trash button beside a paragraph, a heading, a list item or an image. It works on articles, transcripts, threads and PDFs. **Edit as text** opens the saved Markdown for finer cuts. The change goes to Drive, the Google Doc and the local copy; highlights inside removed text go with it, and **Undo** puts everything back. Claude can do it too: ask it to cut a passage or a whole section, and to put it back.
 
 ### Fixed
 

@@ -12,7 +12,7 @@ export const CACHE_TTL_MS = 10 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 20;
 const OUTLINE_MAX_LINES = 150;
 
-interface Heading {
+export interface Heading {
   level: number;
   text: string;
   /** Offset of the heading's line in the body. */
@@ -73,7 +73,7 @@ export function splitFrontMatter(file: string): { fields: Record<string, string>
   return { fields, body: afterClose < 0 ? "" : text.slice(afterClose + 1) };
 }
 
-function findHeadings(body: string): Heading[] {
+export function findHeadings(body: string): Heading[] {
   const headings: Heading[] = [];
   let fence: string | null = null;
   let offset = 0;

@@ -7,7 +7,7 @@ import { fetchHackerNewsCapture } from "./hackernews";
 import { fetchPdfCapture, type LoadPdfJs } from "./pdf";
 import { fetchRedditCapture } from "./reddit";
 import { SourceError, type SourceFetch } from "./source-fetch";
-import { detectLinkKind, parseYouTubeLink } from "./source-links";
+import { detectLinkKind, listingPageMessage, parseYouTubeLink } from "./source-links";
 import { fetchWebPageCapture, WebPageIsPdfError } from "./web-page";
 import { fetchYouTubeCapture } from "./youtube";
 
@@ -47,7 +47,9 @@ export async function fetchSourceCapture(
       return fetchBlueskyCapture(url, { fetch, signal });
     case "pdf":
       return fetchPdfCapture(url, { fetch, parseHtml, loadPdfJs, signal });
-    case "web":
+    case "web": {
+      const listing = listingPageMessage(url);
+      if (listing) throw new SourceError("invalid_url", listing);
       try {
         return await fetchWebPageCapture(url, { fetch, parseHtml, signal });
       } catch (error) {
@@ -56,6 +58,7 @@ export async function fetchSourceCapture(
         }
         throw error;
       }
+    }
     default:
       throw new SourceError("invalid_url", "That isn't a link Sourcefold can open.");
   }

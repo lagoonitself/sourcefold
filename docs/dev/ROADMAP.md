@@ -128,6 +128,8 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [x] `apps/mcp`: 26 tools over the web API (browse, read in parts, find, organize, notes, highlights on the reader's own text, add links as background jobs with YouTube pacing, images, Drive, show in app), packed as `Sourcefold-Claude.mcpb`.
   - [x] Desktop bridge: `agent.json` key and `/api/agent/*` (status, keyword search, show, changed, Substack fetch); Settings → Claude → Add to Claude Desktop; live refresh and "show in app".
   - [x] Release workflow builds the bundle, ships it inside the desktop installers and as a fourth download.
+  - [x] Fixes from Claude Desktop's own test run (2026-10-19): browse level by level (groups, then titles, then a source's outline and only the sections needed), a `project` guard on every change, footnote markers in highlight quotes, Wikimedia image downloads, waiting for a Drive save already running, clear messages for listing pages, and no more empty "saved" sources.
+  - [ ] Owner re-tests the moves, deletes and archives Claude's safety check skipped, using the `project` guard.
   - [ ] Offline mode (the desktop's local library) through the bridge.
   - [ ] Search by meaning for Claude (the query vector comes from the app's GPU worker).
   - [ ] Optional: a remote MCP server on Vercel for Claude on the phone and claude.ai (no YouTube adding, no search inside sources).

@@ -98,6 +98,14 @@ describe("GET /api/items/[id]/content", () => {
     expect(res.status).toBe(409);
   });
 
+  it("builds an empty body for a source that never had text (no Drive file either)", async () => {
+    setup({ kind: "web", title: "YouTube", markdown: null, drive_file_id: null });
+    const res = await GET(new Request("http://localhost/x"), params);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("# YouTube\n");
+    expect(downloadFileText).not.toHaveBeenCalled();
+  });
+
   it("has no file for a paid post that wasn't saved", async () => {
     setup({ kind: "substack", title: "Paid", status: "unavailable", markdown: null });
     const res = await GET(new Request("http://localhost/x"), params);

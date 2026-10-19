@@ -1,13 +1,17 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Folder, Item } from "../types";
+import type { WebApi } from "../web-api";
 import { defineTool, type ToolContext } from "./define";
-import { messageOf, plural, sourceLine } from "./format";
+import { kindLabel, messageOf, plural, sourceLine, type FolderIndex } from "./format";
 import {
   isProject,
   loadFolderIndex,
   mapLimit,
+  PROJECT_GUARD_DESCRIPTION,
   requireFolder,
+  requireInProject,
+  resolveProject,
   sourcesIn,
   withHint,
 } from "./library-data";
@@ -15,6 +19,7 @@ import { forgetCachedSource } from "./read";
 
 const BATCH_CONCURRENCY = 4;
 const GROUP_HINT = "Use get_project_tree to find group ids.";
+const SOURCE_HINT = "Use list_sources to find source ids.";
 
 /** Runs `fn` for each distinct id; returns what worked and what failed, in order. */
 async function eachId<T>(
@@ -29,7 +34,7 @@ async function eachId<T>(
     try {
       return { id, value: await fn(id) };
     } catch (err) {
-      return { id, error: messageOf(withHint(err, "Use get_project_tree to find source ids.")) };
+      return { id, error: messageOf(withHint(err, SOURCE_HINT)) };
     }
   });
   const done: Array<{ id: string; value: T }> = [];
@@ -47,6 +52,29 @@ async function eachId<T>(
 function failureLines(failed: Array<{ id: string; message: string }>): string[] {
   return failed.map((f) => `[${f.id}] ${f.message}`);
 }
+
+/** What `GET /api/items/[id]` answers: enough to say what and where a source is. */
+interface SourceRef {
+  id: string;
+  kind: string;
+  title: string;
+  folder_id: string;
+}
+
+async function loadSourceRef(api: WebApi, id: string): Promise<SourceRef> {
+  return api.get<SourceRef>(`/items/${encodeURIComponent(id)}`);
+}
+
+function where(index: FolderIndex, folderId: string): string {
+  return index.byId.has(folderId) ? index.pathOf(folderId) : `group ${folderId}`;
+}
+
+/** `[id] Web page · "Title" (in Cars › Engines)` */
+function refLine(index: FolderIndex, ref: SourceRef): string {
+  return `[${ref.id}] ${kindLabel(ref.kind)} · "${ref.title}" (in ${where(index, ref.folder_id)})`;
+}
+
+const projectGuard = z.string().min(1).optional().describe(PROJECT_GUARD_DESCRIPTION);
 
 export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void {
   defineTool(server, ctx, {
@@ -107,9 +135,10 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
         .boolean()
         .optional()
         .describe("true to archive a project, false to bring it back. Projects only."),
+      project: projectGuard,
     },
     idempotent: true,
-    run: async ({ group_id, name, parent_id, position, archived }, { api }) => {
+    run: async ({ group_id, name, parent_id, position, archived, project }, { api }) => {
       const body: Record<string, unknown> = {};
       if (name !== undefined) body.name = name;
       if (parent_id !== undefined) body.parent_id = parent_id;
@@ -119,13 +148,19 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
       }
 
       const index = await loadFolderIndex(api);
+      const guard = project ? resolveProject(index, project) : null;
       const folder = requireFolder(index, group_id, "any");
+      const label = `${isProject(folder) ? "Project" : "Group"} "${index.pathOf(group_id)}" [${group_id}]`;
+      requireInProject(index, guard, group_id, label);
       if (archived !== undefined && !isProject(folder)) {
         throw new Error(
           `Only projects can be archived, and "${folder.name}" is a group in ${index.pathOf(group_id)}.`,
         );
       }
-      if (parent_id) requireFolder(index, parent_id, "any");
+      if (parent_id) {
+        requireFolder(index, parent_id, "any");
+        requireInProject(index, guard, parent_id, `The new parent [${parent_id}]`);
+      }
 
       const changes: string[] = [];
       // The web app handles `archived` on its own and ignores other fields sent with it.
@@ -149,7 +184,7 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
         await api.patch(`/folders/${encodeURIComponent(group_id)}`, { archived });
         changes.push(archived ? "archived" : "unarchived");
       }
-      return `Updated "${folder.name}" [${group_id}]: ${changes.join(", ")}.`;
+      return `Updated ${label}: ${changes.join(", ")}.`;
     },
   });
 
@@ -160,21 +195,33 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
       "Deletes a group (or a whole project) together with every group inside it and every source in them. This cannot be undone from here. Check with get_project_tree first, and use move_sources to keep sources that should survive. Answers with what was deleted.",
     input: {
       group_id: z.string().min(1).describe("Id of the group or project to delete."),
+      project: projectGuard,
     },
     destructive: true,
-    run: async ({ group_id }, { api }) => {
+    run: async ({ group_id, project }, { api }) => {
       let summary = `[${group_id}]`;
       let note = "";
+      let index: FolderIndex | null = null;
       try {
-        const index = await loadFolderIndex(api);
+        index = await loadFolderIndex(api);
+      } catch (err) {
+        // With a guard the delete must be checked; without one a failed lookup isn't a reason
+        // to refuse.
+        if (project) throw err;
+      }
+      if (index) {
+        const guard = project ? resolveProject(index, project) : null;
         const folder = requireFolder(index, group_id, "any");
+        summary = `${isProject(folder) ? "project" : "group"} "${index.pathOf(group_id)}" [${group_id}]`;
+        requireInProject(
+          index,
+          guard,
+          group_id,
+          summary.replace(/^./, (c) => c.toUpperCase()),
+        );
         const inside = index.descendantsOf(group_id);
         const sources = inside.reduce((sum, f) => sum + sourcesIn(f), 0);
-        summary = `${isProject(folder) ? "project" : "group"} "${index.pathOf(group_id)}" [${group_id}]`;
         note = ` with ${plural(inside.length - 1, "subgroup")} and ${plural(sources, "source")}`;
-      } catch (err) {
-        // A missing folder is an answer; a failed lookup is not a reason to refuse the delete.
-        if (err instanceof Error && err.message.startsWith("No ")) throw err;
       }
       try {
         await api.delete(`/folders/${encodeURIComponent(group_id)}`);
@@ -203,9 +250,10 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
         .nullable()
         .optional()
         .describe("The user's note on the source; null or an empty string removes it."),
+      project: projectGuard,
     },
     idempotent: true,
-    run: async ({ source_id, title, group_id, note }, { api }) => {
+    run: async ({ source_id, title, group_id, note, project }, { api }) => {
       const body: Record<string, unknown> = {};
       if (title !== undefined) body.title = title;
       if (group_id !== undefined) body.folder_id = group_id;
@@ -213,19 +261,35 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
       if (Object.keys(body).length === 0) {
         throw new Error("Nothing to change. Give title, group_id or note.");
       }
+
+      const [index, before] = await Promise.all([
+        loadFolderIndex(api),
+        loadSourceRef(api, source_id).catch((err: unknown) => {
+          throw withHint(err, SOURCE_HINT);
+        }),
+      ]);
+      const guard = project ? resolveProject(index, project) : null;
+      requireInProject(index, guard, before.folder_id, `"${before.title}" [${source_id}]`);
+      if (group_id !== undefined) {
+        requireFolder(index, group_id, "group");
+        requireInProject(index, guard, group_id, `The group [${group_id}]`);
+      }
+
       let item: Item;
       try {
         item = await api.patch<Item>(`/items/${encodeURIComponent(source_id)}`, body);
       } catch (err) {
-        throw withHint(err, "Use get_project_tree to find source ids.");
+        throw withHint(err, SOURCE_HINT);
       }
       forgetCachedSource(source_id);
       const changes = [
-        title !== undefined ? "renamed" : null,
-        group_id !== undefined ? `moved to group ${group_id}` : null,
+        title !== undefined ? `renamed from "${before.title}"` : null,
+        group_id !== undefined
+          ? `moved from ${where(index, before.folder_id)} to ${where(index, group_id)}`
+          : null,
         note !== undefined ? (note ? "note set" : "note cleared") : null,
       ].filter(Boolean);
-      return `Updated (${changes.join(", ")}): ${sourceLine(item)}`;
+      return `Updated (${changes.join(", ")}): ${sourceLine(item)} · in ${where(index, item.folder_id)}`;
     },
   });
 
@@ -233,7 +297,7 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
     name: "move_sources",
     title: "Move sources to a group",
     description:
-      "Moves several sources into one group (a group, not a project). Each source is handled on its own, and the reply lists which moved and which failed with the reason. Fails as a whole only when none could be moved.",
+      "Moves several sources into one group (a group, not a project). Each source is handled on its own, and the reply lists each one with where it came from, and which failed with the reason. Fails as a whole only when none could be moved.",
     input: {
       source_ids: z
         .array(z.string().min(1))
@@ -241,24 +305,27 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
         .max(200)
         .describe("Ids of the sources to move."),
       group_id: z.string().min(1).describe("Id of the group to move them into."),
+      project: projectGuard,
     },
     idempotent: true,
-    run: async ({ source_ids, group_id }, { api }) => {
+    run: async ({ source_ids, group_id, project }, { api }) => {
       const index = await loadFolderIndex(api);
+      const guard = project ? resolveProject(index, project) : null;
       const target = requireFolder(index, group_id, "group");
+      requireInProject(index, guard, group_id, `The group ${index.pathOf(group_id)} [${group_id}]`);
       const { done, failed } = await eachId(source_ids, async (id) => {
-        const item = await api.patch<Item>(`/items/${encodeURIComponent(id)}`, {
-          folder_id: group_id,
-        });
+        const ref = await loadSourceRef(api, id);
+        requireInProject(index, guard, ref.folder_id, `"${ref.title}"`);
+        await api.patch<Item>(`/items/${encodeURIComponent(id)}`, { folder_id: group_id });
         forgetCachedSource(id);
-        return item;
+        return ref;
       });
       if (done.length === 0) {
         throw new Error(["Couldn't move any source:", ...failureLines(failed)].join("\n"));
       }
       const lines = [
-        `Moved ${done.length} of ${done.length + failed.length} sources to ${index.pathOf(target.id)} [${target.id}].`,
-        ...done.map(({ value }) => sourceLine(value)),
+        `Moved ${done.length} of ${done.length + failed.length} sources to ${index.pathOf(target.id)} [${target.id}]:`,
+        ...done.map(({ value }) => refLine(index, value).replace(/\(in /, "(from ")),
       ];
       if (failed.length > 0) lines.push("Failed:", ...failureLines(failed));
       return lines.join("\n");
@@ -269,25 +336,32 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
     name: "delete_sources",
     title: "Delete sources",
     description:
-      "Deletes sources by id. Each one is handled on its own, and the reply lists which were deleted and which failed with the reason. Fails as a whole only when none could be deleted. Check ids with get_project_tree or find_sources first; this cannot be undone from here.",
+      "Deletes sources by id. Each one is handled on its own, and the reply lists each deleted source with its title and group, and which failed with the reason. Fails as a whole only when none could be deleted. Check ids with list_sources or find_sources first; this cannot be undone from here.",
     input: {
       source_ids: z
         .array(z.string().min(1))
         .min(1)
         .max(200)
         .describe("Ids of the sources to delete."),
+      project: projectGuard,
     },
     destructive: true,
-    run: async ({ source_ids }, { api }) => {
+    run: async ({ source_ids, project }, { api }) => {
+      const index = await loadFolderIndex(api);
+      const guard = project ? resolveProject(index, project) : null;
       const { done, failed } = await eachId(source_ids, async (id) => {
+        const ref = await loadSourceRef(api, id);
+        requireInProject(index, guard, ref.folder_id, `"${ref.title}"`);
         await api.delete(`/items/${encodeURIComponent(id)}`);
         forgetCachedSource(id);
+        return ref;
       });
       if (done.length === 0) {
         throw new Error(["Couldn't delete any source:", ...failureLines(failed)].join("\n"));
       }
       const lines = [
-        `Deleted ${done.length} of ${done.length + failed.length} sources: ${done.map((d) => `[${d.id}]`).join(" ")}`,
+        `Deleted ${done.length} of ${done.length + failed.length} sources:`,
+        ...done.map(({ value }) => refLine(index, value)),
       ];
       if (failed.length > 0) lines.push("Failed:", ...failureLines(failed));
       return lines.join("\n");

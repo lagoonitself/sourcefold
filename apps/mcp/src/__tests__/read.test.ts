@@ -112,17 +112,76 @@ describe("read_source", () => {
     expect(text).not.toContain("Outline");
   });
 
-  it("splits a long source at headings and gives the outline on part 1", async () => {
+  it("answers a long source with an overview and outline, without its text", async () => {
+    const body = [section("First", 15), section("Second", 15), section("Third", 15)].join("\n\n");
+    const h = await connect(registerReadTools, { web: web("web", file(body)) });
+    const { text, isError } = await h.call("read_source", { source_id: "s1" });
+    expect(isError).toBe(false);
+    const lines = text.split("\n");
+    expect(lines[0]).toBe("A: title");
+    expect(lines[2]).toBe("By: Ada · Site: Example · Published: 2026-01-02 · Saved: 2026-10-01");
+    expect(text).toMatch(/Length: [\d,]+ characters \(about [\d,]+ words\), too long/);
+    expect(text).toMatch(/^§1 First · 15\.\dk characters$/m);
+    expect(text).toMatch(/^§3 Third · /m);
+    expect(text).not.toContain("Paragraph 0.");
+  });
+
+  it("gives the video time each part of a long transcript covers", async () => {
+    const lines = Array.from(
+      { length: 60 },
+      (_, n) => `[${n}:00](https://youtu.be/abc?t=${n * 60}) ${"word ".repeat(200)}`,
+    );
+    const body = ["## Transcript", ...lines].join("\n\n");
+    const h = await connect(registerReadTools, { web: web("youtube", file(body)) });
+    const { text } = await h.call("read_source", { source_id: "s1" });
+    expect(text).toContain("Video time in each part (read one with part=N):");
+    expect(text).toMatch(/^part 1: 0:00 to \d+:00$/m);
+    expect(text).toMatch(/^part 2: \d+:00 to 59:00$/m);
+  });
+
+  it("reads one section, and the next part of a section that is too long", async () => {
+    const body = [
+      "Intro text.",
+      section("First", 3),
+      "### Inside first\n\nNested text.",
+      section("Second", 45),
+      section("Third", 3),
+    ].join("\n\n");
+    const h = await connect(registerReadTools, { web: web("web", file(body)) });
+
+    const overview = await h.call("read_source", { source_id: "s1" });
+    expect(overview.text).toMatch(/^§1 First · /m);
+    expect(overview.text).toMatch(/^ {2}§2 Inside first · /m);
+
+    const first = await h.call("read_source", { source_id: "s1", section: 1 });
+    expect(first.text).toContain("Section §1 First");
+    expect(first.text).toContain("----\n## First");
+    // A section includes its subsections and stops at the next heading at its level.
+    expect(first.text).toContain("Nested text.");
+    expect(first.text).not.toContain("## Second");
+    expect(first.text).toContain("Next section: §3 Second.");
+
+    const second = await h.call("read_source", { source_id: "s1", section: 3 });
+    expect(second.text).toContain("Section §3 Second (part 1 of 2 of this section)");
+    expect(second.text).toContain("call read_source with section=3, part=2.");
+    const rest = await h.call("read_source", { source_id: "s1", section: 3, part: 2 });
+    expect(rest.text).toContain("(part 2 of 2 of this section)");
+    expect(rest.text).not.toContain("## Third");
+    expect(rest.text).toContain("Next section: §4 Third.");
+
+    const missing = await h.call("read_source", { source_id: "s1", section: 9 });
+    expect(missing.isError).toBe(true);
+    expect(missing.text).toContain("has 4 sections; section 9 doesn't exist");
+  });
+
+  it("splits a long source at headings into parts", async () => {
     const body = [section("First", 15), section("Second", 15), section("Third", 15)].join("\n\n");
     const markdown = file(body);
     const h = await connect(registerReadTools, { web: web("web", markdown) });
 
-    const one = await h.call("read_source", { source_id: "s1" });
+    const one = await h.call("read_source", { source_id: "s1", part: 1 });
     expect(one.text).toMatch(/Part 1 of 2 \(characters 1–[\d,]+ of [\d,]+\)/);
-    expect(one.text).toContain("Outline (heading, then the part it is in):");
-    expect(one.text).toContain("- First (part 1)");
-    expect(one.text).toContain("- Second (part 1)");
-    expect(one.text).toContain("- Third (part 2)");
+    expect(one.text).not.toContain("Outline");
     expect(one.text).toContain("Continues in part 2: call read_source with part=2.");
     // Part 1 stops before the heading that starts part 2.
     expect(one.text).not.toContain("## Third");
@@ -146,7 +205,9 @@ describe("read_source", () => {
   it("cuts at a paragraph break when there are no headings", async () => {
     const body = Array.from({ length: 60 }, (_, n) => paragraph(n)).join("\n\n");
     const h = await connect(registerReadTools, { web: web("web", file(body)) });
-    const one = await h.call("read_source", { source_id: "s1" });
+    const overview = await h.call("read_source", { source_id: "s1" });
+    expect(overview.text).toContain("It has no headings. Read it in order with part=1 to part=2.");
+    const one = await h.call("read_source", { source_id: "s1", part: 1 });
     expect(one.text).toContain("Part 1 of 2");
     expect(one.text).not.toContain("Outline");
     const first = one.text.split("----\n")[1]!;
@@ -162,8 +223,8 @@ describe("read_source", () => {
       web: web("web", file(body + "\n\n" + section("Big", 45))),
     });
     const { text } = await h.call("read_source", { source_id: "s1" });
-    expect(text).toContain("- Real (part 1)");
-    expect(text).not.toContain("- not a heading");
+    expect(text).toMatch(/^§1 Real · /m);
+    expect(text).not.toContain("not a heading");
   });
 
   it("says which parts exist when the part is out of range", async () => {

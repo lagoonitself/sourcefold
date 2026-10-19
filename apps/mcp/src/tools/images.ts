@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { WIKIPEDIA_USER_AGENT } from "@sourcefold/core/capture";
 import { z } from "zod";
 import type { Item } from "../types";
 import { defineTool, type ToolContext } from "./define";
@@ -68,7 +69,11 @@ async function downloadImage(url: string): Promise<{ bytes: Uint8Array; fileName
   }
   let res: Response;
   try {
-    res = await fetch(parsed, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
+    // Wikimedia (upload.wikimedia.org) refuses downloads that don't say who they are.
+    res = await fetch(parsed, {
+      headers: { "User-Agent": WIKIPEDIA_USER_AGENT },
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+    });
   } catch {
     throw new Error(`Couldn't download ${url}.`);
   }

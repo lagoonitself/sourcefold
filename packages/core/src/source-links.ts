@@ -248,6 +248,30 @@ export function detectLinkKind(input: string): SourceCaptureKind | null {
   return "web";
 }
 
+/**
+ * Why a YouTube, Reddit, Hacker News or Bluesky page that isn't a single source can't be saved, or null.
+ * Without this such a page is read as an ordinary web page and fails with "Couldn't find the
+ * article text".
+ */
+export function listingPageMessage(input: string): string | null {
+  const url = parse(input);
+  if (!url || detectLinkKind(input) !== "web") return null;
+  const host = bareHost(url);
+  if (REDDIT_HOSTS.has(host) || host === "redd.it") {
+    return "Only single Reddit posts can be saved (links with /comments/ in them), not subreddits, listings or profiles.";
+  }
+  if (host === "news.ycombinator.com") {
+    return "Only single Hacker News items can be saved (news.ycombinator.com/item?id=…), not the front page or lists.";
+  }
+  if (YOUTUBE_HOSTS.has(host) || host === "youtu.be") {
+    return "Only YouTube videos, playlists and channels can be saved, not YouTube's home, search or feed pages.";
+  }
+  if (host === "bsky.app") {
+    return "Only single Bluesky posts can be saved (bsky.app/profile/…/post/…), not profiles or feeds.";
+  }
+  return null;
+}
+
 /** Canonical address for the kinds above, or null when the link is none of them. */
 export function canonicalSourceUrl(input: string): string | null {
   return (

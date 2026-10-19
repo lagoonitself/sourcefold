@@ -121,7 +121,7 @@ export function registerHighlightsTools(server: McpServer, ctx: ToolContext): vo
     name: "add_highlight",
     title: "Highlight a passage",
     description:
-      "Highlights a passage in a source, as if the user selected it in the reader; it shows in the reader, the Highlights tab and the source's file. quote must be the exact passage as read_source showed it (Markdown marks like ** and link targets are ignored, spacing and curly quotes don't matter). For a long passage, give its first words, then ..., then its last words. If the passage overlaps an existing highlight, nothing is created and that highlight is named instead (use update_highlight to change its note).",
+      "Highlights a passage in a source, as if the user selected it in the reader; it shows in the reader, the Highlights tab and the source's file. quote must be the exact passage as read_source showed it (Markdown marks like ** and link targets are ignored, footnote markers like [^15] may be left out, spacing and curly quotes don't matter). For a long passage, give its first words, then ..., then its last words. If the passage overlaps an existing highlight, nothing is created and that highlight is named instead (use update_highlight to change its note).",
     input: {
       source_id: z.string().describe("The source to highlight in."),
       quote: z.string().min(1).describe("The passage, copied from read_source."),
@@ -133,7 +133,7 @@ export function registerHighlightsTools(server: McpServer, ctx: ToolContext): vo
       const file = await ctx.api.text(`/items/${encodeURIComponent(item.id)}/content`);
       const reader = readerTextOf(file);
 
-      const match = findQuote(reader.text, args.quote);
+      const match = findQuote(reader.text, args.quote, reader.footnoteMarkers);
       if (!match) {
         throw new Error(
           `That passage isn't in "${item.title}". Copy it exactly from read_source (or give its first words ... last words).`,

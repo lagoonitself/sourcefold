@@ -4,6 +4,7 @@ import {
   canonicalSourceUrl,
   detectLinkKind,
   hackerNewsItemUrl,
+  listingPageMessage,
   looksLikePdfUrl,
   meaningfulQuery,
   parseArxivLink,
@@ -212,5 +213,24 @@ describe("canonicalSourceUrl and meaningfulQuery", () => {
     const url = new URL("https://example.com/p?b=2&utm_source=x&a=1&fbclid=z&si=q&ref=feed");
     expect(meaningfulQuery(url)).toBe("?b=2&a=1");
     expect(meaningfulQuery(new URL("https://example.com/p?utm_medium=y"))).toBe("");
+  });
+});
+
+describe("listingPageMessage", () => {
+  it("explains listing pages on sites where only single posts can be saved", () => {
+    expect(listingPageMessage("https://www.reddit.com/r/robotics/top/")).toMatch(
+      /^Only single Reddit posts/,
+    );
+    expect(listingPageMessage("https://old.reddit.com/user/someone")).toMatch(/Reddit/);
+    expect(listingPageMessage("https://news.ycombinator.com/news")).toMatch(/Hacker News/);
+    expect(listingPageMessage("https://www.youtube.com/")).toMatch(/YouTube/);
+    expect(listingPageMessage("https://bsky.app/profile/someone.bsky.social")).toMatch(/Bluesky/);
+  });
+
+  it("is null for single posts and other sites", () => {
+    expect(listingPageMessage("https://www.reddit.com/r/robotics/comments/1abc2d/x/")).toBeNull();
+    expect(listingPageMessage("https://news.ycombinator.com/item?id=123")).toBeNull();
+    expect(listingPageMessage(VIDEO)).toBeNull();
+    expect(listingPageMessage("https://example.com/r/robotics/top")).toBeNull();
   });
 });

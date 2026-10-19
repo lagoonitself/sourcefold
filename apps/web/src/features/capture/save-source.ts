@@ -30,7 +30,7 @@ export type SaveSourceDuplicateError = {
 
 export type SaveSourceGeneralError = {
   success: false;
-  status: 400 | 500;
+  status: 400 | 422 | 500;
   error: { code: string; message: string };
 };
 
@@ -97,6 +97,15 @@ export async function saveSource(
   folderId: string,
   capture: SourceCapture,
 ): Promise<SaveSourceResult> {
+  // A source with no text would be "saved" with nothing in it, and nothing for Drive to keep.
+  if (!capture.markdown.trim()) {
+    return {
+      success: false,
+      status: 422,
+      error: { code: "no_content", message: "There's no text on this page to save." },
+    };
+  }
+
   const canonical = await canonicalOrOriginal(capture.url);
 
   const existing = await findDuplicate(db, userId, canonical, folderId);
@@ -104,7 +113,7 @@ export async function saveSource(
 
   const position = await nextPosition(db, userId, folderId);
   const title = capture.title.trim().slice(0, 500) || capture.url;
-  const markdown = capture.markdown.trim() ? `${capture.markdown.trim()}\n` : null;
+  const markdown = `${capture.markdown.trim()}\n`;
 
   const { data: item, error: insertError } = await db
     .from("items")

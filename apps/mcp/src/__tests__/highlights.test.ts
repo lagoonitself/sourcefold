@@ -86,6 +86,22 @@ describe("findQuote", () => {
     expect(text.slice(span.start, span.end)).toMatch(/^uses exhaust gas[\s\S]*called turbo lag$/);
     expect(findQuote(text, "not in the article")).toBeNull();
   });
+
+  it("matches a quote that leaves out a footnote marker it crosses", () => {
+    const reader = readerTextOf(FILE);
+    const quote = "spin a turbine. The delay before boost";
+    expect(findQuote(reader.text, quote)).toBeNull();
+    const m = findQuote(reader.text, quote, reader.footnoteMarkers)!;
+    expect(reader.text.slice(m.start, m.end)).toBe("spin a turbine.[1] The delay before boost");
+    const span = findQuote(
+      reader.text,
+      "spin a turbine. The delay … in the 1900s.",
+      reader.footnoteMarkers,
+    )!;
+    expect(reader.text.slice(span.start, span.end)).toMatch(
+      /^spin a turbine\.\[1\][\s\S]*1900s\.$/,
+    );
+  });
 });
 
 describe("highlight tools", () => {

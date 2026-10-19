@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { registerDriveTools } from "../tools/drive";
+import { driveTiming, registerDriveTools } from "../tools/drive";
 import { connect, fakeWeb } from "./harness";
 
 const connected = () => ({ json: { data: { connected: true, unsaved: 3 } } });
@@ -26,6 +26,29 @@ describe("save_to_drive", () => {
     expect(isError).toBe(false);
     expect(text).toBe("Saved 57 items to Google Drive.");
     expect(web.calls.filter((c) => c === "POST /drive/save")).toHaveLength(2);
+  });
+
+  it("waits for a save the app already started, then carries on", async () => {
+    driveTiming.busyRetryMs = 1;
+    let calls = 0;
+    const web = fakeWeb({
+      "GET /drive/status": connected,
+      "POST /drive/save": () => {
+        calls++;
+        return calls < 3
+          ? {
+              status: 409,
+              json: { error: { code: "sync_in_progress", message: "A save is already running." } },
+            }
+          : { json: { data: { processed: 0, remaining: 0, done: true, failed: [] } } };
+      },
+    });
+    const h = await connect(registerDriveTools, { web });
+    const { text, isError } = await h.call("save_to_drive");
+    expect(isError).toBe(false);
+    expect(text).toContain("a save the Sourcefold app had started saved the changes");
+    expect(calls).toBe(3);
+    driveTiming.busyRetryMs = 3_000;
   });
 
   it("says when there was nothing to save", async () => {

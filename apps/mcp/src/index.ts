@@ -19,9 +19,14 @@ export const INSTRUCTIONS = `Sourcefold is the user's research library. It holds
 
 How it is organized: projects (top-level, e.g. "Cars") contain groups, and groups can contain groups, to any depth. Every source lives in exactly one group, never directly in a project. Everything has an id; pass ids back exactly as shown in brackets.
 
-Working with it:
-- Start with list_projects, then get_project_tree to see a project's groups and sources.
-- Sources can be long (a Grokipedia article is often 50,000 words). read_source answers in parts and lists the outline first; read only the parts you need. find_sources finds titles, and passages inside sources when the desktop app is open.
+Browse it the way a person would, one level at a time, and open only what you need:
+1. list_projects: the projects.
+2. get_project_tree: one project's groups, with how many sources each holds.
+3. list_sources: the titles in one group. Decide from the titles which sources matter.
+4. read_source: a short source comes back whole. A long one (a Grokipedia article is often 50,000 words) first comes back as an overview with a numbered outline; then read only the sections you need (section=N).
+find_sources finds titles, and passages inside sources when the desktop app is open; use it when you know what you're looking for.
+
+Changing things: move_sources, delete_sources, update_source, update_group and delete_group take an optional project (its name or id). When the user has told you to keep away from some projects, pass the project you mean to change: anything outside it is refused and left untouched. Every reply names the project and group of what changed.
 - add_links saves links in the background (YouTube is paced to avoid being blocked, so many videos take minutes). Check with get_add_progress.
 - The user's highlights are their own reading notes: list_highlights shows them.
 - show_in_app opens a group, source or highlight in the Sourcefold desktop app so the user can see it.

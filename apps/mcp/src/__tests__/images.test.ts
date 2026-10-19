@@ -122,6 +122,9 @@ describe("add_image", () => {
     expect(fake.bodies[fake.calls.indexOf("POST /uploads/sign")]).toMatchObject({
       file_name: "photo.png",
     });
+    // Wikimedia answers 400 to downloads without a User-Agent that names the app.
+    const download = storage.mock.calls.find((c) => String(c[0]) === "https://img.test/photo.png")!;
+    expect(download[1].headers["User-Agent"]).toMatch(/^Sourcefold\//);
   });
 
   it("wants exactly one of path and url", async () => {

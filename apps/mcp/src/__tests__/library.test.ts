@@ -115,7 +115,10 @@ describe("list_projects", () => {
 describe("get_project_tree", () => {
   it("nests groups and lists sources with urls", async () => {
     const h = await connect(registerLibraryTools, { web: web() });
-    const { text, isError } = await h.call("get_project_tree", { project_id: "p1" });
+    const { text, isError } = await h.call("get_project_tree", {
+      project_id: "p1",
+      include_sources: true,
+    });
     expect(isError).toBe(false);
     const lines = text.split("\n");
     expect(lines[0]).toBe("Project: [p1] Cars · 2 groups · 3 sources");
@@ -128,10 +131,11 @@ describe("get_project_tree", () => {
     expect(text).not.toContain("urls are left out");
   });
 
-  it("can leave the sources out and then makes no per-group requests", async () => {
+  it("shows only the groups by default and makes no per-group requests", async () => {
     const fake = web();
     const h = await connect(registerLibraryTools, { web: fake });
-    const { text } = await h.call("get_project_tree", { project_id: "p1", include_sources: false });
+    const { text } = await h.call("get_project_tree", { project_id: "p1" });
+    expect(text).toContain("list_sources with a group's id shows its source titles");
     expect(text).toContain("Group [g1] Engines · 2 sources");
     expect(text).not.toContain("[i1]");
     expect(fake.calls).toEqual(["GET /folders?includeArchived=true"]);
@@ -146,7 +150,7 @@ describe("get_project_tree", () => {
         }),
       }),
     });
-    const { text } = await h.call("get_project_tree", { project_id: "p1" });
+    const { text } = await h.call("get_project_tree", { project_id: "p1", include_sources: true });
     expect(text).toContain("This project has 301 sources, so urls are left out");
     expect(text).toContain("[m0] Web page · Title m0");
     expect(text).not.toContain("https://example.com/m0");
@@ -161,7 +165,7 @@ describe("get_project_tree", () => {
         }),
       }),
     });
-    const { text } = await h.call("get_project_tree", { project_id: "p1" });
+    const { text } = await h.call("get_project_tree", { project_id: "p1", include_sources: true });
     expect(text).toContain("https://example.com/m0");
   });
 
@@ -189,7 +193,10 @@ describe("get_project_tree", () => {
         },
       }),
     });
-    const { isError } = await h.call("get_project_tree", { project_id: "p" });
+    const { isError } = await h.call("get_project_tree", {
+      project_id: "p",
+      include_sources: true,
+    });
     expect(isError).toBe(false);
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(6);
@@ -214,7 +221,10 @@ describe("get_project_tree", () => {
             : { json: { data: itemsByFolder[query.get("folder") ?? ""] ?? [] } },
       }),
     });
-    const { text, isError } = await h.call("get_project_tree", { project_id: "p1" });
+    const { text, isError } = await h.call("get_project_tree", {
+      project_id: "p1",
+      include_sources: true,
+    });
     expect(isError).toBe(false);
     expect(text).toContain("couldn't list its sources: Database busy");
     expect(text).toContain("[i1]");
@@ -222,9 +232,40 @@ describe("get_project_tree", () => {
 });
 
 describe("list_sources", () => {
-  it("shows url, error and the start of the note", async () => {
+  it("lists one line per source, with subgroups first, and no urls or notes", async () => {
     const h = await connect(registerLibraryTools, { web: web() });
     const { text } = await h.call("list_sources", { group_id: "g1" });
+    expect(text.split("\n")).toEqual([
+      "Cars › Engines [g1] · 2 sources",
+      "Subgroups:",
+      "  Group [g2] Turbo · 1 source",
+      "Sources:",
+      "[i1] YouTube · Title i1 · Engineering Explained · 2026-10-01",
+      "[i2] Web page · Title i2 · 2026-10-01 · error",
+      "  Error: Blocked by the site",
+    ]);
+  });
+
+  it("pages long groups", async () => {
+    const many = Array.from({ length: 130 }, (_, n) => item(`m${n}`, "g2"));
+    const h = await connect(registerLibraryTools, {
+      web: web({ "GET /items": () => ({ json: { data: many } }) }),
+    });
+    const first = await h.call("list_sources", { group_id: "g2" });
+    expect(first.text).toContain("[m99]");
+    expect(first.text).not.toContain("[m100]");
+    expect(first.text).toContain(
+      "Showing 1–100 of 130. Call list_sources with offset=100 for more.",
+    );
+    const second = await h.call("list_sources", { group_id: "g2", offset: 100 });
+    expect(second.text).toContain("[m129]");
+    expect(second.text).not.toContain("[m99]");
+    expect(second.text).not.toContain("Showing");
+  });
+
+  it("shows url, error and the start of the note with details", async () => {
+    const h = await connect(registerLibraryTools, { web: web() });
+    const { text } = await h.call("list_sources", { group_id: "g1", details: true });
     expect(text).toContain("Cars › Engines [g1] · 2 sources");
     expect(text).toContain("  https://example.com/i1");
     expect(text).toContain("  Error: Blocked by the site");

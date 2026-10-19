@@ -6,7 +6,12 @@ Each release's downloads are on the [releases page](https://github.com/lagoonits
 
 ### New
 
-- **Sourcefold in Claude Desktop.** Add it from the desktop app (**Settings → Claude → Add to Claude Desktop**) or with `Sourcefold-Claude.mcpb`, then ask Claude to do what you do: list and read your sources (long ones in parts), add links, YouTube playlists and channels or a Substack publication to a group, rename, move, archive and delete, highlight passages and write notes, and save to Drive. It uses the desktop app's sign-in; with the app open, Claude can also search inside your sources and open things in the app for you.
+- **Sourcefold in Claude Desktop.** Add it from the desktop app (**Settings → Claude → Add to Claude Desktop**) or with `Sourcefold-Claude.mcpb`, then ask Claude to do what you do: browse your projects and groups and read your sources (long ones by section), add links, YouTube playlists and channels or a Substack publication to a group, rename, move, archive and delete, highlight passages and write notes, and save to Drive. It uses the desktop app's sign-in; with the app open, Claude can also search inside your sources and open things in the app for you.
+
+### Fixed
+
+- Links to a subreddit, Hacker News's front page, a Bluesky profile or YouTube's home page now say that only single posts and videos can be saved, instead of "Couldn't find the article text".
+- A page with no text is no longer saved as an empty source. Such a source used to fail to save to Drive with a wrong "Drive held the only copy" message.
 
 ## 0.3.0 (2026-10-18)
 

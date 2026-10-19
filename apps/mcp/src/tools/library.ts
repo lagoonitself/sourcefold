@@ -27,6 +27,7 @@ import {
 export const TREE_URL_LIMIT = 300;
 const TREE_CONCURRENCY = 6;
 const MAX_TITLE_MATCHES = 40;
+export const LIST_PAGE_SIZE = 100;
 
 function urlOf(item: Item): string | null {
   return item.source_url || item.canonical_url || null;
@@ -105,7 +106,7 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     name: "list_projects",
     title: "List projects",
     description:
-      "Lists the user's projects (the top level of the library) with each one's id, number of groups and number of sources. Archived projects are left out unless include_archived is true. Use it to start exploring; then get_project_tree shows what is inside one project.",
+      "Lists the user's projects (the top level of the library) with each one's id, number of groups and number of sources. Archived projects are left out unless include_archived is true. Start here; then get_project_tree shows one project's groups.",
     input: {
       include_archived: z
         .boolean()
@@ -139,13 +140,15 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     name: "get_project_tree",
     title: "Show a project's groups and sources",
     description:
-      "Shows one project as a tree: its groups (nested groups are indented) with their ids and source counts, and by default every source as `[id] kind · title · author · saved date · url`. Use it to find group ids and source ids. Projects over 300 sources are listed without urls (titles stay); use list_sources for one group to see urls. Pass include_sources=false for just the groups.",
+      "Shows one project's groups as a tree (nested groups are indented), each with its id and number of sources. This is the map of a project: pick the groups that matter, then list_sources shows the titles in a group. Pass include_sources=true only when you need every source title in the whole project at once (large projects get long; over 300 sources the urls are left out).",
     input: {
       project_id: z.string().describe("Id of the project (from list_projects)."),
       include_sources: z
         .boolean()
-        .default(true)
-        .describe("List the sources inside each group. Default true."),
+        .default(false)
+        .describe(
+          "Also list every source in every group. Default false: just the groups; list_sources shows one group's titles.",
+        ),
     },
     readOnly: true,
     idempotent: true,
@@ -184,6 +187,9 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         lines.push("No groups yet. Use create_group with this project's id as parent_id.");
         return lines.join("\n");
       }
+      if (!include_sources) {
+        lines.push("Groups (list_sources with a group's id shows its source titles):");
+      }
 
       const walk = (parentId: string, depth: number) => {
         const indent = "  ".repeat(depth);
@@ -208,25 +214,55 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     name: "list_sources",
     title: "List the sources in a group",
     description:
-      "Lists every source in one group with its id, kind, title, url, author or channel, saved date, status (and the error when saving failed) and the first 200 characters of the user's own note. Use it when you need urls or notes for one group. To read a source's text use read_source.",
+      "Lists the sources in one group, one line each: `[id] kind · title · author or channel · saved date` (and the error when saving failed), after the group's subgroups. Read the titles to decide what is worth opening, then use read_source. Pass details=true to also get each source's url and the start of the user's note. Groups over 100 sources come in pages (offset continues).",
     input: {
       group_id: z.string().describe("Id of the group (from get_project_tree)."),
+      details: z
+        .boolean()
+        .default(false)
+        .describe("Also show each source's url and the first 200 characters of the user's note."),
+      offset: z
+        .number()
+        .int()
+        .min(0)
+        .default(0)
+        .describe("How many sources to skip, to see the next page. Default 0."),
     },
     readOnly: true,
     idempotent: true,
-    run: async ({ group_id }, { api }) => {
+    run: async ({ group_id, details, offset }, { api }) => {
       const index = await loadFolderIndex(api);
       const group = requireFolder(index, group_id, "group");
       const items = await loadFolderItems(api, group_id);
+      const page = items.slice(offset, offset + LIST_PAGE_SIZE);
       const lines = [`${index.pathOf(group_id)} [${group.id}] · ${plural(items.length, "source")}`];
-      for (const item of items) {
+
+      const subgroups = index.children(group_id);
+      if (subgroups.length > 0) {
+        lines.push("Subgroups:");
+        for (const sub of subgroups) {
+          lines.push(`  Group [${sub.id}] ${sub.name} · ${plural(sourcesIn(sub), "source")}`);
+        }
+        if (items.length > 0) lines.push("Sources:");
+      }
+
+      for (const item of page) {
         lines.push(sourceLine(item));
+        if (item.error) lines.push(`  Error: ${item.error}`);
+        if (!details) continue;
         const url = urlOf(item);
         if (url) lines.push(`  ${url}`);
-        if (item.error) lines.push(`  Error: ${item.error}`);
         if (item.note) lines.push(`  Note: ${truncate(item.note, 200)}`);
       }
-      if (items.length === 0) lines.push("This group has no sources yet.");
+      if (items.length === 0) {
+        lines.push("This group has no sources of its own.");
+      } else if (page.length === 0) {
+        lines.push(`This group has ${items.length} sources; use a smaller offset.`);
+      } else if (offset + page.length < items.length) {
+        lines.push(
+          `Showing ${offset + 1}–${offset + page.length} of ${items.length}. Call list_sources with offset=${offset + page.length} for more.`,
+        );
+      }
       return lines.join("\n");
     },
   });

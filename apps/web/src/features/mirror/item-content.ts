@@ -65,10 +65,14 @@ export async function getItemContent(
 
   let markdown = item.markdown;
   if (markdown === null && item.kind !== "note") {
-    if (!item.drive_file_id) return DRIVE_COPY_GONE;
-    const text = await downloadFileText(await getGoogleAccessToken(userId), item.drive_file_id);
-    if (text === null) return DRIVE_COPY_GONE;
-    markdown = bodyFromDriveFile(text);
+    // Text is only cleared once Drive has the file, so no Drive file means it never had text.
+    if (item.drive_file_id) {
+      const text = await downloadFileText(await getGoogleAccessToken(userId), item.drive_file_id);
+      if (text === null) return DRIVE_COPY_GONE;
+      markdown = bodyFromDriveFile(text);
+    } else {
+      markdown = "";
+    }
   }
 
   const { data: folders, error: foldersError } = await db

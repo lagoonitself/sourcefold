@@ -74,6 +74,18 @@ describe("saveSource", () => {
     });
   });
 
+  it("refuses a capture with no text instead of saving an empty source", async () => {
+    const { fake, db } = fakeDb();
+    const result = await saveSource(db, USER_ID, "web", FOLDER_ID, {
+      url: "https://www.youtube.com/",
+      title: "YouTube",
+      meta: {},
+      markdown: "  \n ",
+    });
+    expect(result).toMatchObject({ success: false, status: 422, error: { code: "no_content" } });
+    expect(fake.queries.some((q) => callsOf(q, "insert").length > 0)).toBe(false);
+  });
+
   it("falls back to the capture URL when it cannot be canonicalized", async () => {
     const { fake, db } = fakeDb();
 

@@ -60,7 +60,7 @@ export function registerNotesTools(server: McpServer, ctx: ToolContext): void {
             `${err.message} That source isn't a note. Use update_source to set the user's note on it.`,
           );
         }
-        throw withHint(err, "Use get_project_tree to find note ids.");
+        throw withHint(err, "Use list_sources to find note ids.");
       }
       forgetCachedSource(note_id);
       const changes = [title !== undefined ? "title" : null, text !== undefined ? "text" : null];

@@ -457,7 +457,11 @@ export async function runSaveBatch(
           const folderPath = folderPathOf(item.folder_id, foldersById as Map<string, FolderRef>);
           let markdown = item.markdown;
           if (markdown === null && item.kind !== "note") {
-            markdown = await readBodyFromDrive(accessToken, item.drive_file_id);
+            // Text is only cleared once Drive has the file, so no Drive file means it never had
+            // text (an empty capture): nothing is lost, and the file is built with an empty body.
+            markdown = item.drive_file_id
+              ? await readBodyFromDrive(accessToken, item.drive_file_id)
+              : "";
           }
           body = buildItemFile(
             { ...item, markdown, highlights: highlightsByItem.get(item.id) ?? [] },

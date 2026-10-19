@@ -76,6 +76,50 @@ export function requireFolder(
   return folder;
 }
 
+// The `project` guard on tools that change things: the model names the project it means to change,
+// and anything found outside it is refused before it is touched. It makes the call say where it
+// acts, and makes a mixed-up id harmless.
+
+export const PROJECT_GUARD_DESCRIPTION =
+  "Name or id of the project you mean to change. When given, anything outside that project is refused and left untouched. Pass it whenever the user has asked you to keep away from other projects.";
+
+/** The project a `project` guard names, by id or by its exact name (case doesn't matter). */
+export function resolveProject(index: FolderIndex, nameOrId: string): Folder {
+  const byId = index.byId.get(nameOrId);
+  if (byId) {
+    if (isProject(byId)) return byId;
+    throw new Error(
+      `${nameOrId} is the group ${index.pathOf(nameOrId)}, not a project. Give the project's name or id.`,
+    );
+  }
+  const wanted = nameOrId.trim().toLowerCase();
+  const projects = index.children(null);
+  const named = projects.filter((p) => p.name.trim().toLowerCase() === wanted);
+  if (named.length === 1) return named[0]!;
+  if (named.length > 1) {
+    throw new Error(
+      `Several projects are named "${nameOrId}": ${named.map((p) => `[${p.id}]`).join(", ")}. Give the project's id instead.`,
+    );
+  }
+  throw new Error(
+    `No project is named "${nameOrId}". The projects are: ${projects.map((p) => `"${p.name}" [${p.id}]`).join(", ")}.`,
+  );
+}
+
+/** Throws unless `folderId` is the project or inside it. `what` starts the message. */
+export function requireInProject(
+  index: FolderIndex,
+  project: Folder | null,
+  folderId: string,
+  what: string,
+): void {
+  if (!project || index.projectOf(folderId)?.id === project.id) return;
+  const where = index.byId.has(folderId) ? `in ${index.pathOf(folderId)}` : "in another project";
+  throw new Error(
+    `${what} is ${where}, outside the project "${project.name}", so it was left untouched.`,
+  );
+}
+
 /** Adds a hint to "not found" answers from the web app. Other errors pass through unchanged. */
 export function withHint(err: unknown, hint: string): Error {
   if (err instanceof ApiError && (err.status === 404 || /no longer exists/i.test(err.message))) {

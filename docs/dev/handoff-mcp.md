@@ -54,18 +54,20 @@ Ids are uuids. "Group id" means any folder id; a project is a folder without a p
 
 - `get_status` — who is signed in (email, web address, whether the sign-in came from the desktop app or an access token), whether the desktop app is open and its mode, Drive (`GET /api/drive/status`: unsaved count, connected or not).
 - `list_projects` `{ include_archived?: boolean = false }` — id, name, archived, number of groups.
-- `get_project_tree` `{ project_id, include_sources?: boolean = true }` — the project's groups nested (indentation), each with its source count; with sources, each source as `[id] kind · title · saved date` (and `url`). Over 300 sources: titles are kept, urls dropped, and the reply says so.
-- `list_sources` `{ group_id }` — every source in one group: id, kind, title, url, author/channel/site from `meta` when present, saved date, status (and its error), note (first 200 characters).
+- `get_project_tree` `{ project_id, include_sources?: boolean = false }` — the project's groups nested (indentation), each with its source count. With sources (changed 2026-10-19 from on by default, so Claude browses level by level), each source as `[id] kind · title · saved date` (and `url`). Over 300 sources: titles are kept, urls dropped, and the reply says so.
+- `list_sources` `{ group_id, details?: boolean = false, offset?: number = 0 }` — the group's subgroups, then one line per source: id, kind, title, author/channel/site from `meta` when present, saved date, status (and its error). `details` adds the url and the note (first 200 characters). Pages of 100.
 - `find_sources` `{ query, project_id?, inside_text?: boolean = true }` — title matches (`GET /api/items?q=`, filtered to the project when given) and, when the desktop app is open and `inside_text`, passages from `desktop.search` (keywords; each with source title, group, heading, snippet with the matched words in `**bold**`, YouTube time). When the desktop is closed, the reply says inside-text search needs it.
 - `get_source` `{ source_id }` — `GET /api/items/[id]`: everything about one source except its text (metadata, note, status, group path).
 
 ### Reading — package A, `read.ts`
 
-- `read_source` `{ source_id, part?: number = 1 }` — downloads `GET /api/items/[id]/content`, splits front matter from the body, and answers in parts of at most 40 000 characters, cut at a heading or paragraph. Every reply starts with the title, kind, url, `Part N of M`, and (part 1) an outline: each heading with the part it is in. Text is cached in memory for 10 minutes per source. Images and notes are files too: an image answers with its link and caption only.
+- `read_source` `{ source_id, section?: number, part?: number }` — downloads `GET /api/items/[id]/content` and splits front matter from the body. A source of one part (at most 40 000 characters) comes back whole. A longer one, called without `section` or `part`, answers with an overview and no text: details, summary, length, and a numbered outline (`§N heading · size`). `section=N` reads from that heading to the next heading at its level or above (in parts of 40 000 characters when longer, `part` picks one); `part=N` reads the body in order, cut at a heading or paragraph. Text is cached in memory for 10 minutes per source. Images and notes are files too: an image answers with its link and caption only.
 
 ### Organizing — package A, `organize.ts`
 
 - `create_project` `{ name }`, `create_group` `{ name, parent_id }` — `POST /api/folders`.
+  Every tool below that changes or deletes something except `create_*` takes an optional `project` (name or id): anything outside that project is refused and left untouched (added 2026-10-19, after Claude's own safety check couldn't tell the owner's test projects from the one they'd asked it to leave alone). Replies name the project and group of each source changed.
+
 - `update_group` `{ group_id, name?, parent_id?, position?, archived? }` — rename, move or nest, reorder, archive/unarchive a project (`PATCH /api/folders/[id]`).
 - `delete_group` `{ group_id }` — `DELETE /api/folders/[id]`; deletes the group, its subgroups and their sources. `destructiveHint: true`.
 - `update_source` `{ source_id, title?, group_id?, note? }` — rename, move, set or clear (`null`) the source's note (`PATCH /api/items/[id]`).
@@ -139,9 +141,10 @@ Settings → **Claude** pane (package C; follow `docs/dev/DESIGN.md`):
 ## Built (2026-10-19): deviations and notes
 
 - **Tools:** 26, as listed above.
-  - `read_source` shows the outline only when a source has more than one part.
   - `show_in_app` is marked read-only.
-  - `add_image` downloads with plain `fetch`, without the address guard; it only accepts image types up to 10 MB.
+  - `add_image` downloads with plain `fetch`, without the address guard; it only accepts image types up to 10 MB. It sends `WIKIPEDIA_USER_AGENT` (Sourcefold and the repository's address): upload.wikimedia.org answers 400 without one.
+  - `add_highlight` also matches quotes that leave out the footnote markers (`[15]`) they cross.
+  - `save_to_drive` waits for a save already running (409 `sync_in_progress`, usually the app's automatic save) and then carries on.
 - **Add jobs:** `get_add_progress` without a `job_id` lists the recent jobs. Jobs run one at a time across all `add_links` calls.
 - **`agent.json`:** written once the loopback port is bound (in `run_server`), not before. That way a second app instance that fails to bind never replaces the first one's key. The key is 32 random bytes taken from three v4 UUIDs, because the app has no `rand` crate.
 - **Agent threads:** agent requests are served on their own threads (at most 8, then 503), so a slow Substack fetch or search doesn't hold up the extension.

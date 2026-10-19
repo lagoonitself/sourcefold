@@ -17,6 +17,8 @@ import { parseHtmlOnServer } from "@sourcefold/core/server";
 
 export interface ReaderText {
   text: string;
+  /** [start, end) of each footnote marker (`[15]`) in `text`; quotes may leave them out. */
+  footnoteMarkers: Array<[number, number]>;
   timestamps: { marks: TimestampMark[]; end: number };
   footnotes: { refs: FootnoteRef[]; defs: Map<string, FootnoteDef> };
 }
@@ -81,8 +83,14 @@ export function readerTextOf(file: string): ReaderText {
     const label = (a.textContent ?? "").replace(/^\[|\]$/g, "").trim();
     if (a.firstChild && label) refs.push({ offset: offsetOf(a), label });
   }
+  const footnoteMarkers: Array<[number, number]> = Array.from(
+    root.querySelectorAll("sup.fn-ref"),
+  ).map((sup) => {
+    const start = offsetOf(sup);
+    return [start, start + (sup.textContent ?? "").length];
+  });
 
-  return { text, timestamps: { marks, end }, footnotes: { refs, defs } };
+  return { text, footnoteMarkers, timestamps: { marks, end }, footnotes: { refs, defs } };
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -131,11 +139,19 @@ interface Folded {
   map: number[];
 }
 
-function fold(input: string, lower: boolean): Folded {
+/** Characters inside `skip` ranges ([start, end), sorted) are left out as if they weren't there. */
+function fold(input: string, lower: boolean, skip: ReadonlyArray<[number, number]> = []): Folded {
   let text = "";
   const map: number[] = [];
   let pendingSpace = -1;
+  let range = 0;
   for (let i = 0; i < input.length; i++) {
+    while (range < skip.length && skip[range]![1] <= i) range++;
+    const skipped = skip[range];
+    if (skipped && i >= skipped[0]) {
+      i = skipped[1] - 1;
+      continue;
+    }
     const ch = input.charAt(i);
     if (/\s/.test(ch)) {
       if (pendingSpace === -1) pendingSpace = i;
@@ -164,25 +180,29 @@ export interface QuoteMatch {
   occurrences: number;
 }
 
-function findFolded(text: string, quote: string, lower: boolean): QuoteMatch | null {
-  const hay = fold(text, lower);
+/** The quote in the folded text, searching from the original offset `from`. */
+function findFolded(hay: Folded, quote: string, lower: boolean, from = 0): QuoteMatch | null {
   const needle = fold(quote, lower).text;
   if (!needle) return null;
-  const at = hay.text.indexOf(needle);
+  let fromFolded = 0;
+  while (fromFolded < hay.map.length && hay.map[fromFolded]! < from) fromFolded++;
+  const at = hay.text.indexOf(needle, fromFolded);
   if (at === -1) return null;
   let occurrences = 0;
-  for (let from = at; from !== -1; from = hay.text.indexOf(needle, from + 1)) occurrences++;
+  for (let next = at; next !== -1; next = hay.text.indexOf(needle, next + 1)) occurrences++;
   const start = hay.map[at] ?? 0;
   const end = (hay.map[at + needle.length - 1] ?? start) + 1;
   return { start, end, occurrences };
 }
 
-/** Finds the passage; "first words … last words" spans from the first part to the last. */
-export function findQuote(text: string, rawQuote: string): QuoteMatch | null {
-  const quote = stripMarkdown(rawQuote).trim();
-  if (!quote) return null;
-  for (const lower of [false, true]) {
-    const whole = findFolded(text, quote, lower);
+function findIn(
+  text: string,
+  quote: string,
+  skip: ReadonlyArray<[number, number]>,
+): QuoteMatch | null {
+  const folded = [false, true].map((lower) => ({ lower, hay: fold(text, lower, skip) }));
+  for (const { lower, hay } of folded) {
+    const whole = findFolded(hay, quote, lower);
     if (whole) return whole;
   }
 
@@ -193,12 +213,32 @@ export function findQuote(text: string, rawQuote: string): QuoteMatch | null {
   if (parts.length < 2) return null;
   const first = parts[0]!;
   const lastPart = parts[parts.length - 1]!;
-  for (const lower of [false, true]) {
-    const head = findFolded(text, first, lower);
+  for (const { lower, hay } of folded) {
+    const head = findFolded(hay, first, lower);
     if (!head) continue;
-    const tail = findFolded(text.slice(head.end), lastPart, lower);
+    const tail = findFolded(hay, lastPart, lower, head.end);
     if (!tail) continue;
-    return { start: head.start, end: head.end + tail.end, occurrences: head.occurrences };
+    return { start: head.start, end: tail.end, occurrences: head.occurrences };
   }
   return null;
+}
+
+/** Footnote markers as a quote may carry them: `[^15]`, or `[15]` as the reader shows them. */
+const FOOTNOTE_MARKER = /\[\^?[\w-]{1,20}\]/g;
+
+/**
+ * Finds the passage; "first words … last words" spans from the first part to the last. Footnote
+ * markers (`[15]`, `[^15]`) may be left out of the quote, or kept.
+ */
+export function findQuote(
+  text: string,
+  rawQuote: string,
+  footnoteMarkers: ReadonlyArray<[number, number]> = [],
+): QuoteMatch | null {
+  const quote = stripMarkdown(rawQuote).trim();
+  if (!quote) return null;
+  const asQuoted = findIn(text, quote, []);
+  if (asQuoted || footnoteMarkers.length === 0) return asQuoted;
+  const withoutMarkers = quote.replace(FOOTNOTE_MARKER, "").trim();
+  return withoutMarkers ? findIn(text, withoutMarkers, footnoteMarkers) : null;
 }

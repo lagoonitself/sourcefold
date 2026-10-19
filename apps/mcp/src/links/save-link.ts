@@ -20,6 +20,7 @@ import {
   fetchSourceCapture,
   fetchWikipediaCapture,
   listYouTubeVideos,
+  type LoadPdfJs,
 } from "@sourcefold/core/capture";
 import { parseHtmlOnServer } from "@sourcefold/core/server";
 import type { DesktopBridge } from "../desktop-bridge";
@@ -76,6 +77,18 @@ interface CheckUrlResult {
   exists: boolean;
   folder_name?: string | null;
 }
+
+// Claude Desktop runs this server in its own Electron runtime, where pdf.js doesn't detect Node,
+// never picks its worker file and failed every PDF with 'No "GlobalWorkerOptions.workerSrc"
+// specified.' Handing it the worker module makes it parse in this process on any runtime.
+const loadPdfJs: LoadPdfJs = async () => {
+  const [pdfjs, worker] = await Promise.all([
+    import("pdfjs-dist/legacy/build/pdf.mjs"),
+    import("pdfjs-dist/legacy/build/pdf.worker.mjs"),
+  ]);
+  (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = worker;
+  return pdfjs as Awaited<ReturnType<LoadPdfJs>>;
+};
 
 function canonical(url: string): string {
   try {
@@ -213,6 +226,7 @@ async function saveSource(
   const result = await fetchSourceCapture(inputUrl, {
     fetch: sourceFetch,
     parseHtml: parseHtmlOnServer,
+    loadPdfJs,
     signal,
   });
 

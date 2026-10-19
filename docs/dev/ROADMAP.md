@@ -136,6 +136,8 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [x] Release workflow builds the bundle, ships it inside the desktop installers and as a fourth download.
   - [x] Fixes from Claude Desktop's own test run (2026-10-19): browse level by level (groups, then titles, then a source's outline and only the sections needed), a `project` guard on every change, footnote markers in highlight quotes, Wikimedia image downloads, waiting for a Drive save already running, clear messages for listing pages, and no more empty "saved" sources.
   - [ ] Owner re-tests the moves, deletes and archives Claude's safety check skipped, using the `project` guard.
+  - [x] PDFs from Claude Desktop (2026-10-19): every non-arXiv PDF failed with `No "GlobalWorkerOptions.workerSrc" specified`; the MCP now hands pdf.js its worker module. [ ] Owner re-adds a failed PDF.
+  - [ ] From the owner's research run (2026-10-19), not started: X posts through Claude (single post text and video link via X's public embed data), a real-browser fallback for sites that refuse saving (TechSpot, GameSpot, Decrypt, Axios), keep/maybe/cut status and outline tags, a short summary per source, quote cards and an outline, a script view with citations and a reference list, duplicates across groups, author and author type per source, a b-roll list of video timestamps.
   - [ ] Offline mode (the desktop's local library) through the bridge.
   - [ ] Search by meaning for Claude (the query vector comes from the app's GPU worker).
   - [ ] Optional: a remote MCP server on Vercel for Claude on the phone and claude.ai (no YouTube adding, no search inside sources).

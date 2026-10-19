@@ -51,18 +51,19 @@ export async function pdfToCapture(
     throw new SourceError("parse_failed", READ_FAILED);
   }
 
-  const task = pdfjs.getDocument({
-    data: bytes,
-    useWorkerFetch: false,
-    disableFontFace: true,
-    // Nothing to render, so keep the text-only path cheap and quiet: no canvas support and no
-    // warnings about standard font data the caller didn't provide.
-    isOffscreenCanvasSupported: false,
-    verbosity: 0,
-  });
-
+  let task: ReturnType<PdfJsModule["getDocument"]>;
   let document: Awaited<typeof task.promise>;
   try {
+    // getDocument can throw before it returns (no worker it can load), so it's inside the try.
+    task = pdfjs.getDocument({
+      data: bytes,
+      useWorkerFetch: false,
+      disableFontFace: true,
+      // Nothing to render, so keep the text-only path cheap and quiet: no canvas support and no
+      // warnings about standard font data the caller didn't provide.
+      isOffscreenCanvasSupported: false,
+      verbosity: 0,
+    });
     document = await task.promise;
   } catch {
     throw new SourceError("parse_failed", READ_FAILED);

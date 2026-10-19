@@ -1,6 +1,16 @@
 import * as React from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { BookOpen, Film, FolderInput, MoreHorizontal, NotebookPen, Pencil, Quote, Trash2, Type } from "lucide-react";
+import {
+  BookOpen,
+  Film,
+  FolderInput,
+  MoreHorizontal,
+  NotebookPen,
+  Pencil,
+  Quote,
+  Trash2,
+  Type,
+} from "lucide-react";
 import type { Card } from "@sourcefold/core";
 import {
   DropdownMenu,
@@ -150,7 +160,11 @@ export function CardRow({
     listeners,
     setNodeRef: setDragRef,
     isDragging,
-  } = useDraggable({ id, data: { type: "card", cardId: card.id }, disabled: editingField !== null });
+  } = useDraggable({
+    id,
+    data: { type: "card", cardId: card.id },
+    disabled: editingField !== null,
+  });
   const { setNodeRef: setDropRef } = useDroppable({ id, data: { type: "card", cardId: card.id } });
   const setRef = React.useCallback(
     (node: HTMLElement | null) => {

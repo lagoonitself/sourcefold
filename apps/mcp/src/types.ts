@@ -1,7 +1,21 @@
 // Shapes the web API and the desktop bridge answer with. Only the fields the tools read are typed;
 // the web app may send more.
 
-export type { Highlight, HighlightCitation, HighlightInput } from "@sourcefold/core";
+export type {
+  AuthorType,
+  Card,
+  CardInput,
+  CardKind,
+  CardPatch,
+  Highlight,
+  HighlightCitation,
+  HighlightInput,
+  OutlineSection,
+  OutlineSectionInput,
+  Triage,
+} from "@sourcefold/core";
+
+import type { AuthorType, Triage } from "@sourcefold/core";
 
 export interface Folder {
   id: string;
@@ -30,6 +44,11 @@ export interface Item {
   position?: number;
   created_at: string;
   updated_at?: string;
+  triage?: Triage | null;
+  tags?: string[];
+  summary?: string | null;
+  author?: string | null;
+  author_type?: AuthorType | null;
 }
 
 /** `GET /api/agent/status` on the desktop app. */

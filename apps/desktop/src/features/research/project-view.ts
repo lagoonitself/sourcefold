@@ -65,6 +65,9 @@ export function reduceProjectView(
 }
 
 /** The view to show for the open project, or null while a group is open. */
-export function viewInProject(state: ProjectViewState, projectId: string | null): ProjectView | null {
+export function viewInProject(
+  state: ProjectViewState,
+  projectId: string | null,
+): ProjectView | null {
   return state.projectId !== null && state.projectId === projectId ? state.view : null;
 }

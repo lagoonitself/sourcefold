@@ -12,7 +12,8 @@ use serde_json::{json, Value};
 
 use crate::db::Database;
 use crate::models::{
-    AddXPostRequest, CheckUrlResult, Folder, Highlight, HighlightInput, Item, RecentXItem,
+    AddXPostRequest, Card, CardInput, CardPatch, CheckUrlResult, Folder, Highlight, HighlightInput,
+    Item, ItemResearchPatch, MergeResult, OutlineSection, OutlineSectionInput, RecentXItem,
     SaveItemRequest,
 };
 
@@ -1133,6 +1134,11 @@ pub struct ItemFileFields {
     pub saved: Option<String>,
     pub created: Option<String>,
     pub folder: Option<String>,
+    pub written_by: Option<String>,
+    pub author_type: Option<String>,
+    pub status: Option<String>,
+    pub tags: Vec<String>,
+    pub research_summary: Option<String>,
     /// Kind-specific front matter for the 2026-10 source kinds, keyed as in docs/FILE-FORMAT.md.
     pub meta: serde_json::Map<String, Value>,
 }
@@ -1313,6 +1319,11 @@ fn item_file_fields(item: &Item, title: String, folder: Option<String>) -> ItemF
         saved: clean_date(Some(&item.created_at)),
         created: clean_date(Some(&item.created_at)),
         folder,
+        written_by: item.author.clone(),
+        author_type: item.author_type.clone(),
+        status: item.triage.clone(),
+        tags: item.tags.clone(),
+        research_summary: item.summary.clone(),
         meta: item.meta.as_object().cloned().unwrap_or_default(),
     }
 }
@@ -1332,6 +1343,9 @@ pub fn clean_body_markdown(kind: &str, body: &str, subtitle: Option<&str>) -> St
     }
     if let Some(hl_start) = raw.rfind(HIGHLIGHTS_HEADING) {
         raw.truncate(hl_start);
+    }
+    if let Some(sum_start) = raw.rfind("\n## My summary\n") {
+        raw.truncate(sum_start);
     }
 
     let mut text = raw.trim();
@@ -1552,6 +1566,33 @@ pub fn build_item_file_with_highlights(
             fm.push_str(&format!("folder: {}\n", format_yaml_string(tr)));
         }
     }
+
+    if kind != "note" {
+        if let Some(w) = &fields.written_by {
+            let tr = w.trim();
+            if !tr.is_empty() {
+                fm.push_str(&format!("written_by: {}\n", format_yaml_string(tr)));
+            }
+        }
+        if let Some(at) = &fields.author_type {
+            let tr = at.trim();
+            if !tr.is_empty() {
+                fm.push_str(&format!("author_type: {}\n", format_yaml_string(tr)));
+            }
+        }
+    }
+    if let Some(st) = &fields.status {
+        let tr = st.trim();
+        if !tr.is_empty() {
+            fm.push_str(&format!("status: {}\n", format_yaml_string(tr)));
+        }
+    }
+    if !fields.tags.is_empty() {
+        fm.push_str("tags:\n");
+        for t in &fields.tags {
+            fm.push_str(&format!("  - {}\n", format_yaml_string(t.trim())));
+        }
+    }
     fm.push_str("---\n\n");
 
     let source_line = match kind {
@@ -1619,6 +1660,15 @@ pub fn build_item_file_with_highlights(
         sections.push(cleaned_body);
     }
 
+    if kind != "note" {
+        if let Some(sum) = &fields.research_summary {
+            let tr = sum.trim();
+            if !tr.is_empty() {
+                sections.push(format!("## My summary\n\n{}", tr));
+            }
+        }
+    }
+
     if let Some(section) = build_highlights_section(highlights, fields.url.as_deref()) {
         sections.push(section);
     }
@@ -1653,9 +1703,13 @@ pub fn extract_body_and_note(md: &str) -> (String, Option<String>) {
     } else {
         (without_fm, None)
     };
-    let body = match before_note.rfind(HIGHLIGHTS_HEADING) {
+    let before_hl = match before_note.rfind(HIGHLIGHTS_HEADING) {
         Some(hl_idx) => &before_note[..hl_idx],
         None => before_note,
+    };
+    let body = match before_hl.rfind("\n## My summary\n") {
+        Some(sum_idx) => &before_hl[..sum_idx],
+        None => before_hl,
     };
     (body.to_string(), note)
 }
@@ -2442,6 +2496,14 @@ pub fn save_substack(
             check.folder_name,
         ));
     }
+    if let Some(elsewhere) = check.elsewhere {
+        return Err(ServiceError::duplicate(
+            format!("Already saved in {}.", elsewhere.folder_path),
+            Some(elsewhere.item_id),
+            Some(elsewhere.folder_id),
+            Some(elsewhere.folder_path),
+        ));
+    }
 
     let today = Utc::now().format("%Y-%m-%d").to_string();
     let (_, folder_path_str) = resolve_folder_path(db, folder_id);
@@ -2563,6 +2625,14 @@ pub fn save_wikipedia(
             check.folder_name,
         ));
     }
+    if let Some(elsewhere) = check.elsewhere {
+        return Err(ServiceError::duplicate(
+            format!("Already saved in {}.", elsewhere.folder_path),
+            Some(elsewhere.item_id),
+            Some(elsewhere.folder_id),
+            Some(elsewhere.folder_path),
+        ));
+    }
 
     let today = Utc::now().format("%Y-%m-%d").to_string();
     let (_, folder_path_str) = resolve_folder_path(db, folder_id);
@@ -2680,6 +2750,14 @@ pub fn save_source(
             check.item_id,
             check.folder_id,
             check.folder_name,
+        ));
+    }
+    if let Some(elsewhere) = check.elsewhere {
+        return Err(ServiceError::duplicate(
+            format!("Already saved in {}.", elsewhere.folder_path),
+            Some(elsewhere.item_id),
+            Some(elsewhere.folder_id),
+            Some(elsewhere.folder_path),
         ));
     }
 
@@ -3346,7 +3424,7 @@ pub fn validate_highlight_input(input: &HighlightInput) -> Result<(), ServiceErr
 
 /// Rebuilds the item's file (database copy and file on disk) so it carries its current note and
 /// `## My highlights` section, and moves the item's updated_at.
-fn rewrite_item_file(db: &Database, item_id: &str) {
+pub fn rewrite_item_file(db: &Database, item_id: &str) {
     let item = match db.get_item(item_id) {
         Ok(i) => i,
         Err(_) => return,
@@ -3833,6 +3911,508 @@ pub fn delete_folder(db: &Database, id: &str) -> Result<(), ServiceError> {
 
     crate::search::notify();
     Ok(())
+}
+
+
+// -----------------------------------------------------------------------------
+// Research Tools Helpers
+// -----------------------------------------------------------------------------
+
+fn normalize_tags(tags: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for raw in tags {
+        let collapsed = WHITESPACE_COLLAPSE_RE.replace_all(raw, " ").trim().to_string();
+        let tag = if collapsed.len() > 60 {
+            collapsed[..60].trim().to_string()
+        } else {
+            collapsed
+        };
+        if tag.is_empty() {
+            continue;
+        }
+        let key = tag.to_lowercase();
+        if !seen.contains(&key) {
+            seen.insert(key);
+            out.push(tag);
+        }
+    }
+    out
+}
+
+fn same_tag(a: &str, b: &str) -> bool {
+    let clean_a = WHITESPACE_COLLAPSE_RE.replace_all(a, " ").trim().to_lowercase();
+    let clean_b = WHITESPACE_COLLAPSE_RE.replace_all(b, " ").trim().to_lowercase();
+    clean_a == clean_b
+}
+
+fn validate_card(card: &CardInput) -> Result<(), ServiceError> {
+    if card.kind != "quote" && card.kind != "broll" && card.kind != "line" {
+        return Err(ServiceError::bad_request("A card is a quote, a b-roll clip or a line."));
+    }
+    if card.quote.len() > 10000 {
+        return Err(ServiceError::bad_request("The quote is too long."));
+    }
+    if let Some(note) = &card.note {
+        if note.len() > 5000 {
+            return Err(ServiceError::bad_request("The note is too long."));
+        }
+    }
+    if let Some(script_line) = &card.script_line {
+        if script_line.len() > 5000 {
+            return Err(ServiceError::bad_request("The script line is too long."));
+        }
+    }
+    for s in [card.seconds, card.end_seconds] {
+        if let Some(sec) = s {
+            if sec < 0 {
+                return Err(ServiceError::bad_request("Times are whole seconds."));
+            }
+        }
+    }
+    if let Some(end) = card.end_seconds {
+        if card.seconds.is_none() || end < card.seconds.unwrap() {
+            return Err(ServiceError::bad_request("A clip ends after it starts."));
+        }
+    }
+    if !card.position.is_finite() {
+        return Err(ServiceError::bad_request("Invalid position."));
+    }
+    if let Some(url) = &card.url {
+        if url.len() > 2000 || (!url.starts_with("http://") && !url.starts_with("https://")) {
+            return Err(ServiceError::bad_request("The video link must be an http(s) address."));
+        }
+    }
+    match card.kind.as_str() {
+        "quote" => {
+            if card.item_id.is_none() {
+                return Err(ServiceError::bad_request("A quote card needs its source."));
+            }
+            if card.quote.trim().is_empty() {
+                return Err(ServiceError::bad_request("A quote card needs the quote."));
+            }
+            if card.url.is_some() || card.end_seconds.is_some() {
+                return Err(ServiceError::bad_request("Only b-roll clips have a link or an end time."));
+            }
+        }
+        "broll" => {
+            if card.item_id.is_none() && card.url.is_none() {
+                return Err(ServiceError::bad_request("A b-roll clip needs a saved video or a link."));
+            }
+        }
+        "line" => {
+            if card.item_id.is_some() || card.highlight_id.is_some() || card.url.is_some() {
+                return Err(ServiceError::bad_request("A line has no source."));
+            }
+            if !card.quote.is_empty() {
+                return Err(ServiceError::bad_request("A line has no quote."));
+            }
+            if card.script_line.as_deref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+                return Err(ServiceError::bad_request("A line needs its text."));
+            }
+            if card.seconds.is_some() || card.end_seconds.is_some() {
+                return Err(ServiceError::bad_request("A line has no time."));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn validate_card_relations(db: &Database, card: &CardInput) -> Result<(), ServiceError> {
+    let project = db.get_folder(&card.project_id).map_err(|_| ServiceError::not_found("Project not found"))?;
+    if project.parent_id.is_some() {
+        return Err(ServiceError::bad_request("Project must be a top-level folder"));
+    }
+
+    if let Some(item_id) = &card.item_id {
+        let is_live = db.is_live_item_in_project(item_id, &card.project_id)
+            .map_err(|e| ServiceError::internal(e.to_string(), "db_error"))?;
+        if !is_live {
+            return Err(ServiceError::bad_request("Source item not found or not a live source in this project"));
+        }
+    }
+
+    if let Some(section_id) = &card.section_id {
+        let sec = db.get_outline_section(section_id).map_err(|_| ServiceError::not_found("Outline section not found"))?;
+        if sec.project_id != card.project_id {
+            return Err(ServiceError::bad_request("Outline section belongs to a different project"));
+        }
+    }
+
+    if let Some(hl_id) = &card.highlight_id {
+        let hl = db.get_highlight(hl_id).map_err(|_| ServiceError::not_found("Highlight not found"))?;
+        if Some(&hl.item_id) != card.item_id.as_ref() {
+            return Err(ServiceError::bad_request("Highlight does not belong to the card's source"));
+        }
+    }
+
+    Ok(())
+}
+
+
+pub fn list_outline_sections(db: &Database, project_id: &str) -> Result<Vec<OutlineSection>, ServiceError> {
+    db.list_outline_sections(project_id).map_err(|e| {
+        ServiceError::internal(format!("Database error: {}", e), "db_error")
+    })
+}
+
+pub fn put_outline_section(
+    db: &Database,
+    section: OutlineSectionInput,
+) -> Result<OutlineSection, ServiceError> {
+    let title_trimmed = section.title.trim();
+    if title_trimmed.is_empty() || title_trimmed.len() > 200 {
+        return Err(ServiceError::bad_request("Section title must be 1 to 200 characters"));
+    }
+    if !section.position.is_finite() {
+        return Err(ServiceError::bad_request("Invalid position"));
+    }
+    let project = db.get_folder(&section.project_id).map_err(|_| ServiceError::not_found("Project not found"))?;
+    if project.parent_id.is_some() {
+        return Err(ServiceError::bad_request("Project must be a top-level folder"));
+    }
+
+    let input = OutlineSectionInput {
+        id: section.id,
+        project_id: section.project_id,
+        title: title_trimmed.to_string(),
+        position: section.position,
+    };
+
+    let (saved, old_title) = db.put_outline_section(&input)
+        .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+
+    if let Some(old) = old_title {
+        if !same_tag(&old, &saved.title) {
+            if let Ok(items) = db.list_project_items(&saved.project_id) {
+                for item in items {
+                    let mut changed = false;
+                    let new_tags: Vec<String> = item.tags.into_iter().map(|tag| {
+                        if same_tag(&tag, &old) {
+                            changed = true;
+                            saved.title.clone()
+                        } else {
+                            tag
+                        }
+                    }).collect();
+
+                    if changed {
+                        let _ = db.update_item_research_db(&item.id, None, Some(new_tags), None, None, None);
+                        rewrite_item_file(db, &item.id);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(saved)
+}
+
+pub fn delete_outline_section(db: &Database, id: &str) -> Result<(), ServiceError> {
+    db.delete_outline_section(id).map_err(|e| {
+        ServiceError::not_found(format!("Outline section not found: {}", e))
+    })?;
+    Ok(())
+}
+
+pub fn list_cards(
+    db: &Database,
+    project_id: Option<&str>,
+    item_id: Option<&str>,
+) -> Result<Vec<Card>, ServiceError> {
+    db.list_cards(project_id, item_id).map_err(|e| {
+        ServiceError::internal(format!("Database error: {}", e), "db_error")
+    })
+}
+
+pub fn put_card(db: &Database, card: CardInput) -> Result<Card, ServiceError> {
+    validate_card(&card)?;
+    validate_card_relations(db, &card)?;
+    db.put_card(&card).map_err(|e| {
+        ServiceError::internal(format!("Database error: {}", e), "db_error")
+    })
+}
+
+pub fn update_card(db: &Database, id: &str, patch: CardPatch) -> Result<Card, ServiceError> {
+    let mut card = db.get_card(id).map_err(|_| ServiceError::not_found("Card not found"))?;
+
+    if let Some(quote) = patch.quote {
+        card.quote = quote;
+    }
+    if let Some(sec) = patch.seconds {
+        card.seconds = sec;
+    }
+    if let Some(end_sec) = patch.end_seconds {
+        card.end_seconds = end_sec;
+    }
+    if let Some(url) = patch.url {
+        card.url = url;
+    }
+    if let Some(note) = patch.note {
+        card.note = note;
+    }
+    if let Some(script_line) = patch.script_line {
+        card.script_line = script_line;
+    }
+    if let Some(section_id) = patch.section_id {
+        card.section_id = section_id;
+    }
+    if let Some(position) = patch.position {
+        card.position = position;
+    }
+
+    let input = CardInput {
+        id: card.id.clone(),
+        project_id: card.project_id.clone(),
+        kind: card.kind.clone(),
+        item_id: card.item_id.clone(),
+        highlight_id: card.highlight_id.clone(),
+        quote: card.quote.clone(),
+        seconds: card.seconds,
+        end_seconds: card.end_seconds,
+        url: card.url.clone(),
+        note: card.note.clone(),
+        script_line: card.script_line.clone(),
+        section_id: card.section_id.clone(),
+        position: card.position,
+    };
+
+    validate_card(&input)?;
+    validate_card_relations(db, &input)?;
+
+    db.update_card_fields(&card).map_err(|e| {
+        ServiceError::internal(format!("Database error: {}", e), "db_error")
+    })?;
+
+    db.get_card(id).map_err(|e| {
+        ServiceError::internal(format!("Database error: {}", e), "db_error")
+    })
+}
+
+pub fn delete_card(db: &Database, id: &str) -> Result<(), ServiceError> {
+    db.delete_card(id).map_err(|e| {
+        ServiceError::not_found(format!("Card not found: {}", e))
+    })?;
+    Ok(())
+}
+
+
+pub fn list_project_items(db: &Database, project_id: &str) -> Result<Vec<Item>, ServiceError> {
+    db.list_project_items(project_id).map_err(|e| {
+        ServiceError::internal(format!("Database error: {}", e), "db_error")
+    })
+}
+
+pub fn update_item_research(
+    db: &Database,
+    id: &str,
+    patch: ItemResearchPatch,
+) -> Result<Item, ServiceError> {
+    let _ = db.get_item(id).map_err(|_| ServiceError::not_found("Item not found"))?;
+
+    let cleaned_triage = match patch.triage {
+        Some(Some(ref t)) => {
+            if t != "keep" && t != "maybe" && t != "cut" {
+                return Err(ServiceError::bad_request("Invalid triage: must be keep, maybe, or cut"));
+            }
+            Some(Some(t.clone()))
+        }
+        Some(None) => Some(None),
+        None => None,
+    };
+
+    let cleaned_author = match patch.author {
+        Some(Some(ref a)) => {
+            let tr = a.trim();
+            if tr.is_empty() {
+                Some(None)
+            } else if tr.len() > 200 {
+                return Err(ServiceError::bad_request("Author must be at most 200 characters"));
+            } else {
+                Some(Some(tr.to_string()))
+            }
+        }
+        Some(None) => Some(None),
+        None => None,
+    };
+
+    let cleaned_author_type = match patch.author_type {
+        Some(Some(ref at)) => {
+            if !matches!(at.as_str(), "lab" | "researcher" | "journalist" | "company" | "government" | "creator" | "forum" | "encyclopedia" | "other") {
+                return Err(ServiceError::bad_request("Invalid author_type"));
+            }
+            Some(Some(at.clone()))
+        }
+        Some(None) => Some(None),
+        None => None,
+    };
+
+    let cleaned_summary = match patch.summary {
+        Some(Some(ref s)) => {
+            let tr = s.trim();
+            if tr.is_empty() {
+                Some(None)
+            } else if tr.len() > 5000 {
+                return Err(ServiceError::bad_request("Summary must be at most 5000 characters"));
+            } else {
+                Some(Some(s.clone()))
+            }
+        }
+        Some(None) => Some(None),
+        None => None,
+    };
+
+    let cleaned_tags = match patch.tags {
+        Some(ref tags) => {
+            let normalized = normalize_tags(tags);
+            if normalized.len() > 20 {
+                return Err(ServiceError::bad_request("Cannot have more than 20 tags"));
+            }
+            Some(normalized)
+        }
+        None => None,
+    };
+
+    db.update_item_research_db(
+        id,
+        cleaned_triage,
+        cleaned_tags,
+        cleaned_summary,
+        cleaned_author,
+        cleaned_author_type,
+    ).map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+
+    rewrite_item_file(db, id);
+
+    db.get_item(id).map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))
+}
+
+pub fn merge_items(
+    db: &Database,
+    keep_id: &str,
+    ids: &[String],
+) -> Result<MergeResult, ServiceError> {
+    if ids.is_empty() || ids.len() > 20 {
+        return Err(ServiceError::bad_request("ids must contain between 1 and 20 item ids"));
+    }
+    if ids.iter().any(|id| id == keep_id) {
+        return Err(ServiceError::bad_request("keepId cannot be included in ids"));
+    }
+
+    let keep_item = db.get_item(keep_id).map_err(|_| ServiceError::not_found("Keep item not found"))?;
+    let keep_project = db.get_project_id_for_item(keep_id)
+        .map_err(|e| ServiceError::internal(e.to_string(), "db_error"))?
+        .ok_or_else(|| ServiceError::not_found("Keep item is not in a project"))?;
+
+    let mut other_items: Vec<Item> = Vec::new();
+    for other_id in ids {
+        let other = db.get_item(other_id).map_err(|_| ServiceError::not_found(format!("Item {} not found", other_id)))?;
+        let other_project = db.get_project_id_for_item(other_id)
+            .map_err(|e| ServiceError::internal(e.to_string(), "db_error"))?
+            .ok_or_else(|| ServiceError::not_found(format!("Item {} is not in a project", other_id)))?;
+        if other_project != keep_project {
+            return Err(ServiceError::bad_request("Cannot merge items from different projects"));
+        }
+        other_items.push(other);
+    }
+
+    let (moved_highlights, moved_cards) = db.merge_items_db(keep_id, ids)
+        .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+
+    let mut all_tags = keep_item.tags.clone();
+    for other in &other_items {
+        all_tags.extend(other.tags.clone());
+    }
+    let merged_tags = normalize_tags(&all_tags);
+
+    let mut merged_triage = keep_item.triage.clone();
+    if merged_triage.is_none() {
+        for other in &other_items {
+            if other.triage.is_some() {
+                merged_triage = other.triage.clone();
+                break;
+            }
+        }
+    }
+
+    let mut merged_summary = keep_item.summary.clone();
+    if merged_summary.is_none() {
+        for other in &other_items {
+            if other.summary.is_some() {
+                merged_summary = other.summary.clone();
+                break;
+            }
+        }
+    }
+
+    let mut merged_author = keep_item.author.clone();
+    if merged_author.is_none() {
+        for other in &other_items {
+            if other.author.is_some() {
+                merged_author = other.author.clone();
+                break;
+            }
+        }
+    }
+
+    let mut merged_author_type = keep_item.author_type.clone();
+    if merged_author_type.is_none() {
+        for other in &other_items {
+            if other.author_type.is_some() {
+                merged_author_type = other.author_type.clone();
+                break;
+            }
+        }
+    }
+
+    let mut merged_note = keep_item.note.clone();
+    for other in &other_items {
+        if let Some(other_note) = &other.note {
+            let tr_other = other_note.trim();
+            if !tr_other.is_empty() {
+                match &merged_note {
+                    Some(kn) => {
+                        let tr_kn = kn.trim();
+                        if tr_kn != tr_other && !tr_kn.contains(tr_other) {
+                            merged_note = Some(format!("{}\n\n{}", tr_kn, tr_other));
+                        }
+                    }
+                    None => {
+                        merged_note = Some(tr_other.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    db.update_item_research_db(
+        keep_id,
+        Some(merged_triage),
+        Some(merged_tags),
+        Some(merged_summary),
+        Some(merged_author),
+        Some(merged_author_type),
+    ).map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+
+    if let Some(ref note) = merged_note {
+        let _ = db.update_item_note(keep_id, Some(note.as_str()));
+    }
+
+    for other_id in ids {
+        delete_item(db, other_id)?;
+    }
+
+    rewrite_item_file(db, keep_id);
+
+    let updated_keep = db.get_item(keep_id)
+        .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+
+    Ok(MergeResult {
+        item: updated_keep,
+        moved_highlights,
+        moved_cards,
+    })
 }
 
 // -----------------------------------------------------------------------------
@@ -5196,6 +5776,15 @@ Cited: [sae.org](https://www.sae.org/paper) · Note: Check the date";
                 let post_url = meta["post_url"].as_str().map(|s| s.to_string());
                 let posted = meta["posted"].as_str().map(|s| s.to_string());
 
+                let written_by = v.get("author").and_then(|x| x.as_str()).map(|s| s.to_string());
+                let author_type = v.get("author_type").and_then(|x| x.as_str()).map(|s| s.to_string());
+                let status = v.get("triage").and_then(|x| x.as_str()).map(|s| s.to_string());
+                let tags: Vec<String> = v.get("tags")
+                    .and_then(|arr| arr.as_array())
+                    .map(|arr| arr.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                let research_summary = v.get("summary").and_then(|x| x.as_str()).map(|s| s.to_string());
+
                 let fields = ItemFileFields {
                     title,
                     subtitle,
@@ -5216,6 +5805,11 @@ Cited: [sae.org](https://www.sae.org/paper) · Note: Check the date";
                     saved,
                     created,
                     folder,
+                    written_by,
+                    author_type,
+                    status,
+                    tags,
+                    research_summary,
                     meta: meta.as_object().cloned().unwrap_or_default(),
                 };
 
@@ -5236,6 +5830,319 @@ Cited: [sae.org](https://www.sae.org/paper) · Note: Check the date";
         }
         assert!(count >= 6, "Expected at least 6 golden fixtures, found {}", count);
     }
+
+    #[test]
+    fn test_golden_item_with_research() {
+        let golden_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../packages/core/test/golden");
+        let json_path = golden_dir.join("item-with-research.input.json");
+        let md_path = golden_dir.join("item-with-research.md");
+        if !json_path.exists() || !md_path.exists() {
+            return;
+        }
+
+        let json_str = fs::read_to_string(&json_path).unwrap();
+        let v: Value = serde_json::from_str(&json_str).unwrap();
+
+        let kind = v["kind"].as_str().unwrap();
+        let title = v["title"].as_str().unwrap().to_string();
+        let url = v["url"].as_str().map(|s| s.to_string());
+        let folder = v["folder"].as_str().map(|s| s.to_string());
+        let saved = v["saved"].as_str().map(|s| s.to_string());
+        let created = v["created"].as_str().map(|s| s.to_string());
+        let body = v["body"].as_str().unwrap_or("");
+        let note = v["note"].as_str();
+
+        let meta = &v["meta"];
+        let summary = meta["summary"].as_str().map(|s| s.to_string());
+        let fact_checked = meta["fact_checked"].as_str().map(|s| s.to_string());
+        let language = meta["language"].as_str().map(|s| s.to_string());
+        let revision = meta["revision"]
+            .as_str()
+            .map(|s| s.to_string())
+            .or_else(|| meta["revision"].as_u64().map(|n| n.to_string()));
+        let last_edited = meta["last_edited"].as_str().map(|s| s.to_string());
+        let subtitle = meta["subtitle"].as_str().map(|s| s.to_string());
+        let author = meta["author"].as_str().map(|s| s.to_string());
+        let author_url = meta["author_url"].as_str().map(|s| s.to_string());
+        let publication = meta["publication"].as_str().map(|s| s.to_string());
+        let publication_url = meta["publication_url"].as_str().map(|s| s.to_string());
+        let published = meta["published"].as_str().map(|s| s.to_string());
+        let access = meta["access"].as_str().map(|s| s.to_string());
+        let post_url = meta["post_url"].as_str().map(|s| s.to_string());
+        let posted = meta["posted"].as_str().map(|s| s.to_string());
+
+        let written_by = v.get("author").and_then(|x| x.as_str()).map(|s| s.to_string());
+        let author_type = v.get("author_type").and_then(|x| x.as_str()).map(|s| s.to_string());
+        let status = v.get("triage").and_then(|x| x.as_str()).map(|s| s.to_string());
+        let tags: Vec<String> = v.get("tags")
+            .and_then(|arr| arr.as_array())
+            .map(|arr| arr.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        let research_summary = v.get("summary").and_then(|x| x.as_str()).map(|s| s.to_string());
+
+        let fields = ItemFileFields {
+            title,
+            subtitle,
+            url,
+            post_url,
+            author,
+            author_url,
+            publication,
+            publication_url,
+            published,
+            access,
+            summary,
+            fact_checked,
+            language,
+            revision,
+            last_edited,
+            posted,
+            saved,
+            created,
+            folder,
+            written_by,
+            author_type,
+            status,
+            tags,
+            research_summary,
+            meta: meta.as_object().cloned().unwrap_or_default(),
+        };
+
+        let highlights: Vec<Highlight> = match v.get("highlights") {
+            Some(h) if !h.is_null() => serde_json::from_value(h.clone()).unwrap(),
+            _ => Vec::new(),
+        };
+        let built = build_item_file_with_highlights(kind, &fields, body, note, &highlights);
+        let expected_md = fs::read_to_string(&md_path).unwrap().replace("\r\n", "\n");
+
+        assert_eq!(built, expected_md, "item-with-research fixture mismatch");
+    }
+
+    #[test]
+    fn test_update_item_research_and_file_rewrite() {
+        let db = Database::open_in_memory().unwrap();
+        let root = std::env::temp_dir().join(format!("sourcefold-research-test-{}", uuid::Uuid::new_v4()));
+        db.set_setting("storage_dir", root.to_str().unwrap()).unwrap();
+
+        let project = db.create_folder("Research", None).unwrap();
+        let group = db.create_folder("AI", Some(&project.id)).unwrap();
+
+        let save_req = SaveItemRequest {
+            folder_id: group.id.clone(),
+            kind: "web".to_string(),
+            title: "Scaling Laws".to_string(),
+            source_url: Some("https://example.com/scaling".to_string()),
+            canonical_url: Some("https://example.com/scaling".to_string()),
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("---\nsource: web\ntitle: Scaling Laws\nfolder: Research/AI\n---\n\n# Scaling Laws\n\nContent here.\n".to_string()),
+            meta: None,
+            note: None,
+            position: None,
+        };
+        let item = db.save_item(save_req).unwrap();
+        let _ = write_item_file_to_disk(
+            &db,
+            &group.id,
+            &item.id,
+            &item.title,
+            "md",
+            &item.created_at,
+            item.markdown.as_ref().unwrap().as_bytes(),
+        );
+
+        let patch = ItemResearchPatch {
+            triage: Some(Some("keep".to_string())),
+            tags: Some(vec!["Compute".to_string(), "Ending".to_string()]),
+            summary: Some(Some("Scaling summary.".to_string())),
+            author: Some(Some("Epoch AI".to_string())),
+            author_type: Some(Some("lab".to_string())),
+        };
+
+        let updated = update_item_research(&db, &item.id, patch).unwrap();
+        assert_eq!(updated.triage.as_deref(), Some("keep"));
+        assert_eq!(updated.tags, vec!["Compute", "Ending"]);
+        assert_eq!(updated.summary.as_deref(), Some("Scaling summary."));
+        assert_eq!(updated.author.as_deref(), Some("Epoch AI"));
+        assert_eq!(updated.author_type.as_deref(), Some("lab"));
+
+        let file_path = root.join("Research").join("AI").join("Scaling Laws.md");
+        let disk_md = fs::read_to_string(&file_path).unwrap();
+        assert!(disk_md.contains("written_by: Epoch AI\n"));
+        assert!(disk_md.contains("author_type: lab\n"));
+        assert!(disk_md.contains("status: keep\n"));
+        assert!(disk_md.contains("tags:\n  - Compute\n  - Ending\n"));
+        assert!(disk_md.contains("## My summary\n\nScaling summary.\n"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_outline_section_rename_updates_tags_and_rewrites_files() {
+        let db = Database::open_in_memory().unwrap();
+        let root = std::env::temp_dir().join(format!("sourcefold-section-test-{}", uuid::Uuid::new_v4()));
+        db.set_setting("storage_dir", root.to_str().unwrap()).unwrap();
+
+        let project = db.create_folder("Video Project", None).unwrap();
+        let group = db.create_folder("Sources", Some(&project.id)).unwrap();
+
+        let sec_id = uuid::Uuid::new_v4().to_string();
+        let sec = put_outline_section(&db, OutlineSectionInput {
+            id: sec_id.clone(),
+            project_id: project.id.clone(),
+            title: "Old Section".to_string(),
+            position: 1.0,
+        }).unwrap();
+        assert_eq!(sec.title, "Old Section");
+
+        let save_req = SaveItemRequest {
+            folder_id: group.id.clone(),
+            kind: "web".to_string(),
+            title: "Source 1".to_string(),
+            source_url: Some("https://example.com/1".to_string()),
+            canonical_url: Some("https://example.com/1".to_string()),
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("---\nsource: web\ntitle: Source 1\ntags:\n  - Old Section\n---\n\n# Source 1\n".to_string()),
+            meta: None,
+            note: None,
+            position: None,
+        };
+        let item = db.save_item(save_req).unwrap();
+        let _ = db.update_item_research_db(&item.id, None, Some(vec!["Old Section".to_string()]), None, None, None);
+        let _ = write_item_file_to_disk(
+            &db,
+            &group.id,
+            &item.id,
+            &item.title,
+            "md",
+            &item.created_at,
+            "---\nsource: web\ntitle: Source 1\ntags:\n  - Old Section\n---\n\n# Source 1\n".as_bytes(),
+        );
+
+        // Rename section
+        let updated_sec = put_outline_section(&db, OutlineSectionInput {
+            id: sec_id.clone(),
+            project_id: project.id.clone(),
+            title: "New Section".to_string(),
+            position: 1.0,
+        }).unwrap();
+        assert_eq!(updated_sec.title, "New Section");
+
+        let reloaded = db.get_item(&item.id).unwrap();
+        assert_eq!(reloaded.tags, vec!["New Section"]);
+
+        let file_path = root.join("Video Project").join("Sources").join("Source 1.md");
+        let disk_md = fs::read_to_string(&file_path).unwrap();
+        assert!(disk_md.contains("tags:\n  - New Section\n"));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_merge_items_moves_highlights_cards_and_merges_tags() {
+        let db = Database::open_in_memory().unwrap();
+        let root = std::env::temp_dir().join(format!("sourcefold-merge-test-{}", uuid::Uuid::new_v4()));
+        db.set_setting("storage_dir", root.to_str().unwrap()).unwrap();
+
+        let project = db.create_folder("Project A", None).unwrap();
+        let group = db.create_folder("Group A", Some(&project.id)).unwrap();
+
+        let save_req1 = SaveItemRequest {
+            folder_id: group.id.clone(),
+            kind: "web".to_string(),
+            title: "Keep Item".to_string(),
+            source_url: Some("https://example.com/keep".to_string()),
+            canonical_url: Some("https://example.com/keep".to_string()),
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("---\nsource: web\ntitle: Keep Item\n---\n\n# Keep Item\n".to_string()),
+            meta: None,
+            note: Some("Keep note".to_string()),
+            position: None,
+        };
+        let item1 = db.save_item(save_req1).unwrap();
+        let _ = db.update_item_research_db(&item1.id, Some(Some("keep".to_string())), Some(vec!["Tag1".to_string()]), None, None, None);
+
+        let save_req2 = SaveItemRequest {
+            folder_id: group.id.clone(),
+            kind: "web".to_string(),
+            title: "Other Item".to_string(),
+            source_url: Some("https://example.com/other".to_string()),
+            canonical_url: Some("https://example.com/other".to_string()),
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("---\nsource: web\ntitle: Other Item\n---\n\n# Other Item\n".to_string()),
+            meta: None,
+            note: Some("Other note".to_string()),
+            position: None,
+        };
+        let item2 = db.save_item(save_req2).unwrap();
+        let _ = db.update_item_research_db(&item2.id, None, Some(vec!["Tag2".to_string()]), Some(Some("Other summary".to_string())), Some(Some("Author Bob".to_string())), Some(Some("journalist".to_string())));
+
+        // Create card for item 2
+        let card_id = uuid::Uuid::new_v4().to_string();
+        let card = put_card(&db, CardInput {
+            id: card_id.clone(),
+            project_id: project.id.clone(),
+            kind: "quote".to_string(),
+            item_id: Some(item2.id.clone()),
+            highlight_id: None,
+            quote: "Some quote".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: None,
+            section_id: None,
+            position: 1.0,
+        }).unwrap();
+        assert_eq!(card.item_id.as_deref(), Some(item2.id.as_str()));
+
+        // Merge item 2 into item 1
+        let merge_res = merge_items(&db, &item1.id, &[item2.id.clone()]).unwrap();
+        assert_eq!(merge_res.moved_cards, 1);
+        assert_eq!(merge_res.item.tags, vec!["Tag1", "Tag2"]);
+        assert_eq!(merge_res.item.summary.as_deref(), Some("Other summary"));
+        assert_eq!(merge_res.item.author.as_deref(), Some("Author Bob"));
+        assert_eq!(merge_res.item.author_type.as_deref(), Some("journalist"));
+        assert_eq!(merge_res.item.triage.as_deref(), Some("keep"));
+        assert!(merge_res.item.note.as_ref().unwrap().contains("Keep note"));
+        assert!(merge_res.item.note.as_ref().unwrap().contains("Other note"));
+
+        // item 2 is deleted
+        assert!(db.get_item(&item2.id).is_err());
+
+        // card now points to item 1
+        let moved_card = db.get_card(&card_id).unwrap();
+        assert_eq!(moved_card.item_id.as_deref(), Some(item1.id.as_str()));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_cross_group_duplicate_refusal_in_same_project() {
+        let db = Database::open_in_memory().unwrap();
+        let project = db.create_folder("My Project", None).unwrap();
+        let group1 = db.create_folder("Group 1", Some(&project.id)).unwrap();
+        let group2 = db.create_folder("Group 2", Some(&project.id)).unwrap();
+
+        let raw_url = "https://example.com/duplicate-test";
+        let capture = SourceCapture {
+            url: raw_url.to_string(),
+            title: "Doc 1".to_string(),
+            meta: serde_json::Map::new(),
+            markdown: "Content".to_string(),
+        };
+        let _ = save_source(&db, &group1.id, "web", capture.clone()).unwrap();
+
+        // Attempt to save same URL in group 2
+        let err = save_source(&db, &group2.id, "web", capture).unwrap_err();
+        assert_eq!(err.message, "Already saved in Group 1.");
+    }
+
+
 
     #[test]
     fn test_parse_grokipedia_html() {
@@ -5356,5 +6263,97 @@ Cited: [sae.org](https://www.sae.org/paper) · Note: Check the date";
 
         // Cleanup
         let _ = fs::remove_dir_all(&storage_root);
+    }
+
+    #[test]
+    fn test_service_put_card_and_update_card_refuse_non_live_source() {
+        let db = Database::open_in_memory().unwrap();
+        let project = db.create_folder("Project 1", None).unwrap();
+        let group = db.create_folder("Group 1", Some(&project.id)).unwrap();
+
+        let item = db.save_item(SaveItemRequest {
+            folder_id: group.id.clone(),
+            kind: "note".to_string(),
+            title: "Item 1".to_string(),
+            source_url: None,
+            canonical_url: None,
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("Text".to_string()),
+            meta: None,
+            note: None,
+            position: None,
+        }).unwrap();
+
+        let card_id = uuid::Uuid::new_v4().to_string();
+        let card = put_card(&db, CardInput {
+            id: card_id.clone(),
+            project_id: project.id.clone(),
+            kind: "quote".to_string(),
+            item_id: Some(item.id.clone()),
+            highlight_id: None,
+            quote: "Some quote".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: None,
+            section_id: None,
+            position: 1.0,
+        }).unwrap();
+
+        db.delete_item(&item.id).unwrap();
+
+        let put_err = put_card(&db, CardInput {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id: project.id.clone(),
+            kind: "quote".to_string(),
+            item_id: Some(item.id.clone()),
+            highlight_id: None,
+            quote: "Another quote".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: None,
+            section_id: None,
+            position: 2.0,
+        });
+        assert!(put_err.is_err());
+
+        let update_err = update_card(&db, &card.id, CardPatch {
+            note: Some(Some("New note".to_string())),
+            ..Default::default()
+        });
+        assert!(update_err.is_err());
+    }
+
+    #[test]
+    fn test_save_x_thread_allows_cross_group_in_same_project_but_refuses_same_group() {
+        let db = Database::open_in_memory().unwrap();
+        let project = db.create_folder("Project 1", None).unwrap();
+        let group1 = db.create_folder("Group 1", Some(&project.id)).unwrap();
+        let group2 = db.create_folder("Group 2", Some(&project.id)).unwrap();
+
+        let posts = vec![XPostCapture {
+            post_url: "https://x.com/someuser/status/123456789".to_string(),
+            author_name: "Some User".to_string(),
+            handle: "someuser".to_string(),
+            author_url: "https://x.com/someuser".to_string(),
+            posted_at: Some("2026-10-19T00:00:00Z".to_string()),
+            text: "First post".to_string(),
+        }];
+
+        let item1 = save_x_thread(&db, &group1.id, posts.clone()).unwrap();
+        assert_eq!(item1.folder_id, group1.id);
+
+        let err_same_group = save_x_thread(&db, &group1.id, posts.clone());
+        assert!(err_same_group.is_err());
+        let err = err_same_group.unwrap_err();
+        assert_eq!(err.code, "duplicate");
+
+        let item2 = save_x_thread(&db, &group2.id, posts.clone()).unwrap();
+        assert_eq!(item2.folder_id, group2.id);
+        assert_ne!(item1.id, item2.id);
     }
 }

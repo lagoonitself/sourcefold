@@ -61,14 +61,20 @@ export function revertPatch(card: Card, patch: CardPatch): CardPatch {
 
 /** Deleting a section sends its cards back to the card pile. */
 export function releaseSectionCards(cards: readonly Card[], sectionId: string): Card[] {
-  return cards.map((card) => (card.section_id === sectionId ? { ...card, section_id: null } : card));
+  return cards.map((card) =>
+    card.section_id === sectionId ? { ...card, section_id: null } : card,
+  );
 }
 
 /**
  * What the server does when a section is renamed: every source tagged with the old title gets the
  * new one in the same place in its list (and no repeat when it already had the new one).
  */
-export function renameTagOnItems(items: readonly Item[], oldTitle: string, newTitle: string): Item[] {
+export function renameTagOnItems(
+  items: readonly Item[],
+  oldTitle: string,
+  newTitle: string,
+): Item[] {
   return items.map((item) => {
     const tags = item.tags ?? [];
     if (!tags.some((t) => sameTag(t, oldTitle))) return item;

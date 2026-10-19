@@ -51,7 +51,12 @@ function checked(card: CardInput): CardInput | null {
 }
 
 /** A `quote` card with the highlight's passage and time; null when the highlight has no text. */
-export function buildQuoteCard({ highlight, projectId, id, position }: CardSource): CardInput | null {
+export function buildQuoteCard({
+  highlight,
+  projectId,
+  id,
+  position,
+}: CardSource): CardInput | null {
   return checked({
     id,
     project_id: projectId,
@@ -97,7 +102,9 @@ export function buildBrollCard(
 }
 
 /** The highlights that already have a card (the highlights panel marks them). */
-export function highlightIdsWithCards(cards: ReadonlyArray<Pick<Card, "highlight_id">>): Set<string> {
+export function highlightIdsWithCards(
+  cards: ReadonlyArray<Pick<Card, "highlight_id">>,
+): Set<string> {
   const ids = new Set<string>();
   for (const card of cards) if (card.highlight_id) ids.add(card.highlight_id);
   return ids;

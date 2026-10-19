@@ -30,6 +30,7 @@ import { ReaderCleanupLayer } from "./ReaderCleanupLayer";
 import { ReaderTextEditor } from "./ReaderTextEditor";
 import { buildReaderHeader, calculateReadingTime } from "./reader-meta";
 import { useReaderContent } from "./use-reader-content";
+import { SourceInfoPanel } from "../research/source-info";
 import "./reader.css";
 import type { ReaderFindController, ReaderTypography, ReaderViewProps } from "./types";
 
@@ -63,6 +64,9 @@ export function ReaderView({
   bodyRef,
   find,
   cleanup,
+  projectId,
+  onUpdateResearch,
+  researchSignals,
 }: ReaderViewProps) {
   const [typography, setTypography] = React.useState<ReaderTypography>(() => {
     try {
@@ -446,6 +450,16 @@ export function ReaderView({
                       {targetUrl}
                     </a>
                   </div>
+                )}
+
+                {onUpdateResearch && (
+                  <SourceInfoPanel
+                    item={item}
+                    projectId={projectId ?? null}
+                    onUpdate={onUpdateResearch}
+                    signals={researchSignals}
+                    className="mt-6 border-t border-border pt-4"
+                  />
                 )}
               </header>
 

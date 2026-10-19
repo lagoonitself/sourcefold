@@ -129,6 +129,12 @@ Saving runs in the background, one link after another; YouTube videos are spaced
         .min(1)
         .max(500)
         .describe("The links. Each entry may also be text containing several links."),
+      allow_duplicates: z
+        .boolean()
+        .default(false)
+        .describe(
+          "Only allows saving a second copy in a different group of the same project. Same-group duplicates are still refused. Default false.",
+        ),
       limit_per_collection: z
         .number()
         .int()
@@ -139,10 +145,10 @@ Saving runs in the background, one link after another; YouTube videos are spaced
           "Most videos or posts to take from each playlist, channel or publication. Default 50.",
         ),
       published_after: DATE.describe(
-        "Substack publications only: posts published after this day (YYYY-MM-DD).",
+        "Substack publications only: save only posts published after this day (YYYY-MM-DD).",
       ),
       published_before: DATE.describe(
-        "Substack publications only: posts published before this day (YYYY-MM-DD).",
+        "Substack publications only: save only posts published before this day (YYYY-MM-DD).",
       ),
       wait_seconds: z
         .number()
@@ -168,6 +174,7 @@ Saving runs in the background, one link after another; YouTube videos are spaced
           limitPerCollection: args.limit_per_collection ?? 50,
           publishedAfter: args.published_after ?? null,
           publishedBefore: args.published_before ?? null,
+          allowDuplicates: args.allow_duplicates ?? false,
         },
       );
       await jobs.waitForEnd(job, (args.wait_seconds ?? 25) * 1000);

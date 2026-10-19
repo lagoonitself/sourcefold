@@ -20,6 +20,7 @@ import {
   updateCard,
 } from "@/lib/api";
 import { isSessionExpiredError } from "@/lib/remote-client";
+import type { MergeResult } from "@/lib/types";
 import { errorMessage } from "@/lib/utils";
 import {
   applyCardPatch,
@@ -49,7 +50,7 @@ export interface ProjectData extends ProjectDataState {
   /** Deletes a section; its cards go back to the pile. Resolves to the section, or null. */
   removeSection: (id: string) => Promise<OutlineSection | null>;
   /** Keeps one copy and merges the others into it, then reloads. */
-  mergeDuplicates: (keepId: string, ids: string[]) => Promise<boolean>;
+  mergeDuplicates: (keepId: string, ids: string[]) => Promise<MergeResult | null>;
 }
 
 function newId(): string {
@@ -160,7 +161,7 @@ export function useProjectData(projectId: string | null): ProjectData {
 
   /** Runs a write: counts it as pending, and reloads afterwards if a reload was dropped meanwhile. */
   const write = React.useCallback(
-    async <T,>(run: () => Promise<T>): Promise<T> => {
+    async <T>(run: () => Promise<T>): Promise<T> => {
       pendingRef.current += 1;
       epochRef.current += 1;
       try {
@@ -238,7 +239,10 @@ export function useProjectData(projectId: string | null): ProjectData {
       const sectionExists =
         card.section_id === null ||
         storedRef.current.data.sections.some((s) => s.id === card.section_id);
-      const restored = await createCard({ ...input, section_id: sectionExists ? card.section_id : null });
+      const restored = await createCard({
+        ...input,
+        section_id: sectionExists ? card.section_id : null,
+      });
       return restored !== null;
     },
     [createCard],
@@ -321,14 +325,12 @@ export function useProjectData(projectId: string | null): ProjectData {
   );
 
   const renameSection = React.useCallback(
-    (id: string, title: string) =>
-      writeSection(id, { title }, "Couldn't rename the section."),
+    (id: string, title: string) => writeSection(id, { title }, "Couldn't rename the section."),
     [writeSection],
   );
 
   const moveSection = React.useCallback(
-    (id: string, position: number) =>
-      writeSection(id, { position }, "Couldn't move the section."),
+    (id: string, position: number) => writeSection(id, { position }, "Couldn't move the section."),
     [writeSection],
   );
 
@@ -361,14 +363,14 @@ export function useProjectData(projectId: string | null): ProjectData {
   );
 
   const mergeDuplicates = React.useCallback(
-    async (keepId: string, ids: string[]): Promise<boolean> => {
+    async (keepId: string, ids: string[]): Promise<MergeResult | null> => {
       try {
-        await write(() => mergeItems(keepId, ids));
+        const result = await write(() => mergeItems(keepId, ids));
         await refresh();
-        return true;
+        return result;
       } catch (err) {
         toast.error(errorMessage(err, "Couldn't merge the copies. Nothing was changed."));
-        return false;
+        return null;
       }
     },
     [refresh, write],

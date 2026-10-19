@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Copy, StickyNote, Trash2 } from "lucide-react";
+import { Copy, Film, Quote, StickyNote, Trash2 } from "lucide-react";
 import type { Highlight } from "@sourcefold/core";
 import { Button } from "@/components/ui/Button";
 import { Kbd } from "@/components/ui/Kbd";
@@ -75,7 +75,21 @@ export function HighlightMenu({
       style={{ top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? "visible" : "hidden" }}
       className="animate-pop-in absolute z-30 w-[340px] max-w-full rounded-[12px] border border-border bg-popover p-1.5 font-sans shadow-float text-popover-foreground select-none"
     >
-      <div className="flex items-center gap-0.5">
+      <div className="flex flex-wrap items-center gap-0.5">
+        <MenuButton
+          label="Make card"
+          hint="q"
+          icon={<Quote className="size-3.5 text-muted-foreground" aria-hidden="true" />}
+          onClick={() => void controller.makeCard(highlight.id)}
+        />
+        {controller.isYouTube && highlight.seconds !== null && (
+          <MenuButton
+            label="B-roll"
+            hint="b"
+            icon={<Film className="size-3.5 text-muted-foreground" aria-hidden="true" />}
+            onClick={() => void controller.makeBroll(highlight.id)}
+          />
+        )}
         <MenuButton
           label="Note"
           hint="n"

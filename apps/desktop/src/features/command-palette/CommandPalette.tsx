@@ -9,6 +9,11 @@ import type { Folder, Item, Project } from "@/lib/types";
 import { filterFuzzy } from "./fuzzy";
 import { SHORTCUT_COMMANDS } from "../shortcuts/registry";
 import { formatKeyBinding, isMacPlatform, splitComboForKbd } from "../shortcuts/key-utils";
+import {
+  PROJECT_VIEW_COMMANDS,
+  PROJECT_VIEW_LABELS,
+  PROJECT_VIEWS,
+} from "../research/project-view";
 import { cn } from "@/lib/utils";
 
 const RECENT_COMMANDS_KEY = "sourcefold:recent-commands";
@@ -145,6 +150,22 @@ export function CommandPalette({
         keywords: `${cmd.id} ${cmd.group || ""}`,
         run: () => onExecuteCommand(cmd.id),
       });
+    }
+
+    // Project views (Outline, B-roll, Duplicates)
+    if (activeProjectId) {
+      for (const view of PROJECT_VIEWS) {
+        const cmd = PROJECT_VIEW_COMMANDS[view];
+        list.push({
+          id: cmd.id,
+          type: "command",
+          title: `Project: ${PROJECT_VIEW_LABELS[view]}`,
+          subtitle: `Open ${PROJECT_VIEW_LABELS[view]} view`,
+          shortcut: cmd.keys,
+          keywords: `${view} ${PROJECT_VIEW_LABELS[view]} outline broll duplicates project`,
+          run: () => onExecuteCommand(cmd.id),
+        });
+      }
     }
 
     // 2. Projects

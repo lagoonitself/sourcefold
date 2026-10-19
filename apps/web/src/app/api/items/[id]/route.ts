@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { isSourceCaptureKind } from "@sourcefold/core";
+import { type AuthorType, isSourceCaptureKind } from "@sourcefold/core";
 import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
 import { invalidFolderMessage, nextPosition } from "@/features/capture/find-duplicate";
 import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
+import { researchPatchShape } from "@/features/research/item-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -43,15 +44,24 @@ const patchItemSchema = z
       .string()
       .max(SOURCE_MARKDOWN_MAX, `Text must be at most ${SOURCE_MARKDOWN_MAX} characters.`)
       .optional(),
+    ...researchPatchShape,
   })
   .refine(
     (data) =>
       data.title !== undefined ||
       data.folder_id !== undefined ||
       data.note !== undefined ||
-      data.markdown !== undefined,
+      data.markdown !== undefined ||
+      data.triage !== undefined ||
+      data.tags !== undefined ||
+      data.summary !== undefined ||
+      data.author !== undefined ||
+      data.author_type !== undefined,
     { message: "At least one field must be provided to update." },
   );
+
+const ITEM_GET_COLUMNS =
+  "id, kind, title, note, markdown, folder_id, triage, tags, summary, author, author_type" as const;
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireApiUser(request);
@@ -65,7 +75,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const { data: item, error } = await auth.db
     .from("items")
-    .select("id, kind, title, note, markdown, folder_id")
+    .select(ITEM_GET_COLUMNS)
     .eq("id", id)
     .eq("user_id", auth.userId)
     .is("deleted_at", null)
@@ -136,6 +146,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     note?: string | null;
     markdown?: string;
     position?: number;
+    triage?: "keep" | "maybe" | "cut" | null;
+    tags?: string[];
+    summary?: string | null;
+    author?: string | null;
+    author_type?: AuthorType | null;
   } = {};
 
   if (parsed.data.title !== undefined) {
@@ -146,6 +161,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   if (parsed.data.markdown !== undefined) {
     updateData.markdown = parsed.data.markdown;
+  }
+  if (parsed.data.triage !== undefined) {
+    updateData.triage = parsed.data.triage;
+  }
+  if (parsed.data.tags !== undefined) {
+    updateData.tags = parsed.data.tags;
+  }
+  if (parsed.data.summary !== undefined) {
+    updateData.summary = parsed.data.summary;
+  }
+  if (parsed.data.author !== undefined) {
+    updateData.author = parsed.data.author;
+  }
+  if (parsed.data.author_type !== undefined) {
+    updateData.author_type = parsed.data.author_type;
   }
 
   if (parsed.data.folder_id !== undefined) {

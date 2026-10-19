@@ -5,6 +5,7 @@ import { Kbd } from "@/components/ui/Kbd";
 import { DriveSyncStatus } from "@/features/drive";
 import type { Folder } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { PROJECT_VIEW_LABELS, type ProjectView } from "../research/project-view";
 
 export interface TopBarProps {
   isMac: boolean;
@@ -18,6 +19,7 @@ export interface TopBarProps {
   onSearch: () => void;
   onAddLinks: () => void;
   canAddLinks: boolean;
+  projectView?: ProjectView | null;
 }
 
 /** Where you are, search, Drive status and the main action. It also drags the window on macOS. */
@@ -31,6 +33,7 @@ export function TopBar({
   onSearch,
   onAddLinks,
   canAddLinks,
+  projectView,
 }: TopBarProps) {
   const mod = isMac ? "⌘" : "Ctrl+";
 
@@ -65,6 +68,16 @@ export function TopBar({
           <span className="hidden max-w-[16ch] shrink-0 truncate @[560px]/topbar:inline">
             {project.name}
           </span>
+        )}
+        {projectView && (
+          <>
+            <span aria-hidden="true" className="shrink-0 text-border-strong">
+              /
+            </span>
+            <span aria-current="page" className="min-w-0 truncate font-medium text-foreground">
+              {PROJECT_VIEW_LABELS[projectView]}
+            </span>
+          </>
         )}
         {trail.map((folder, index) => {
           const last = index === trail.length - 1;

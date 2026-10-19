@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { AUTHOR_TYPE_LABELS, TRIAGE_LABELS, type AuthorType, type Triage } from "@sourcefold/core";
 import { z } from "zod";
 import { ApiError } from "../web-api";
 import { defineTool, type ToolContext } from "./define";
@@ -28,6 +29,13 @@ interface CachedSource {
   /** [start, end) of each part in `body`. */
   parts: Array<[number, number]>;
   expires: number;
+  item?: {
+    triage?: string | null;
+    tags?: string[];
+    summary?: string | null;
+    author?: string | null;
+    author_type?: string | null;
+  };
 }
 
 const cache = new Map<string, CachedSource>();
@@ -169,9 +177,16 @@ async function loadSource(
   cache.delete(id);
 
   const { api } = ctx;
-  const base = await api.get<{ kind: string; title: string; note: string | null }>(
-    `/items/${encodeURIComponent(id)}`,
-  );
+  const base = await api.get<{
+    kind: string;
+    title: string;
+    note: string | null;
+    triage?: string | null;
+    tags?: string[];
+    summary?: string | null;
+    author?: string | null;
+    author_type?: string | null;
+  }>(`/items/${encodeURIComponent(id)}`);
   if (base.kind === "image") return { image: true, title: base.title, note: base.note };
 
   let file: string;
@@ -197,6 +212,7 @@ async function loadSource(
     headings,
     parts: splitParts(body, headings),
     expires: Date.now() + CACHE_TTL_MS,
+    item: base,
   };
   cache.set(id, entry);
   while (cache.size > CACHE_MAX_ENTRIES) {
@@ -229,8 +245,28 @@ function headerLines(source: CachedSource, withDetails: boolean): string[] {
       const value = source.fields[key];
       return value ? [`${label}: ${value}`] : [];
     });
+    const author = source.item?.author || source.fields.written_by;
+    if (author && !details.some((d) => d.startsWith("By:"))) {
+      details.push(`By: ${author}`);
+    }
+    const authorType = source.item?.author_type || source.fields.author_type;
+    if (authorType) {
+      const label = AUTHOR_TYPE_LABELS[authorType as AuthorType] ?? authorType;
+      details.push(`Author type: ${label}`);
+    }
+    const triage = source.item?.triage || source.fields.status;
+    if (triage) {
+      const label = TRIAGE_LABELS[triage as Triage] ?? triage;
+      details.push(`Status: ${label}`);
+    }
+    const tags = source.item?.tags;
+    if (tags && tags.length > 0) {
+      details.push(`Tags: ${tags.join(", ")}`);
+    }
+
     if (details.length > 0) lines.push(details.join(" · "));
-    if (source.fields.summary) lines.push(`Summary: ${truncate(source.fields.summary, 300)}`);
+    const summary = source.item?.summary || source.fields.summary;
+    if (summary) lines.push(`Summary: ${truncate(summary, 300)}`);
   }
   return lines;
 }

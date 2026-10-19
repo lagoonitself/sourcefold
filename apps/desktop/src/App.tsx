@@ -11,6 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  isAnyDialogOpen,
 } from "@/components/ui/Dialog";
 import { ProjectSwitcher } from "@/features/projects/ProjectSwitcher";
 import { FolderTree } from "@/features/folders/FolderTree";
@@ -40,11 +41,26 @@ import { ReaderModal } from "@/features/reader/ReaderModal";
 import { openSource, opensInReader } from "@/features/reader/open-decision";
 import { CommandPalette } from "@/features/command-palette/CommandPalette";
 import { KeyboardShortcutsDialog, useKeyboardShortcuts } from "@/features/shortcuts";
-import { isMacPlatform, matchesKeyCombo } from "@/features/shortcuts/key-utils";
+import { isMacPlatform, isTypingContext, matchesKeyCombo } from "@/features/shortcuts/key-utils";
 import type { Folder, Item } from "@/lib/types";
 import { archiveProject, getFolders, getItem, getItems, openImage } from "@/lib/api";
 import { isRemoteConfigured, isSessionExpiredError } from "@/lib/remote-client";
 import { openUrl, cn, errorMessage } from "@/lib/utils";
+import { useProjectData } from "@/features/research/project-data/use-project-data";
+import { projectViewCounts } from "@/features/research/project-data/project-data-model";
+import {
+  viewForCommand,
+  viewForChordKey,
+  reduceProjectView,
+  viewInProject,
+  type ProjectView,
+  type ProjectViewState,
+  NO_PROJECT_VIEW,
+} from "@/features/research/project-view";
+import { OutlineView } from "@/features/research/outline/OutlineView";
+import { BrollView } from "@/features/research/broll/BrollView";
+import { DuplicatesView } from "@/features/research/duplicates/DuplicatesView";
+import type { Card } from "@sourcefold/core";
 
 export function App() {
   const isMac = React.useMemo(() => isMacPlatform(), []);
@@ -91,6 +107,17 @@ export function App() {
   const [activeProjectId, setActiveProjectId] = React.useState<string | null>(null);
   const [activeFolderId, setActiveFolderId] = React.useState<string | null>(null);
   const [focusedFolderId, setFocusedFolderId] = React.useState<string | null>(null);
+
+  // State: Project Views (Outline, B-roll, Duplicates)
+  const [projectViewState, setProjectViewState] = React.useState<ProjectViewState>(NO_PROJECT_VIEW);
+  const projectView = viewInProject(projectViewState, activeProjectId);
+
+  // Project Data hook for cards, sections and project-wide sources
+  const projectData = useProjectData(activeProjectId);
+  const projectCounts = React.useMemo(
+    () => projectViewCounts(projectData.cards, projectData.items),
+    [projectData.cards, projectData.items],
+  );
 
   // State: Items in active group
   const [items, setItems] = React.useState<Item[]>([]);
@@ -159,6 +186,27 @@ export function App() {
     } catch (err) {
       toast.error(errorMessage(err, "Couldn't open that source."));
     }
+  }, []);
+
+  // Open reader for a research card
+  const handleOpenCard = React.useCallback(
+    async (card: Card) => {
+      if (!card.item_id) return;
+      try {
+        const item =
+          projectData.items.find((i) => i.id === card.item_id) ?? (await getItem(card.item_id));
+        setReaderHighlightId(card.highlight_id ?? null);
+        setReaderItem(item);
+      } catch (err) {
+        toast.error(errorMessage(err, "Couldn't open source in reader"));
+      }
+    },
+    [projectData.items],
+  );
+
+  const handleOpenSource = React.useCallback((item: Item) => {
+    setReaderHighlightId(null);
+    setReaderItem(item);
   }, []);
 
   // Archive project confirm dialog
@@ -292,6 +340,7 @@ export function App() {
   // Handle selecting a project
   const handleSelectProject = (projectId: string) => {
     setActiveProjectId(projectId);
+    setProjectViewState((s) => reduceProjectView(s, { type: "project-selected", projectId }));
     // Find first group under this project if any
     const firstGroup = folders.find((f) => f.parent_id === projectId);
     if (firstGroup) {
@@ -309,6 +358,7 @@ export function App() {
     if (projectGroups.length === 0) return;
     const currentIndex = projectGroups.findIndex((g) => g.id === activeFolderId);
     const prevIndex = currentIndex > 0 ? currentIndex - 1 : projectGroups.length - 1;
+    setProjectViewState(NO_PROJECT_VIEW);
     setActiveFolderId(projectGroups[prevIndex].id);
     setFocusedFolderId(projectGroups[prevIndex].id);
   }, [projectGroups, activeFolderId]);
@@ -317,6 +367,7 @@ export function App() {
     if (projectGroups.length === 0) return;
     const currentIndex = projectGroups.findIndex((g) => g.id === activeFolderId);
     const nextIndex = currentIndex < projectGroups.length - 1 ? currentIndex + 1 : 0;
+    setProjectViewState(NO_PROJECT_VIEW);
     setActiveFolderId(projectGroups[nextIndex].id);
     setFocusedFolderId(projectGroups[nextIndex].id);
   }, [projectGroups, activeFolderId]);
@@ -378,6 +429,14 @@ export function App() {
   // Execute commands from Command Palette
   const handleExecuteCommand = React.useCallback(
     (cmdId: string) => {
+      const projectViewTarget = viewForCommand(cmdId);
+      if (projectViewTarget && activeProjectId) {
+        setProjectViewState({ view: projectViewTarget, projectId: activeProjectId });
+        setActiveFolderId(null);
+        setActiveRegion("list");
+        return;
+      }
+
       switch (cmdId) {
         case "app.command-palette":
           setCommandPaletteOpen((prev) => !prev);
@@ -444,6 +503,7 @@ export function App() {
       }
     },
     [
+      activeProjectId,
       activeFolderId,
       isProjectWithNoGroups,
       currentProject,
@@ -454,6 +514,50 @@ export function App() {
       sidebar.toggle,
     ],
   );
+
+  // Global keys: g o (Outline), g b (B-roll), g d (Duplicates)
+  React.useEffect(() => {
+    let chordPending = false;
+    let chordTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isTypingContext(e.target) || isAnyDialogOpen()) {
+        chordPending = false;
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        chordPending = false;
+        return;
+      }
+
+      if (chordPending) {
+        chordPending = false;
+        if (chordTimer) clearTimeout(chordTimer);
+        const targetView = viewForChordKey(e.key);
+        if (targetView && activeProjectIdRef.current) {
+          e.preventDefault();
+          setProjectViewState({ view: targetView, projectId: activeProjectIdRef.current });
+          setActiveFolderId(null);
+          setActiveRegion("list");
+          return;
+        }
+      }
+
+      if (e.key === "g" || e.key === "G") {
+        chordPending = true;
+        if (chordTimer) clearTimeout(chordTimer);
+        chordTimer = setTimeout(() => {
+          chordPending = false;
+        }, 1000);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      if (chordTimer) clearTimeout(chordTimer);
+    };
+  }, []);
 
   // Global app-level keyboard shortcuts hook
   useKeyboardShortcuts({
@@ -514,6 +618,7 @@ export function App() {
   const closeDrawer = sidebar.closeDrawer;
   const selectGroup = React.useCallback(
     (id: string) => {
+      setProjectViewState(NO_PROJECT_VIEW);
       setActiveFolderId(id);
       setFocusedFolderId(id);
       closeDrawer();
@@ -526,6 +631,7 @@ export function App() {
     (nav: ShowNavigation) => {
       setReaderItem(null);
       setReaderHighlightId(null);
+      setProjectViewState(NO_PROJECT_VIEW);
       setActiveProjectId(nav.projectId);
       setActiveFolderId(nav.groupId);
       setFocusedFolderId(nav.groupId);
@@ -581,6 +687,16 @@ export function App() {
             projectId={activeProjectId}
             folders={folders}
             activeFolderId={activeFolderId}
+            activeProjectView={projectView}
+            onSelectProjectView={(view) => {
+              if (activeProjectId) {
+                setProjectViewState({ view, projectId: activeProjectId });
+                setActiveFolderId(null);
+                setActiveRegion("list");
+                closeDrawer();
+              }
+            }}
+            projectViewCounts={projectCounts}
             isFocusedRegion={activeRegion === "tree"}
             focusedFolderId={focusedFolderId}
             onFocusedFolderChange={setFocusedFolderId}
@@ -588,6 +704,7 @@ export function App() {
               // The tree reports the project itself when its last group is deleted; sources
               // can only be shown and saved in groups.
               const groupId = id === activeProjectId ? null : id;
+              setProjectViewState(NO_PROJECT_VIEW);
               setActiveFolderId(groupId);
               setFocusedFolderId(groupId);
               if (groupId) closeDrawer();
@@ -663,6 +780,7 @@ export function App() {
             onSearch={() => setSearchOpen(true)}
             onAddLinks={() => setAddLinksOpen(true)}
             canAddLinks={canAddLinks}
+            projectView={projectView}
           />
 
           {activeFolderId ? (
@@ -717,6 +835,29 @@ export function App() {
                 </>
               )}
             </div>
+          ) : projectView === "outline" ? (
+            <OutlineView
+              project={currentProject}
+              data={projectData}
+              isFocusedRegion={activeRegion === "list"}
+              onOpenCard={handleOpenCard}
+              onOpenSource={handleOpenSource}
+            />
+          ) : projectView === "broll" ? (
+            <BrollView
+              project={currentProject}
+              data={projectData}
+              isFocusedRegion={activeRegion === "list"}
+              onOpenReader={handleOpenSource}
+            />
+          ) : projectView === "duplicates" ? (
+            <DuplicatesView
+              project={currentProject}
+              folders={folders}
+              data={projectData}
+              isFocusedRegion={activeRegion === "list"}
+              onOpenReader={handleOpenSource}
+            />
           ) : !hasProjects ? (
             <div className="flex flex-1 items-center justify-center">
               <EmptyState
@@ -773,6 +914,7 @@ export function App() {
         activeProjectId={activeProjectId}
         onSelectProject={handleSelectProject}
         onSelectFolder={(folderId) => {
+          setProjectViewState(NO_PROJECT_VIEW);
           setActiveFolderId(folderId);
           setFocusedFolderId(folderId);
           setActiveRegion("list");
@@ -805,6 +947,7 @@ export function App() {
         currentProjectId={activeProjectId}
         onOpenHit={(hit, query) => void openSearchHit(hit, query)}
         onSelectItem={(item) => {
+          setProjectViewState(NO_PROJECT_VIEW);
           setActiveFolderId(item.folder_id);
           setFocusedFolderId(item.folder_id);
           setFocusedItemId(item.id);

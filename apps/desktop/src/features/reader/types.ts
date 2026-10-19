@@ -1,4 +1,6 @@
+import type { AuthorType, ItemResearchPatch, Triage } from "@sourcefold/core";
 import type { ItemKind } from "@/lib/types";
+import type { SourceInfoSignals } from "../research/source-info";
 import type { ReaderHighlightsController } from "./useReaderHighlights";
 import type { ReaderCleanupController } from "./use-reader-cleanup";
 import type { InitialSearch, ReaderFindController } from "./use-reader-find";
@@ -19,6 +21,10 @@ export interface ReaderItem {
   status?: string;
   author?: string | null;
   folder_id?: string;
+  triage?: Triage | null;
+  tags?: string[];
+  summary?: string | null;
+  author_type?: AuthorType | null;
 }
 
 export type ReaderTypography = "serif" | "sans";
@@ -47,6 +53,10 @@ export interface ReaderViewProps {
   find?: ReaderFindController;
   /** "Remove text" mode and the text editor; without it the view cannot change the text. */
   cleanup?: ReaderCleanupController;
+  /** Research tools: project id, updater and keyboard signals. */
+  projectId?: string | null;
+  onUpdateResearch?: (patch: ItemResearchPatch) => void;
+  researchSignals?: SourceInfoSignals;
 }
 
 export interface ReaderContent {

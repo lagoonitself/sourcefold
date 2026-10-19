@@ -210,11 +210,7 @@ export function SectionBlock({
           )}
         </div>
 
-        <TaggedSources
-          title={section.title}
-          sources={taggedSources}
-          onOpenSource={onOpenSource}
-        />
+        <TaggedSources title={section.title} sources={taggedSources} onOpenSource={onOpenSource} />
         <span className="hidden shrink-0 font-sans text-[12.5px] leading-[18px] text-muted-foreground tabular-nums @[560px]/view:inline">
           {plural(cardCount, "card", "cards")}
         </span>

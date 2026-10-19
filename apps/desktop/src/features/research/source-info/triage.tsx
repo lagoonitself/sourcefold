@@ -59,7 +59,9 @@ export function TriageButtons({
             key={triage}
             type="button"
             aria-pressed={active}
-            title={active ? `${TRIAGE_LABELS[triage]}: press ${key} or 0 to clear` : `${hint} (${key})`}
+            title={
+              active ? `${TRIAGE_LABELS[triage]}: press ${key} or 0 to clear` : `${hint} (${key})`
+            }
             onClick={() => onChange(active ? null : triage)}
             className={cn(
               "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-[8px] px-2 font-sans text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring",

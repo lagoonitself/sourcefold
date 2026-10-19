@@ -2,12 +2,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import type { ItemResearchPatch } from "@sourcefold/core";
 import { updateItemResearch } from "@/lib/api";
-import {
-  applyResearch,
-  effectivePatch,
-  researchBefore,
-  type ResearchItem,
-} from "./research-logic";
+import { applyResearch, effectivePatch, researchBefore, type ResearchItem } from "./research-logic";
 
 export interface UseItemResearchOptions {
   /** Called after a change was saved, so the owner of the item list can reload it. */

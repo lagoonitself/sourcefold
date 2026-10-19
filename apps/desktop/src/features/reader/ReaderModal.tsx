@@ -11,6 +11,7 @@ import { useReaderCleanup } from "./use-reader-cleanup";
 import { useReaderContent } from "./use-reader-content";
 import { useReaderFind } from "./use-reader-find";
 import { useReaderHighlights } from "./useReaderHighlights";
+import { useItemProjectId, useItemResearch, type SourceInfoSignals } from "../research/source-info";
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -55,6 +56,19 @@ export function ReaderModal({
     setDisplayItem(item);
   }
   const currentItem = item ?? displayItem;
+  const isShown = open && item !== null;
+
+  const projectId = useItemProjectId(currentItem, isShown);
+  const research = useItemResearch({
+    onSynced: () => {
+      if (currentItem?.id) onHighlightsChanged?.(currentItem.id);
+    },
+  });
+  const currentItemWithResearch = currentItem ? research.withResearch(currentItem) : null;
+  const [researchSignals, setResearchSignals] = React.useState<SourceInfoSignals>({
+    tags: 0,
+    summary: 0,
+  });
 
   React.useEffect(() => {
     if (!open || !itemId) return;
@@ -96,7 +110,7 @@ export function ReaderModal({
   const [removing, setRemoving] = React.useState(false);
 
   const highlights = useReaderHighlights({
-    item,
+    item: currentItemWithResearch,
     open,
     bodyHtml: content.bodyHtml,
     bodyRef,
@@ -107,6 +121,7 @@ export function ReaderModal({
     onSaveLinks,
     onHighlightsChanged,
     suspended: removing,
+    projectId,
   });
 
   const cleanup = useReaderCleanup({
@@ -148,8 +163,6 @@ export function ReaderModal({
   const cleanupRef = React.useRef(cleanup);
   cleanupRef.current = cleanup;
 
-  const isShown = open && item !== null;
-
   // Focus the scroll container when the modal opens so j/k/Space shortcuts work immediately
   React.useEffect(() => {
     if (open && itemId) {
@@ -171,6 +184,9 @@ export function ReaderModal({
   // - Escape: close the small menu, then a panel note field, then the find bar, then the reader
   // - e: Remove text mode (select text or press the trash button to take it out of the source)
   // - o / O: open original source URL in browser
+  // - 1 / 2 / 3 / 0: Keep, Maybe, Cut, clear status
+  // - t: focus tags
+  // - u: focus summary
   // - ArrowDown / ArrowUp: scroll
   // - Space / Shift+Space: page down / page up
   React.useEffect(() => {
@@ -202,6 +218,46 @@ export function ReaderModal({
       if (cleanupRef.current.handleKey(e)) return;
       if (highlightsRef.current.handleKey(e)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // Research shortcuts: 1 Keep, 2 Maybe, 3 Cut, 0 clear, t tags, u summary
+      if (e.key === "1") {
+        e.preventDefault();
+        if (currentItemWithResearch) {
+          void research.update([currentItemWithResearch], { triage: "keep" });
+        }
+        return;
+      }
+      if (e.key === "2") {
+        e.preventDefault();
+        if (currentItemWithResearch) {
+          void research.update([currentItemWithResearch], { triage: "maybe" });
+        }
+        return;
+      }
+      if (e.key === "3") {
+        e.preventDefault();
+        if (currentItemWithResearch) {
+          void research.update([currentItemWithResearch], { triage: "cut" });
+        }
+        return;
+      }
+      if (e.key === "0") {
+        e.preventDefault();
+        if (currentItemWithResearch) {
+          void research.update([currentItemWithResearch], { triage: null });
+        }
+        return;
+      }
+      if (e.key === "t") {
+        e.preventDefault();
+        setResearchSignals((prev) => ({ ...prev, tags: prev.tags + 1 }));
+        return;
+      }
+      if (e.key === "u") {
+        e.preventDefault();
+        setResearchSignals((prev) => ({ ...prev, summary: prev.summary + 1 }));
+        return;
+      }
 
       if (
         e.key === "Enter" &&
@@ -251,11 +307,11 @@ export function ReaderModal({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isShown, handleClose]);
+  }, [isShown, handleClose, currentItemWithResearch, research]);
 
   return createPortal(
     <AnimatePresence>
-      {isShown && currentItem && (
+      {isShown && currentItemWithResearch && (
         <motion.div
           key="reader-desk-backdrop"
           className="desk-grain fixed inset-0 z-50 flex flex-col p-2 select-none bg-desk"
@@ -268,7 +324,7 @@ export function ReaderModal({
             key="reader-sheet"
             role="dialog"
             aria-modal="true"
-            aria-label={`Reader: ${currentItem.title}`}
+            aria-label={`Reader: ${currentItemWithResearch.title}`}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8, transition: { duration: 0.12, ease: [0.16, 1, 0.3, 1] } }}
@@ -276,7 +332,7 @@ export function ReaderModal({
             className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] bg-background text-foreground shadow-sheet"
           >
             <ReaderView
-              item={currentItem}
+              item={currentItemWithResearch}
               state={state}
               onRetry={() => setAttempt((n) => n + 1)}
               onClose={handleClose}
@@ -288,6 +344,13 @@ export function ReaderModal({
               bodyRef={bodyRef}
               find={find}
               cleanup={cleanup}
+              projectId={projectId}
+              onUpdateResearch={(patch) => {
+                if (currentItemWithResearch) {
+                  void research.update([currentItemWithResearch], patch);
+                }
+              }}
+              researchSignals={researchSignals}
             />
           </motion.div>
         </motion.div>

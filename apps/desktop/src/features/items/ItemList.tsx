@@ -6,10 +6,12 @@ import {
   Copy,
   ExternalLink,
   FileStack,
+  FileText,
   Folder as FolderIcon,
   MessageSquare,
   MoreVertical,
   Pencil,
+  Tag,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -132,8 +134,8 @@ export function ItemList({
   );
   const items = React.useMemo(() => filterItems(allItems, filter), [allItems, filter]);
 
-  const [tagsOpen, setTagsOpen] = React.useState(false);
-  const [summaryOpen, setSummaryOpen] = React.useState(false);
+  const [tagsTarget, setTagsTarget] = React.useState<Item[] | null>(null);
+  const [summaryTarget, setSummaryTarget] = React.useState<Item | null>(null);
 
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [selecting, setSelecting] = React.useState(false);
@@ -316,8 +318,21 @@ export function ItemList({
       onGroupAction((action) => {
         if (action === "select-mode") toggleSelecting();
         else if (action === "copy-all-links") void handleCopyAll();
+        else if (action === "status-keep") {
+          if (actionTargets.length > 0) void research.update(actionTargets, { triage: "keep" });
+        } else if (action === "status-maybe") {
+          if (actionTargets.length > 0) void research.update(actionTargets, { triage: "maybe" });
+        } else if (action === "status-cut") {
+          if (actionTargets.length > 0) void research.update(actionTargets, { triage: "cut" });
+        } else if (action === "status-clear") {
+          if (actionTargets.length > 0) void research.update(actionTargets, { triage: null });
+        } else if (action === "edit-tags") {
+          if (actionTargets.length > 0) setTagsTarget(actionTargets);
+        } else if (action === "edit-summary") {
+          if (focusedItem) setSummaryTarget(focusedItem);
+        }
       }),
-    [toggleSelecting, handleCopyAll],
+    [toggleSelecting, handleCopyAll, actionTargets, focusedItem, research],
   );
 
   // Range selection helper
@@ -499,6 +514,50 @@ export function ItemList({
         return;
       }
 
+      // Research keys: 1 Keep, 2 Maybe, 3 Cut, 0 clear, t tags, u summary
+      if (e.key === "1" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        if (actionTargets.length > 0) {
+          void research.update(actionTargets, { triage: "keep" });
+        }
+        return;
+      }
+      if (e.key === "2" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        if (actionTargets.length > 0) {
+          void research.update(actionTargets, { triage: "maybe" });
+        }
+        return;
+      }
+      if (e.key === "3" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        if (actionTargets.length > 0) {
+          void research.update(actionTargets, { triage: "cut" });
+        }
+        return;
+      }
+      if (e.key === "0" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        if (actionTargets.length > 0) {
+          void research.update(actionTargets, { triage: null });
+        }
+        return;
+      }
+      if (e.key === "t" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        if (actionTargets.length > 0) {
+          setTagsTarget(actionTargets);
+        }
+        return;
+      }
+      if (e.key === "u" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        if (focusedItem) {
+          setSummaryTarget(focusedItem);
+        }
+        return;
+      }
+
       // Move to group: m
       if (e.key === "m" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();
@@ -557,6 +616,7 @@ export function ItemList({
     stopSelecting,
     toggleSelected,
     toggleSelecting,
+    research,
   ]);
 
   const handleDeleteConfirmed = async () => {
@@ -601,32 +661,35 @@ export function ItemList({
 
   return (
     <div ref={listContainerRef} className="relative flex min-h-0 flex-1 flex-col select-none">
-      {/* List toolbar: Select and Copy all links when outside select mode */}
-      {!selectionMode && items.length > 0 && (
-        <div className="flex h-11 shrink-0 items-center justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={toggleSelecting} title="Select (s)">
-            <span>Select</span>
-            <Kbd>s</Kbd>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={linkItems.length === 0}
-            onClick={() => void handleCopyAll()}
-            title={
-              linkItems.length === 0
-                ? "No sources in this group have a link"
-                : "Copy all links (Shift+Y)"
-            }
-          >
-            {copiedAll ? (
-              <Check className="size-3.5 text-primary" aria-hidden="true" />
-            ) : (
-              <Copy className="size-3.5" aria-hidden="true" />
-            )}
-            <span>{copiedAll ? "Copied" : "Copy all links"}</span>
-            {!copiedAll && <Kbd>⇧Y</Kbd>}
-          </Button>
+      {/* List toolbar: Filter bar, Select and Copy all links when outside select mode */}
+      {!selectionMode && allItems.length > 0 && (
+        <div className="flex h-11 shrink-0 items-center justify-between gap-2">
+          <ListFilterBar filter={filter} onChange={setFilter} tags={tagsInGroup} />
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={toggleSelecting} title="Select (s)">
+              <span>Select</span>
+              <Kbd>s</Kbd>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={linkItems.length === 0}
+              onClick={() => void handleCopyAll()}
+              title={
+                linkItems.length === 0
+                  ? "No sources in this group have a link"
+                  : "Copy all links (Shift+Y)"
+              }
+            >
+              {copiedAll ? (
+                <Check className="size-3.5 text-primary" aria-hidden="true" />
+              ) : (
+                <Copy className="size-3.5" aria-hidden="true" />
+              )}
+              <span>{copiedAll ? "Copied" : "Copy all links"}</span>
+              {!copiedAll && <Kbd>⇧Y</Kbd>}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -654,6 +717,30 @@ export function ItemList({
               {selectedItems.length > 0 ? `${selectedItems.length} selected` : "Select sources"}
             </span>
             <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+
+            <BulkStatusMenu
+              disabled={selectedItems.length === 0}
+              onPick={(triage) => void research.update(selectedItems, { triage })}
+            />
+            <BulkTagMenu
+              targets={selectedItems}
+              projectId={projectId}
+              disabled={selectedItems.length === 0}
+              onToggle={(tag, shouldAdd) => {
+                for (const item of selectedItems) {
+                  const currentTags = item.tags ?? [];
+                  const res = addTag(currentTags, tag);
+                  const nextTags = shouldAdd
+                    ? res.ok
+                      ? res.tags
+                      : currentTags
+                    : removeTag(currentTags, tag);
+                  void research.update([item], { tags: nextTags });
+                }
+              }}
+              onMore={() => setTagsTarget(selectedItems)}
+            />
+
             <Button
               variant="outline"
               size="sm"
@@ -700,25 +787,38 @@ export function ItemList({
       <div className={cn("flex flex-1 flex-col gap-0.5 overflow-y-auto", selectionMode && "pb-20")}>
         {items.length === 0 ? (
           <div className="flex flex-1 items-center justify-center py-12">
-            <EmptyState
-              icon={FileStack}
-              title="Nothing here yet"
-              description="Add Grokipedia, YouTube, Substack or any other links, or save a page with the Sourcefold extension."
-              actions={
-                <Button
-                  variant="default"
-                  onClick={() => {
-                    window.dispatchEvent(
-                      new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true }),
-                    );
-                  }}
-                  title="Add links (a)"
-                >
-                  <span>Add links</span>
-                  <Kbd>A</Kbd>
-                </Button>
-              }
-            />
+            {isFiltering(filter) && allItems.length > 0 ? (
+              <EmptyState
+                icon={FileStack}
+                title="No sources match this filter"
+                description="Try picking another status or tag, or clearing the filter."
+                actions={
+                  <Button variant="outline" onClick={() => setFilter(NO_FILTER)}>
+                    Clear filter
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                icon={FileStack}
+                title="Nothing here yet"
+                description="Add Grokipedia, YouTube, Substack or any other links, or save a page with the Sourcefold extension."
+                actions={
+                  <Button
+                    variant="default"
+                    onClick={() => {
+                      window.dispatchEvent(
+                        new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true }),
+                      );
+                    }}
+                    title="Add links (a)"
+                  >
+                    <span>Add links</span>
+                    <Kbd>A</Kbd>
+                  </Button>
+                }
+              />
+            )}
           </div>
         ) : (
           items.map((item, index) => {
@@ -727,9 +827,9 @@ export function ItemList({
             const hasNote = Boolean(item.kind !== "note" && item.note && item.note.trim());
             const canRead = opensInReader(item);
             const kind = getSourceKind(item.kind);
-            const metaLine = getSourceMetaLine(
-              item.kind,
-              item.meta as Record<string, unknown> | null,
+            const metaLine = researchMetaLine(
+              item,
+              getSourceMetaLine(item.kind, item.meta as Record<string, unknown> | null),
             );
             const staggerDelay = index < 12 ? index * 0.02 : 0;
 
@@ -784,9 +884,16 @@ export function ItemList({
 
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate font-serif text-[16px] font-medium leading-[22px] text-foreground">
+                    <TriageMark triage={item.triage} />
+                    <span
+                      className={cn(
+                        "truncate font-serif text-[16px] font-medium leading-[22px]",
+                        item.triage === "cut" ? "text-muted-foreground" : "text-foreground",
+                      )}
+                    >
                       {item.title}
                     </span>
+                    <TagChips tags={item.tags} className="shrink-0" />
                     {hasNote && (
                       <span
                         role="img"
@@ -887,6 +994,28 @@ export function ItemList({
                       <DropdownMenuItem
                         onClick={() => {
                           setFocusedItemId(item.id);
+                          setTagsTarget([item]);
+                        }}
+                      >
+                        <Tag className="size-3.5" />
+                        <span>Tags</span>
+                        <Kbd>t</Kbd>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setFocusedItemId(item.id);
+                          setSummaryTarget(item);
+                        }}
+                      >
+                        <FileText className="size-3.5" />
+                        <span>Summary</span>
+                        <Kbd>u</Kbd>
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setFocusedItemId(item.id);
                           setMoveOpen(true);
                         }}
                       >
@@ -939,6 +1068,41 @@ export function ItemList({
           })
         )}
       </div>
+
+      {/* Tags dialog */}
+      {tagsTarget && (
+        <TagsDialog
+          open={Boolean(tagsTarget)}
+          onOpenChange={(open) => !open && setTagsTarget(null)}
+          targets={tagsTarget}
+          projectId={projectId}
+          onAdd={(tag) => {
+            for (const t of tagsTarget) {
+              const res = addTag(t.tags ?? [], tag);
+              if (res.ok) void research.update([t], { tags: res.tags });
+            }
+          }}
+          onRemove={(tag) => {
+            for (const t of tagsTarget) {
+              const next = removeTag(t.tags ?? [], tag);
+              void research.update([t], { tags: next });
+            }
+          }}
+        />
+      )}
+
+      {/* Summary dialog */}
+      {summaryTarget && (
+        <SummaryDialog
+          open={Boolean(summaryTarget)}
+          onOpenChange={(open) => !open && setSummaryTarget(null)}
+          item={summaryTarget}
+          onSave={(summary) => {
+            void research.update([summaryTarget], { summary });
+            setSummaryTarget(null);
+          }}
+        />
+      )}
 
       {/* Move Dialog */}
       <MoveItemDialog

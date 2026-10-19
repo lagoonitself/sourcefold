@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { sameTag } from "@sourcefold/core";
 import { z } from "zod";
 import { NOT_SIGNED_IN_MESSAGE } from "../config";
 import { DesktopClosedError } from "../desktop-bridge";
@@ -214,9 +215,14 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     name: "list_sources",
     title: "List the sources in a group",
     description:
-      "Lists the sources in one group, one line each: `[id] kind · title · author or channel · saved date` (and the error when saving failed), after the group's subgroups. Read the titles to decide what is worth opening, then use read_source. Pass details=true to also get each source's url and the start of the user's note. Groups over 100 sources come in pages (offset continues).",
+      "Lists the sources in one group, one line each: `[id] kind · title · author · author type · saved date · status · tags` (and the error when saving failed), after the group's subgroups. Read the titles to decide what is worth opening, then use read_source. Pass status (keep, maybe, cut, none) or tag to filter. Pass details=true to also get each source's url and the start of the user's note. Groups over 100 sources come in pages (offset continues).",
     input: {
       group_id: z.string().describe("Id of the group (from get_project_tree)."),
+      status: z
+        .enum(["keep", "maybe", "cut", "none"])
+        .optional()
+        .describe("Filter by research status: keep, maybe, cut, or none (untriaged)."),
+      tag: z.string().min(1).optional().describe("Filter by tag (outline section or other tag)."),
       details: z
         .boolean()
         .default(false)
@@ -230,12 +236,25 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     },
     readOnly: true,
     idempotent: true,
-    run: async ({ group_id, details, offset }, { api }) => {
+    run: async ({ group_id, status, tag, details, offset }, { api }) => {
       const index = await loadFolderIndex(api);
       const group = requireFolder(index, group_id, "group");
       const items = await loadFolderItems(api, group_id);
-      const page = items.slice(offset, offset + LIST_PAGE_SIZE);
-      const lines = [`${index.pathOf(group_id)} [${group.id}] · ${plural(items.length, "source")}`];
+      let filtered = items;
+      if (status) {
+        filtered = filtered.filter((item) =>
+          status === "none" ? !item.triage : item.triage === status,
+        );
+      }
+      if (tag) {
+        filtered = filtered.filter(
+          (item) => Array.isArray(item.tags) && item.tags.some((t) => sameTag(t, tag)),
+        );
+      }
+      const page = filtered.slice(offset, offset + LIST_PAGE_SIZE);
+      const lines = [
+        `${index.pathOf(group_id)} [${group.id}] · ${plural(filtered.length, "source")}`,
+      ];
 
       const subgroups = index.children(group_id);
       if (subgroups.length > 0) {
@@ -243,7 +262,7 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         for (const sub of subgroups) {
           lines.push(`  Group [${sub.id}] ${sub.name} · ${plural(sourcesIn(sub), "source")}`);
         }
-        if (items.length > 0) lines.push("Sources:");
+        if (filtered.length > 0) lines.push("Sources:");
       }
 
       for (const item of page) {
@@ -256,11 +275,13 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
       }
       if (items.length === 0) {
         lines.push("This group has no sources of its own.");
+      } else if (filtered.length === 0) {
+        lines.push("No sources in this group match the filter.");
       } else if (page.length === 0) {
-        lines.push(`This group has ${items.length} sources; use a smaller offset.`);
-      } else if (offset + page.length < items.length) {
+        lines.push(`This group has ${filtered.length} matching sources; use a smaller offset.`);
+      } else if (offset + page.length < filtered.length) {
         lines.push(
-          `Showing ${offset + 1}–${offset + page.length} of ${items.length}. Call list_sources with offset=${offset + page.length} for more.`,
+          `Showing ${offset + 1}–${offset + page.length} of ${filtered.length}. Call list_sources with offset=${offset + page.length} for more.`,
         );
       }
       return lines.join("\n");

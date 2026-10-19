@@ -248,7 +248,8 @@ export function CardsMode({
       if (isTypingContext(e.target) || isAnyDialogOpen()) return;
       const noMods = !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey;
       const altOnly = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
-      const card = focusedTarget?.kind === "card" ? cards.find((c) => c.id === focusedTarget.id) : null;
+      const card =
+        focusedTarget?.kind === "card" ? cards.find((c) => c.id === focusedTarget.id) : null;
       const section =
         focusedTarget?.kind === "section"
           ? sections.find((s) => s.id === focusedTarget.id)
@@ -309,7 +310,16 @@ export function CardsMode({
     return () => window.removeEventListener("keydown", onKeyDown);
     // `deleteCard` and the other actions only use the values listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocusedRegion, focusedTarget, focusedId, order, cards, sections, onOpenCard, startNewSection]);
+  }, [
+    isFocusedRegion,
+    focusedTarget,
+    focusedId,
+    order,
+    cards,
+    sections,
+    onOpenCard,
+    startNewSection,
+  ]);
 
   // ----- drag and drop
 

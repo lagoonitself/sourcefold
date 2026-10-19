@@ -25,7 +25,7 @@ import {
 import { parseHtmlOnServer } from "@sourcefold/core/server";
 import type { DesktopBridge } from "../desktop-bridge";
 import type { Item } from "../types";
-import type { WebApi } from "../web-api";
+import { ApiError, type WebApi } from "../web-api";
 
 // One link at a time, the way the desktop's Add links saves it (apps/desktop/src/features/
 // grokipedia/AddLinksDialog.tsx and the *-client.ts files it calls): Grokipedia through the web
@@ -73,9 +73,10 @@ export interface LinkDeps {
   desktopOpen: boolean;
 }
 
-interface CheckUrlResult {
+export interface CheckUrlResult {
   exists: boolean;
   folder_name?: string | null;
+  elsewhere?: { item_id: string; folder_id: string; folder_path?: string } | null;
 }
 
 // Claude Desktop runs this server in its own Electron runtime, where pdf.js doesn't detect Node,
@@ -103,7 +104,21 @@ function alreadySaved(folderName: string | null | undefined): string {
 }
 
 function isDuplicateError(err: unknown): err is Error {
+  if (err instanceof ApiError && err.status === 409) return true;
   return err instanceof Error && /already saved/i.test(err.message);
+}
+
+export function checkDuplicate(
+  check: CheckUrlResult,
+  allowDuplicates = false,
+): { isDuplicate: boolean; message: string } {
+  if (check.exists) {
+    return { isDuplicate: true, message: alreadySaved(check.folder_name) };
+  }
+  if (!allowDuplicates && check.elsewhere) {
+    return { isDuplicate: true, message: alreadySaved(check.elsewhere.folder_path) };
+  }
+  return { isDuplicate: false, message: "" };
 }
 
 async function checkUrl(api: WebApi, url: string, groupId: string): Promise<CheckUrlResult> {
@@ -136,16 +151,17 @@ export async function saveLink(
   groupId: string,
   deps: LinkDeps,
   signal?: AbortSignal,
+  allowDuplicates = false,
 ): Promise<SaveOutcome> {
   switch (kind) {
     case "grokipedia":
-      return saveGrokipedia(url, groupId, deps);
+      return saveGrokipedia(url, groupId, deps, allowDuplicates);
     case "wikipedia":
-      return saveWikipedia(url, groupId, deps, signal);
+      return saveWikipedia(url, groupId, deps, signal, allowDuplicates);
     case "substack":
-      return saveSubstack(url, groupId, deps);
+      return saveSubstack(url, groupId, deps, allowDuplicates);
     case "source":
-      return saveSource(url, groupId, deps, signal);
+      return saveSource(url, groupId, deps, signal, allowDuplicates);
     case "x":
       throw new Error(
         "X posts are saved with the Sourcefold extension: open the post in Chrome and click Save.",
@@ -156,15 +172,22 @@ export async function saveLink(
   }
 }
 
-async function saveGrokipedia(url: string, groupId: string, { api }: LinkDeps) {
+async function saveGrokipedia(
+  url: string,
+  groupId: string,
+  { api }: LinkDeps,
+  allowDuplicates = false,
+) {
   const check = await checkUrl(api, url, groupId);
-  if (check.exists) {
-    return { status: "duplicate", title: null, message: alreadySaved(check.folder_name) } as const;
+  const dup = checkDuplicate(check, allowDuplicates);
+  if (dup.isDuplicate) {
+    return { status: "duplicate", title: null, message: dup.message } as const;
   }
   try {
     const res = await api.post<{ item?: Item } | Item>("/grokipedia", {
       url,
       folder_id: groupId,
+      ...(allowDuplicates ? { allow_duplicate: true } : {}),
     });
     const item = (res as { item?: Item }).item ?? (res as Item);
     return { status: "saved", title: item.title || url, itemId: item.id } as const;
@@ -180,12 +203,14 @@ async function saveWikipedia(
   groupId: string,
   { api, publicFetch }: LinkDeps,
   signal?: AbortSignal,
+  allowDuplicates = false,
 ): Promise<SaveOutcome> {
   const url = canonicalWikipediaUrl(inputUrl);
   if (!url) throw new Error(WIKIPEDIA_ERROR_MESSAGES.invalid_url);
   const before = await checkUrl(api, url, groupId);
-  if (before.exists) {
-    return { status: "duplicate", title: null, message: alreadySaved(before.folder_name) };
+  const dup = checkDuplicate(before, allowDuplicates);
+  if (dup.isDuplicate) {
+    return { status: "duplicate", title: null, message: dup.message };
   }
   const article = await fetchWikipediaCapture(url, {
     parseHtml: parseHtmlOnServer,
@@ -195,19 +220,22 @@ async function saveWikipedia(
   });
   if (article.url !== url) {
     const resolved = await checkUrl(api, article.url, groupId);
-    if (resolved.exists) {
+    const resolvedDup = checkDuplicate(resolved, allowDuplicates);
+    if (resolvedDup.isDuplicate) {
       return {
         status: "duplicate",
         title: article.title,
-        message: alreadySaved(resolved.folder_name),
+        message: resolvedDup.message,
       };
     }
   }
-  return captureOrDuplicate(
-    api,
-    { kind: "wikipedia", folder_id: groupId, capture: article },
-    article.title,
-  );
+  const request = {
+    kind: "wikipedia",
+    folder_id: groupId,
+    capture: article,
+    ...(allowDuplicates ? { allow_duplicate: true } : {}),
+  } as unknown as CaptureRequest;
+  return captureOrDuplicate(api, request, article.title);
 }
 
 async function saveSource(
@@ -215,11 +243,13 @@ async function saveSource(
   groupId: string,
   { api, sourceFetch }: LinkDeps,
   signal?: AbortSignal,
+  allowDuplicates = false,
 ): Promise<SaveOutcome> {
   const url = canonical(inputUrl);
   const before = await checkUrl(api, url, groupId);
-  if (before.exists) {
-    return { status: "duplicate", title: null, message: alreadySaved(before.folder_name) };
+  const dup = checkDuplicate(before, allowDuplicates);
+  if (dup.isDuplicate) {
+    return { status: "duplicate", title: null, message: dup.message };
   }
 
   // Throws a SourceError whose message says what to do.
@@ -249,15 +279,22 @@ async function saveSource(
   const { kind, capture: source } = result;
   if (canonical(source.url) !== url) {
     const resolved = await checkUrl(api, source.url, groupId);
-    if (resolved.exists) {
+    const resolvedDup = checkDuplicate(resolved, allowDuplicates);
+    if (resolvedDup.isDuplicate) {
       return {
         status: "duplicate",
         title: source.title,
-        message: alreadySaved(resolved.folder_name),
+        message: resolvedDup.message,
       };
     }
   }
-  return captureOrDuplicate(api, { kind, folder_id: groupId, capture: source }, source.title);
+  const request = {
+    kind,
+    folder_id: groupId,
+    capture: source,
+    ...(allowDuplicates ? { allow_duplicate: true } : {}),
+  } as unknown as CaptureRequest;
+  return captureOrDuplicate(api, request, source.title);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -288,12 +325,14 @@ async function saveSubstack(
   inputUrl: string,
   groupId: string,
   deps: LinkDeps,
+  allowDuplicates = false,
 ): Promise<SaveOutcome> {
   const { api } = deps;
   const url = normalizeSubstackPostUrl(inputUrl);
   const before = await checkUrl(api, url, groupId);
-  if (before.exists) {
-    return { status: "duplicate", title: null, message: alreadySaved(before.folder_name) };
+  const dup = checkDuplicate(before, allowDuplicates);
+  if (dup.isDuplicate) {
+    return { status: "duplicate", title: null, message: dup.message };
   }
 
   const cookieSent = new Map<string, boolean>();
@@ -329,19 +368,22 @@ async function saveSubstack(
   const { capture: post } = parsed;
   if (post.url !== url) {
     const resolved = await checkUrl(api, post.url, groupId);
-    if (resolved.exists) {
+    const resolvedDup = checkDuplicate(resolved, allowDuplicates);
+    if (resolvedDup.isDuplicate) {
       return {
         status: "duplicate",
         title: post.title,
-        message: alreadySaved(resolved.folder_name),
+        message: resolvedDup.message,
       };
     }
   }
-  const outcome = await captureOrDuplicate(
-    api,
-    { kind: "substack", folder_id: groupId, capture: post },
-    post.title,
-  );
+  const request = {
+    kind: "substack",
+    folder_id: groupId,
+    capture: post,
+    ...(allowDuplicates ? { allow_duplicate: true } : {}),
+  } as unknown as CaptureRequest;
+  const outcome = await captureOrDuplicate(api, request, post.title);
   if (outcome.status === "saved" && post.access === "paid") outcome.message = "Paid post";
   return outcome;
 }

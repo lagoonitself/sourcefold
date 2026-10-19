@@ -6,13 +6,48 @@ use rusqlite::{params, Connection, OptionalExtension, Result};
 use serde_json::Value;
 
 use crate::models::{
-    AddXPostRequest, CheckUrlResult, Folder, Highlight, HighlightCitation, Item, RecentXItem,
-    SaveItemRequest, XPost,
+    AddXPostRequest, Card, CardInput, CheckUrlResult, Elsewhere, Folder, Highlight,
+    HighlightCitation, Item, OutlineSection, OutlineSectionInput, RecentXItem, SaveItemRequest,
+    XPost,
 };
 
 #[derive(Clone)]
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
+}
+
+
+pub const ITEM_SELECT_COLS: &str = "id, folder_id, kind, title, source_url, canonical_url, status, error, markdown, meta, note, position, storage_path, deleted_at, created_at, updated_at, triage, tags, summary, author, author_type";
+
+pub fn map_item_row(row: &rusqlite::Row) -> Result<Item> {
+    let meta_str: String = row.get(9).unwrap_or_else(|_| "{}".to_string());
+    let meta: Value = serde_json::from_str(&meta_str).unwrap_or_else(|_| serde_json::json!({}));
+    let tags_str: String = row.get(17).unwrap_or_else(|_| "[]".to_string());
+    let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
+
+    Ok(Item {
+        id: row.get(0)?,
+        folder_id: row.get(1)?,
+        kind: row.get(2)?,
+        title: row.get(3)?,
+        source_url: row.get(4)?,
+        canonical_url: row.get(5)?,
+        status: row.get(6)?,
+        error: row.get(7)?,
+        markdown: row.get(8)?,
+        meta,
+        note: row.get(10)?,
+        position: row.get(11)?,
+        storage_path: row.get(12)?,
+        deleted_at: row.get(13)?,
+        created_at: row.get(14)?,
+        updated_at: row.get(15)?,
+        triage: row.get(16)?,
+        tags,
+        summary: row.get(18)?,
+        author: row.get(19)?,
+        author_type: row.get(20)?,
+    })
 }
 
 impl Database {
@@ -90,8 +125,46 @@ impl Database {
                 storage_path TEXT,
                 deleted_at TEXT,
                 created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                triage TEXT,
+                tags TEXT NOT NULL DEFAULT '[]',
+                summary TEXT,
+                author TEXT,
+                author_type TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS outline_sections (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                position REAL NOT NULL DEFAULT 0.0,
+                created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS cards (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+                kind TEXT NOT NULL CHECK (kind IN ('quote', 'broll', 'line')),
+                item_id TEXT REFERENCES items(id) ON DELETE CASCADE,
+                highlight_id TEXT REFERENCES highlights(id) ON DELETE SET NULL,
+                quote TEXT NOT NULL DEFAULT '',
+                seconds INTEGER,
+                end_seconds INTEGER,
+                url TEXT,
+                note TEXT,
+                script_line TEXT,
+                section_id TEXT REFERENCES outline_sections(id) ON DELETE SET NULL,
+                position REAL NOT NULL DEFAULT 0.0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_outline_sections_project ON outline_sections(project_id, position);
+            CREATE INDEX IF NOT EXISTS idx_cards_project ON cards(project_id, position);
+            CREATE INDEX IF NOT EXISTS idx_cards_item ON cards(item_id);
+            CREATE INDEX IF NOT EXISTS idx_cards_section ON cards(section_id);
+            CREATE INDEX IF NOT EXISTS idx_cards_highlight ON cards(highlight_id);
 
             CREATE TABLE IF NOT EXISTS x_posts (
                 id TEXT PRIMARY KEY,
@@ -153,12 +226,38 @@ impl Database {
 
         Self::migrate_to_projects_and_groups(&conn)?;
         Self::add_local_copy_search_columns(&conn)?;
+        Self::migrate_research_tools(&conn)?;
 
         Ok(())
     }
 
     /// The search index needs to know which project a local copy file belongs to
     /// (docs/dev/handoff-search.md). Older databases get the columns added; idempotent.
+    fn migrate_research_tools(conn: &Connection) -> Result<()> {
+        let mut stmt = conn.prepare("PRAGMA table_info(items)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(Result::ok)
+            .collect();
+
+        if !columns.iter().any(|c| c == "triage") {
+            conn.execute_batch("ALTER TABLE items ADD COLUMN triage TEXT;")?;
+        }
+        if !columns.iter().any(|c| c == "tags") {
+            conn.execute_batch("ALTER TABLE items ADD COLUMN tags TEXT NOT NULL DEFAULT '[]';")?;
+        }
+        if !columns.iter().any(|c| c == "summary") {
+            conn.execute_batch("ALTER TABLE items ADD COLUMN summary TEXT;")?;
+        }
+        if !columns.iter().any(|c| c == "author") {
+            conn.execute_batch("ALTER TABLE items ADD COLUMN author TEXT;")?;
+        }
+        if !columns.iter().any(|c| c == "author_type") {
+            conn.execute_batch("ALTER TABLE items ADD COLUMN author_type TEXT;")?;
+        }
+        Ok(())
+    }
+
     fn add_local_copy_search_columns(conn: &Connection) -> Result<()> {
         let mut existing: Vec<String> = Vec::new();
         {
@@ -282,34 +381,94 @@ impl Database {
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        let row: Option<(String, String, String)> = conn
+        // 1. Same folder check
+        let same_folder: Option<(String, String, String)> = conn
             .query_row(
                 "SELECT i.id, i.folder_id, f.name
                  FROM items i
                  JOIN folders f ON i.folder_id = f.id
-                 WHERE i.canonical_url = ?1 AND i.deleted_at IS NULL AND f.deleted_at IS NULL",
-                params![canonical_url],
+                 WHERE i.canonical_url = ?1 AND i.folder_id = ?2 AND i.deleted_at IS NULL AND f.deleted_at IS NULL",
+                params![canonical_url, folder_id],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()
             .unwrap_or(None);
 
-        match row {
-            Some((id, fid, folder_name)) => CheckUrlResult {
+        if let Some((id, fid, folder_name)) = same_folder {
+            return CheckUrlResult {
                 exists: true,
                 item_id: Some(id),
                 folder_id: Some(fid),
                 folder_name: Some(folder_name),
-            },
-            None => {
-                let _ = folder_id;
-                CheckUrlResult {
+                elsewhere: None,
+            };
+        }
+
+        // 2. Find root project of folder_id
+        let project_id: Option<String> = conn
+            .query_row(
+                "WITH RECURSIVE ancestors AS (
+                    SELECT id, parent_id FROM folders WHERE id = ?1 AND deleted_at IS NULL
+                    UNION ALL
+                    SELECT f.id, f.parent_id FROM folders f
+                    JOIN ancestors a ON f.id = a.parent_id
+                    WHERE f.deleted_at IS NULL
+                 )
+                 SELECT id FROM ancestors WHERE parent_id IS NULL",
+                params![folder_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .unwrap_or(None);
+
+        if let Some(proj_id) = project_id {
+            let elsewhere: Option<(String, String, String)> = conn
+                .query_row(
+                    "WITH RECURSIVE project_folders AS (
+                        SELECT id, parent_id, name, name AS path
+                        FROM folders
+                        WHERE parent_id = ?1 AND deleted_at IS NULL
+                        UNION ALL
+                        SELECT f.id, f.parent_id, f.name, pf.path || '/' || f.name
+                        FROM folders f
+                        JOIN project_folders pf ON f.parent_id = pf.id
+                        WHERE f.deleted_at IS NULL
+                     )
+                     SELECT i.id, i.folder_id, pf.path
+                     FROM items i
+                     JOIN project_folders pf ON i.folder_id = pf.id
+                     WHERE i.canonical_url = ?2
+                       AND i.deleted_at IS NULL
+                       AND i.folder_id != ?3
+                     ORDER BY i.created_at ASC, i.id ASC
+                     LIMIT 1",
+                    params![proj_id, canonical_url, folder_id],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .optional()
+                .unwrap_or(None);
+
+            if let Some((other_id, other_fid, other_path)) = elsewhere {
+                return CheckUrlResult {
                     exists: false,
                     item_id: None,
                     folder_id: None,
                     folder_name: None,
-                }
+                    elsewhere: Some(Elsewhere {
+                        item_id: other_id,
+                        folder_id: other_fid,
+                        folder_path: other_path,
+                    }),
+                };
             }
+        }
+
+        CheckUrlResult {
+            exists: false,
+            item_id: None,
+            folder_id: None,
+            folder_name: None,
+            elsewhere: None,
         }
     }
 
@@ -608,39 +767,16 @@ impl Database {
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        let mut stmt = match conn.prepare(
-            "SELECT id, folder_id, kind, title, source_url, canonical_url, status, error, markdown, meta, note, position, storage_path, deleted_at, created_at, updated_at
-             FROM items
-             WHERE folder_id = ?1 AND deleted_at IS NULL
-             ORDER BY position ASC, created_at DESC",
-        ) {
+        let sql = format!(
+            "SELECT {} FROM items WHERE folder_id = ?1 AND deleted_at IS NULL ORDER BY position ASC, created_at DESC",
+            ITEM_SELECT_COLS
+        );
+        let mut stmt = match conn.prepare(&sql) {
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
 
-        let rows = stmt.query_map(params![folder_id], |row| {
-            let meta_str: String = row.get(9).unwrap_or_else(|_| "{}".to_string());
-            let meta: Value = serde_json::from_str(&meta_str).unwrap_or_else(|_| serde_json::json!({}));
-
-            Ok(Item {
-                id: row.get(0)?,
-                folder_id: row.get(1)?,
-                kind: row.get(2)?,
-                title: row.get(3)?,
-                source_url: row.get(4)?,
-                canonical_url: row.get(5)?,
-                status: row.get(6)?,
-                error: row.get(7)?,
-                markdown: row.get(8)?,
-                meta,
-                note: row.get(10)?,
-                position: row.get(11)?,
-                storage_path: row.get(12)?,
-                deleted_at: row.get(13)?,
-                created_at: row.get(14)?,
-                updated_at: row.get(15)?,
-            })
-        });
+        let rows = stmt.query_map(params![folder_id], map_item_row);
 
         match rows {
             Ok(iter) => iter.filter_map(Result::ok).collect(),
@@ -654,34 +790,11 @@ impl Database {
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        conn.query_row(
-            "SELECT id, folder_id, kind, title, source_url, canonical_url, status, error, markdown, meta, note, position, storage_path, deleted_at, created_at, updated_at
-             FROM items WHERE id = ?1 AND deleted_at IS NULL",
-            params![id],
-            |row| {
-                let meta_str: String = row.get(9).unwrap_or_else(|_| "{}".to_string());
-                let meta: Value = serde_json::from_str(&meta_str).unwrap_or_else(|_| serde_json::json!({}));
-
-                Ok(Item {
-                    id: row.get(0)?,
-                    folder_id: row.get(1)?,
-                    kind: row.get(2)?,
-                    title: row.get(3)?,
-                    source_url: row.get(4)?,
-                    canonical_url: row.get(5)?,
-                    status: row.get(6)?,
-                    error: row.get(7)?,
-                    markdown: row.get(8)?,
-                    meta,
-                    note: row.get(10)?,
-                    position: row.get(11)?,
-                    storage_path: row.get(12)?,
-                    deleted_at: row.get(13)?,
-                    created_at: row.get(14)?,
-                    updated_at: row.get(15)?,
-                })
-            },
-        )
+        let sql = format!(
+            "SELECT {} FROM items WHERE id = ?1 AND deleted_at IS NULL",
+            ITEM_SELECT_COLS
+        );
+        conn.query_row(&sql, params![id], map_item_row)
     }
 
     pub fn save_item(&self, req: SaveItemRequest) -> Result<Item> {
@@ -730,8 +843,8 @@ impl Database {
         let meta_str = req.meta.as_ref().map(|m| m.to_string()).unwrap_or_else(|| "{}".to_string());
 
         conn.execute(
-            "INSERT INTO items (id, folder_id, kind, title, source_url, canonical_url, status, error, markdown, meta, note, position, storage_path, deleted_at, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, NULL, NULL, ?13, ?13)",
+            "INSERT INTO items (id, folder_id, kind, title, source_url, canonical_url, status, error, markdown, meta, note, position, storage_path, deleted_at, created_at, updated_at, triage, tags, summary, author, author_type)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, NULL, NULL, ?13, ?13, NULL, '[]', NULL, NULL, NULL)",
             params![
                 id,
                 req.folder_id,
@@ -768,6 +881,11 @@ impl Database {
             deleted_at: None,
             created_at: now.clone(),
             updated_at: now,
+            triage: None,
+            tags: Vec::new(),
+            summary: None,
+            author: None,
+            author_type: None,
         })
     }
 
@@ -915,17 +1033,17 @@ impl Database {
 
         let (sql, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = match project_id {
             Some(fid) => (
-                "SELECT id, folder_id, kind, title, source_url, canonical_url, status, error, markdown, meta, note, position, storage_path, deleted_at, created_at, updated_at
-                 FROM items
-                 WHERE folder_id = ?1 AND deleted_at IS NULL AND (title LIKE ?2 OR markdown LIKE ?2 OR note LIKE ?2)
-                 ORDER BY created_at DESC LIMIT 50".to_string(),
+                format!(
+                    "SELECT {} FROM items WHERE folder_id = ?1 AND deleted_at IS NULL AND (title LIKE ?2 OR markdown LIKE ?2 OR note LIKE ?2) ORDER BY created_at DESC LIMIT 50",
+                    ITEM_SELECT_COLS
+                ),
                 vec![Box::new(fid.to_string()), Box::new(search_pattern)],
             ),
             None => (
-                "SELECT id, folder_id, kind, title, source_url, canonical_url, status, error, markdown, meta, note, position, storage_path, deleted_at, created_at, updated_at
-                 FROM items
-                 WHERE deleted_at IS NULL AND (title LIKE ?1 OR markdown LIKE ?1 OR note LIKE ?1)
-                 ORDER BY created_at DESC LIMIT 50".to_string(),
+                format!(
+                    "SELECT {} FROM items WHERE deleted_at IS NULL AND (title LIKE ?1 OR markdown LIKE ?1 OR note LIKE ?1) ORDER BY created_at DESC LIMIT 50",
+                    ITEM_SELECT_COLS
+                ),
                 vec![Box::new(search_pattern)],
             ),
         };
@@ -934,29 +1052,7 @@ impl Database {
         let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
 
         let items = stmt
-            .query_map(params_refs.as_slice(), |row| {
-                let meta_str: String = row.get(9).unwrap_or_else(|_| "{}".to_string());
-                let meta: Value = serde_json::from_str(&meta_str).unwrap_or_else(|_| serde_json::json!({}));
-
-                Ok(Item {
-                    id: row.get(0)?,
-                    folder_id: row.get(1)?,
-                    kind: row.get(2)?,
-                    title: row.get(3)?,
-                    source_url: row.get(4)?,
-                    canonical_url: row.get(5)?,
-                    status: row.get(6)?,
-                    error: row.get(7)?,
-                    markdown: row.get(8)?,
-                    meta,
-                    note: row.get(10)?,
-                    position: row.get(11)?,
-                    storage_path: row.get(12)?,
-                    deleted_at: row.get(13)?,
-                    created_at: row.get(14)?,
-                    updated_at: row.get(15)?,
-                })
-            })?
+            .query_map(params_refs.as_slice(), map_item_row)?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(items)
@@ -1233,6 +1329,604 @@ impl Database {
         }
         Ok(())
     }
+    // ----------------- Outline Sections -----------------
+
+    pub fn list_outline_sections(&self, project_id: &str) -> Result<Vec<OutlineSection>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, title, position, created_at, updated_at
+             FROM outline_sections
+             WHERE project_id = ?1
+             ORDER BY position ASC, title ASC, id ASC",
+        )?;
+        let rows = stmt.query_map(params![project_id], |row| {
+            Ok(OutlineSection {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                title: row.get(2)?,
+                position: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_outline_section(&self, id: &str) -> Result<OutlineSection> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        conn.query_row(
+            "SELECT id, project_id, title, position, created_at, updated_at
+             FROM outline_sections WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(OutlineSection {
+                    id: row.get(0)?,
+                    project_id: row.get(1)?,
+                    title: row.get(2)?,
+                    position: row.get(3)?,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            },
+        )
+    }
+
+    pub fn put_outline_section(&self, section: &OutlineSectionInput) -> Result<(OutlineSection, Option<String>)> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let now = Utc::now().to_rfc3339();
+
+        let old_title: Option<String> = conn
+            .query_row(
+                "SELECT title FROM outline_sections WHERE id = ?1",
+                params![section.id],
+                |r| r.get(0),
+            )
+            .optional()?;
+
+        conn.execute(
+            "INSERT INTO outline_sections (id, project_id, title, position, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+               project_id = excluded.project_id,
+               title = excluded.title,
+               position = excluded.position,
+               updated_at = excluded.updated_at",
+            params![section.id, section.project_id, section.title, section.position, now],
+        )?;
+
+        let created_at: String = conn.query_row(
+            "SELECT created_at FROM outline_sections WHERE id = ?1",
+            params![section.id],
+            |r| r.get(0),
+        )?;
+
+        let saved = OutlineSection {
+            id: section.id.clone(),
+            project_id: section.project_id.clone(),
+            title: section.title.clone(),
+            position: section.position,
+            created_at,
+            updated_at: now,
+        };
+
+        Ok((saved, old_title))
+    }
+
+    pub fn delete_outline_section(&self, id: &str) -> Result<()> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        conn.execute(
+            "UPDATE cards SET section_id = NULL WHERE section_id = ?1",
+            params![id],
+        )?;
+        let rows = conn.execute(
+            "DELETE FROM outline_sections WHERE id = ?1",
+            params![id],
+        )?;
+        if rows == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        Ok(())
+    }
+
+    pub fn is_live_item_in_project(&self, item_id: &str, project_id: &str) -> Result<bool> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let is_live: bool = conn.query_row(
+            "WITH RECURSIVE ancestors AS (
+                SELECT f.id, f.parent_id, f.deleted_at
+                FROM folders f
+                JOIN items i ON i.folder_id = f.id
+                WHERE i.id = ?1 AND i.deleted_at IS NULL AND f.deleted_at IS NULL
+                UNION ALL
+                SELECT p.id, p.parent_id, p.deleted_at
+                FROM folders p
+                JOIN ancestors a ON p.id = a.parent_id
+                WHERE p.deleted_at IS NULL
+             )
+             SELECT EXISTS(
+                SELECT 1 FROM ancestors WHERE id = ?2 AND parent_id IS NULL
+             )",
+            params![item_id, project_id],
+            |r| r.get(0),
+        )?;
+        Ok(is_live)
+    }
+
+    // ----------------- Cards -----------------
+
+    pub fn list_cards(&self, project_id: Option<&str>, item_id: Option<&str>) -> Result<Vec<Card>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        let live_filter = "(cards.item_id IS NULL OR (
+            i.id IS NOT NULL AND i.deleted_at IS NULL
+            AND f.id IS NOT NULL AND f.deleted_at IS NULL
+            AND NOT EXISTS (
+                WITH RECURSIVE ancestors AS (
+                    SELECT id, parent_id, deleted_at FROM folders WHERE id = f.parent_id
+                    UNION ALL
+                    SELECT p.id, p.parent_id, p.deleted_at FROM folders p
+                    JOIN ancestors a ON p.id = a.parent_id
+                )
+                SELECT 1 FROM ancestors WHERE deleted_at IS NOT NULL
+            )
+        ))";
+
+        let (sql, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = match (project_id, item_id) {
+            (Some(pid), Some(iid)) => (
+                format!(
+                    "SELECT cards.id, cards.project_id, cards.kind, cards.item_id, cards.highlight_id,
+                            cards.quote, cards.seconds, cards.end_seconds, cards.url, cards.note,
+                            cards.script_line, cards.section_id, cards.position, cards.created_at, cards.updated_at
+                     FROM cards
+                     LEFT JOIN items i ON i.id = cards.item_id
+                     LEFT JOIN folders f ON f.id = i.folder_id
+                     WHERE {} AND cards.project_id = ?1 AND cards.item_id = ?2
+                     ORDER BY cards.position ASC, cards.created_at ASC, cards.id ASC",
+                    live_filter
+                ),
+                vec![Box::new(pid.to_string()), Box::new(iid.to_string())],
+            ),
+            (Some(pid), None) => (
+                format!(
+                    "SELECT cards.id, cards.project_id, cards.kind, cards.item_id, cards.highlight_id,
+                            cards.quote, cards.seconds, cards.end_seconds, cards.url, cards.note,
+                            cards.script_line, cards.section_id, cards.position, cards.created_at, cards.updated_at
+                     FROM cards
+                     LEFT JOIN items i ON i.id = cards.item_id
+                     LEFT JOIN folders f ON f.id = i.folder_id
+                     WHERE {} AND cards.project_id = ?1
+                     ORDER BY cards.position ASC, cards.created_at ASC, cards.id ASC",
+                    live_filter
+                ),
+                vec![Box::new(pid.to_string())],
+            ),
+            (None, Some(iid)) => (
+                format!(
+                    "SELECT cards.id, cards.project_id, cards.kind, cards.item_id, cards.highlight_id,
+                            cards.quote, cards.seconds, cards.end_seconds, cards.url, cards.note,
+                            cards.script_line, cards.section_id, cards.position, cards.created_at, cards.updated_at
+                     FROM cards
+                     LEFT JOIN items i ON i.id = cards.item_id
+                     LEFT JOIN folders f ON f.id = i.folder_id
+                     WHERE {} AND cards.item_id = ?1
+                     ORDER BY cards.position ASC, cards.created_at ASC, cards.id ASC",
+                    live_filter
+                ),
+                vec![Box::new(iid.to_string())],
+            ),
+            (None, None) => (
+                format!(
+                    "SELECT cards.id, cards.project_id, cards.kind, cards.item_id, cards.highlight_id,
+                            cards.quote, cards.seconds, cards.end_seconds, cards.url, cards.note,
+                            cards.script_line, cards.section_id, cards.position, cards.created_at, cards.updated_at
+                     FROM cards
+                     LEFT JOIN items i ON i.id = cards.item_id
+                     LEFT JOIN folders f ON f.id = i.folder_id
+                     WHERE {}
+                     ORDER BY cards.position ASC, cards.created_at ASC, cards.id ASC",
+                    live_filter
+                ),
+                vec![],
+            ),
+        };
+
+        let mut stmt = conn.prepare(&sql)?;
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt.query_map(params_refs.as_slice(), |row| {
+            Ok(Card {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                kind: row.get(2)?,
+                item_id: row.get(3)?,
+                highlight_id: row.get(4)?,
+                quote: row.get(5)?,
+                seconds: row.get(6)?,
+                end_seconds: row.get(7)?,
+                url: row.get(8)?,
+                note: row.get(9)?,
+                script_line: row.get(10)?,
+                section_id: row.get(11)?,
+                position: row.get(12)?,
+                created_at: row.get(13)?,
+                updated_at: row.get(14)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_card(&self, id: &str) -> Result<Card> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        conn.query_row(
+            "SELECT id, project_id, kind, item_id, highlight_id, quote, seconds, end_seconds, url, note, script_line, section_id, position, created_at, updated_at
+             FROM cards WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(Card {
+                    id: row.get(0)?,
+                    project_id: row.get(1)?,
+                    kind: row.get(2)?,
+                    item_id: row.get(3)?,
+                    highlight_id: row.get(4)?,
+                    quote: row.get(5)?,
+                    seconds: row.get(6)?,
+                    end_seconds: row.get(7)?,
+                    url: row.get(8)?,
+                    note: row.get(9)?,
+                    script_line: row.get(10)?,
+                    section_id: row.get(11)?,
+                    position: row.get(12)?,
+                    created_at: row.get(13)?,
+                    updated_at: row.get(14)?,
+                })
+            },
+        )
+    }
+
+    pub fn put_card(&self, card: &CardInput) -> Result<Card> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        if let Some(item_id) = &card.item_id {
+            let is_live: bool = conn.query_row(
+                "WITH RECURSIVE ancestors AS (
+                    SELECT f.id, f.parent_id, f.deleted_at
+                    FROM folders f
+                    JOIN items i ON i.folder_id = f.id
+                    WHERE i.id = ?1 AND i.deleted_at IS NULL AND f.deleted_at IS NULL
+                    UNION ALL
+                    SELECT p.id, p.parent_id, p.deleted_at
+                    FROM folders p
+                    JOIN ancestors a ON p.id = a.parent_id
+                    WHERE p.deleted_at IS NULL
+                 )
+                 SELECT EXISTS(
+                    SELECT 1 FROM ancestors WHERE id = ?2 AND parent_id IS NULL
+                 )",
+                params![item_id, card.project_id],
+                |r| r.get(0),
+            )?;
+            if !is_live {
+                return Err(rusqlite::Error::QueryReturnedNoRows);
+            }
+        }
+
+        let now = Utc::now().to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO cards (id, project_id, kind, item_id, highlight_id, quote, seconds, end_seconds, url, note, script_line, section_id, position, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14)
+             ON CONFLICT(id) DO UPDATE SET
+               project_id = excluded.project_id,
+               kind = excluded.kind,
+               item_id = excluded.item_id,
+               highlight_id = excluded.highlight_id,
+               quote = excluded.quote,
+               seconds = excluded.seconds,
+               end_seconds = excluded.end_seconds,
+               url = excluded.url,
+               note = excluded.note,
+               script_line = excluded.script_line,
+               section_id = excluded.section_id,
+               position = excluded.position,
+               updated_at = excluded.updated_at",
+            params![
+                card.id,
+                card.project_id,
+                card.kind,
+                card.item_id,
+                card.highlight_id,
+                card.quote,
+                card.seconds,
+                card.end_seconds,
+                card.url,
+                card.note,
+                card.script_line,
+                card.section_id,
+                card.position,
+                now,
+            ],
+        )?;
+
+        let created_at: String = conn.query_row(
+            "SELECT created_at FROM cards WHERE id = ?1",
+            params![card.id],
+            |r| r.get(0),
+        )?;
+
+        Ok(Card {
+            id: card.id.clone(),
+            project_id: card.project_id.clone(),
+            kind: card.kind.clone(),
+            item_id: card.item_id.clone(),
+            highlight_id: card.highlight_id.clone(),
+            quote: card.quote.clone(),
+            seconds: card.seconds,
+            end_seconds: card.end_seconds,
+            url: card.url.clone(),
+            note: card.note.clone(),
+            script_line: card.script_line.clone(),
+            section_id: card.section_id.clone(),
+            position: card.position,
+            created_at,
+            updated_at: now,
+        })
+    }
+
+    pub fn update_card_fields(&self, card: &Card) -> Result<()> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        if let Some(item_id) = &card.item_id {
+            let is_live: bool = conn.query_row(
+                "WITH RECURSIVE ancestors AS (
+                    SELECT f.id, f.parent_id, f.deleted_at
+                    FROM folders f
+                    JOIN items i ON i.folder_id = f.id
+                    WHERE i.id = ?1 AND i.deleted_at IS NULL AND f.deleted_at IS NULL
+                    UNION ALL
+                    SELECT p.id, p.parent_id, p.deleted_at
+                    FROM folders p
+                    JOIN ancestors a ON p.id = a.parent_id
+                    WHERE p.deleted_at IS NULL
+                 )
+                 SELECT EXISTS(
+                    SELECT 1 FROM ancestors WHERE id = ?2 AND parent_id IS NULL
+                 )",
+                params![item_id, card.project_id],
+                |r| r.get(0),
+            )?;
+            if !is_live {
+                return Err(rusqlite::Error::QueryReturnedNoRows);
+            }
+        }
+
+        let now = Utc::now().to_rfc3339();
+        let rows = conn.execute(
+            "UPDATE cards SET
+               quote = ?1,
+               seconds = ?2,
+               end_seconds = ?3,
+               url = ?4,
+               note = ?5,
+               script_line = ?6,
+               section_id = ?7,
+               position = ?8,
+               updated_at = ?9
+             WHERE id = ?10",
+            params![
+                card.quote,
+                card.seconds,
+                card.end_seconds,
+                card.url,
+                card.note,
+                card.script_line,
+                card.section_id,
+                card.position,
+                now,
+                card.id,
+            ],
+        )?;
+        if rows == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        Ok(())
+    }
+
+    pub fn delete_card(&self, id: &str) -> Result<()> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let rows = conn.execute("DELETE FROM cards WHERE id = ?1", params![id])?;
+        if rows == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        Ok(())
+    }
+
+    // ----------------- Research & Merge -----------------
+
+    pub fn list_project_items(&self, project_id: &str) -> Result<Vec<Item>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        let sql = format!(
+            "WITH RECURSIVE project_folders AS (
+                SELECT id FROM folders WHERE id = ?1 AND deleted_at IS NULL
+                UNION ALL
+                SELECT f.id FROM folders f
+                JOIN project_folders pf ON f.parent_id = pf.id
+                WHERE f.deleted_at IS NULL
+             )
+             SELECT {}
+             FROM items
+             WHERE folder_id IN (SELECT id FROM project_folders) AND deleted_at IS NULL
+             ORDER BY created_at ASC, id ASC",
+            ITEM_SELECT_COLS
+        );
+
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![project_id], map_item_row)?;
+        rows.collect()
+    }
+
+    pub fn get_project_id_for_folder(&self, folder_id: &str) -> Result<Option<String>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        conn.query_row(
+            "WITH RECURSIVE ancestors AS (
+                SELECT id, parent_id FROM folders WHERE id = ?1 AND deleted_at IS NULL
+                UNION ALL
+                SELECT f.id, f.parent_id FROM folders f
+                JOIN ancestors a ON f.id = a.parent_id
+                WHERE f.deleted_at IS NULL
+             )
+             SELECT id FROM ancestors WHERE parent_id IS NULL",
+            params![folder_id],
+            |r| r.get(0),
+        )
+        .optional()
+    }
+
+    pub fn get_project_id_for_item(&self, item_id: &str) -> Result<Option<String>> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        conn.query_row(
+            "WITH RECURSIVE ancestors AS (
+                SELECT f.id, f.parent_id FROM folders f
+                JOIN items i ON i.folder_id = f.id
+                WHERE i.id = ?1 AND f.deleted_at IS NULL
+                UNION ALL
+                SELECT f.id, f.parent_id FROM folders f
+                JOIN ancestors a ON f.id = a.parent_id
+                WHERE f.deleted_at IS NULL
+             )
+             SELECT id FROM ancestors WHERE parent_id IS NULL",
+            params![item_id],
+            |r| r.get(0),
+        )
+        .optional()
+    }
+
+    pub fn update_item_research_db(
+        &self,
+        id: &str,
+        triage: Option<Option<String>>,
+        tags: Option<Vec<String>>,
+        summary: Option<Option<String>>,
+        author: Option<Option<String>>,
+        author_type: Option<Option<String>>,
+    ) -> Result<Item> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        let now = Utc::now().to_rfc3339();
+
+        let existing = conn.query_row(
+            &format!("SELECT {} FROM items WHERE id = ?1 AND deleted_at IS NULL", ITEM_SELECT_COLS),
+            params![id],
+            map_item_row,
+        )?;
+
+        let new_triage = match triage {
+            Some(t) => t,
+            None => existing.triage,
+        };
+        let new_tags = match tags {
+            Some(t) => t,
+            None => existing.tags,
+        };
+        let new_summary = match summary {
+            Some(s) => s,
+            None => existing.summary,
+        };
+        let new_author = match author {
+            Some(a) => a,
+            None => existing.author,
+        };
+        let new_author_type = match author_type {
+            Some(at) => at,
+            None => existing.author_type,
+        };
+
+        let tags_json = serde_json::to_string(&new_tags).unwrap_or_else(|_| "[]".to_string());
+
+        conn.execute(
+            "UPDATE items SET triage = ?1, tags = ?2, summary = ?3, author = ?4, author_type = ?5, updated_at = ?6 WHERE id = ?7 AND deleted_at IS NULL",
+            params![new_triage, tags_json, new_summary, new_author, new_author_type, now, id],
+        )?;
+
+        drop(conn);
+        self.get_item(id)
+    }
+
+    pub fn merge_items_db(&self, keep_id: &str, other_ids: &[String]) -> Result<(i64, i64)> {
+        let conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        let mut moved_highlights: i64 = 0;
+        let mut moved_cards: i64 = 0;
+
+        for other_id in other_ids {
+            let hl_count: i64 = conn.query_row(
+                "SELECT count(*) FROM highlights WHERE item_id = ?1",
+                params![other_id],
+                |r| r.get(0),
+            )?;
+            conn.execute(
+                "UPDATE highlights SET item_id = ?1 WHERE item_id = ?2",
+                params![keep_id, other_id],
+            )?;
+            moved_highlights += hl_count;
+
+            let card_count: i64 = conn.query_row(
+                "SELECT count(*) FROM cards WHERE item_id = ?1",
+                params![other_id],
+                |r| r.get(0),
+            )?;
+            conn.execute(
+                "UPDATE cards SET item_id = ?1 WHERE item_id = ?2",
+                params![keep_id, other_id],
+            )?;
+            moved_cards += card_count;
+        }
+
+        Ok((moved_highlights, moved_cards))
+    }
+
 
     /// Moves an item's updated_at (a highlight change counts as an edit of the item).
     pub fn touch_item(&self, id: &str) -> Result<()> {
@@ -1675,13 +2369,20 @@ mod tests {
         assert_eq!(check_f1.item_id.as_deref(), Some(item.id.as_str()));
         assert_eq!(check_f1.folder_id.as_deref(), Some(folder1.id.as_str()));
         assert_eq!(check_f1.folder_name.as_deref(), Some("Folder 1"));
+        assert_eq!(check_f1.elsewhere, None);
 
-        // check_url from folder 2 -> detects duplicate saved in folder 1
+        // check_url from folder 2 -> detects duplicate saved in folder 1 as elsewhere
         let check_f2 = db.check_url(url, &folder2.id);
-        assert!(check_f2.exists);
-        assert_eq!(check_f2.item_id.as_deref(), Some(item.id.as_str()));
-        assert_eq!(check_f2.folder_id.as_deref(), Some(folder1.id.as_str()));
-        assert_eq!(check_f2.folder_name.as_deref(), Some("Folder 1"));
+        assert!(!check_f2.exists);
+        assert_eq!(check_f2.item_id, None);
+        assert_eq!(
+            check_f2.elsewhere,
+            Some(Elsewhere {
+                item_id: item.id.clone(),
+                folder_id: folder1.id.clone(),
+                folder_path: "Folder 1".to_string(),
+            })
+        );
 
         // Update item note
         db.update_item_note(&item.id, Some("Updated Note")).unwrap();
@@ -1729,6 +2430,7 @@ mod tests {
         assert!(db.get_item(&item.id).is_err());
         let check_after_del = db.check_url(url, &folder2.id);
         assert!(!check_after_del.exists);
+        assert_eq!(check_after_del.elsewhere, None);
     }
 
     #[test]
@@ -2072,5 +2774,268 @@ mod tests {
         assert_eq!(mode.to_lowercase(), "memory");
         let timeout: i64 = conn.query_row("PRAGMA busy_timeout", [], |r| r.get(0)).unwrap();
         assert_eq!(timeout, 5000);
+    }
+
+    #[test]
+    fn test_list_cards_filters_soft_deleted_sources_and_groups() {
+        let db = Database::open_in_memory().unwrap();
+
+        let project = db.create_folder("Project 1", None).unwrap();
+        let group1 = db.create_folder("Group 1", Some(&project.id)).unwrap();
+        let group2 = db.create_folder("Group 2", Some(&group1.id)).unwrap();
+        let group3 = db.create_folder("Group 3", Some(&project.id)).unwrap();
+
+        let item1 = db.save_item(SaveItemRequest {
+            folder_id: group1.id.clone(),
+            kind: "note".to_string(),
+            title: "Item 1".to_string(),
+            source_url: None,
+            canonical_url: None,
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("Body 1".to_string()),
+            meta: None,
+            note: None,
+            position: None,
+        }).unwrap();
+
+        let item2 = db.save_item(SaveItemRequest {
+            folder_id: group2.id.clone(),
+            kind: "note".to_string(),
+            title: "Item 2".to_string(),
+            source_url: None,
+            canonical_url: None,
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("Body 2".to_string()),
+            meta: None,
+            note: None,
+            position: None,
+        }).unwrap();
+
+        let item3 = db.save_item(SaveItemRequest {
+            folder_id: group3.id.clone(),
+            kind: "note".to_string(),
+            title: "Item 3".to_string(),
+            source_url: None,
+            canonical_url: None,
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("Body 3".to_string()),
+            meta: None,
+            note: None,
+            position: None,
+        }).unwrap();
+
+        let item4 = db.save_item(SaveItemRequest {
+            folder_id: group3.id.clone(),
+            kind: "note".to_string(),
+            title: "Item 4".to_string(),
+            source_url: None,
+            canonical_url: None,
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("Body 4".to_string()),
+            meta: None,
+            note: None,
+            position: None,
+        }).unwrap();
+
+        let c_line = db.put_card(&CardInput {
+            id: "card-line".to_string(),
+            project_id: project.id.clone(),
+            kind: "line".to_string(),
+            item_id: None,
+            highlight_id: None,
+            quote: "".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: Some("Voiceover line".to_string()),
+            section_id: None,
+            position: 10.0,
+        }).unwrap();
+
+        let c1 = db.put_card(&CardInput {
+            id: "card-1".to_string(),
+            project_id: project.id.clone(),
+            kind: "quote".to_string(),
+            item_id: Some(item1.id.clone()),
+            highlight_id: None,
+            quote: "Quote 1".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: None,
+            section_id: None,
+            position: 20.0,
+        }).unwrap();
+
+        let _c2 = db.put_card(&CardInput {
+            id: "card-2".to_string(),
+            project_id: project.id.clone(),
+            kind: "quote".to_string(),
+            item_id: Some(item2.id.clone()),
+            highlight_id: None,
+            quote: "Quote 2".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: None,
+            section_id: None,
+            position: 30.0,
+        }).unwrap();
+
+        let c3 = db.put_card(&CardInput {
+            id: "card-3".to_string(),
+            project_id: project.id.clone(),
+            kind: "quote".to_string(),
+            item_id: Some(item3.id.clone()),
+            highlight_id: None,
+            quote: "Quote 3".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: None,
+            section_id: None,
+            position: 40.0,
+        }).unwrap();
+
+        let c4 = db.put_card(&CardInput {
+            id: "card-4".to_string(),
+            project_id: project.id.clone(),
+            kind: "quote".to_string(),
+            item_id: Some(item4.id.clone()),
+            highlight_id: None,
+            quote: "Quote 4".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: None,
+            section_id: None,
+            position: 50.0,
+        }).unwrap();
+
+        let cards_proj = db.list_cards(Some(&project.id), None).unwrap();
+        assert_eq!(cards_proj.len(), 5);
+
+        let cards_item1 = db.list_cards(None, Some(&item1.id)).unwrap();
+        assert_eq!(cards_item1.len(), 1);
+        assert_eq!(cards_item1[0].id, c1.id);
+
+        let cards_all = db.list_cards(None, None).unwrap();
+        assert_eq!(cards_all.len(), 5);
+
+        db.delete_item(&item3.id).unwrap();
+
+        let cards_proj_after_i3 = db.list_cards(Some(&project.id), None).unwrap();
+        assert_eq!(cards_proj_after_i3.len(), 4);
+        assert!(!cards_proj_after_i3.iter().any(|c| c.id == c3.id));
+
+        let cards_item3 = db.list_cards(None, Some(&item3.id)).unwrap();
+        assert_eq!(cards_item3.len(), 0);
+
+        let cards_all_after_i3 = db.list_cards(None, None).unwrap();
+        assert_eq!(cards_all_after_i3.len(), 4);
+        assert!(!cards_all_after_i3.iter().any(|c| c.id == c3.id));
+
+        db.delete_folder(&group1.id).unwrap();
+
+        let cards_proj_after_g1 = db.list_cards(Some(&project.id), None).unwrap();
+        assert_eq!(cards_proj_after_g1.len(), 2);
+        let ids: Vec<&str> = cards_proj_after_g1.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(ids, vec![c_line.id.as_str(), c4.id.as_str()]);
+
+        let cards_item1_after_g1 = db.list_cards(None, Some(&item1.id)).unwrap();
+        assert_eq!(cards_item1_after_g1.len(), 0);
+
+        let cards_item2_after_g1 = db.list_cards(None, Some(&item2.id)).unwrap();
+        assert_eq!(cards_item2_after_g1.len(), 0);
+
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute("UPDATE items SET deleted_at = NULL WHERE id = ?1", rusqlite::params![item3.id]).unwrap();
+        }
+        let cards_proj_after_restore = db.list_cards(Some(&project.id), None).unwrap();
+        assert_eq!(cards_proj_after_restore.len(), 3);
+        assert!(cards_proj_after_restore.iter().any(|c| c.id == c3.id));
+    }
+
+    #[test]
+    fn test_db_put_card_and_update_card_refuse_non_live_source() {
+        let db = Database::open_in_memory().unwrap();
+        let project = db.create_folder("Project 1", None).unwrap();
+        let group = db.create_folder("Group 1", Some(&project.id)).unwrap();
+
+        let item = db.save_item(SaveItemRequest {
+            folder_id: group.id.clone(),
+            kind: "note".to_string(),
+            title: "Live Item".to_string(),
+            source_url: None,
+            canonical_url: None,
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("Live text".to_string()),
+            meta: None,
+            note: None,
+            position: None,
+        }).unwrap();
+
+        let deleted_item = db.save_item(SaveItemRequest {
+            folder_id: group.id.clone(),
+            kind: "note".to_string(),
+            title: "Deleted Item".to_string(),
+            source_url: None,
+            canonical_url: None,
+            status: "saved".to_string(),
+            error: None,
+            markdown: Some("Deleted text".to_string()),
+            meta: None,
+            note: None,
+            position: None,
+        }).unwrap();
+        db.delete_item(&deleted_item.id).unwrap();
+
+        let err = db.put_card(&CardInput {
+            id: "card-deleted-item".to_string(),
+            project_id: project.id.clone(),
+            kind: "quote".to_string(),
+            item_id: Some(deleted_item.id.clone()),
+            highlight_id: None,
+            quote: "Quote".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: None,
+            section_id: None,
+            position: 1.0,
+        });
+        assert!(err.is_err());
+
+        let card = db.put_card(&CardInput {
+            id: "card-live".to_string(),
+            project_id: project.id.clone(),
+            kind: "quote".to_string(),
+            item_id: Some(item.id.clone()),
+            highlight_id: None,
+            quote: "Quote".to_string(),
+            seconds: None,
+            end_seconds: None,
+            url: None,
+            note: None,
+            script_line: None,
+            section_id: None,
+            position: 1.0,
+        }).unwrap();
+
+        db.delete_item(&item.id).unwrap();
+        let update_err = db.update_card_fields(&card);
+        assert!(update_err.is_err());
     }
 }

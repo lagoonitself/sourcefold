@@ -31,6 +31,16 @@ pub struct Item {
     pub deleted_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triage: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -66,6 +76,8 @@ pub struct CheckUrlResult {
     pub folder_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folder_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elsewhere: Option<Elsewhere>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -261,4 +273,129 @@ pub struct HighlightInput {
     pub seconds: Option<i64>,
     #[serde(default)]
     pub cited: Vec<HighlightCitation>,
+}
+
+// -----------------------------------------------------------------------------
+// Research tools (docs/dev/handoff-research.md)
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Elsewhere {
+    pub item_id: String,
+    pub folder_id: String,
+    pub folder_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ItemResearchPatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triage: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<Option<String>>,
+    #[serde(default, alias = "authorType", skip_serializing_if = "Option::is_none")]
+    pub author_type: Option<Option<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MergeResult {
+    pub item: Item,
+    pub moved_highlights: i64,
+    pub moved_cards: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OutlineSection {
+    pub id: String,
+    pub project_id: String,
+    pub title: String,
+    pub position: f64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OutlineSectionInput {
+    pub id: String,
+    #[serde(alias = "projectId")]
+    pub project_id: String,
+    pub title: String,
+    pub position: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Card {
+    pub id: String,
+    pub project_id: String,
+    pub kind: String, // quote | broll | line
+    #[serde(default)]
+    pub item_id: Option<String>,
+    #[serde(default)]
+    pub highlight_id: Option<String>,
+    pub quote: String,
+    #[serde(default)]
+    pub seconds: Option<i64>,
+    #[serde(default)]
+    pub end_seconds: Option<i64>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub script_line: Option<String>,
+    #[serde(default)]
+    pub section_id: Option<String>,
+    pub position: f64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CardInput {
+    pub id: String,
+    #[serde(alias = "projectId")]
+    pub project_id: String,
+    pub kind: String,
+    #[serde(default, alias = "itemId")]
+    pub item_id: Option<String>,
+    #[serde(default, alias = "highlightId")]
+    pub highlight_id: Option<String>,
+    #[serde(default)]
+    pub quote: String,
+    #[serde(default)]
+    pub seconds: Option<i64>,
+    #[serde(default, alias = "endSeconds")]
+    pub end_seconds: Option<i64>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default, alias = "scriptLine")]
+    pub script_line: Option<String>,
+    #[serde(default, alias = "sectionId")]
+    pub section_id: Option<String>,
+    pub position: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CardPatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quote: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seconds: Option<Option<i64>>,
+    #[serde(default, alias = "endSeconds", skip_serializing_if = "Option::is_none")]
+    pub end_seconds: Option<Option<i64>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<Option<String>>,
+    #[serde(default, alias = "scriptLine", skip_serializing_if = "Option::is_none")]
+    pub script_line: Option<Option<String>>,
+    #[serde(default, alias = "sectionId", skip_serializing_if = "Option::is_none")]
+    pub section_id: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<f64>,
 }

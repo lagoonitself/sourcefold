@@ -1,3 +1,4 @@
+import { AUTHOR_TYPE_LABELS, TRIAGE_LABELS } from "@sourcefold/core";
 import type { Folder, Item } from "../types";
 
 // Text helpers shared by every tool. Replies are written for a model to read: one fact per line,
@@ -50,7 +51,10 @@ function metaString(meta: Item["meta"], key: string): string | null {
 }
 
 /** Author, channel, publication or site, whichever the source has. */
-export function bylineOf(item: Pick<Item, "meta">): string | null {
+export function bylineOf(item: Pick<Item, "meta"> & { author?: string | null }): string | null {
+  if (item.author && typeof item.author === "string" && item.author.trim()) {
+    return item.author.trim();
+  }
   for (const key of ["author", "channel", "publication", "site_name", "site", "subreddit"]) {
     const value = metaString(item.meta, key);
     if (value) return value;
@@ -63,9 +67,20 @@ export function sourceLine(item: Item): string {
   const parts = [kindLabel(item.kind), item.title || "(untitled)"];
   const byline = bylineOf(item);
   if (byline) parts.push(byline);
+  if (item.author_type) {
+    const label = AUTHOR_TYPE_LABELS[item.author_type] ?? item.author_type;
+    parts.push(label);
+  }
   const date = formatDate(item.created_at);
   if (date) parts.push(date);
+  if (item.triage) {
+    const label = TRIAGE_LABELS[item.triage] ?? item.triage;
+    parts.push(label);
+  }
   if (item.status && item.status !== "saved") parts.push(item.status);
+  if (item.tags && item.tags.length > 0) {
+    parts.push(`tags: ${item.tags.join(", ")}`);
+  }
   return `[${item.id}] ${parts.join(" · ")}`;
 }
 

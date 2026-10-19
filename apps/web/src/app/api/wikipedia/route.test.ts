@@ -4,6 +4,7 @@ import { callsOf, createFakeDb } from "@/test/fake-db";
 const requireApiUser = vi.fn();
 const pushToDriveSoon = vi.fn();
 const findDuplicate = vi.fn();
+const findDuplicateElsewhere = vi.fn();
 const nextPosition = vi.fn();
 const fetchWikipediaCaptureOnServer = vi.fn();
 
@@ -16,6 +17,7 @@ vi.mock("@/features/drive/push-to-drive-soon", () => ({
 vi.mock("@/features/capture/find-duplicate", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/capture/find-duplicate")>()),
   findDuplicate: (...args: unknown[]) => findDuplicate(...args),
+  findDuplicateElsewhere: (...args: unknown[]) => findDuplicateElsewhere(...args),
   nextPosition: (...args: unknown[]) => nextPosition(...args),
 }));
 vi.mock("@sourcefold/core/server", () => ({
@@ -63,6 +65,7 @@ describe("POST /api/wikipedia", () => {
     fake = createFakeDb({ items: ITEM_ROW });
     requireApiUser.mockResolvedValue({ db: fake.db, userId: USER_ID, via: "token" });
     findDuplicate.mockResolvedValue(null);
+    findDuplicateElsewhere.mockResolvedValue(null);
     nextPosition.mockResolvedValue(4);
     fetchWikipediaCaptureOnServer.mockResolvedValue(CAPTURE);
   });

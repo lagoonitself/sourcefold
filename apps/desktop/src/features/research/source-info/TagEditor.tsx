@@ -53,9 +53,7 @@ export function TagEditor({
   );
 
   const typed = query.replace(/\s+/g, " ").trim();
-  const exact = typed
-    ? (suggestions.find((s) => sameTag(s.tag, typed)) ?? null)
-    : null;
+  const exact = typed ? (suggestions.find((s) => sameTag(s.tag, typed)) ?? null) : null;
   const alreadyHas = typed ? tags.some((t) => sameTag(t, typed)) : false;
   const canCreate = typed !== "" && !exact && !alreadyHas;
   const rows: Array<TagSuggestion | { tag: string; kind: "new" }> = canCreate
@@ -74,9 +72,7 @@ export function TagEditor({
       if (rows.length === 0) return;
       event.preventDefault();
       const down = event.key === "ArrowDown";
-      setActive((cur) =>
-        down ? (cur + 1) % rows.length : cur <= 0 ? rows.length - 1 : cur - 1,
-      );
+      setActive((cur) => (down ? (cur + 1) % rows.length : cur <= 0 ? rows.length - 1 : cur - 1));
     } else if (event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();

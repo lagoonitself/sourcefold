@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ChevronDown, ListFilter, Tag } from "lucide-react";
+import { Check, ChevronDown, ListFilter as ListFilterIcon, Tag } from "lucide-react";
 import { TRIAGE_LABELS, TRIAGE_VALUES, type Triage } from "@sourcefold/core";
 import { Button } from "@/components/ui/Button";
 import {
@@ -72,7 +72,7 @@ export function ListFilterBar({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" title="Filter by status">
-              <ListFilter className="size-3.5" aria-hidden="true" />
+              <ListFilterIcon className="size-3.5" aria-hidden="true" />
               <span>{filter.status === "all" ? "Status" : statusLabel(filter.status)}</span>
               <ChevronDown className="size-3.5" aria-hidden="true" />
             </Button>
@@ -218,7 +218,10 @@ export function BulkTagMenu({
           <ChevronDown className="size-3.5" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="bottom-full mb-1.5 mt-0 max-h-72 w-56 overflow-y-auto">
+      <DropdownMenuContent
+        align="start"
+        className="bottom-full mb-1.5 mt-0 max-h-72 w-56 overflow-y-auto"
+      >
         {options.map((option) => (
           <DropdownMenuItem key={option.tag} onClick={() => onToggle(option.tag, !option.on)}>
             <span className="flex size-3.5 items-center justify-center">

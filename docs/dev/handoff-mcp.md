@@ -14,10 +14,10 @@ Contract for letting an AI agent (Claude Desktop first, but any MCP client) use 
 
 ```
 Claude Desktop ──stdio──► apps/mcp (Node, runs on this computer; Claude Desktop ships Node)
-                            ├─► web API, Bearer token  (everything about the library)
-                            ├─► fetches links itself (YouTube, web pages, PDFs, Wikipedia…) with
+                            ├────► web API, Bearer token  (everything about the library)
+                            ├────► fetches links itself (YouTube, web pages, PDFs, Wikipedia…) with
                             │   @sourcefold/core extractors, saves through /api/capture
-                            └─► desktop app 127.0.0.1:23456/api/agent/* when it is running
+                            └────► desktop app 127.0.0.1:23456/api/agent/* when it is running
 ```
 
 Every web API route already accepts `Authorization: Bearer <token>` (`requireApiUser`), except the token routes themselves. Replies are `{ data }` or `{ error: { message, code? } }`; `GET /api/items/[id]/content` answers with the Markdown file as text.
@@ -40,6 +40,7 @@ The web URL falls back to the build-time default (`SOURCEFOLD_DEFAULT_WEB_URL`, 
 | `apps/mcp/src/index.ts`, `config.ts`, `web-api.ts`, `desktop-bridge.ts`, `types.ts`, `tools/define.ts`, `tools/format.ts`                                                                                               | orchestrator (foundation; others may only read) |
 | `apps/mcp/src/tools/library.ts`, `read.ts`, `organize.ts`, `notes.ts`, `drive.ts`, `images.ts`, `app.ts` + their tests                                                                                                  | package A                                       |
 | `apps/mcp/src/tools/add.ts`, `add-jobs.ts`, `highlights.ts` + tests                                                                                                                                                     | orchestrator                                    |
+| `apps/mcp/src/tools/research.ts` + `research.test.ts`                                                                                                                                                                   | package E                                       |
 | `packages/core/src/reader/*`, `packages/core/src/youtube/pacing.ts` (moved from the desktop)                                                                                                                            | orchestrator                                    |
 | `apps/desktop/src-tauri/src/agent.rs`, the `/api/agent/*` branch in `server.rs`, `commands/claude.rs`, `apps/desktop/src/features/claude/*`, the Claude pane in `SettingsDialog.tsx`, the agent event hook in `App.tsx` | package C                                       |
 | Release workflow, README, `docs/INSTALL.md`, `CHANGELOG.md`, web Settings card                                                                                                                                          | orchestrator                                    |
@@ -55,13 +56,13 @@ Ids are uuids. "Group id" means any folder id; a project is a folder without a p
 - `get_status` — who is signed in (email, web address, whether the sign-in came from the desktop app or an access token), whether the desktop app is open and its mode, Drive (`GET /api/drive/status`: unsaved count, connected or not).
 - `list_projects` `{ include_archived?: boolean = false }` — id, name, archived, number of groups.
 - `get_project_tree` `{ project_id, include_sources?: boolean = false }` — the project's groups nested (indentation), each with its source count. With sources (changed 2026-10-19 from on by default, so Claude browses level by level), each source as `[id] kind · title · saved date` (and `url`). Over 300 sources: titles are kept, urls dropped, and the reply says so.
-- `list_sources` `{ group_id, details?: boolean = false, offset?: number = 0 }` — the group's subgroups, then one line per source: id, kind, title, author/channel/site from `meta` when present, saved date, status (and its error). `details` adds the url and the note (first 200 characters). Pages of 100.
+- `list_sources` `{ group_id, details?: boolean = false, offset?: number = 0, status?: "keep" | "maybe" | "cut" | "none", tag?: string }` — the group's subgroups, then one line per source: id, kind, title, author/channel/site and author type from `meta`/`author` when present, saved date, triage status, tags, and status (and its error). `details` adds the url and the note (first 200 characters). Supports filtering by triage status (`keep`, `maybe`, `cut`, or `none` for untriaged) or tag (outline section or custom tag). Pages of 100.
 - `find_sources` `{ query, project_id?, inside_text?: boolean = true }` — title matches (`GET /api/items?q=`, filtered to the project when given) and, when the desktop app is open and `inside_text`, passages from `desktop.search` (keywords; each with source title, group, heading, snippet with the matched words in `**bold**`, YouTube time). When the desktop is closed, the reply says inside-text search needs it.
 - `get_source` `{ source_id }` — `GET /api/items/[id]`: everything about one source except its text (metadata, note, status, group path).
 
 ### Reading — package A, `read.ts`
 
-- `read_source` `{ source_id, section?: number, part?: number }` — downloads `GET /api/items/[id]/content` and splits front matter from the body. A source of one part (at most 40 000 characters) comes back whole. A longer one, called without `section` or `part`, answers with an overview and no text: details, summary, length, and a numbered outline (`§N heading · size`). `section=N` reads from that heading to the next heading at its level or above (in parts of 40 000 characters when longer, `part` picks one); `part=N` reads the body in order, cut at a heading or paragraph. Text is cached in memory for 10 minutes per source. Images and notes are files too: an image answers with its link and caption only.
+- `read_source` `{ source_id, section?: number, part?: number }` — downloads `GET /api/items/[id]/content` and splits front matter from the body. A source of one part (at most 40 000 characters) comes back whole. A longer one, called without `section` or `part`, answers with an overview and no text: details, summary, length, and a numbered outline (`§N heading · size`). When present, the source's author, author type, triage status, tags, and summary are included in the overview header. `section=N` reads from that heading to the next heading at its level or above (in parts of 40 000 characters when longer, `part` picks one); `part=N` reads the body in order, cut at a heading or paragraph. Text is cached in memory for 10 minutes per source. Images and notes are files too: an image answers with its link and caption only.
 
 ### Organizing — package A, `organize.ts`
 
@@ -82,7 +83,23 @@ Ids are uuids. "Group id" means any folder id; a project is a folder without a p
 
 - `list_highlights` `{ source_id? | group_id? | project_id? }` — quote, note, source title, YouTube time, id.
 - `add_highlight` `{ source_id, quote, note? }` — finds the quote in the reader's text (the body rendered exactly as the reader renders it, `packages/core/src/reader`), whitespace-tolerant; stores offsets, prefix, suffix, YouTube seconds and cited references like the reader does. Fails with a clear message when the quote isn't in the source.
-- `update_highlight` `{ highlight_id, note }` (`null` clears), `delete_highlight` `{ highlight_id }`.
+- `update_highlight` `{ highlight_id, note }` (`null` clears), `delete_highlight` `{ highlight_id }` — updates or deletes existing highlights.
+
+### Research — package E, `research.ts`
+
+- `set_source_info` `{ source_id? | source_ids?, status?, add_tags?, remove_tags?, tags?, author?, author_type?, summary?, project? }` — updates triage status (`keep` / `maybe` / `cut` / `none` to clear), tags (`tags` replaces; `add_tags` and `remove_tags` append/delete tags while keeping existing tags intact), `author`, `author_type` (`lab` / `researcher` / `journalist` / `company` / `government` / `creator` / `forum` / `encyclopedia` / `other` / `none`), and Markdown `summary`. Refuses bulk author/summary when several sources are passed at once. Guarded by optional `project`. Invalidates cached reader text for affected sources.
+- `list_tags` `{ project }` — lists tags used across a project: outline sections first (in outline order with source counts), followed by all other tags sorted with counts.
+- `find_duplicates` `{ project }` — finds duplicate sets in a project using `findDuplicateSets` across identical URLs, video IDs, paper identifiers, or normalized titles. Formats reason, IDs, titles, group paths, and saved dates.
+- `merge_duplicates` `{ keep_id, ids? | duplicate_ids?, project? }` — merges duplicates into `keep_id` (`POST /api/items/<keep_id>/merge`). Verifies all IDs are in `project` if specified, moves highlights and outline cards from duplicates to the kept source, deletes duplicates, reports moved counts, and invalidates read cache for all affected items.
+- `make_card` `{ source_id?, quote?, highlight_id?, section?, project }` — creates an outline card (`quote` kind) from a quote (validated in the source's reader text) or an existing highlight ID. Places into an outline section (appended at bottom) or into the unplaced pile.
+- `add_broll` `{ source_id?, url?, start?, end?, description, section?, project? }` — creates a b-roll card (`broll` kind) for a video clip with start and end timestamps (formatted as `M:SS` or `H:MM:SS`), optional URL for unsaved videos, description, placed into a section or unplaced pile.
+- `list_cards` `{ project, section?, unplaced_only?: boolean, kind?: "quote" | "broll" | "line" }` — lists outline cards grouped by section and unplaced cards, showing card ID, kind, quote/line/description, timestamp range, and source title. Supports filtering.
+- `edit_outline` `{ project, actions }` — runs a batch of outline edits in order (`add_section`, `rename_section`, `delete_section`, `move_section`, `place_card`, `unplace_card`, `set_line`, `add_line`, `delete_card`). Halts on the first failure, reporting completed steps before the failure.
+- `get_script` `{ project, format?: "script" | "references" | "keep_references" | "broll" }` — exports project research:
+  - `script`: full narration Markdown with section headings and cited reference numbers (`[1, 2:30]`).
+  - `references`: numbered list of sources cited in the script.
+  - `keep_references`: alphabetical list of all sources triaged as `keep``.
+  - `broll`: numbered list of b-roll clips ordered by time per source.
 
 ### Removing text — `remove-text.ts` (added 2026-10-19)
 
@@ -91,7 +108,7 @@ Ids are uuids. "Group id" means any folder id; a project is a folder without a p
 
 ### Adding — orchestrator, `add.ts`, `add-jobs.ts`
 
-- `add_links` `{ group_id, links: string[], limit_per_collection?: number = 50, published_after?, published_before?, wait_seconds?: number = 25 }` — starts a background job in this process and waits up to `wait_seconds` before answering with its progress and job id. Playlists, channels and Substack publications expand into their videos or posts. Grokipedia: `POST /api/grokipedia`; Wikipedia, YouTube, web, Reddit, PDF, arXiv, Hacker News, Bluesky, Substack: fetched here with the core extractors, saved with `POST /api/capture`. X: refused ("save X posts with the extension"). YouTube follows the desktop's pacing (2–5 s between videos, waits of 1 and 3 min on a rate limit). Duplicates are reported, not saved.
+- `add_links` `{ group_id, links: string[], limit_per_collection?: number = 50, published_after?, published_before?, wait_seconds?: number = 25, allow_duplicates?: boolean = false }` — starts a background job in this process and waits up to `wait_seconds` before answering with its progress and job id. Playlists, channels and Substack publications expand into their videos or posts. Grokipedia: `POST /api/grokipedia`; Wikipedia, YouTube, web, Reddit, PDF, arXiv, Hacker News, Bluesky, Substack: fetched here with the core extractors, saved with `POST /api/capture`. X: refused ("save X posts with the extension"). YouTube follows the desktop's pacing (2–5 s between videos, waits of 1 and 3 min on a rate limit). Duplicates are reported, not saved. Cross-group duplicates are reported naming the group they are already in (`Already saved in <Group path>`). When `allow_duplicates` is true, saving a second copy in a different group of the same project is permitted (same-group duplicates are still refused).
 - `get_add_progress` `{ job_id, wait_seconds?: number = 20, stop?: boolean }` — per link: waiting, saving, saved, duplicate, unavailable (with the reason), paid, paused (seconds left), failed (message).
 - `list_collection` `{ url, limit?: number = 50, published_after?, published_before? }` — the videos of a playlist or channel, or the posts of a Substack publication (title, date, paid or free, link), without saving.
 
@@ -141,17 +158,3 @@ Settings → **Claude** pane (package C; follow `docs/dev/DESIGN.md`):
 
 - `npm run typecheck`, `npm test`, `npm run format:check` pass; desktop `cargo test` and `cargo check` pass; the IPC contract test covers `open_claude_extension`.
 - `npm run build -w @sourcefold/mcp` produces `apps/mcp/dist/Sourcefold-Claude.mcpb`, which installs in Claude Desktop and lists the tools above.
-- The owner can, from a Claude chat: list projects, read a long source in parts, add a YouTube playlist to a group and watch it fill, move and delete sources, highlight a sentence (it shows in the reader), save to Drive, and ask Claude to show a source in the app.
-
-## Built (2026-10-19): deviations and notes
-
-- **Tools:** 26, as listed above.
-  - `show_in_app` is marked read-only.
-  - `add_image` downloads with plain `fetch`, without the address guard; it only accepts image types up to 10 MB. It sends `WIKIPEDIA_USER_AGENT` (Sourcefold and the repository's address): upload.wikimedia.org answers 400 without one.
-  - `add_highlight` also matches quotes that leave out the footnote markers (`[15]`) they cross.
-  - `save_to_drive` waits for a save already running (409 `sync_in_progress`, usually the app's automatic save) and then carries on.
-- **Add jobs:** `get_add_progress` without a `job_id` lists the recent jobs. Jobs run one at a time across all `add_links` calls.
-- **`agent.json`:** written once the loopback port is bound (in `run_server`), not before. That way a second app instance that fails to bind never replaces the first one's key. The key is 32 random bytes taken from three v4 UUIDs, because the app has no `rand` crate.
-- **Agent threads:** agent requests are served on their own threads (at most 8, then 503), so a slow Substack fetch or search doesn't hold up the extension.
-- **`open_claude_extension`:** downloads with `reqwest`: https only, 50 MB cap, and the file must start with `PK` (a zip).
-- **`show`:** on a project it opens the project's first group; on an image it only focuses the row.

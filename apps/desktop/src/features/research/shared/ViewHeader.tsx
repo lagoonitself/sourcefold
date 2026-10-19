@@ -22,7 +22,12 @@ export function ViewHeader({ title, summary, actions, children }: ViewHeaderProp
           </span>
         </h1>
       </div>
-      <div className={cn("flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-1.5", children ? "pb-4" : "pb-3")}>
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-1.5",
+          children ? "pb-4" : "pb-3",
+        )}
+      >
         <span className="font-sans text-[12.5px] leading-[18px] text-muted-foreground tabular-nums">
           {summary}
         </span>
@@ -46,8 +51,14 @@ export function ViewSkeleton({ label, rows = 4 }: { label: string; rows?: number
         >
           <div className="skeleton h-[54px] w-24 shrink-0 rounded-[6px]" />
           <div className="min-w-0 flex-1 space-y-2 pt-0.5">
-            <div className="skeleton h-4.5 rounded" style={{ width: `${[78, 92, 64, 84][i % 4]}%` }} />
-            <div className="skeleton h-3.5 rounded" style={{ width: `${[36, 44, 28, 40][i % 4]}%` }} />
+            <div
+              className="skeleton h-4.5 rounded"
+              style={{ width: `${[78, 92, 64, 84][i % 4]}%` }}
+            />
+            <div
+              className="skeleton h-3.5 rounded"
+              style={{ width: `${[36, 44, 28, 40][i % 4]}%` }}
+            />
           </div>
         </div>
       ))}

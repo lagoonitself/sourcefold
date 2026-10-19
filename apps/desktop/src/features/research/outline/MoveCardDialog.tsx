@@ -29,9 +29,7 @@ export function MoveCardDialog({ card, sections, onPick, onClose }: MoveCardDial
       <DialogContent className="max-w-[420px]">
         <DialogHeader>
           <DialogTitle>Move to section</DialogTitle>
-          <DialogDescription>
-            The card goes to the end of the section you pick.
-          </DialogDescription>
+          <DialogDescription>The card goes to the end of the section you pick.</DialogDescription>
         </DialogHeader>
         <div role="menu" className="-mx-2 flex max-h-[320px] flex-col gap-0.5 overflow-y-auto px-2">
           {options.map((option) => {
@@ -50,7 +48,9 @@ export function MoveCardDialog({ card, sections, onPick, onClose }: MoveCardDial
               >
                 <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">{option.title}</span>
-                {current && <Check className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                {current && (
+                  <Check className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                )}
               </button>
             );
           })}

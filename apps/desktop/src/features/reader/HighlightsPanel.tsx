@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertCircle, Copy, Highlighter, Link2, StickyNote, Trash2 } from "lucide-react";
+import { AlertCircle, Copy, Highlighter, Link2, Quote, StickyNote, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 import { formatHighlightTime, youtubeTimestampUrl, type Highlight } from "@sourcefold/core";
 import { Button } from "@/components/ui/Button";
@@ -189,6 +189,7 @@ function HighlightRow({
 }) {
   const editing = controller.panelNoteId === h.id;
   const timeUrl = h.seconds !== null ? youtubeTimestampUrl(itemUrl, h.seconds) : null;
+  const hasCard = controller.cardHighlightIds?.has(h.id);
 
   return (
     <li
@@ -203,27 +204,39 @@ function HighlightRow({
           aria-hidden="true"
         />
       )}
-      <button
-        type="button"
-        disabled={!placed}
-        onClick={() => controller.jumpTo(h.id)}
-        className="block w-full cursor-pointer text-left disabled:cursor-default"
-        aria-label={placed ? `Go to highlight: ${h.quote.slice(0, 60)}` : undefined}
-      >
-        {h.kind === "image" && h.image_src ? (
-          <img
-            src={h.image_src}
-            alt={h.quote}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className="max-h-20 max-w-full rounded-[8px]"
-          />
-        ) : (
-          <span className="line-clamp-4 font-serif text-[13.5px] leading-[19px] text-foreground">
-            {h.quote}
+      <div className="flex items-start justify-between gap-2">
+        <button
+          type="button"
+          disabled={!placed}
+          onClick={() => controller.jumpTo(h.id)}
+          className="block w-full cursor-pointer text-left disabled:cursor-default"
+          aria-label={placed ? `Go to highlight: ${h.quote.slice(0, 60)}` : undefined}
+        >
+          {h.kind === "image" && h.image_src ? (
+            <img
+              src={h.image_src}
+              alt={h.quote}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="max-h-20 max-w-full rounded-[8px]"
+            />
+          ) : (
+            <span className="line-clamp-4 font-serif text-[13.5px] leading-[19px] text-foreground">
+              {h.quote}
+            </span>
+          )}
+        </button>
+        {hasCard && (
+          <span
+            role="img"
+            aria-label="Has a card"
+            title="A card has been made from this highlight"
+            className="mt-0.5 inline-flex shrink-0 items-center text-primary"
+          >
+            <Quote className="size-3.5" aria-hidden="true" />
           </span>
         )}
-      </button>
+      </div>
 
       {!placed && (
         <p className="mt-1 flex items-start gap-1 text-[12px] leading-4 text-warning">

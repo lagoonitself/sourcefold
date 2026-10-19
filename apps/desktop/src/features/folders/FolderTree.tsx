@@ -1,5 +1,6 @@
 import * as React from "react";
 import { ChevronRight, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Files, Film, ListTree } from "lucide-react";
 import {
   DndContext,
   type DragEndEvent,
@@ -49,6 +50,7 @@ import {
 import { isMacPlatform, isTypingContext } from "../shortcuts/key-utils";
 import { NEW_GROUP_EVENT } from "@/features/items/group-actions";
 import { cn } from "@/lib/utils";
+import type { ProjectView } from "../research/project-view";
 
 export interface FolderTreeProps {
   projectId: string;
@@ -60,6 +62,13 @@ export interface FolderTreeProps {
   onRequestFocusList?: () => void;
   focusedFolderId?: string | null;
   onFocusedFolderChange?: (folderId: string | null) => void;
+  activeProjectView?: ProjectView | null;
+  onSelectProjectView?: (view: ProjectView) => void;
+  projectViewCounts?: {
+    outline: number;
+    broll: number;
+    duplicates: number;
+  };
 }
 
 export function FolderTree({
@@ -72,6 +81,9 @@ export function FolderTree({
   onRequestFocusList,
   focusedFolderId: externalFocusedId,
   onFocusedFolderChange,
+  activeProjectView,
+  onSelectProjectView,
+  projectViewCounts,
 }: FolderTreeProps) {
   // Build the hierarchical tree for this project
   const projectFolders = React.useMemo(() => {
@@ -534,6 +546,56 @@ export function FolderTree({
 
   return (
     <div className="flex min-h-0 flex-1 select-none flex-col">
+      {/* Project Views */}
+      <div className="px-1.5 pb-2 pt-0.5 space-y-0.5 border-b border-border/50 mb-1">
+        {(
+          [
+            {
+              id: "outline" as const,
+              name: "Outline",
+              icon: ListTree,
+              count: projectViewCounts?.outline ?? 0,
+            },
+            {
+              id: "broll" as const,
+              name: "B-roll",
+              icon: Film,
+              count: projectViewCounts?.broll ?? 0,
+            },
+            {
+              id: "duplicates" as const,
+              name: "Duplicates",
+              icon: Files,
+              count: projectViewCounts?.duplicates ?? 0,
+            },
+          ] as const
+        ).map((item) => {
+          const active = activeProjectView === item.id;
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelectProjectView?.(item.id)}
+              className={cn(
+                "flex w-full cursor-pointer items-center gap-2 rounded-[8px] px-2 py-1.5 text-[13px] font-normal transition-colors",
+                active
+                  ? "bg-sidebar-accent font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+              )}
+            >
+              <Icon className="size-4 shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-left">{item.name}</span>
+              {item.count > 0 && (
+                <span className="rounded-[5px] bg-muted px-1.5 py-0.2 text-[11px] tabular-nums text-muted-foreground">
+                  {item.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex items-center justify-between py-1 pl-3 pr-1 text-[12px] font-medium leading-4 text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <span>Groups</span>

@@ -10,6 +10,7 @@ import { registerNotesTools } from "./tools/notes";
 import { registerOrganizeTools } from "./tools/organize";
 import { registerReadTools } from "./tools/read";
 import { registerRemoveTextTools } from "./tools/remove-text";
+import { registerResearchTools } from "./tools/research";
 
 declare const __SOURCEFOLD_VERSION__: string | undefined;
 export const VERSION =
@@ -29,8 +30,9 @@ find_sources finds titles, and passages inside sources when the desktop app is o
 
 remove_text cuts text the user doesn't want out of a source (a passage, or a whole section from the outline); undo_remove_text puts it back. Only remove what the user asked for.
 
-Changing things: move_sources, delete_sources, update_source, update_group, delete_group and remove_text take an optional project (its name or id). When the user has told you to keep away from some projects, pass the project you mean to change: anything outside it is refused and left untouched. Every reply names the project and group of what changed.
+Changing things: move_sources, delete_sources, update_source, update_group, delete_group, remove_text, set_source_info, merge_duplicates, make_card, add_broll, edit_outline take an optional project (its name or id). When the user has told you to keep away from some projects, pass the project you mean to change: anything outside it is refused and left untouched. Every reply names the project and group of what changed.
 - add_links saves links in the background (YouTube is paced to avoid being blocked, so many videos take minutes). Check with get_add_progress.
+- Research workflow: set_source_info (status, tags, author, summary), list_tags, find_duplicates, merge_duplicates, make_card, add_broll, list_cards, edit_outline, get_script (export script or reference list).
 - The user's highlights are their own reading notes: list_highlights shows them.
 - show_in_app opens a group, source or highlight in the Sourcefold desktop app so the user can see it.
 - Search inside sources, show_in_app and paid Substack posts need the desktop app to be open.
@@ -52,5 +54,6 @@ export function createServer(ctx: ToolContext): McpServer {
   registerDriveTools(server, ctx);
   registerImagesTools(server, ctx);
   registerAppTools(server, ctx);
+  registerResearchTools(server, ctx);
   return server;
 }

@@ -1,4 +1,5 @@
 import {
+  SECTION_TITLE_MAX,
   positionBetween,
   sortSections,
   type Card,
@@ -6,6 +7,27 @@ import {
   type OutlineSection,
 } from "@sourcefold/core";
 import { cardsIn } from "../project-data/project-data-model";
+
+// ---------------------------------------------------------------------------------------------
+// Outline section validation and normalization
+
+export type NormalizeSectionTitleResult =
+  { ok: true; title: string } | { ok: false; error: string };
+
+/**
+ * Validates and normalizes an outline section title:
+ * collapses whitespace, trims, and checks that length is between 1 and SECTION_TITLE_MAX characters.
+ */
+export function normalizeSectionTitle(raw: string): NormalizeSectionTitleResult {
+  const title = raw.replace(/\s+/g, " ").trim();
+  if (!title) {
+    return { ok: false, error: "Section title can't be empty." };
+  }
+  if (title.length > SECTION_TITLE_MAX) {
+    return { ok: false, error: `Section title must be ${SECTION_TITLE_MAX} characters or fewer.` };
+  }
+  return { ok: true, title };
+}
 
 // ---------------------------------------------------------------------------------------------
 // The card pile's filters
@@ -71,7 +93,8 @@ export function pileSourceOptions(
     else
       byId.set(id, {
         id,
-        title: id === PILE_NO_SOURCE ? "Lines (no source)" : (sourceTitleOf(card) ?? "Removed source"),
+        title:
+          id === PILE_NO_SOURCE ? "Lines (no source)" : (sourceTitleOf(card) ?? "Removed source"),
         count: 1,
       });
   }
@@ -87,8 +110,7 @@ export function pileSourceOptions(
 
 /** Where a dragged card was dropped: on another card (before or after it) or on a whole list. */
 export type CardDropTarget =
-  | { type: "card"; id: string; after: boolean }
-  | { type: "container"; sectionId: string | null };
+  { type: "card"; id: string; after: boolean } | { type: "container"; sectionId: string | null };
 
 /**
  * True when the dragged item's centre is below the centre of the one it is over, so it goes after
@@ -161,7 +183,10 @@ export function computeSectionDrop(
   const before = sorted.map((s) => s.id);
   const next = [...list.slice(0, insertIndex), active, ...list.slice(insertIndex)].map((s) => s.id);
   if (before.every((id, i) => id === next[i])) return null;
-  return positionBetween(list[insertIndex - 1]?.position ?? null, list[insertIndex]?.position ?? null);
+  return positionBetween(
+    list[insertIndex - 1]?.position ?? null,
+    list[insertIndex]?.position ?? null,
+  );
 }
 
 // ---------------------------------------------------------------------------------------------

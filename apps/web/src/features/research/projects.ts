@@ -94,19 +94,20 @@ export async function loadItemsInGroups<T extends { created_at: string; id: stri
   const rows: T[] = [];
   for (let i = 0; i < groupIds.length; i += FOLDER_CHUNK) {
     const chunk = groupIds.slice(i, i + FOLDER_CHUNK);
-    const page = await selectAllPages<T>((from, to) =>
-      db
-        .from("items")
-        .select(columns)
-        .eq("user_id", userId)
-        .in("folder_id", chunk)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, to) as unknown as PromiseLike<{
-        data: T[] | null;
-        error: { message: string } | null;
-      }>,
+    const page = await selectAllPages<T>(
+      (from, to) =>
+        db
+          .from("items")
+          .select(columns)
+          .eq("user_id", userId)
+          .in("folder_id", chunk)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to) as unknown as PromiseLike<{
+          data: T[] | null;
+          error: { message: string } | null;
+        }>,
     );
     rows.push(...page);
   }

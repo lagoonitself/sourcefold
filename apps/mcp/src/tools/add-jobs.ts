@@ -42,6 +42,7 @@ export interface AddJobOptions {
   limitPerCollection: number;
   publishedAfter: string | null;
   publishedBefore: string | null;
+  allowDuplicates?: boolean;
 }
 
 export interface AddJob {
@@ -276,7 +277,14 @@ export class AddJobs {
   private async saveWithRetries(job: AddJob, r: JobRow, deps: LinkDeps, stopped: () => boolean) {
     for (let attempt = 0; ; attempt++) {
       try {
-        const outcome = await saveLink(r.url, r.kind as LinkKind, job.groupId, deps);
+        const outcome = await saveLink(
+          r.url,
+          r.kind as LinkKind,
+          job.groupId,
+          deps,
+          undefined,
+          job.options.allowDuplicates,
+        );
         Object.assign(r, {
           status: outcome.status,
           title: outcome.title ?? r.title,

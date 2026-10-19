@@ -2,11 +2,17 @@
   "manifest_version": "0.3",
   "name": "sourcefold",
   "display_name": "Sourcefold",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "description": "Read, add and organize your Sourcefold research library from Claude.",
   "long_description": "Lets Claude work with your Sourcefold library the way you do: list projects, groups and sources, read sources in parts, search inside them, add YouTube videos and playlists, articles, PDFs and more, move, rename and delete things, highlight passages, write notes and save to Google Drive.\n\nIf the Sourcefold desktop app is signed in on this computer, Claude uses its sign-in and nothing needs to be filled in. Otherwise create an access token on the Sourcefold website (Settings → Create token) and paste it below.\n\nWith the desktop app open, Claude can also search inside your sources, open things in the app for you, and save paid Substack posts you subscribe to.",
-  "author": { "name": "Sourcefold", "url": "https://github.com/lagoonitself/sourcefold" },
-  "repository": { "type": "git", "url": "https://github.com/lagoonitself/sourcefold" },
+  "author": {
+    "name": "Sourcefold",
+    "url": "https://github.com/lagoonitself/sourcefold"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lagoonitself/sourcefold"
+  },
   "homepage": "https://github.com/lagoonitself/sourcefold",
   "support": "https://github.com/lagoonitself/sourcefold/issues",
   "icon": "icon.png",
@@ -40,9 +46,160 @@
       "required": false
     }
   },
-  "tools": [],
+  "tools": [
+    {
+      "name": "get_status",
+      "description": "Shows who Sourcefold is signed in as on this computer, whether the Sourcefold desktop app is open (and its mode), and the Google Drive state (connected, how many changes are not saved yet)."
+    },
+    {
+      "name": "list_projects",
+      "description": "Lists the user's projects (the top level of the library) with each one's id, number of groups and number of sources."
+    },
+    {
+      "name": "get_project_tree",
+      "description": "Shows one project's groups as a tree (nested groups are indented), each with its id and number of sources."
+    },
+    {
+      "name": "list_sources",
+      "description": "Lists the sources in one group, one line each: `[id] kind · title · author · author type · saved date · status · tags` (and the error when saving failed), after the group's subgroups."
+    },
+    {
+      "name": "find_sources",
+      "description": "Searches the library."
+    },
+    {
+      "name": "get_source",
+      "description": "Everything about one source except its text: kind, title, url, group, author or channel and the other details saved with it, saved date, status (and the error), and the user's own note."
+    },
+    {
+      "name": "read_source",
+      "description": "Reads one source (an article, transcript, web page, PDF, thread or note), including the user's highlights and note at the end."
+    },
+    {
+      "name": "create_project",
+      "description": "Creates a new top-level project."
+    },
+    {
+      "name": "create_group",
+      "description": "Creates a group inside a project or inside another group (groups nest to any depth)."
+    },
+    {
+      "name": "update_group",
+      "description": "Renames a group or project, moves it into another project or group (parent_id; null makes it a top-level project, which only works for a group without sources), changes its position among its siblings, or archives/unarchives a project (archived; projects only)."
+    },
+    {
+      "name": "delete_group",
+      "description": "Deletes a group (or a whole project) together with every group inside it and every source in them."
+    },
+    {
+      "name": "update_source",
+      "description": "Renames a source (title), moves it to another group (group_id), or sets, replaces or clears the user's own note on it (note; null clears it)."
+    },
+    {
+      "name": "move_sources",
+      "description": "Moves several sources into one group (a group, not a project)."
+    },
+    {
+      "name": "delete_sources",
+      "description": "Deletes sources by id."
+    },
+    {
+      "name": "create_note",
+      "description": "Creates a standalone note (a source of kind Note with text you write, in Markdown) inside a group."
+    },
+    {
+      "name": "edit_note",
+      "description": "Changes the title and/or replaces the whole text of a standalone note made with create_note (or in the app)."
+    },
+    {
+      "name": "list_highlights",
+      "description": "The user's highlights (passages they marked while reading, with their notes), for one source, one group, or a whole project."
+    },
+    {
+      "name": "add_highlight",
+      "description": "Highlights a passage in a source, as if the user selected it in the reader; it shows in the reader, the Highlights tab and the source's file."
+    },
+    {
+      "name": "update_highlight",
+      "description": "Sets or clears (note: null) the note on a highlight."
+    },
+    {
+      "name": "delete_highlight",
+      "description": "Deletes one highlight (the passage stays in the source; only the mark and its note go)."
+    },
+    {
+      "name": "remove_text",
+      "description": "Cuts text the user doesn't want out of a saved source (an article, transcript, web page, PDF or thread), like the Remove text mode of the desktop reader: the source's file, its Drive copy and the reader all change."
+    },
+    {
+      "name": "undo_remove_text",
+      "description": "Puts back the last text remove_text cut out of a source in this session, with the highlights that went with it."
+    },
+    {
+      "name": "add_links",
+      "description": "Saves links into a group, like pasting them into Sourcefold's Add links."
+    },
+    {
+      "name": "get_add_progress",
+      "description": "Progress of an add_links job: each link's state (waiting, saving, saved with its source id, already saved, not saved with the reason, paid, paused while YouTube limits requests, failed with the message)."
+    },
+    {
+      "name": "list_collection",
+      "description": "Lists the videos of a YouTube playlist or channel (newest first for channels) or the posts of a Substack publication (with date and paid/free), without saving anything."
+    },
+    {
+      "name": "save_to_drive",
+      "description": "Saves the library's changes to the user's Google Drive now (the files and folders Sourcefold keeps there)."
+    },
+    {
+      "name": "add_image",
+      "description": "Adds a picture (PNG, JPEG, GIF or WebP, up to 10 MB) to a group as an image source."
+    },
+    {
+      "name": "show_in_app",
+      "description": "Opens a group, a source or a highlight in the Sourcefold desktop app and brings its window to the front, so the user can look at it."
+    },
+    {
+      "name": "set_source_info",
+      "description": "Updates research info on one or more sources (1–50): triage status (keep, maybe, cut, or 'none' to clear), add_tags, remove_tags, tags (explicit list), author, author_type (lab, researcher, journalist, company, government, creator, forum, encyclopedia, other), and summary (pass '' to clear)."
+    },
+    {
+      "name": "list_tags",
+      "description": "Lists the outline sections and other tags used across sources in a project, with the count of sources tagged with each."
+    },
+    {
+      "name": "find_duplicates",
+      "description": "Finds duplicate sources in a project using findDuplicateSets: each set with reason, ids, titles, group paths, and saved dates."
+    },
+    {
+      "name": "merge_duplicates",
+      "description": "Merges one or more duplicate sources into keep_id, re-attaching their highlights and cards, and deletes the duplicates."
+    },
+    {
+      "name": "make_card",
+      "description": "Creates a quote card from an existing highlight_id OR from (source_id and quote)."
+    },
+    {
+      "name": "add_broll",
+      "description": "Adds a b-roll clip (video segment) to a project's research outline."
+    },
+    {
+      "name": "list_cards",
+      "description": "Lists the cards in a project outline (quotes, b-roll clips, lines) grouped by outline section and unplaced cards."
+    },
+    {
+      "name": "edit_outline",
+      "description": "Performs one or more outline mutations in order: add_section, rename_section, delete_section, move_section, place_card, unplace_card, set_line, add_line, delete_card."
+    },
+    {
+      "name": "get_script",
+      "description": "Exports the project's research outline as a narration script with citations, a reference list of cited sources, keep_references (all sources marked keep), or a chronological b-roll clip list."
+    }
+  ],
   "compatibility": {
     "platforms": ["win32", "darwin"],
-    "runtimes": { "node": ">=18.0.0" }
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
   }
 }

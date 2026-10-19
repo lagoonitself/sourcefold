@@ -102,7 +102,10 @@ export function groupTags(
 }
 
 /** A remembered filter whose tag has since left the group stops filtering by that tag. */
-export function resolveFilter(filter: ListFilter, tags: ReadonlyArray<{ tag: string }>): ListFilter {
+export function resolveFilter(
+  filter: ListFilter,
+  tags: ReadonlyArray<{ tag: string }>,
+): ListFilter {
   if (filter.tag === null) return filter;
   const tag = filter.tag;
   return tags.some((t) => sameTag(t.tag, tag)) ? filter : { ...filter, tag: null };
@@ -117,9 +120,7 @@ export interface TagSuggestion {
 }
 
 /** Tags in use across a project's sources, most used first, then A to Z. */
-export function projectTagsByUse(
-  items: ReadonlyArray<Pick<ResearchItem, "tags">>,
-): string[] {
+export function projectTagsByUse(items: ReadonlyArray<Pick<ResearchItem, "tags">>): string[] {
   return groupTags(items).map((t) => t.tag);
 }
 

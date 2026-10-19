@@ -1285,10 +1285,10 @@ mod tests {
         let resp = handle_request(&db, &Method::Post, "/api/check-url", "", &check_body_from_b, &standard_headers());
         assert_eq!(resp.status_code().0, 200);
         let check_b = read_json_response(resp);
-        assert_eq!(check_b["exists"], true);
-        assert_eq!(check_b["item_id"], item_id);
-        assert_eq!(check_b["folder_id"], folder_a_id);
-        assert_eq!(check_b["folder_name"], "Folder A");
+        assert_eq!(check_b["exists"], false);
+        assert_eq!(check_b["elsewhere"]["item_id"], item_id);
+        assert_eq!(check_b["elsewhere"]["folder_id"], folder_a_id);
+        assert_eq!(check_b["elsewhere"]["folder_path"], "Folder A");
     }
 
     #[test]
@@ -1347,10 +1347,10 @@ mod tests {
         let resp = handle_request(&db, &Method::Post, "/api/check-url", "", &check_body_from_b, &standard_headers());
         assert_eq!(resp.status_code().0, 200);
         let check_b = read_json_response(resp);
-        assert_eq!(check_b["exists"], true);
-        assert_eq!(check_b["item_id"], item_id);
-        assert_eq!(check_b["folder_id"], folder_a_id);
-        assert_eq!(check_b["folder_name"], "Folder A");
+        assert_eq!(check_b["exists"], false);
+        assert_eq!(check_b["elsewhere"]["item_id"], item_id);
+        assert_eq!(check_b["elsewhere"]["folder_id"], folder_a_id);
+        assert_eq!(check_b["elsewhere"]["folder_path"], "Folder A");
     }
 
     #[test]

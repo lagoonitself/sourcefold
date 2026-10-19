@@ -104,7 +104,11 @@ export async function findDuplicateElsewhere(
   const groups = new Set(groupIdsOf(folders, projectId));
   const hit = others.find((c) => groups.has(c.folder_id));
   if (!hit) return null;
-  return { item_id: hit.id, folder_id: hit.folder_id, folder_path: groupPathOf(folders, hit.folder_id) };
+  return {
+    item_id: hit.id,
+    folder_id: hit.folder_id,
+    folder_path: groupPathOf(folders, hit.folder_id),
+  };
 }
 
 export function formatElsewhereMessage(folderPath: string): string {

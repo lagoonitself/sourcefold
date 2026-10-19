@@ -5,7 +5,7 @@ import { AddJobs, type AddJob } from "../tools/add-jobs";
 import { registerAddTools } from "../tools/add";
 import type { LinkDeps } from "../links/save-link";
 import * as saveLinkModule from "../links/save-link";
-import { classifyLink } from "../links/save-link";
+import { checkDuplicate, classifyLink } from "../links/save-link";
 import { assertPublicUrl, BlockedAddressError } from "../links/public-fetch";
 import { connect, fakeDesktop, fakeWeb } from "./harness";
 
@@ -25,6 +25,42 @@ describe("classifyLink", () => {
     expect(classifyLink("https://name.substack.com/p/a-post")).toBe("substack");
     expect(classifyLink("https://name.substack.com")).toBe("publication");
     expect(classifyLink("https://example.com/article")).toBe("source");
+  });
+});
+
+describe("checkDuplicate", () => {
+  it("always refuses same-group duplicate even when allowDuplicates is true", () => {
+    const same = { exists: true, folder_name: "Turbo" };
+    expect(checkDuplicate(same, false)).toEqual({
+      isDuplicate: true,
+      message: "Already saved in Turbo",
+    });
+    expect(checkDuplicate(same, true)).toEqual({
+      isDuplicate: true,
+      message: "Already saved in Turbo",
+    });
+  });
+
+  it("refuses cross-group duplicate when allowDuplicates is false naming the group path", () => {
+    const cross = {
+      exists: false,
+      elsewhere: { item_id: "other", folder_id: "g2", folder_path: "Cars › Engines" },
+    };
+    expect(checkDuplicate(cross, false)).toEqual({
+      isDuplicate: true,
+      message: "Already saved in Cars › Engines",
+    });
+  });
+
+  it("allows cross-group duplicate when allowDuplicates is true", () => {
+    const cross = {
+      exists: false,
+      elsewhere: { item_id: "other", folder_id: "g2", folder_path: "Cars › Engines" },
+    };
+    expect(checkDuplicate(cross, true)).toEqual({
+      isDuplicate: false,
+      message: "",
+    });
   });
 });
 

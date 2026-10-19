@@ -4,10 +4,20 @@ import {
   copySourceFromItem,
   formatQuoteWithSource,
   HIGHLIGHT_LIMITS,
+  type Card,
   type Highlight,
   type HighlightInput,
 } from "@sourcefold/core";
-import { deleteHighlight, getHighlights, putHighlight, updateHighlightNote } from "@/lib/api";
+import {
+  deleteCard,
+  deleteHighlight,
+  getCards,
+  getFolders,
+  getHighlights,
+  putCard,
+  putHighlight,
+  updateHighlightNote,
+} from "@/lib/api";
 import {
   captureContext,
   locateHighlight,
@@ -39,6 +49,15 @@ import { openTargetFor } from "./open-decision";
 import type { ReaderItem } from "./types";
 import { createUndoStack, type UndoEntry } from "./undo-stack";
 import { savedUrlKeys } from "./url-key";
+import { errorMessage } from "@/lib/utils";
+import {
+  buildBrollCard,
+  buildQuoteCard,
+  highlightIdsWithCards,
+  nextParagraphSeconds,
+  nextPilePosition,
+  projectIdOf,
+} from "../research/source-info";
 
 const AUTO_KEY = "sourcefold:reader:autoHighlight";
 const PANEL_KEY = "sourcefold:reader:highlightsPanel";
@@ -59,6 +78,7 @@ export interface ReaderHighlightsArgs {
   onHighlightsChanged?: (itemId: string) => void;
   /** True while the reader is in "Remove text" mode: selecting text must not highlight it. */
   suspended?: boolean;
+  projectId?: string | null;
 }
 
 export type ReaderReference = FootnoteDef;
@@ -81,6 +101,10 @@ export interface ReaderHighlightsController {
   savedKeys: ReadonlySet<string>;
   canSaveLinks: boolean;
   position: { index: number; total: number } | null;
+  isYouTube: boolean;
+  cardHighlightIds: ReadonlySet<string>;
+  makeCard: (id: string) => Promise<void>;
+  makeBroll: (id: string) => Promise<void>;
   setAutoHighlight: (on: boolean) => void;
   setPanelOpen: (open: boolean) => void;
   setPanelTab: (tab: PanelTab) => void;
@@ -174,6 +198,8 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
   const [panelOpen, setPanelState] = React.useState(() => readFlag(PANEL_KEY, false));
   const [panelTab, setPanelTab] = React.useState<PanelTab>("highlights");
   const [references, setReferences] = React.useState<ReaderReference[]>([]);
+  const [cards, setCards] = React.useState<Card[]>([]);
+  const cardHighlightIds = React.useMemo(() => highlightIdsWithCards(cards), [cards]);
 
   const itemIdRef = React.useRef(itemId);
   itemIdRef.current = itemId;
@@ -192,7 +218,10 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
 
   // ---- loading -------------------------------------------------------------------------------
   React.useEffect(() => {
-    if (!open || !itemId) return;
+    if (!open || !itemId) {
+      setCards([]);
+      return;
+    }
     let cancelled = false;
     setHighlights([]);
     setLoadState("loading");
@@ -215,6 +244,15 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
         setLoadState("error");
         toast.error("Couldn't load your highlights. Close this source and open it again.");
       });
+
+    getCards({ itemId })
+      .then((c) => {
+        if (!cancelled) setCards(c);
+      })
+      .catch(() => {
+        if (!cancelled) setCards([]);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -497,6 +535,120 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
         .catch(() => toast.error("Couldn't copy. Allow clipboard access and try again."));
     },
     [item],
+  );
+
+  // ---- card creation from highlights ---------------------------------------------------------
+  const getProjectId = React.useCallback(async (): Promise<string | null> => {
+    if (args.projectId) return args.projectId;
+    if (!item?.folder_id) return null;
+    try {
+      const folders = await getFolders(true);
+      return projectIdOf(folders, item.folder_id);
+    } catch {
+      return null;
+    }
+  }, [args.projectId, item?.folder_id]);
+
+  const makeCard = React.useCallback(
+    async (highlightId: string) => {
+      const h = highlightsRef.current.find((x) => x.id === highlightId);
+      if (!h) return;
+      const pId = await getProjectId();
+      if (!pId) {
+        toast.error("Sources outside a project can't make cards.");
+        return;
+      }
+      try {
+        const projectCards = await getCards({ projectId: pId });
+        const position = nextPilePosition(projectCards);
+        const cardId = crypto.randomUUID();
+        const cardInput = buildQuoteCard({
+          highlight: h,
+          projectId: pId,
+          id: cardId,
+          position,
+        });
+        if (!cardInput) {
+          toast.error("That highlight has no text to make a card.");
+          return;
+        }
+        const saved = await putCard(cardInput);
+        setCards((prev) => [...prev, saved]);
+        setMenu(null);
+        toast.success("Card added", {
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await deleteCard(cardId);
+                setCards((prev) => prev.filter((c) => c.id !== cardId));
+                toast.success("Card removed");
+                changed(h.item_id);
+              } catch (err) {
+                toast.error(errorMessage(err, "Couldn't remove card."));
+              }
+            },
+          },
+        });
+        changed(h.item_id);
+      } catch (err) {
+        toast.error(errorMessage(err, "Couldn't add card."));
+      }
+    },
+    [getProjectId, changed],
+  );
+
+  const makeBroll = React.useCallback(
+    async (highlightId: string) => {
+      const h = highlightsRef.current.find((x) => x.id === highlightId);
+      if (!h || h.seconds === null) return;
+      const pId = await getProjectId();
+      if (!pId) {
+        toast.error("Sources outside a project can't make cards.");
+        return;
+      }
+      try {
+        const root = bodyRef.current;
+        const marks = root ? collectTimestamps(root).marks : [];
+        const endSeconds = nextParagraphSeconds(marks, h.end_offset, h.seconds);
+        const projectCards = await getCards({ projectId: pId });
+        const position = nextPilePosition(projectCards);
+        const cardId = crypto.randomUUID();
+        const cardInput = buildBrollCard({
+          highlight: h,
+          projectId: pId,
+          id: cardId,
+          position,
+          endSeconds,
+        });
+        if (!cardInput) {
+          toast.error("Couldn't create B-roll card.");
+          return;
+        }
+        const saved = await putCard(cardInput);
+        setCards((prev) => [...prev, saved]);
+        setMenu(null);
+        toast.success("Card added", {
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              try {
+                await deleteCard(cardId);
+                setCards((prev) => prev.filter((c) => c.id !== cardId));
+                toast.success("Card removed");
+                changed(h.item_id);
+              } catch (err) {
+                toast.error(errorMessage(err, "Couldn't remove card."));
+              }
+            },
+          },
+        });
+        changed(h.item_id);
+      } catch (err) {
+        toast.error(errorMessage(err, "Couldn't add B-roll card."));
+      }
+    },
+    [getProjectId, changed, bodyRef],
   );
 
   // ---- making highlights ---------------------------------------------------------------------
@@ -840,6 +992,16 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
       }
       if (onControl && (key === "Backspace" || key === "Delete")) return false;
       if (current && currentId) {
+        if (key === "q") {
+          e.preventDefault();
+          void makeCard(currentId);
+          return true;
+        }
+        if (key === "b" && kind === "youtube") {
+          e.preventDefault();
+          void makeBroll(currentId);
+          return true;
+        }
         if (key === "n") {
           e.preventDefault();
           openMenu(currentId, true);
@@ -863,6 +1025,9 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
       copyHighlight,
       currentId,
       highlightNow,
+      kind,
+      makeBroll,
+      makeCard,
       moveFocus,
       navigate,
       openMenu,
@@ -888,6 +1053,10 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
     savedKeys,
     canSaveLinks,
     position,
+    isYouTube: kind === "youtube",
+    cardHighlightIds,
+    makeCard,
+    makeBroll,
     setAutoHighlight,
     setPanelOpen,
     setPanelTab,

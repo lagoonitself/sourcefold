@@ -50,6 +50,10 @@ Every `.md` file is UTF-8 with `\n` line endings, ends with one newline, and has
 
 <body>
 
+## My summary
+
+<the short summary, only if there is one>
+
 ## My highlights
 
 <the user's highlights, only if there are any>
@@ -59,11 +63,19 @@ Every `.md` file is UTF-8 with `\n` line endings, ends with one newline, and has
 <the user's note, only if there is one>
 ```
 
+### My summary
+
+A short summary written by the user or Claude (through the MCP server). Sourcefold never writes summaries itself.
+
+- The section comes after the body and before `## My highlights`. It is left out when there is no summary, and for notes.
+- The summary text is trimmed, as written, with line breaks kept.
+- Readers, `bodyFromDriveFile` and the Rust equivalent cut the section off the body (the last `\n## My summary\n` after removing `## My note` and `## My highlights`), so the body and highlight offsets never include it.
+
 ### My highlights
 
 The passages the user highlighted in the reader. The database is the source of truth; the section is rebuilt from it on every save (`buildHighlightsSection` in `packages/core/src/highlights.ts`, `build_item_file` in the desktop). Both are checked against `packages/core/test/golden/item-with-highlights.md`.
 
-- The section comes after the body and before `## My note`. It is left out when there are no highlights.
+- The section comes after the body (and after `## My summary` when present) and before `## My note`. It is left out when there are no highlights.
 - Highlights are listed by `start_offset`, then `created_at`, then `id`.
 - Each highlight is one block; blocks are separated by one blank line:
   - Text: `> ` followed by the quote with every run of whitespace (including line breaks) collapsed to one space and trimmed.
@@ -113,6 +125,15 @@ The source kinds added in 2026-10 (stored in `items.kind` as `youtube`, `web`, `
 
 `folder` is the full path with real names joined by `/`, for example `Cars/Engines/Diesel`.
 
+After `folder` (every kind, notes included), research fields go in this order, each only when set:
+
+1. `written_by`: who wrote the source as set by the user or Claude (`author`, omitted for notes).
+2. `author_type`: the author's type (`lab`, `researcher`, `journalist`, `company`, `government`, `creator`, `forum`, `encyclopedia`, `other`, omitted for notes).
+3. `status`: triage mark (`keep`, `maybe`, `cut`).
+4. `tags`: outline section tags as a YAML block list (`- Tag`).
+
+Guessed author types are never written to the file.
+
 ### Source line
 
 One blockquote line under the title, so a reader (or NotebookLM) knows where the text came from:
@@ -147,7 +168,7 @@ Substack only: if there is a subtitle, it goes on its own line between the title
   - The infobox becomes a two-column table `| Field | Value |` placed right after the lead paragraph, with the infobox picture and its italic caption above the table. Rows need a label and a value; list items and line breaks inside a value are joined with `; `. The title row, section header rows and rows without a label are dropped, and so is the whole infobox if no row is usable.
   - Citations are GFM footnotes `[^n]` numbered by first use. A source cited again keeps its number, and a run of markers lists each number once (`[^1][^2][^1]` becomes `[^1][^2]`). Footnote text goes under `## References`, one per line: `[^n]: <reference text with its links>`.
   - Pictures and thumbnails stay where they were, as `![<alt>](<full-size address>)` with the caption in italics as its own paragraph below. The address is the original file on `upload.wikimedia.org`, not the resized thumbnail (files a browser can't show, like PDFs, keep their thumbnail). Pictures under 40px (flags, icons) are skipped. Galleries list each picture, then its caption. Pictures inside tables are left out, except that a flag or icon's alt text stays as text.
-  - Formulas keep their LaTeX: `$…$` inline, `$$` on its own lines for display equations (`|` inside a table cell is written `\vert`). Superscripts and subscripts become Unicode where the characters exist (`CO₂`, `m²`).
+  - Formulas keep their LaTeX: `$\dots$` inline, `$$` on its own lines for display equations (`|` inside a table cell is written `\vert`). Superscripts and subscripts become Unicode where the characters exist (`CO₂`, `m²`).
   - A simple table (one header row, no merged cells, same number of cells in every row) becomes a GFM table; rows with nothing in them are dropped. Any other table keeps its text, one `- ` bullet per row with cells joined by `·`. A table that only lays out other tables is dissolved and the tables inside are converted.
   - Wikipedia's text is CC BY-SA 4.0. The `url` and the "Saved from" line are the attribution and must stay with the text.
 - X threads: one block per post, nested blockquotes for replies, each post starting with `**<name>** (@<handle>) · <date> · [link](<post url>)`. This is the existing `renderXThreadMarkdown` output in `packages/core/src/x/markdown.ts`.
@@ -156,7 +177,7 @@ Substack only: if there is a subtitle, it goes on its own line between the title
 - Reddit: the post's text (already Markdown), or a link line for a link post, with images as `![](url)`. Then `## Comments`, one block per comment: `**u/<author>** · <score> points · <date> · [link](<permalink>)` and the text, with replies as nested `>` blockquotes. The top comments by score, depth up to 4, about 200 comments at most; deleted or removed comments with no replies are skipped.
 - Hacker News: the story's URL as a link line and its text, then `## Comments` in the same style: `**<author>** · <date> · [link](https://news.ycombinator.com/item?id=<id>)`.
 - Bluesky: like X. The root post and the author's own replies come in sequence; other replies are nested blockquotes. Each post starts `**<name>** (@<handle>) · <date> · [link](<post url>)`. Images are `![alt](fullsize)`; quoted posts and link cards become links.
-- PDF: the text joined into paragraphs, hyphenated line breaks mended, and repeated page headers, footers and bare page numbers dropped where that's easy. arXiv papers use arXiv's HTML version when there is one: `## Abstract`, then the sections, with math as `$…$` from `<math alttext>`.
+- PDF: the text joined into paragraphs, hyphenated line breaks mended, and repeated page headers, footers and bare page numbers dropped where that's easy. arXiv papers use arXiv's HTML version when there is one: `## Abstract`, then the sections, with math as `$\dots$` from `<math alttext>`.
 
 ## Post images
 

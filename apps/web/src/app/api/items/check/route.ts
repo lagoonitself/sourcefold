@@ -2,6 +2,7 @@ import { z } from "zod";
 import { canonicalizeUrl, detectSource } from "@sourcefold/core";
 import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { findExistingItemByCanonicalUrl } from "@/features/grokipedia/save-grokipedia";
+import { findDuplicateElsewhere } from "@/features/capture/find-duplicate";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
       item_id: existing.id,
       folder_id: existing.folder_id,
       folder_name: existing.folder_name,
+      elsewhere: null,
     });
   }
 
@@ -81,10 +83,18 @@ export async function POST(request: Request) {
           item_id: liveItem.id,
           folder_id: liveItem.folder_id,
           folder_name: folderName,
+          elsewhere: null,
         });
       }
     }
   }
 
-  return jsonData({ exists: false });
+  const elsewhere = await findDuplicateElsewhere(
+    auth.db,
+    auth.userId,
+    canonical,
+    parsed.data.folder_id,
+  );
+
+  return jsonData({ exists: false, elsewhere: elsewhere ?? null });
 }

@@ -15,7 +15,7 @@ vi.mock("@/features/drive/push-to-drive-soon", () => ({
   pushToDriveSoon: (userId: string) => pushToDriveSoon(userId),
 }));
 
-import { PATCH } from "./route";
+import { GET, PATCH } from "./route";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
 const ITEM_ID = "00000000-0000-4000-8000-0000000000aa";
@@ -40,6 +40,42 @@ function setup(kind: string) {
 function updatesOf(fake: ReturnType<typeof createFakeDb>) {
   return fake.queries.flatMap((q) => callsOf(q, "update"));
 }
+
+describe("GET /api/items/[id]", () => {
+  beforeEach(() => {
+    requireApiUser.mockReset();
+  });
+
+  it("selects research columns on GET", async () => {
+    const fake = createFakeDb({
+      items: {
+        id: ITEM_ID,
+        kind: "web",
+        title: "Test",
+        note: null,
+        markdown: "body",
+        folder_id: "g",
+        triage: "keep",
+        tags: ["tag1"],
+        summary: "short",
+        author: "someone",
+        author_type: "journalist",
+      },
+    });
+    requireApiUser.mockResolvedValue({ db: fake.db, userId: USER_ID, via: "token" });
+
+    const res = await GET(new Request(`http://localhost/api/items/${ITEM_ID}`), params);
+    expect(res.status).toBe(200);
+
+    const [args] = callsOf(fake.queries[0]!, "select");
+    const cols = String(args![0])
+      .split(",")
+      .map((c) => c.trim());
+    expect(cols).toEqual(
+      expect.arrayContaining(["triage", "tags", "summary", "author", "author_type"]),
+    );
+  });
+});
 
 describe("PATCH /api/items/[id] with text", () => {
   beforeEach(() => {
@@ -97,5 +133,67 @@ describe("PATCH /api/items/[id] with text", () => {
     setup("youtube");
     expect((await patch({ title: "New title" })).status).toBe(200);
     expect(pushToDriveSoon).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH /api/items/[id] with research fields", () => {
+  beforeEach(() => {
+    requireApiUser.mockReset();
+    pushToDriveSoon.mockReset();
+  });
+
+  it("updates triage, tags, summary, author and author_type", async () => {
+    const fake = setup("web");
+    const res = await patch({
+      triage: "keep",
+      tags: [" Compute ", "Ending", "compute"],
+      summary: " A brief overview. ",
+      author: " Dario Amodei ",
+      author_type: "researcher",
+    });
+
+    expect(res.status).toBe(200);
+    expect(updatesOf(fake)).toEqual([
+      [
+        {
+          triage: "keep",
+          tags: ["Compute", "Ending"],
+          summary: "A brief overview.",
+          author: "Dario Amodei",
+          author_type: "researcher",
+        },
+      ],
+    ]);
+  });
+
+  it("clears summary and author when passed empty strings", async () => {
+    const fake = setup("web");
+    const res = await patch({
+      summary: "   ",
+      author: "",
+    });
+
+    expect(res.status).toBe(200);
+    expect(updatesOf(fake)).toEqual([
+      [
+        {
+          summary: null,
+          author: null,
+        },
+      ],
+    ]);
+  });
+
+  it("refuses more than 20 tags with 400", async () => {
+    setup("web");
+    const tags = Array.from({ length: 21 }, (_, i) => `Tag ${i + 1}`);
+    const res = await patch({ tags });
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses invalid triage or author_type with 400", async () => {
+    setup("web");
+    expect((await patch({ triage: "invalid" })).status).toBe(400);
+    expect((await patch({ author_type: "invalid" })).status).toBe(400);
   });
 });

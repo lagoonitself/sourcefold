@@ -79,7 +79,16 @@ manifest.tools = tools.map((t) => ({
   name: t.name,
   description: (t.description ?? "").split("\n")[0].split(/(?<=\.)\s/)[0],
 }));
-writeFileSync(join(out, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+let manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
+try {
+  const prettier = await import("prettier");
+  const cfg = await prettier.resolveConfig(join(root, "manifest.json"));
+  manifestText = await prettier.format(manifestText, { ...cfg, parser: "json" });
+} catch {
+  // Prettier optional fallback
+}
+writeFileSync(join(out, "manifest.json"), manifestText);
+writeFileSync(join(root, "manifest.json"), manifestText);
 cpSync(join(repo, "apps/desktop/src-tauri/icons/icon.png"), join(out, "icon.png"));
 cpSync(join(repo, "LICENSE"), join(out, "LICENSE"));
 

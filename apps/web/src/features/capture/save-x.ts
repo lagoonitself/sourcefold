@@ -7,7 +7,9 @@ import {
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import {
+  elsewhereError,
   findDuplicate,
+  findDuplicateElsewhere,
   formatDuplicateMessage,
   invalidFolderMessage,
   nextPosition,
@@ -127,6 +129,7 @@ export async function saveXThread(
   userId: string,
   folderId: string,
   posts: XPostInput[],
+  options: { allowDuplicate?: boolean } = {},
 ): Promise<SaveXResult> {
   if (posts.length === 0) {
     return {
@@ -166,6 +169,11 @@ export async function saveXThread(
         folder_name: rootExisting.folder_name,
       },
     };
+  }
+
+  if (!options.allowDuplicate) {
+    const elsewhere = await findDuplicateElsewhere(db, userId, rootCanonical, folderId);
+    if (elsewhere) return { success: false, status: 409, error: elsewhereError(elsewhere) };
   }
 
   // Check if ANY of the posts is already a node of a live X item in this group

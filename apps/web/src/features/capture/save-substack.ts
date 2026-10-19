@@ -2,7 +2,9 @@ import { canonicalizeUrl, InvalidUrlError } from "@sourcefold/core";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import {
+  elsewhereError,
   findDuplicate,
+  findDuplicateElsewhere,
   formatDuplicateMessage,
   invalidFolderMessage,
   nextPosition,
@@ -51,6 +53,8 @@ export type SaveSubstackResult =
 
 export interface SaveSubstackParams {
   folder_id: string;
+  /** Save it even though the link is already in another group of the project. */
+  allow_duplicate?: boolean;
   capture: {
     url: string;
     title: string;
@@ -67,6 +71,7 @@ export interface SaveSubstackParams {
 
 export interface SaveSubstackUnavailableParams {
   folder_id: string;
+  allow_duplicate?: boolean;
   url: string;
   title: string;
 }
@@ -109,6 +114,10 @@ export async function saveSubstack(
         folder_name: existing.folder_name,
       },
     };
+  }
+  if (!params.allow_duplicate) {
+    const elsewhere = await findDuplicateElsewhere(db, userId, canonical, folder_id);
+    if (elsewhere) return { success: false, status: 409, error: elsewhereError(elsewhere) };
   }
 
   const position = await nextPosition(db, userId, folder_id);
@@ -235,6 +244,10 @@ export async function saveSubstackUnavailable(
         folder_name: existing.folder_name,
       },
     };
+  }
+  if (!params.allow_duplicate) {
+    const elsewhere = await findDuplicateElsewhere(db, userId, canonical, folder_id);
+    if (elsewhere) return { success: false, status: 409, error: elsewhereError(elsewhere) };
   }
 
   const position = await nextPosition(db, userId, folder_id);

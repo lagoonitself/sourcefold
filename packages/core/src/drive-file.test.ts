@@ -398,3 +398,104 @@ describe("highlights in the file", () => {
     expect(buildItemFile({ ...base, body: null, markdown: withSection })).toBe(buildItemFile(base));
   });
 });
+
+describe("research fields in the file", () => {
+  const base: BuildItemInput = {
+    kind: "web",
+    title: "Page",
+    url: "https://example.com/p",
+    saved: "2026-10-19",
+    folder: "Cars/Engines",
+    body: "Body text.",
+  };
+  const one = {
+    id: "a",
+    kind: "text" as const,
+    quote: "Body text.",
+    image_src: null,
+    note: null,
+    seconds: null,
+    cited: [],
+    start_offset: 0,
+    created_at: "2026-10-19T12:00:00.000Z",
+  };
+
+  it("writes the fields after folder, in order", () => {
+    const file = buildItemFile({
+      ...base,
+      tags: ["A", "B"],
+      triage: "maybe",
+      author: "Jane",
+      author_type: "researcher",
+    });
+    expect(file).toContain(
+      "folder: Cars/Engines\nwritten_by: Jane\nauthor_type: researcher\nstatus: maybe\ntags:\n  - A\n  - B\n---\n",
+    );
+  });
+
+  it("leaves out what isn't set or isn't valid", () => {
+    expect(
+      buildItemFile({
+        ...base,
+        author: " ",
+        author_type: "wizard",
+        triage: "love",
+        tags: [],
+        summary: "  ",
+      }),
+    ).toBe(buildItemFile(base));
+    expect(buildItemFile({ ...base, triage: null, tags: null, summary: null })).toBe(
+      buildItemFile(base),
+    );
+  });
+
+  it("gives notes the status and tags, but no author or author type", () => {
+    const note: BuildItemInput = { kind: "note", title: "Idea", created: "2026-10-19", body: "x" };
+    const file = buildItemFile({
+      ...note,
+      triage: "keep",
+      tags: ["Ending"],
+      author: "Me",
+      author_type: "creator",
+      summary: "Not for notes.",
+    });
+    expect(file).toContain("created: 2026-10-19\nstatus: keep\ntags:\n  - Ending\n---\n");
+    expect(file).not.toContain("written_by");
+    expect(file).not.toContain("author_type");
+    expect(file).not.toContain("My summary");
+  });
+
+  it("writes the trimmed summary between the body and the highlights", () => {
+    const file = buildItemFile({
+      ...base,
+      summary: "\n First line.\nSecond line. \n",
+      note: "Mine.",
+      highlights: [one],
+    });
+    expect(
+      file.endsWith(
+        "Body text.\n\n## My summary\n\nFirst line.\nSecond line.\n\n## My highlights\n\n> Body text.\n\n## My note\n\nMine.\n",
+      ),
+    ).toBe(true);
+  });
+
+  it("bodyFromDriveFile strips the summary with and without the other sections", () => {
+    const summary = "A summary.";
+    const all = buildItemFile({ ...base, summary, note: "Mine.", highlights: [one] });
+    const summaryOnly = buildItemFile({ ...base, summary });
+    const withNote = buildItemFile({ ...base, summary, note: "Mine." });
+    for (const file of [all, summaryOnly, withNote]) {
+      const body = bodyFromDriveFile(file);
+      expect(body).not.toContain("My summary");
+      expect(body.trimEnd().endsWith("Body text.")).toBe(true);
+    }
+  });
+
+  it("rebuilding from a Drive copy never duplicates the summary", () => {
+    const input = { ...base, summary: "A summary.", note: "Mine.", highlights: [one] };
+    const first = buildItemFile(input);
+    const second = buildItemFile({ ...input, markdown: first });
+    expect(second).toBe(first);
+    expect(second.match(/## My summary/g)).toHaveLength(1);
+  });
+});

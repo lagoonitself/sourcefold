@@ -1,9 +1,11 @@
 import { buildFrontMatter, formatDate, type FrontMatterValue } from "./front-matter";
 import { buildHighlightsSection, type FileHighlight } from "./highlights";
+import { isAuthorType, isTriage } from "./research";
 
 const FRONT_MATTER = /^---\r?\n[\s\S]*?\r?\n---\r?\n/;
 const NOTE_HEADING = "\n## My note\n";
 const HIGHLIGHTS_HEADING = "\n## My highlights\n";
+const SUMMARY_HEADING = "\n## My summary\n";
 
 export type ItemKind = "grokipedia" | "substack" | "wikipedia" | "x" | "note" | string;
 
@@ -22,6 +24,13 @@ export interface BuildItemInput {
   body?: string | null;
   note?: string | null;
   highlights?: FileHighlight[] | null;
+  /** Research fields (docs/FILE-FORMAT.md): the item's keep / maybe / cut mark, tags, summary. */
+  triage?: string | null;
+  tags?: string[] | null;
+  summary?: string | null;
+  /** Who wrote it, as set by the user or Claude (not the captured byline), and its type. */
+  author?: string | null;
+  author_type?: string | null;
 }
 
 function tryFormatDate(val?: unknown): string | undefined {
@@ -188,20 +197,34 @@ function newKindSourceLine(
   }
 }
 
-// Cuts the trailing "## My note" and then "## My highlights" sections off a body; both are
-// rebuilt from the database on every save.
+// The research fields that go into the front matter after `folder`, each only when set. Notes
+// have no author or author type.
+function buildResearchFields(item: BuildItemInput): Record<string, FrontMatterValue> {
+  const isNote = item.kind === "note";
+  return {
+    written_by: isNote ? undefined : stringValue(item.author),
+    author_type: !isNote && isAuthorType(item.author_type) ? item.author_type : undefined,
+    status: isTriage(item.triage) ? item.triage : undefined,
+    tags: Array.isArray(item.tags) ? item.tags : undefined,
+  };
+}
+
+// Cuts the trailing "## My note", "## My highlights" and "## My summary" sections off a body, in
+// that order; all three are rebuilt from the database on every save.
 function stripTrailingSections(text: string): string {
   let body = text;
   const noteStart = body.lastIndexOf(NOTE_HEADING);
   if (noteStart !== -1) body = body.slice(0, noteStart);
   const highlightsStart = body.lastIndexOf(HIGHLIGHTS_HEADING);
   if (highlightsStart !== -1) body = body.slice(0, highlightsStart);
+  const summaryStart = body.lastIndexOf(SUMMARY_HEADING);
+  if (summaryStart !== -1) body = body.slice(0, summaryStart);
   return body;
 }
 
 // Recovers the Markdown body from a file Sourcefold wrote to Drive: drops the front matter
-// and the trailing "## My highlights" and "## My note" sections, which are rebuilt from the
-// database on every save.
+// and the trailing "## My summary", "## My highlights" and "## My note" sections, which are
+// rebuilt from the database on every save.
 export function bodyFromDriveFile(fileText: string): string {
   let body = fileText.replace(/^\ufeff/, "").replace(/\r\n/g, "\n");
   body = body.replace(FRONT_MATTER, "");
@@ -224,6 +247,8 @@ export function bodyFromDriveFile(fileText: string): string {
  * [> Saved from ...] (source line, omitted for notes)
  *
  * <body>
+ *
+ * [## My summary]
  *
  * [## My highlights]
  *
@@ -339,7 +364,7 @@ export function buildItemFile(item: BuildItemInput, folderPath?: string): string
     };
   }
 
-  const frontMatter = buildFrontMatter(fields);
+  const frontMatter = buildFrontMatter({ ...fields, ...buildResearchFields(item) });
 
   // Compute Source line
   let sourceLine: string | null = null;
@@ -434,7 +459,13 @@ export function buildItemFile(item: BuildItemInput, folderPath?: string): string
     sections.push(text);
   }
 
-  // Highlights, after the body and before the note
+  // Summary, after the body and before the highlights (omitted for notes)
+  const summary = stringValue(item.summary);
+  if (item.kind !== "note" && summary) {
+    sections.push(`## My summary\n\n${summary}`);
+  }
+
+  // Highlights, after the summary and before the note
   const highlightsSection = buildHighlightsSection(item.highlights, itemUrl);
   if (highlightsSection) {
     sections.push(highlightsSection);

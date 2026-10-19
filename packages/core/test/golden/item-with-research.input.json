@@ -1,0 +1,35 @@
+{
+  "kind": "web",
+  "title": "Can AI scaling continue through 2030?",
+  "url": "https://epoch.ai/blog/can-ai-scaling-continue-through-2030",
+  "folder": "AI research/Compute",
+  "saved": "2026-10-19",
+  "meta": {
+    "site": "Epoch AI"
+  },
+  "body": "## Power\n\nTraining runs of 2e29 FLOP are feasible by 2030 if power keeps growing.\n\n## Data\n\nPublic text will run short before then.",
+  "note": "Use for the compute section.",
+  "author": "Epoch AI",
+  "author_type": "lab",
+  "triage": "keep",
+  "tags": ["Compute", "Ending"],
+  "summary": "\n  Training runs of 2e29 FLOP are feasible by 2030; power is the binding constraint.\nData is the next limit.\n\n",
+  "highlights": [
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "item_id": "22222222-2222-4222-8222-222222222222",
+      "kind": "text",
+      "quote": "Training runs of 2e29 FLOP are\n  feasible by 2030",
+      "prefix": "",
+      "suffix": "",
+      "start_offset": 9,
+      "end_offset": 53,
+      "image_src": null,
+      "note": "The headline number",
+      "seconds": null,
+      "cited": [],
+      "created_at": "2026-10-19T09:00:00.000Z",
+      "updated_at": "2026-10-19T09:00:00.000Z"
+    }
+  ]
+}

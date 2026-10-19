@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/DropdownMenu";
 import { EmptyState } from "@/components/ui/EmptyState";
+import type { Triage } from "@sourcefold/core";
 import type { Folder, Item } from "@/lib/types";
 import { deleteItem, openImage, renameItem } from "@/lib/api";
 import { openUrl, cn, errorMessage } from "@/lib/utils";
@@ -48,6 +49,29 @@ import {
 } from "./source-kinds";
 import { onGroupAction } from "./group-actions";
 import { hasTextSelection, isMacPlatform, isTypingContext } from "../shortcuts/key-utils";
+import {
+  BulkStatusMenu,
+  BulkTagMenu,
+  ListFilterBar,
+  SummaryDialog,
+  TagChips,
+  TagsDialog,
+  TriageMark,
+  NO_FILTER,
+  addTag,
+  filterItems,
+  groupTags,
+  isFiltering,
+  projectIdOf,
+  removeTag,
+  researchMetaLine,
+  resolveFilter,
+  useItemResearch,
+  type ListFilter,
+} from "../research/source-info";
+
+// The status and tag filter each group was last shown with, for the session.
+const rememberedFilters = new Map<string, ListFilter>();
 
 export interface ItemListProps {
   items: Item[];
@@ -76,7 +100,7 @@ async function openImageItem(item: Item) {
 }
 
 export function ItemList({
-  items,
+  items: sourceItems,
   folders,
   onRefresh,
   isFocusedRegion = false,
@@ -84,6 +108,33 @@ export function ItemList({
   onFocusedItemChange,
   onOpenReader,
 }: ItemListProps) {
+  // Status, tag, author and summary changes show at once; the list reloads once they are saved.
+  const research = useItemResearch({ onSynced: onRefresh, clearAfterSync: true });
+  const allItems = React.useMemo(
+    () => sourceItems.map(research.withResearch),
+    [sourceItems, research.withResearch],
+  );
+  const groupId = allItems[0]?.folder_id ?? null;
+  const projectId = React.useMemo(() => projectIdOf(folders, groupId), [folders, groupId]);
+  const [, setFilterVersion] = React.useState(0);
+  const savedFilter = (groupId ? rememberedFilters.get(groupId) : undefined) ?? NO_FILTER;
+  const tagsInGroup = React.useMemo(() => groupTags(allItems), [allItems]);
+  const filter = React.useMemo(
+    () => resolveFilter(savedFilter, tagsInGroup),
+    [savedFilter, tagsInGroup],
+  );
+  const setFilter = React.useCallback(
+    (next: ListFilter) => {
+      if (groupId) rememberedFilters.set(groupId, next);
+      setFilterVersion((n) => n + 1);
+    },
+    [groupId],
+  );
+  const items = React.useMemo(() => filterItems(allItems, filter), [allItems, filter]);
+
+  const [tagsOpen, setTagsOpen] = React.useState(false);
+  const [summaryOpen, setSummaryOpen] = React.useState(false);
+
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
   const [selecting, setSelecting] = React.useState(false);
   const [copiedAll, setCopiedAll] = React.useState(false);

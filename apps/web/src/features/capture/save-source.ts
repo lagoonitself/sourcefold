@@ -2,7 +2,9 @@ import { canonicalizeUrl, type SourceCapture, type SourceCaptureKind } from "@so
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import {
+  elsewhereError,
   findDuplicate,
+  findDuplicateElsewhere,
   formatDuplicateMessage,
   invalidFolderMessage,
   nextPosition,
@@ -43,6 +45,12 @@ export interface SaveSourceUnavailableParams {
   url: string;
   title: string;
   reason: string;
+  /** Save it even though the link is already in another group of the project. */
+  allow_duplicate?: boolean;
+}
+
+export interface SaveSourceOptions {
+  allowDuplicate?: boolean;
 }
 
 const SELECT_ITEM = "id, folder_id, kind, title, source_url, status, created_at";
@@ -96,6 +104,7 @@ export async function saveSource(
   kind: SourceCaptureKind,
   folderId: string,
   capture: SourceCapture,
+  options: SaveSourceOptions = {},
 ): Promise<SaveSourceResult> {
   // A source with no text would be "saved" with nothing in it, and nothing for Drive to keep.
   if (!capture.markdown.trim()) {
@@ -110,6 +119,10 @@ export async function saveSource(
 
   const existing = await findDuplicate(db, userId, canonical, folderId);
   if (existing) return duplicateResult(existing);
+  if (!options.allowDuplicate) {
+    const elsewhere = await findDuplicateElsewhere(db, userId, canonical, folderId);
+    if (elsewhere) return { success: false, status: 409, error: elsewhereError(elsewhere) };
+  }
 
   const position = await nextPosition(db, userId, folderId);
   const title = capture.title.trim().slice(0, 500) || capture.url;
@@ -175,6 +188,10 @@ export async function saveSourceUnavailable(
 
   const existing = await findDuplicate(db, userId, canonical, folder_id);
   if (existing) return duplicateResult(existing);
+  if (!params.allow_duplicate) {
+    const elsewhere = await findDuplicateElsewhere(db, userId, canonical, folder_id);
+    if (elsewhere) return { success: false, status: 409, error: elsewhereError(elsewhere) };
+  }
 
   const position = await nextPosition(db, userId, folder_id);
 

@@ -1,5 +1,15 @@
 /** Actions the group view's header and list can run from the command palette. */
-export type GroupAction = "new-subgroup" | "add-image" | "select-mode" | "copy-all-links";
+export type GroupAction =
+  | "new-subgroup"
+  | "add-image"
+  | "select-mode"
+  | "copy-all-links"
+  | "status-keep"
+  | "status-maybe"
+  | "status-cut"
+  | "status-clear"
+  | "edit-tags"
+  | "edit-summary";
 
 export const GROUP_ACTION_EVENT = "sourcefold:group-action";
 
@@ -8,6 +18,12 @@ const COMMAND_ACTIONS: Record<string, GroupAction> = {
   "list.add-image": "add-image",
   "list.select-mode": "select-mode",
   "list.copy-all-links": "copy-all-links",
+  "list.status-keep": "status-keep",
+  "list.status-maybe": "status-maybe",
+  "list.status-cut": "status-cut",
+  "list.status-clear": "status-clear",
+  "list.tags": "edit-tags",
+  "list.summary": "edit-summary",
 };
 
 export function groupActionForCommand(commandId: string): GroupAction | null {

@@ -13,6 +13,8 @@ const INVALID_FOLDER = "That group no longer exists.";
 const saveWikipediaSchema = z.object({
   url: z.string().trim().min(1, "URL is required"),
   folder_id: z.string().uuid("Invalid folder ID"),
+  // Save the link even though it is already in another group of the project.
+  allow_duplicate: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -46,6 +48,7 @@ export async function POST(request: Request) {
   const result = await saveWikipediaLink(auth.db, auth.userId, {
     url: parsed.data.url,
     folderId: parsed.data.folder_id,
+    allowDuplicate: parsed.data.allow_duplicate,
   });
 
   if (result.success) {

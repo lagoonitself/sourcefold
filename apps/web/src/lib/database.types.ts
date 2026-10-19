@@ -47,6 +47,92 @@ export type Database = {
         }
         Relationships: []
       }
+      cards: {
+        Row: {
+          created_at: string
+          end_seconds: number | null
+          highlight_id: string | null
+          id: string
+          item_id: string | null
+          kind: string
+          note: string | null
+          position: number
+          project_id: string
+          quote: string
+          script_line: string | null
+          seconds: number | null
+          section_id: string | null
+          updated_at: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_seconds?: number | null
+          highlight_id?: string | null
+          id?: string
+          item_id?: string | null
+          kind: string
+          note?: string | null
+          position?: number
+          project_id: string
+          quote?: string
+          script_line?: string | null
+          seconds?: number | null
+          section_id?: string | null
+          updated_at?: string
+          url?: string | null
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          end_seconds?: number | null
+          highlight_id?: string | null
+          id?: string
+          item_id?: string | null
+          kind?: string
+          note?: string | null
+          position?: number
+          project_id?: string
+          quote?: string
+          script_line?: string | null
+          seconds?: number | null
+          section_id?: string | null
+          updated_at?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cards_highlight_id_fkey"
+            columns: ["highlight_id"]
+            isOneToOne: false
+            referencedRelation: "highlights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cards_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cards_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cards_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "outline_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drive_state: {
         Row: {
           created_at: string
@@ -209,6 +295,8 @@ export type Database = {
       }
       items: {
         Row: {
+          author: string | null
+          author_type: string | null
           canonical_url: string | null
           created_at: string
           deleted_at: string | null
@@ -225,11 +313,16 @@ export type Database = {
           source_url: string | null
           status: string
           storage_path: string | null
+          summary: string | null
+          tags: string[]
           title: string
+          triage: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          author?: string | null
+          author_type?: string | null
           canonical_url?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -246,11 +339,16 @@ export type Database = {
           source_url?: string | null
           status?: string
           storage_path?: string | null
+          summary?: string | null
+          tags?: string[]
           title: string
+          triage?: string | null
           updated_at?: string
           user_id?: string
         }
         Update: {
+          author?: string | null
+          author_type?: string | null
           canonical_url?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -267,7 +365,10 @@ export type Database = {
           source_url?: string | null
           status?: string
           storage_path?: string | null
+          summary?: string | null
+          tags?: string[]
           title?: string
+          triage?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -275,6 +376,44 @@ export type Database = {
           {
             foreignKeyName: "items_folder_id_fkey"
             columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outline_sections: {
+        Row: {
+          created_at: string
+          id: string
+          position: number
+          project_id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position?: number
+          project_id: string
+          title: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position?: number
+          project_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outline_sections_project_id_fkey"
+            columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "folders"
             referencedColumns: ["id"]
@@ -381,6 +520,8 @@ export type Database = {
       drive_dirty_items: {
         Args: { p_limit?: number; p_user_id?: string }
         Returns: {
+          author: string | null
+          author_type: string | null
           canonical_url: string | null
           created_at: string
           deleted_at: string | null
@@ -397,7 +538,10 @@ export type Database = {
           source_url: string | null
           status: string
           storage_path: string | null
+          summary: string | null
+          tags: string[]
           title: string
+          triage: string | null
           updated_at: string
           user_id: string
         }[]

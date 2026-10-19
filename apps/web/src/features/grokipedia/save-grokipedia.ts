@@ -7,7 +7,12 @@ import {
 } from "@sourcefold/core/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Tables } from "@/lib/database.types";
-import { invalidFolderMessage, nextPosition } from "@/features/capture/find-duplicate";
+import {
+  elsewhereError,
+  findDuplicateElsewhere,
+  invalidFolderMessage,
+  nextPosition,
+} from "@/features/capture/find-duplicate";
 import {
   GROKIPEDIA_ERROR_MESSAGES,
   formatDuplicateMessage,
@@ -18,6 +23,8 @@ import {
 export interface SaveGrokipediaParams {
   url: string;
   folderId: string;
+  /** Save it even though the link is already in another group of the project. */
+  allowDuplicate?: boolean;
 }
 
 export type SavedGrokipediaItem = Pick<
@@ -81,7 +88,7 @@ export async function findExistingItemByCanonicalUrl(
 export async function saveGrokipediaLink(
   db: SupabaseClient<Database>,
   userId: string,
-  { url, folderId }: SaveGrokipediaParams,
+  { url, folderId, allowDuplicate }: SaveGrokipediaParams,
 ): Promise<SaveGrokipediaResult> {
   // Step 1: Canonicalize URL and detect source
   let canonical: string;
@@ -123,6 +130,12 @@ export async function saveGrokipediaLink(
         folder_name: existing.folder_name,
       },
     };
+  }
+
+  // The same link in another group of the project is refused too, unless the caller allows it.
+  if (!allowDuplicate) {
+    const elsewhere = await findDuplicateElsewhere(db, userId, canonical, folderId);
+    if (elsewhere) return { success: false, status: 409, error: elsewhereError(elsewhere) };
   }
 
   // Step 3: Fetch canonical HTML

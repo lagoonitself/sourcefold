@@ -4,7 +4,9 @@ import { fetchWikipediaCaptureOnServer } from "@sourcefold/core/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import {
+  elsewhereError,
   findDuplicate,
+  findDuplicateElsewhere,
   formatDuplicateMessage,
   invalidFolderMessage,
   nextPosition,
@@ -19,6 +21,11 @@ export interface WikipediaCaptureInput {
   revision?: string | null;
   lastEdited?: string | null;
   markdown: string;
+}
+
+export interface SaveWikipediaOptions {
+  /** Save it even though the link is already in another group of the project. */
+  allowDuplicate?: boolean;
 }
 
 export type SaveWikipediaResult =
@@ -78,6 +85,7 @@ export async function saveWikipediaCapture(
   userId: string,
   folderId: string,
   capture: WikipediaCaptureInput,
+  options: SaveWikipediaOptions = {},
 ): Promise<SaveWikipediaResult> {
   const ref = parseWikipediaUrl(capture.url);
   if (!ref) {
@@ -91,6 +99,10 @@ export async function saveWikipediaCapture(
 
   const existing = await findDuplicate(db, userId, canonical, folderId);
   if (existing) return duplicateResult(existing, folderId);
+  if (!options.allowDuplicate) {
+    const elsewhere = await findDuplicateElsewhere(db, userId, canonical, folderId);
+    if (elsewhere) return { success: false, status: 409, error: elsewhereError(elsewhere) };
+  }
 
   const position = await nextPosition(db, userId, folderId);
   const title = capture.title.trim().slice(0, 500) || ref.title.replace(/_/g, " ");
@@ -150,7 +162,7 @@ export async function saveWikipediaCapture(
 export async function saveWikipediaLink(
   db: SupabaseClient<Database>,
   userId: string,
-  { url, folderId }: { url: string; folderId: string },
+  { url, folderId, allowDuplicate }: { url: string; folderId: string; allowDuplicate?: boolean },
 ): Promise<SaveWikipediaResult> {
   const canonical = canonicalWikipediaUrl(url);
   if (!canonical) {
@@ -165,6 +177,10 @@ export async function saveWikipediaLink(
   // once the real title is known.
   const existing = await findDuplicate(db, userId, canonical, folderId);
   if (existing) return duplicateResult(existing, folderId);
+  if (!allowDuplicate) {
+    const elsewhere = await findDuplicateElsewhere(db, userId, canonical, folderId);
+    if (elsewhere) return { success: false, status: 409, error: elsewhereError(elsewhere) };
+  }
 
   let capture;
   try {
@@ -186,5 +202,5 @@ export async function saveWikipediaLink(
     };
   }
 
-  return saveWikipediaCapture(db, userId, folderId, capture);
+  return saveWikipediaCapture(db, userId, folderId, capture, { allowDuplicate });
 }

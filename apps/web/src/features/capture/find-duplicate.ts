@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
+import {
+  groupIdsOf,
+  groupPathOf,
+  loadLiveFolders,
+  projectIdOf,
+} from "@/features/research/projects";
 
 export interface DuplicateInfo {
   item_id: string;
@@ -54,6 +60,65 @@ export async function findDuplicate(
     item_id: item.id,
     folder_id: item.folder_id,
     folder_name: folderName,
+  };
+}
+
+/** The same link saved in another group of the same project. */
+export interface ElsewhereInfo {
+  item_id: string;
+  folder_id: string;
+  /** The group's path without the project's name, groups joined by "/". */
+  folder_path: string;
+}
+
+/**
+ * Finds a live source with this canonical link in a group other than `folderId` but inside the
+ * same project (projects never see each other's links). The oldest copy wins. Null when the
+ * group isn't in a project, so the insert's own folder check reports the problem.
+ */
+export async function findDuplicateElsewhere(
+  db: SupabaseClient<Database>,
+  userId: string,
+  canonicalUrl: string,
+  folderId: string,
+): Promise<ElsewhereInfo | null> {
+  // Few rows match a link, so look it up first and test the project in code.
+  const { data: copies, error } = await db
+    .from("items")
+    .select("id, folder_id, created_at")
+    .eq("user_id", userId)
+    .eq("canonical_url", canonicalUrl)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+  const others = Array.isArray(copies) ? copies.filter((c) => c.folder_id !== folderId) : [];
+  if (error || others.length === 0) return null;
+
+  let folders;
+  try {
+    folders = await loadLiveFolders(db, userId);
+  } catch {
+    return null;
+  }
+  const projectId = projectIdOf(folders, folderId);
+  if (!projectId) return null;
+  const groups = new Set(groupIdsOf(folders, projectId));
+  const hit = others.find((c) => groups.has(c.folder_id));
+  if (!hit) return null;
+  return { item_id: hit.id, folder_id: hit.folder_id, folder_path: groupPathOf(folders, hit.folder_id) };
+}
+
+export function formatElsewhereMessage(folderPath: string): string {
+  return `Already saved in ${folderPath}.`;
+}
+
+/** The 409 body for a link that is already saved in another group of the project. */
+export function elsewhereError(existing: ElsewhereInfo) {
+  return {
+    code: "duplicate" as const,
+    message: formatElsewhereMessage(existing.folder_path),
+    item_id: existing.item_id,
+    folder_id: existing.folder_id,
+    folder_name: existing.folder_path,
   };
 }
 

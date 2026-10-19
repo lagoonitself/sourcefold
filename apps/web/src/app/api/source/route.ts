@@ -8,7 +8,12 @@ import {
 } from "@sourcefold/core/server";
 import { requireApiUser } from "@/lib/api";
 import { BlockedAddressError, publicFetch } from "@/lib/public-fetch";
-import { findDuplicate, formatDuplicateMessage } from "@/features/capture/find-duplicate";
+import {
+  elsewhereError,
+  findDuplicate,
+  findDuplicateElsewhere,
+  formatDuplicateMessage,
+} from "@/features/capture/find-duplicate";
 import { saveSource, saveSourceUnavailable } from "@/features/capture/save-source";
 import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
 
@@ -27,6 +32,8 @@ const BROWSER_USER_AGENT =
 const saveSourceSchema = z.object({
   url: z.string().trim().min(1, "URL is required"),
   folder_id: z.string().uuid("Invalid folder ID"),
+  // Save the link even though it is already in another group of the project.
+  allow_duplicate: z.boolean().optional(),
 });
 
 const ERROR_STATUS = {
@@ -63,7 +70,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { url, folder_id: folderId } = parsed.data;
+  const { url, folder_id: folderId, allow_duplicate: allowDuplicate } = parsed.data;
   const kind = detectLinkKind(url);
   if (!kind) return errorResponse("invalid_url", INVALID_URL, 400);
   if (kind === "youtube") return errorResponse("youtube_unsupported", YOUTUBE_MESSAGE, 422);
@@ -90,6 +97,12 @@ export async function POST(request: Request) {
         },
         { status: 409 },
       );
+    }
+    if (!allowDuplicate) {
+      const elsewhere = await findDuplicateElsewhere(auth.db, auth.userId, canonical, folderId);
+      if (elsewhere) {
+        return NextResponse.json({ error: elsewhereError(elsewhere) }, { status: 409 });
+      }
     }
   }
 
@@ -119,9 +132,12 @@ export async function POST(request: Request) {
 
   const result =
     extracted.status === "ok"
-      ? await saveSource(auth.db, auth.userId, extracted.kind, folderId, extracted.capture)
+      ? await saveSource(auth.db, auth.userId, extracted.kind, folderId, extracted.capture, {
+          allowDuplicate,
+        })
       : await saveSourceUnavailable(auth.db, auth.userId, {
           folder_id: folderId,
+          allow_duplicate: allowDuplicate,
           source: extracted.kind,
           url: extracted.url,
           title: extracted.title,

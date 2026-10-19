@@ -87,21 +87,25 @@ const captureRequestSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("substack"),
     folder_id: z.string().uuid("Invalid folder ID"),
+    allow_duplicate: z.boolean().optional(),
     capture: substackCaptureSchema,
   }),
   z.object({
     kind: z.literal("wikipedia"),
     folder_id: z.string().uuid("Invalid folder ID"),
+    allow_duplicate: z.boolean().optional(),
     capture: wikipediaCaptureSchema,
   }),
   z.object({
     kind: z.enum(SOURCE_CAPTURE_KINDS),
     folder_id: z.string().uuid("Invalid folder ID"),
+    allow_duplicate: z.boolean().optional(),
     capture: sourceCaptureSchema,
   }),
   z.object({
     kind: z.literal("source_unavailable"),
     folder_id: z.string().uuid("Invalid folder ID"),
+    allow_duplicate: z.boolean().optional(),
     source: z.enum(SOURCE_CAPTURE_KINDS),
     url: httpUrlSchema,
     title: z.string().trim().min(1, "Title is required").max(500, "Title is too long"),
@@ -110,12 +114,14 @@ const captureRequestSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("substack_unavailable"),
     folder_id: z.string().uuid("Invalid folder ID"),
+    allow_duplicate: z.boolean().optional(),
     url: z.string().trim().min(1, "URL is required"),
     title: z.string().trim().min(1, "Title is required").max(500, "Title is too long"),
   }),
   z.object({
     kind: z.literal("x"),
     folder_id: z.string().uuid("Invalid folder ID"),
+    allow_duplicate: z.boolean().optional(),
     posts: z
       .array(xPostCaptureSchema)
       .min(1, "At least one post is required")
@@ -164,11 +170,14 @@ export async function POST(request: Request) {
       auth.userId,
       parsed.data.folder_id,
       parsed.data.capture,
+      { allowDuplicate: parsed.data.allow_duplicate },
     );
   } else if (parsed.data.kind === "substack_unavailable") {
     result = await saveSubstackUnavailable(auth.db, auth.userId, parsed.data);
   } else if (parsed.data.kind === "x") {
-    result = await saveXThread(auth.db, auth.userId, parsed.data.folder_id, parsed.data.posts);
+    result = await saveXThread(auth.db, auth.userId, parsed.data.folder_id, parsed.data.posts, {
+      allowDuplicate: parsed.data.allow_duplicate,
+    });
   } else if (parsed.data.kind === "source_unavailable") {
     result = await saveSourceUnavailable(auth.db, auth.userId, parsed.data);
   } else {
@@ -178,6 +187,7 @@ export async function POST(request: Request) {
       parsed.data.kind,
       parsed.data.folder_id,
       parsed.data.capture,
+      { allowDuplicate: parsed.data.allow_duplicate },
     );
   }
 

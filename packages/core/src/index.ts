@@ -13,6 +13,7 @@ export { buildFrontMatter, formatDate, type FrontMatterValue } from "./front-mat
 export { bodyFromDriveFile, buildItemFile, type BuildItemInput, type ItemKind } from "./drive-file";
 export { markdownImageUrls, postImageFileNames, postImagesFolderName } from "./post-images";
 export * from "./highlights";
+export * from "./research";
 export { SOURCE_CAPTURE_KINDS, isSourceCaptureKind } from "./capture-types";
 export type {
   CaptureRequest,

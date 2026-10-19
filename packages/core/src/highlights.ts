@@ -152,7 +152,8 @@ export function formatHighlightTime(seconds: number): string {
   return `${m}:${ss}`;
 }
 
-function youtubeVideoId(itemUrl: string | null | undefined): string | null {
+/** The video id of a YouTube video link (`watch?v=`, `youtu.be/`, `/shorts/`, `/live/`, `/embed/`). */
+export function youtubeVideoId(itemUrl: string | null | undefined): string | null {
   if (!itemUrl) return null;
   let u: URL;
   try {

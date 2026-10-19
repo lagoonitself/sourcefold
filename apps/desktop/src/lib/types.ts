@@ -1,5 +1,7 @@
 import type {
+  AuthorType,
   CaptureRequest as CoreCaptureRequest,
+  Triage,
   SubstackCapture,
   XPostCapture,
 } from "@sourcefold/core";
@@ -64,6 +66,19 @@ export interface Item {
   deleted_at?: string | null;
   created_at: string;
   updated_at?: string;
+  // Research fields (docs/dev/handoff-research.md). Optional: older rows and routes lack them.
+  triage?: Triage | null;
+  tags?: string[];
+  summary?: string | null;
+  author?: string | null;
+  author_type?: AuthorType | null;
+}
+
+/** `mergeItems`: the copy kept and how much moved onto it. */
+export interface MergeResult {
+  item: Item;
+  moved_highlights: number;
+  moved_cards: number;
 }
 
 export interface XPost {
@@ -94,6 +109,8 @@ export interface CheckUrlResult {
   item_id?: string | null;
   folder_id?: string | null;
   folder_name?: string | null;
+  /** The same link saved in another group of the project; saving it again is refused. */
+  elsewhere?: { item_id: string; folder_id: string; folder_path: string } | null;
 }
 
 export interface CreateFolderRequest {

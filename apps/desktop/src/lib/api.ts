@@ -5,13 +5,23 @@ import {
   remoteFetch,
   SessionExpiredError,
 } from "./remote-client";
-import type { Highlight, HighlightInput } from "@sourcefold/core";
+import type {
+  Card,
+  CardInput,
+  CardPatch,
+  Highlight,
+  HighlightInput,
+  ItemResearchPatch,
+  OutlineSection,
+  OutlineSectionInput,
+} from "@sourcefold/core";
 import type {
   AddXPostRequest,
   CaptureRequest,
   CheckUrlResult,
   Folder,
   Item,
+  MergeResult,
   NativeHostStatus,
   Settings,
 } from "./types";
@@ -191,12 +201,8 @@ export async function archiveProject(id: string, archived: boolean): Promise<voi
 
 // ----------------- ITEM OPERATIONS -----------------
 
-export async function getItems(folderId: string): Promise<Item[]> {
-  if (shouldUseTauri()) {
-    return await tauriInvoke<Item[]>("get_items", { folderId });
-  }
-  const rawItems = await httpFetch<Item[]>(`/items?folder=${encodeURIComponent(folderId)}`);
-  return rawItems.map((item) => ({
+function withItemDefaults(item: Item): Item {
+  return {
     ...item,
     canonical_url: item.canonical_url ?? null,
     status: item.status ?? "saved",
@@ -207,14 +213,36 @@ export async function getItems(folderId: string): Promise<Item[]> {
     storage_path: item.storage_path ?? null,
     deleted_at: item.deleted_at ?? null,
     updated_at: item.updated_at ?? item.created_at,
-  }));
+    triage: item.triage ?? null,
+    tags: item.tags ?? [],
+    summary: item.summary ?? null,
+    author: item.author ?? null,
+    author_type: item.author_type ?? null,
+  };
+}
+
+export async function getItems(folderId: string): Promise<Item[]> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Item[]>("get_items", { folderId });
+  }
+  const rawItems = await httpFetch<Item[]>(`/items?folder=${encodeURIComponent(folderId)}`);
+  return rawItems.map(withItemDefaults);
+}
+
+/** Every live source in every group of a project (duplicates, tags, the outline). */
+export async function getProjectItems(projectId: string): Promise<Item[]> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Item[]>("list_project_items", { projectId });
+  }
+  const rawItems = await httpFetch<Item[]>(`/items?project=${encodeURIComponent(projectId)}`);
+  return rawItems.map(withItemDefaults);
 }
 
 export async function getItem(id: string): Promise<Item> {
   if (shouldUseTauri()) {
     return await tauriInvoke<Item>("get_item", { id });
   }
-  return httpFetch<Item>(`/items/${id}`);
+  return withItemDefaults(await httpFetch<Item>(`/items/${id}`));
 }
 
 /**
@@ -336,6 +364,104 @@ export async function updateItemNote(id: string, note: string | null): Promise<v
     method: "PATCH",
     body: JSON.stringify({ note }),
   });
+}
+
+// ----------------- RESEARCH: STATUS, TAGS, CARDS, OUTLINE -----------------
+// Contract: docs/dev/handoff-research.md.
+
+/** Sets some of a source's status, tags, summary, author and author type; `null` clears one. */
+export async function updateItemResearch(id: string, patch: ItemResearchPatch): Promise<Item> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Item>("update_item_research", { id, patch });
+  }
+  const item = await httpFetch<Item>(`/items/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  return withItemDefaults(item);
+}
+
+/** Keeps `keepId` and merges the other copies into it (highlights, cards, tags, notes). */
+export async function mergeItems(keepId: string, ids: string[]): Promise<MergeResult> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<MergeResult>("merge_items", { keepId, ids });
+  }
+  const res = await httpFetch<MergeResult>(`/items/${encodeURIComponent(keepId)}/merge`, {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
+  return { ...res, item: withItemDefaults(res.item) };
+}
+
+export async function getCards(scope: { projectId: string } | { itemId: string }): Promise<Card[]> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Card[]>("list_cards", {
+      projectId: "projectId" in scope ? scope.projectId : undefined,
+      itemId: "itemId" in scope ? scope.itemId : undefined,
+    });
+  }
+  const query =
+    "projectId" in scope
+      ? `project=${encodeURIComponent(scope.projectId)}`
+      : `item=${encodeURIComponent(scope.itemId)}`;
+  return await httpFetch<Card[]>(`/cards?${query}`);
+}
+
+export async function putCard(card: CardInput): Promise<Card> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Card>("put_card", { card });
+  }
+  return await httpFetch<Card>(`/cards/${encodeURIComponent(card.id)}`, {
+    method: "PUT",
+    body: JSON.stringify(card),
+  });
+}
+
+export async function updateCard(id: string, patch: CardPatch): Promise<Card> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<Card>("update_card", { id, patch });
+  }
+  return await httpFetch<Card>(`/cards/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function deleteCard(id: string): Promise<void> {
+  if (shouldUseTauri()) {
+    await tauriInvoke<null>("delete_card", { id });
+    return;
+  }
+  await httpFetch<unknown>(`/cards/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function getOutlineSections(projectId: string): Promise<OutlineSection[]> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<OutlineSection[]>("list_outline_sections", { projectId });
+  }
+  return await httpFetch<OutlineSection[]>(
+    `/outline-sections?project=${encodeURIComponent(projectId)}`,
+  );
+}
+
+/** Creates or replaces a section; a new title also renames that tag on the project's sources. */
+export async function putOutlineSection(section: OutlineSectionInput): Promise<OutlineSection> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<OutlineSection>("put_outline_section", { section });
+  }
+  return await httpFetch<OutlineSection>(`/outline-sections/${encodeURIComponent(section.id)}`, {
+    method: "PUT",
+    body: JSON.stringify(section),
+  });
+}
+
+/** Deletes a section; its cards go back to the pile. */
+export async function deleteOutlineSection(id: string): Promise<void> {
+  if (shouldUseTauri()) {
+    await tauriInvoke<null>("delete_outline_section", { id });
+    return;
+  }
+  await httpFetch<unknown>(`/outline-sections/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 // ----------------- HIGHLIGHTS -----------------

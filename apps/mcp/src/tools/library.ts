@@ -3,7 +3,7 @@ import { sameTag } from "@sourcefold/core";
 import { z } from "zod";
 import { NOT_SIGNED_IN_MESSAGE } from "../config";
 import { DesktopClosedError } from "../desktop-bridge";
-import type { Item } from "../types";
+import type { Folder, Item } from "../types";
 import { defineTool, type ToolContext } from "./define";
 import {
   formatDate,
@@ -21,8 +21,10 @@ import {
   loadFolderItems,
   mapLimit,
   requireFolder,
+  requireInProject,
   sourcesIn,
 } from "./library-data";
+import { rememberId } from "./short-ids";
 
 /** More sources than this in a project tree: urls are dropped to keep the reply small. */
 export const TREE_URL_LIMIT = 300;
@@ -141,22 +143,46 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     name: "get_project_tree",
     title: "Show a project's groups and sources",
     description:
-      "Shows one project's groups as a tree (nested groups are indented), each with its id and number of sources. This is the map of a project: pick the groups that matter, then list_sources shows the titles in a group. Pass include_sources=true only when you need every source title in the whole project at once (large projects get long; over 300 sources the urls are left out).",
+      "Shows one project's groups as a tree (nested groups are indented), each with its id and number of sources. Pass group_id to focus on one group and its subgroups. Pass include_sources=true to also list source titles (compact mode with 8-character short ids turns on automatically over 300 sources or with compact=true; stops at 60,000 characters). Pick the groups that matter, then list_sources shows full details.",
     input: {
       project_id: z.string().describe("Id of the project (from list_projects)."),
+      group_id: z
+        .string()
+        .optional()
+        .describe(
+          "Only show this group and the groups under it (id from get_project_tree). Default: the whole project.",
+        ),
       include_sources: z
         .boolean()
         .default(false)
         .describe(
           "Also list every source in every group. Default false: just the groups; list_sources shows one group's titles.",
         ),
+      compact: z
+        .boolean()
+        .default(false)
+        .describe(
+          "Show only 8-character ids and short titles (turns on automatically over 300 sources). Default false.",
+        ),
     },
     readOnly: true,
     idempotent: true,
-    run: async ({ project_id, include_sources }, { api }) => {
+    run: async ({ project_id, group_id, include_sources, compact }, { api }) => {
       const index = await loadFolderIndex(api);
       const project = requireFolder(index, project_id, "project");
-      const groups = index.descendantsOf(project_id).filter((f) => f.id !== project_id);
+      const startGroup = group_id ? requireFolder(index, group_id, "group") : null;
+      if (startGroup) {
+        requireInProject(
+          index,
+          project,
+          startGroup.id,
+          `The group ${index.pathOf(startGroup.id)} [${startGroup.id}]`,
+        );
+      }
+
+      const groups = startGroup
+        ? index.descendantsOf(startGroup.id)
+        : index.descendantsOf(project_id).filter((f) => f.id !== project_id);
 
       const loaded = new Map<string, Item[] | Error>();
       if (include_sources) {
@@ -172,14 +198,17 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
       let total = 0;
       for (const value of loaded.values()) if (Array.isArray(value)) total += value.length;
       if (!include_sources) total = groups.reduce((sum, g) => sum + sourcesIn(g), 0);
-      const withUrls = total <= TREE_URL_LIMIT;
+      const isCompact = compact || total > TREE_URL_LIMIT;
+      const withUrls = !isCompact && total <= TREE_URL_LIMIT;
 
       const lines: string[] = [];
       const archived = isArchived(index, project) ? " · archived" : "";
       lines.push(
         `Project: [${project.id}] ${project.name} · ${plural(groups.length, "group")} · ${plural(total, "source")}${archived}`,
       );
-      if (include_sources && !withUrls) {
+      if (include_sources && isCompact) {
+        lines.push("Short ids: the first 8 characters of each id; any tool accepts them.");
+      } else if (include_sources && !withUrls) {
         lines.push(
           `This project has ${total} sources, so urls are left out. Use list_sources with a group id to see urls.`,
         );
@@ -192,21 +221,64 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         lines.push("Groups (list_sources with a group's id shows its source titles):");
       }
 
-      const walk = (parentId: string, depth: number) => {
+      let charCount = lines.reduce((sum, l) => sum + l.length + 1, 0);
+      let cutSources = 0;
+      const cutGroups = new Map<string, Folder>();
+      let capReached = false;
+
+      const walkGroup = (group: Folder, depth: number) => {
         const indent = "  ".repeat(depth);
-        for (const group of index.children(parentId)) {
-          const items = loaded.get(group.id);
-          const count = Array.isArray(items) ? items.length : sourcesIn(group);
-          lines.push(`${indent}Group [${group.id}] ${group.name} · ${plural(count, "source")}`);
-          if (items instanceof Error) {
-            lines.push(`${indent}  (couldn't list its sources: ${items.message})`);
-          } else if (items) {
-            for (const item of items) lines.push(`${indent}  ${treeSourceLine(item, withUrls)}`);
+        const items = loaded.get(group.id);
+        const count = Array.isArray(items) ? items.length : sourcesIn(group);
+        const groupLine = `${indent}Group [${group.id}] ${group.name} · ${plural(count, "source")}`;
+        lines.push(groupLine);
+        charCount += groupLine.length + 1;
+
+        if (items instanceof Error) {
+          const errLine = `${indent}  (couldn't list its sources: ${items.message})`;
+          lines.push(errLine);
+          charCount += errLine.length + 1;
+        } else if (items) {
+          for (const item of items) {
+            if (isCompact) {
+              rememberId(item.id);
+            }
+            if (capReached || charCount >= 60_000) {
+              capReached = true;
+              cutSources++;
+              cutGroups.set(group.id, group);
+              continue;
+            }
+            const sourceText = isCompact
+              ? `[${item.id.slice(0, 8)}] ${truncate(item.title || "(untitled)", 90)}`
+              : treeSourceLine(item, withUrls);
+            const line = `${indent}  ${sourceText}`;
+            lines.push(line);
+            charCount += line.length + 1;
           }
-          walk(group.id, depth + 1);
+        }
+        for (const child of index.children(group.id)) {
+          walkGroup(child, depth + 1);
         }
       };
-      walk(project_id, 0);
+
+      if (startGroup) {
+        walkGroup(startGroup, 0);
+      } else {
+        for (const rootGroup of index.children(project_id)) {
+          walkGroup(rootGroup, 0);
+        }
+      }
+
+      if (cutSources > 0) {
+        const groupNames = Array.from(cutGroups.values())
+          .map((g) => `${g.id} ${g.name}`)
+          .join(", ");
+        lines.push(
+          `…${cutSources} more sources not shown. Call get_project_tree with group_id set to one of these groups: ${groupNames}`,
+        );
+      }
+
       return lines.join("\n");
     },
   });

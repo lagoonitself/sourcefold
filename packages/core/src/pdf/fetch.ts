@@ -50,7 +50,15 @@ async function fetchArxiv(
   if (html !== null) {
     try {
       const capture = arxivHtmlToCapture(html, arxiv.id, options.parseHtml);
-      return { status: "ok", kind: "pdf", capture };
+      const paper = await readArxivMetadata(arxiv.id, options);
+      if (paper) {
+        if (paper.title) capture.title = paper.title.slice(0, 500);
+        if (!capture.meta.author && paper.authors) capture.meta.author = paper.authors;
+        if (paper.published) capture.meta.published = paper.published;
+      }
+      if (capture.title) {
+        return { status: "ok", kind: "pdf", capture };
+      }
     } catch {
       // No usable HTML version; save the PDF instead.
     }
@@ -118,10 +126,16 @@ async function tryText(url: string, options: PdfFetchOptions): Promise<string | 
 function ensureOk(status: number): void {
   if (status >= 200 && status < 300) return;
   if (status === 404 || status === 410) throw new SourceError("not_found", MESSAGES.not_found);
-  if (status === 401 || status === 403 || status === 429) {
+  if (status === 401 || status === 403 || status === 407 || status === 429) {
     throw new SourceError("blocked", MESSAGES.blocked);
   }
-  throw new SourceError("fetch_failed", MESSAGES.fetch_failed);
+  if (status >= 500 && status <= 599) {
+    throw new SourceError(
+      "fetch_failed",
+      `The site answered with an error (HTTP ${status}). It may be down; try again later.`,
+    );
+  }
+  throw new SourceError("fetch_failed", `The site answered HTTP ${status} instead of the page.`);
 }
 
 function checkedBytes(response: SourceFetchResponse): Uint8Array {

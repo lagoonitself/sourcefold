@@ -1,5 +1,6 @@
 import type { SourceExtractResult } from "../capture-types";
 import { SourceError, type SourceFetch, type SourceFetchResponse } from "../source-fetch";
+import { isBotWall } from "./bot-wall";
 import { MIN_WEB_PAGE_TEXT_LENGTH, webPageTextLength, webPageToCapture } from "./convert";
 
 // Fetches any http(s) page and turns it into a `web` capture through defuddle (see ./convert).
@@ -51,7 +52,13 @@ function throwIfBadStatus(status: number): void {
   if (status === 401 || status === 403 || status === 407 || status === 429) {
     throw new SourceError("blocked", MESSAGES.blocked);
   }
-  throw new SourceError("fetch_failed", MESSAGES.fetch_failed);
+  if (status >= 500 && status <= 599) {
+    throw new SourceError(
+      "fetch_failed",
+      `The site answered with an error (HTTP ${status}). It may be down; try again later.`,
+    );
+  }
+  throw new SourceError("fetch_failed", `The site answered HTTP ${status} instead of the page.`);
 }
 
 function isTooLarge(response: SourceFetchResponse): boolean {
@@ -87,6 +94,7 @@ export async function fetchWebPageCapture(
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw error;
+    if (error instanceof SourceError) throw error;
     throw new SourceError("fetch_failed", MESSAGES.fetch_failed);
   }
 
@@ -104,6 +112,10 @@ export async function fetchWebPageCapture(
   }
   if (!isHtmlContentType(contentType)) {
     throw new SourceError("parse_failed", MESSAGES.not_a_page);
+  }
+
+  if (isBotWall(response.text)) {
+    throw new SourceError("blocked", MESSAGES.blocked);
   }
 
   const capture = (() => {

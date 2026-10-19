@@ -141,7 +141,7 @@ describe("get_project_tree", () => {
     expect(fake.calls).toEqual(["GET /folders?includeArchived=true"]);
   });
 
-  it("keeps titles but drops urls over 300 sources", async () => {
+  it("auto-compacts over 300 sources", async () => {
     const many = Array.from({ length: TREE_URL_LIMIT + 1 }, (_, n) => item(`m${n}`, "g1"));
     const h = await connect(registerLibraryTools, {
       web: web({
@@ -151,9 +151,66 @@ describe("get_project_tree", () => {
       }),
     });
     const { text } = await h.call("get_project_tree", { project_id: "p1", include_sources: true });
-    expect(text).toContain("This project has 301 sources, so urls are left out");
-    expect(text).toContain("[m0] Web page · Title m0");
+    expect(text).toContain("Short ids: the first 8 characters of each id; any tool accepts them.");
+    expect(text).toContain("  [m0] Title m0");
+    expect(text).not.toContain("Web page");
     expect(text).not.toContain("https://example.com/m0");
+  });
+
+  it("compact mode explicitly requested", async () => {
+    const h = await connect(registerLibraryTools, { web: web() });
+    const { text } = await h.call("get_project_tree", {
+      project_id: "p1",
+      include_sources: true,
+      compact: true,
+    });
+    expect(text).toContain("Short ids: the first 8 characters of each id; any tool accepts them.");
+    expect(text).toContain("  [i1] Title i1");
+    expect(text).not.toContain("https://example.com/i1");
+  });
+
+  it("scopes output to a group and its subgroups when group_id is provided", async () => {
+    const h = await connect(registerLibraryTools, { web: web() });
+    const { text } = await h.call("get_project_tree", {
+      project_id: "p1",
+      group_id: "g2",
+      include_sources: true,
+    });
+    expect(text).toContain("Group [g2] Turbo · 1 source");
+    expect(text).toContain("  [i3] Web page · Title i3");
+    expect(text).not.toContain("Group [g1] Engines");
+    expect(text).not.toContain("[i1]");
+  });
+
+  it("caps tree output at 60,000 characters and lists cut groups", async () => {
+    const bigGroup1 = Array.from({ length: 400 }, (_, n) =>
+      item(`a${n}`, "g1", {
+        title: `A very long title that takes up characters in group one number ${n}`,
+      }),
+    );
+    const bigGroup2 = Array.from({ length: 400 }, (_, n) =>
+      item(`b${n}`, "g2", {
+        title: `A very long title that takes up characters in group two number ${n}`,
+      }),
+    );
+    const h = await connect(registerLibraryTools, {
+      web: web({
+        "GET /items": ({ query }) => {
+          const folder = query.get("folder");
+          if (folder === "g1") return { json: { data: bigGroup1 } };
+          if (folder === "g2") return { json: { data: bigGroup2 } };
+          return { json: { data: [] } };
+        },
+      }),
+    });
+    const { text } = await h.call("get_project_tree", {
+      project_id: "p1",
+      include_sources: true,
+    });
+    expect(text).toContain(
+      "more sources not shown. Call get_project_tree with group_id set to one of these groups:",
+    );
+    expect(text).toContain("g2 Turbo");
   });
 
   it("keeps urls at exactly 300 sources", async () => {

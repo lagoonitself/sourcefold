@@ -3,6 +3,7 @@ import { basename, extname } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WIKIPEDIA_USER_AGENT } from "@sourcefold/core/capture";
 import { z } from "zod";
+import { createPublicFetch, type Lookup } from "../links/public-fetch";
 import type { Item } from "../types";
 import { defineTool, type ToolContext } from "./define";
 import { messageOf } from "./format";
@@ -57,7 +58,10 @@ async function readLocalImage(path: string): Promise<{ bytes: Uint8Array; fileNa
   return { bytes: new Uint8Array(await readFile(path)), fileName: basename(path) };
 }
 
-async function downloadImage(url: string): Promise<{ bytes: Uint8Array; fileName: string }> {
+export async function downloadImage(
+  url: string,
+  publicFetch: typeof fetch = createPublicFetch(),
+): Promise<{ bytes: Uint8Array; fileName: string }> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -70,7 +74,7 @@ async function downloadImage(url: string): Promise<{ bytes: Uint8Array; fileName
   let res: Response;
   try {
     // Wikimedia (upload.wikimedia.org) refuses downloads that don't say who they are.
-    res = await fetch(parsed, {
+    res = await publicFetch(parsed.href, {
       headers: { "User-Agent": WIKIPEDIA_USER_AGENT },
       signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
     });
@@ -103,7 +107,24 @@ async function storageMessage(res: Response): Promise<string> {
     : `The upload failed with status ${res.status}.`;
 }
 
-export function registerImagesTools(server: McpServer, ctx: ToolContext): void {
+export interface ImagesToolOptions {
+  publicFetch?: typeof fetch;
+  fetch?: typeof fetch;
+  lookup?: Lookup;
+}
+
+export function registerImagesTools(
+  server: McpServer,
+  ctx: ToolContext,
+  options?: ImagesToolOptions | typeof fetch,
+): void {
+  const publicFetch =
+    typeof options === "function"
+      ? options
+      : options?.publicFetch
+        ? options.publicFetch
+        : createPublicFetch(options);
+
   defineTool(server, ctx, {
     name: "add_image",
     title: "Add an image",
@@ -137,7 +158,7 @@ export function registerImagesTools(server: McpServer, ctx: ToolContext): void {
 
       const { bytes, fileName: foundName } = path
         ? await readLocalImage(path)
-        : await downloadImage(url!);
+        : await downloadImage(url!, publicFetch);
       const mimeType = sniffImageType(bytes);
       if (!mimeType) throw new Error(TYPE_ERROR);
 

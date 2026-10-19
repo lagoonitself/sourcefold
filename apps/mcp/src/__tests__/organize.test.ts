@@ -257,6 +257,108 @@ describe("move_sources", () => {
     expect(desktop.changed).toHaveBeenCalled();
   });
 
+  it("fails duplicates by default (if_duplicate=fail)", async () => {
+    const web = fakeWeb({
+      "GET /folders": foldersRoute,
+      "GET /items/*": sourceRoute,
+      "PATCH /items/*": () => ({
+        status: 409,
+        json: { error: { message: "That group already has this link." } },
+      }),
+    });
+    const h = await connect(registerOrganizeTools, { web });
+    const { text, isError } = await h.call("move_sources", {
+      source_ids: ["a"],
+      group_id: "g2",
+    });
+    expect(isError).toBe(true);
+    expect(text).toContain("Couldn't move any source:");
+    expect(text).toContain("[a] That group already has this link.");
+  });
+
+  it("skips duplicates when if_duplicate=skip", async () => {
+    const web = fakeWeb({
+      "GET /folders": foldersRoute,
+      "GET /items/*": sourceRoute,
+      "PATCH /items/*": ({ path }) => {
+        const id = path.split("/").pop()!;
+        if (id === "dup") {
+          return {
+            status: 409,
+            json: { error: { message: "That group already has this link." } },
+          };
+        }
+        return itemReply(id, "g2");
+      },
+    });
+    const h = await connect(registerOrganizeTools, { web });
+    const { text, isError } = await h.call("move_sources", {
+      source_ids: ["a", "dup"],
+      group_id: "g2",
+      if_duplicate: "skip",
+    });
+    expect(isError).toBe(false);
+    expect(text).toContain("Moved 1 of 2 sources to Cars › Engines › Turbo [g2]:");
+    expect(text).toContain('[a] Web page · "Title a" (from Cars › Engines)');
+    expect(text).toContain("Skipped (the group already has this link):");
+    expect(text).toContain('[dup] Web page · "Title dup" (from Cars › Engines)');
+  });
+
+  it("merges duplicates when if_duplicate=merge", async () => {
+    let checkBody: unknown = null;
+    let mergeBody: unknown = null;
+    let mergePath: string | null = null;
+    const web = fakeWeb({
+      "GET /folders": foldersRoute,
+      "GET /items/*": ({ path }) => {
+        const id = path.split("/").pop()!;
+        return {
+          json: {
+            data: {
+              id,
+              kind: "web",
+              title: `Title ${id}`,
+              source_url: `https://example.com/${id}`,
+              folder_id: "g1",
+            },
+          },
+        };
+      },
+      "PATCH /items/*": ({ path }) => {
+        const id = path.split("/").pop()!;
+        if (id === "dup") {
+          return {
+            status: 409,
+            json: { error: { message: "That group already has this link." } },
+          };
+        }
+        return itemReply(id, "g2");
+      },
+      "POST /items/check": ({ body }) => {
+        checkBody = body;
+        return { json: { item_id: "target-existing-id" } };
+      },
+      "POST /items/*/merge": ({ path, body }) => {
+        mergePath = path;
+        mergeBody = body;
+        return { json: { ok: true } };
+      },
+    });
+    const h = await connect(registerOrganizeTools, { web });
+    const { text, isError } = await h.call("move_sources", {
+      source_ids: ["a", "dup"],
+      group_id: "g2",
+      if_duplicate: "merge",
+    });
+    expect(isError).toBe(false);
+    expect(text).toContain("Moved 1 of 2 sources to Cars › Engines › Turbo [g2]:");
+    expect(text).toContain("Merged into the copy already in the group:");
+    expect(text).toContain("[dup] into [target-existing-id]");
+    expect(checkBody).toEqual({ url: "https://example.com/dup", folder_id: "g2" });
+    expect(mergePath).toBe("/items/target-existing-id/merge");
+    expect(mergeBody).toEqual({ ids: ["dup"] });
+  });
+
   it("throws only when every source failed", async () => {
     const web = fakeWeb({
       "GET /folders": foldersRoute,

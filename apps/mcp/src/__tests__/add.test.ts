@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { SourceError } from "@sourcefold/core";
 import { YOUTUBE_BLOCKED_MESSAGE } from "@sourcefold/core/capture";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -169,6 +170,60 @@ describe("add_links", () => {
     const listed = await h.call("get_add_progress", {});
     expect(listed.text).toContain(`job ${jobId}: finished`);
   });
+
+  it("does not write to mcp-add-jobs file or disk when built through harness without a store", async () => {
+    const writeFileSyncSpy = vi.spyOn(fs, "writeFileSync");
+    const renameSyncSpy = vi.spyOn(fs, "renameSync");
+
+    const web = grokipediaWeb();
+    const desktop = fakeDesktop();
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx, NO_PACING), {
+      web,
+      desktop,
+    });
+
+    const result = await h.call("add_links", {
+      group_id: "g1",
+      links: ["https://grokipedia.com/page/Turbocharger"],
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.text).toContain("Finished.");
+
+    for (const call of writeFileSyncSpy.mock.calls) {
+      const pathArg = String(call[0]);
+      expect(pathArg).not.toContain("mcp-add-jobs");
+    }
+    for (const call of renameSyncSpy.mock.calls) {
+      const oldPath = String(call[0]);
+      const newPath = String(call[1]);
+      expect(oldPath).not.toContain("mcp-add-jobs");
+      expect(newPath).not.toContain("mcp-add-jobs");
+    }
+  });
+
+  it("does not schedule a real Drive autosave against the harness API with real timers", async () => {
+    const web = grokipediaWeb();
+    const fetchSpy = vi.spyOn(web, "fetch");
+    const desktop = fakeDesktop();
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx, NO_PACING), {
+      web,
+      desktop,
+    });
+
+    const result = await h.call("add_links", {
+      group_id: "g1",
+      links: ["https://grokipedia.com/page/Turbocharger"],
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.text).toContain("Finished.");
+
+    for (const call of fetchSpy.mock.calls) {
+      const url = String(call[0]);
+      expect(url).not.toContain("/drive/");
+    }
+  });
 });
 
 describe("AddJobs pacing", () => {
@@ -179,23 +234,45 @@ describe("AddJobs pacing", () => {
     return job;
   }
 
-  it("waits and tries a video again when YouTube pushes back", async () => {
+  it("spaces YouTube videos across all running add jobs", async () => {
+    const gapMs = vi.fn(() => 50);
+    const saveLinkSpy = vi.spyOn(saveLinkModule, "saveLink").mockResolvedValue({
+      status: "saved",
+      title: "Title",
+      itemId: "item-1",
+    });
+    const jobs = new AddJobs(async () => deps, { gapMs, rateLimitWaitsMs: [] });
+    const run = (url: string) =>
+      jobs.start("g1", "Cars › Turbo", [{ url, kind: "source" }], {
+        limitPerCollection: 50,
+        publishedAfter: null,
+        publishedBefore: null,
+      });
+
+    const first = run("https://www.youtube.com/watch?v=11111111111");
+    const second = run("https://www.youtube.com/watch?v=22222222222");
+
+    await finished(jobs, first);
+    await finished(jobs, second);
+
+    expect(gapMs).toHaveBeenCalledTimes(1);
+    expect(saveLinkSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("pauses when YouTube limits requests, reports paused state, and retries after the wait", async () => {
     const spy = vi
       .spyOn(saveLinkModule, "saveLink")
       .mockRejectedValueOnce(new SourceError("blocked", YOUTUBE_BLOCKED_MESSAGE))
       .mockResolvedValueOnce({ status: "saved", title: "Video", itemId: "v1" });
-    const jobs = new AddJobs(async () => deps, NO_PACING);
+
+    const jobs = new AddJobs(async () => deps, { gapMs: () => 0, rateLimitWaitsMs: [5] });
     const job = await finished(
       jobs,
       jobs.start(
         "g1",
         "Cars › Turbo",
-        [{ url: "https://www.youtube.com/watch?v=aircAruvnKk", kind: "source" }],
-        {
-          limitPerCollection: 50,
-          publishedAfter: null,
-          publishedBefore: null,
-        },
+        [{ url: "https://www.youtube.com/watch?v=11111111111", kind: "source" }],
+        { limitPerCollection: 50, publishedAfter: null, publishedBefore: null },
       ),
     );
     expect(spy).toHaveBeenCalledTimes(2);

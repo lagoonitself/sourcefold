@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Folder, Item } from "../types";
-import type { WebApi } from "../web-api";
+import { ApiError, type WebApi } from "../web-api";
 import { defineTool, type ToolContext } from "./define";
 import { kindLabel, messageOf, plural, sourceLine, type FolderIndex } from "./format";
 import {
@@ -59,6 +59,8 @@ interface SourceRef {
   kind: string;
   title: string;
   folder_id: string;
+  source_url?: string | null;
+  canonical_url?: string | null;
 }
 
 async function loadSourceRef(api: WebApi, id: string): Promise<SourceRef> {
@@ -297,7 +299,7 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
     name: "move_sources",
     title: "Move sources to a group",
     description:
-      "Moves several sources into one group (a group, not a project). Each source is handled on its own, and the reply lists each one with where it came from, and which failed with the reason. Fails as a whole only when none could be moved.",
+      'Moves several sources into one group (a group, not a project). Each source is handled on its own, and the reply lists each one with where it came from, and which failed with the reason. Use if_duplicate="skip" to leave sources whose link the target group already has where they are, or if_duplicate="merge" to combine highlights and notes into the existing copy and delete the moved one. Fails as a whole only when none could be moved, skipped or merged.',
     input: {
       source_ids: z
         .array(z.string().min(1))
@@ -305,28 +307,118 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
         .max(200)
         .describe("Ids of the sources to move."),
       group_id: z.string().min(1).describe("Id of the group to move them into."),
+      if_duplicate: z
+        .enum(["fail", "skip", "merge"])
+        .default("fail")
+        .describe(
+          'What to do when a source\'s link is already in the target group: "fail" (default), "skip" (leave in its current group), or "merge" (combine highlights and notes into the copy already in the group, and delete the moved one).',
+        ),
       project: projectGuard,
     },
     idempotent: true,
-    run: async ({ source_ids, group_id, project }, { api }) => {
+    run: async ({ source_ids, group_id, if_duplicate, project }, { api }) => {
       const index = await loadFolderIndex(api);
       const guard = project ? resolveProject(index, project) : null;
       const target = requireFolder(index, group_id, "group");
       requireInProject(index, guard, group_id, `The group ${index.pathOf(group_id)} [${group_id}]`);
-      const { done, failed } = await eachId(source_ids, async (id) => {
-        const ref = await loadSourceRef(api, id);
-        requireInProject(index, guard, ref.folder_id, `"${ref.title}"`);
-        await api.patch<Item>(`/items/${encodeURIComponent(id)}`, { folder_id: group_id });
-        forgetCachedSource(id);
-        return ref;
+
+      type MoveOutcome =
+        | { status: "moved"; ref: SourceRef }
+        | { status: "skipped"; ref: SourceRef }
+        | { status: "merged"; ref: SourceRef; targetId: string };
+
+      const unique = [...new Set(source_ids)];
+      const results = await mapLimit(unique, BATCH_CONCURRENCY, async (id) => {
+        try {
+          const ref = await loadSourceRef(api, id);
+          requireInProject(index, guard, ref.folder_id, `"${ref.title}"`);
+          try {
+            await api.patch<Item>(`/items/${encodeURIComponent(id)}`, { folder_id: group_id });
+            forgetCachedSource(id);
+            return { id, outcome: { status: "moved", ref } as MoveOutcome };
+          } catch (patchErr) {
+            const isDup =
+              patchErr instanceof ApiError &&
+              patchErr.status === 409 &&
+              /already has this link/i.test(patchErr.message);
+
+            if (isDup && if_duplicate === "skip") {
+              return { id, outcome: { status: "skipped", ref } as MoveOutcome };
+            }
+            if (isDup && if_duplicate === "merge") {
+              let url = ref.canonical_url || ref.source_url;
+              if (!url) {
+                const full = await api.get<{
+                  canonical_url?: string | null;
+                  source_url?: string | null;
+                }>(`/items/${encodeURIComponent(id)}`);
+                url = full.canonical_url || full.source_url;
+              }
+              if (!url) throw patchErr;
+              const check = await api.post<{ item_id: string }>("/items/check", {
+                url,
+                folder_id: group_id,
+              });
+              await api.post(`/items/${encodeURIComponent(check.item_id)}/merge`, {
+                ids: [id],
+              });
+              forgetCachedSource(id);
+              forgetCachedSource(check.item_id);
+              return {
+                id,
+                outcome: { status: "merged", ref, targetId: check.item_id } as MoveOutcome,
+              };
+            }
+            throw patchErr;
+          }
+        } catch (err) {
+          return { id, error: messageOf(withHint(err, SOURCE_HINT)) };
+        }
       });
-      if (done.length === 0) {
+
+      const moved: SourceRef[] = [];
+      const skipped: SourceRef[] = [];
+      const merged: Array<{ ref: SourceRef; targetId: string }> = [];
+      const failed: Array<{ id: string; message: string }> = [];
+
+      for (const res of results) {
+        if ("error" in res && res.error !== undefined) {
+          failed.push({ id: res.id, message: res.error });
+        } else if ("outcome" in res && res.outcome) {
+          if (res.outcome.status === "moved") moved.push(res.outcome.ref);
+          else if (res.outcome.status === "skipped") skipped.push(res.outcome.ref);
+          else if (res.outcome.status === "merged")
+            merged.push({ ref: res.outcome.ref, targetId: res.outcome.targetId });
+        }
+      }
+
+      const succeededCount = moved.length + skipped.length + merged.length;
+      if (succeededCount === 0) {
         throw new Error(["Couldn't move any source:", ...failureLines(failed)].join("\n"));
       }
+
+      const total = succeededCount + failed.length;
       const lines = [
-        `Moved ${done.length} of ${done.length + failed.length} sources to ${index.pathOf(target.id)} [${target.id}]:`,
-        ...done.map(({ value }) => refLine(index, value).replace(/\(in /, "(from ")),
+        `Moved ${moved.length} of ${total} sources to ${index.pathOf(target.id)} [${target.id}]:`,
       ];
+      if (moved.length > 0) {
+        lines.push(...moved.map((ref) => refLine(index, ref).replace(/\(in /, "(from ")));
+      }
+      if (skipped.length > 0) {
+        lines.push(
+          "Skipped (the group already has this link):",
+          ...skipped.map((ref) => refLine(index, ref).replace(/\(in /, "(from ")),
+        );
+      }
+      if (merged.length > 0) {
+        lines.push(
+          "Merged into the copy already in the group:",
+          ...merged.map(
+            ({ ref, targetId }) =>
+              `[${ref.id}] into [${targetId}] ${kindLabel(ref.kind)} · "${ref.title}" (from ${where(index, ref.folder_id)})`,
+          ),
+        );
+      }
       if (failed.length > 0) lines.push("Failed:", ...failureLines(failed));
       return lines.join("\n");
     },

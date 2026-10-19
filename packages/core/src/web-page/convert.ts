@@ -10,6 +10,35 @@ import type { SourceCapture } from "../capture-types";
 /** Below this much visible text a page has no article to save. */
 export const MIN_WEB_PAGE_TEXT_LENGTH = 100;
 
+const FALLBACK_DROP_SELECTORS = [
+  "script",
+  "style",
+  "noscript",
+  "template",
+  "nav",
+  "header",
+  "footer",
+  "aside",
+  "form",
+  "iframe",
+  "svg",
+  "button",
+  "[role=navigation]",
+  "[role=banner]",
+  "[role=contentinfo]",
+  "[aria-hidden=true]",
+];
+
+const FALLBACK_CANDIDATE_SELECTORS = [
+  "main",
+  "[role=main]",
+  "article",
+  "#content",
+  "#main",
+  ".content",
+  "body",
+];
+
 function firstNonEmpty(values: (string | null | undefined)[]): string {
   for (const value of values) {
     const trimmed = value?.replace(/\s+/g, " ").trim();
@@ -80,7 +109,7 @@ function markdownUrl(url: string): string {
 
 /** Escapes the characters that would otherwise change meaning inside alt text or a caption. */
 function escapeText(text: string): string {
-  return text.replace(/([\\[\]*_`])/g, "\\$1");
+  return text.replace(/([\\\[\]*_`])/g, "\\$1");
 }
 
 function cleanText(value: string | null | undefined): string {
@@ -194,7 +223,7 @@ function tidy(markdown: string): string {
 function normalizeHeading(text: string): string {
   return text
     .replace(/\\/g, "")
-    .replace(/[`*_[\]]/g, "")
+    .replace(/[`*_\[\]]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -223,6 +252,30 @@ function contentToMarkdown(contentHtml: string, baseUrl: string, title: string):
 }
 
 /**
+ * Fallback extractor when defuddle returns too little content.
+ * Cleans boilerplate chrome elements and converts the first matching main container.
+ */
+export function fallbackMainText(doc: Document, url: string, title = ""): string {
+  for (const selector of FALLBACK_DROP_SELECTORS) {
+    for (const el of Array.from(doc.querySelectorAll(selector))) {
+      el.remove();
+    }
+  }
+
+  let target: Element | null = null;
+  for (const selector of FALLBACK_CANDIDATE_SELECTORS) {
+    const el = doc.querySelector(selector);
+    if (el) {
+      target = el;
+      break;
+    }
+  }
+
+  if (!target) return "";
+  return contentToMarkdown(target.innerHTML, url, title);
+}
+
+/**
  * Turns an already-parsed page into a `web` capture. Runs defuddle (kepano/defuddle) on `html`
  * to find the main content and its metadata, then converts that content with Turndown.
  */
@@ -237,6 +290,15 @@ export function webPageToCapture(
   const result = new Defuddle(doc, { url, useAsync: false }).parse();
 
   const title = firstNonEmpty([result.title, documentTitle, hostOf(url)]);
+  let markdown = contentToMarkdown(result.content, url, title);
+
+  if (webPageTextLength(markdown) < MIN_WEB_PAGE_TEXT_LENGTH) {
+    const freshDoc = parseHtml(html);
+    const fallback = fallbackMainText(freshDoc, url, title);
+    if (webPageTextLength(fallback) >= MIN_WEB_PAGE_TEXT_LENGTH) {
+      markdown = fallback;
+    }
+  }
 
   return {
     url,
@@ -247,6 +309,6 @@ export function webPageToCapture(
       published: normalizeWebPageDate(result.published),
       summary: cleanText(result.description) || null,
     },
-    markdown: contentToMarkdown(result.content, url, title),
+    markdown,
   };
 }

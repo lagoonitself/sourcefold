@@ -3,7 +3,9 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { z } from "zod";
 import type { DesktopBridge } from "../desktop-bridge";
 import type { WebApi } from "../web-api";
+import { scheduleDriveSave } from "./drive-autosave";
 import { messageOf } from "./format";
+import { rememberIds, resolveId } from "./short-ids";
 
 export interface ToolContext {
   api: WebApi;
@@ -30,6 +32,33 @@ export interface ToolSpec<S extends Shape> {
   run(args: z.infer<z.ZodObject<S>>, ctx: ToolContext): Promise<string>;
 }
 
+const TARGET_ID_KEYS = new Set([
+  "source_id",
+  "source_ids",
+  "group_id",
+  "parent_id",
+  "project_id",
+  "keep_id",
+  "ids",
+  "highlight_id",
+  "card_id",
+]);
+
+function resolveToolArgs<T>(args: T): T {
+  if (!args || typeof args !== "object") return args;
+  const out = { ...(args as Record<string, unknown>) };
+  for (const key of Object.keys(out)) {
+    if (!TARGET_ID_KEYS.has(key)) continue;
+    const val = out[key];
+    if (typeof val === "string") {
+      out[key] = resolveId(val);
+    } else if (Array.isArray(val)) {
+      out[key] = val.map((v) => (typeof v === "string" ? resolveId(v) : v));
+    }
+  }
+  return out as T;
+}
+
 export function defineTool<S extends Shape>(
   server: McpServer,
   ctx: ToolContext,
@@ -37,7 +66,12 @@ export function defineTool<S extends Shape>(
 ) {
   const handler = async (args: z.infer<z.ZodObject<S>>): Promise<CallToolResult> => {
     try {
-      const text = await spec.run(args, ctx);
+      const resolved = resolveToolArgs(args);
+      const text = await spec.run(resolved, ctx);
+      rememberIds(text);
+      if (!spec.readOnly) {
+        scheduleDriveSave(ctx.api);
+      }
       return { content: [{ type: "text", text }] };
     } catch (err) {
       return { content: [{ type: "text", text: messageOf(err) }], isError: true };

@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ApiError } from "../web-api";
+import { ApiError, type WebApi } from "../web-api";
 import { defineTool, type ToolContext } from "./define";
 import { messageOf, plural } from "./format";
 
@@ -14,6 +14,77 @@ interface SaveBatch {
   remaining?: number;
   done?: boolean;
   failed?: Array<{ id: string; title: string; message: string }>;
+}
+
+export interface SaveToDriveOptions {
+  budgetMs?: number;
+  batchSize?: number;
+  waitOnBusy?: boolean;
+  signInWorks?: boolean;
+}
+
+export interface SaveToDriveResult {
+  processed: number;
+  remaining: number;
+  done: boolean;
+  failed: Array<{ id: string; title: string; message: string }>;
+  waited: boolean;
+  busyTimedOut?: boolean;
+}
+
+export async function saveToDrive(
+  api: WebApi,
+  options: SaveToDriveOptions = {},
+): Promise<SaveToDriveResult> {
+  const budgetMs = options.budgetMs ?? TIME_BUDGET_MS;
+  const batchSize = options.batchSize ?? BATCH_SIZE;
+  const waitOnBusy = options.waitOnBusy ?? true;
+  const signInWorks = options.signInWorks ?? false;
+
+  const started = Date.now();
+  let processed = 0;
+  let remaining = 0;
+  let done = false;
+  let waited = false;
+  let busyTimedOut = false;
+  const failed: NonNullable<SaveBatch["failed"]> = [];
+
+  do {
+    let batch: SaveBatch;
+    try {
+      batch = await api.post<SaveBatch>("/drive/save", { budget: batchSize });
+    } catch (err) {
+      // The app saves by itself a few minutes after a change; that save does the same work, so
+      // wait for it to finish and then carry on, instead of failing.
+      if (err instanceof ApiError && err.code === "sync_in_progress") {
+        if (!waitOnBusy) {
+          throw err;
+        }
+        if (Date.now() - started + driveTiming.busyRetryMs >= budgetMs) {
+          busyTimedOut = true;
+          break;
+        }
+        waited = true;
+        await new Promise((resolve) => setTimeout(resolve, driveTiming.busyRetryMs));
+        continue;
+      }
+      // The web app answers 401 "reconnect_drive" when Google refuses; web-api.ts words every
+      // 401 as an expired sign-in. The status check above proved the sign-in is fine.
+      if (signInWorks && err instanceof ApiError && err.status === 401) {
+        throw new Error(
+          "Reconnect Google Drive to keep saving. The user can do that in the Sourcefold web app's Settings.",
+        );
+      }
+      throw err;
+    }
+    processed += batch.processed ?? 0;
+    remaining = batch.remaining ?? 0;
+    done = batch.done ?? remaining === 0;
+    failed.push(...(batch.failed ?? []));
+    if (!batch.processed) break;
+  } while (!done && Date.now() - started < budgetMs);
+
+  return { processed, remaining, done, failed, waited, busyTimedOut };
 }
 
 export function registerDriveTools(server: McpServer, ctx: ToolContext): void {
@@ -40,42 +111,11 @@ export function registerDriveTools(server: McpServer, ctx: ToolContext): void {
           throw err;
       }
 
-      const started = Date.now();
-      let processed = 0;
-      let remaining = 0;
-      let done = false;
-      let waited = false;
-      const failed: NonNullable<SaveBatch["failed"]> = [];
-      do {
-        let batch: SaveBatch;
-        try {
-          batch = await api.post<SaveBatch>("/drive/save", { budget: BATCH_SIZE });
-        } catch (err) {
-          // The app saves by itself a few minutes after a change; that save does the same work, so
-          // wait for it to finish and then carry on, instead of failing.
-          if (err instanceof ApiError && err.code === "sync_in_progress") {
-            if (Date.now() - started + driveTiming.busyRetryMs >= TIME_BUDGET_MS) {
-              return "A save the Sourcefold app started is still running; it saves the same changes. Call save_to_drive again in a minute to check that everything is saved.";
-            }
-            waited = true;
-            await new Promise((resolve) => setTimeout(resolve, driveTiming.busyRetryMs));
-            continue;
-          }
-          // The web app answers 401 "reconnect_drive" when Google refuses; web-api.ts words every
-          // 401 as an expired sign-in. The status check above proved the sign-in is fine.
-          if (signInWorks && err instanceof ApiError && err.status === 401) {
-            throw new Error(
-              "Reconnect Google Drive to keep saving. The user can do that in the Sourcefold web app's Settings.",
-            );
-          }
-          throw err;
-        }
-        processed += batch.processed ?? 0;
-        remaining = batch.remaining ?? 0;
-        done = batch.done ?? remaining === 0;
-        failed.push(...(batch.failed ?? []));
-        if (!batch.processed) break;
-      } while (!done && Date.now() - started < TIME_BUDGET_MS);
+      const result = await saveToDrive(api, { budgetMs: TIME_BUDGET_MS, signInWorks });
+      if (result.busyTimedOut) {
+        return "A save the Sourcefold app started is still running; it saves the same changes. Call save_to_drive again in a minute to check that everything is saved.";
+      }
+      const { processed, remaining, done, failed, waited } = result;
 
       const lines: string[] = [];
       if (processed === 0 && failed.length === 0 && done) {

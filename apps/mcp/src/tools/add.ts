@@ -4,9 +4,34 @@ import { z } from "zod";
 import { createNodeSourceFetch, createPublicFetch } from "../links/public-fetch";
 import { classifyLink, listCollection, type LinkDeps } from "../links/save-link";
 import type { Folder } from "../types";
-import { AddJobs, isRowDone, type AddJob, type JobRow, type Pacing } from "./add-jobs";
+import {
+  ADD_JOBS_FILE,
+  AddJobs,
+  fileJobStore,
+  inMemoryJobStore,
+  isRowDone,
+  memoryJobStore,
+  type AddJob,
+  type AddJobStore,
+  type JobRow,
+  type Pacing,
+} from "./add-jobs";
 import { defineTool, type ToolContext } from "./define";
+import { scheduleDriveSave } from "./drive-autosave";
 import { indexFolders, plural } from "./format";
+
+export {
+  ADD_JOBS_FILE,
+  AddJobs,
+  fileJobStore,
+  inMemoryJobStore,
+  isRowDone,
+  memoryJobStore,
+  type AddJob,
+  type AddJobStore,
+  type JobRow,
+  type Pacing,
+};
 
 const DATE = z
   .string()
@@ -40,7 +65,11 @@ function rowLine(r: JobRow, now: number): string {
   return `- ${STATUS_LABEL[r.status]}${id}: ${name}${message ? ` (${message})` : ""}`;
 }
 
-export function formatJob(job: AddJob, now = Date.now()): string {
+export function formatJob(
+  job: AddJob,
+  now = Date.now(),
+  ahead?: AddJob[] | { jobs: number; links: number },
+): string {
   const count = (status: JobRow["status"]) => job.rows.filter((r) => r.status === status).length;
   const done = job.rows.filter(isRowDone).length;
   const lines: string[] = [];
@@ -57,13 +86,36 @@ export function formatJob(job: AddJob, now = Date.now()): string {
     `Adding to ${job.groupPath} [${job.groupId}], job ${job.id}: ${done} of ${plural(job.rows.length, "link")} done (${parts.join(", ")}).`,
   );
 
-  if (job.state === "running" || job.state === "queued") {
+  if (count("paid") > 0) {
     lines.push(
-      job.state === "queued"
-        ? "Waiting for an earlier add job to finish."
-        : "Still running in the background. YouTube videos are saved a few seconds apart.",
-      `Check again with get_add_progress { "job_id": "${job.id}" }.`,
+      "Paid posts need the user's Substack cookie: in the Sourcefold desktop app, Settings → Substack. Then add those links again.",
     );
+  }
+
+  if (job.state === "running" || job.state === "queued") {
+    if (job.state === "queued") {
+      if (ahead) {
+        if (Array.isArray(ahead)) {
+          const count = ahead.length;
+          const links = ahead.reduce(
+            (sum, j) => sum + j.rows.filter((r) => !isRowDone(r)).length,
+            0,
+          );
+          lines.push(
+            `Waiting behind ${plural(count, "earlier add job")} with ${plural(links, "link")} still to save.`,
+          );
+        } else {
+          lines.push(
+            `Waiting behind ${plural(ahead.jobs, "earlier add job")} with ${plural(ahead.links, "link")} still to save.`,
+          );
+        }
+      } else {
+        lines.push("Waiting for an earlier add job to finish.");
+      }
+    } else {
+      lines.push("Still running in the background. YouTube videos are saved a few seconds apart.");
+    }
+    lines.push(`Check again with get_add_progress { "job_id": "${job.id}" }.`);
   } else if (job.state === "stopped") {
     lines.push("Stopped. Links still waiting were not saved; add them again to continue.");
   } else {
@@ -113,15 +165,22 @@ async function resolveGroup(
   return { id: group.id, path: index.pathOf(group.id) };
 }
 
-export function registerAddTools(server: McpServer, ctx: ToolContext, pacing?: Pacing): AddJobs {
-  const jobs = new AddJobs(linkDepsFactory(ctx), pacing);
+export function registerAddTools(
+  server: McpServer,
+  ctx: ToolContext,
+  pacing?: Pacing,
+  store?: AddJobStore,
+  onJobFinished?: (job: AddJob) => void,
+): AddJobs {
+  const jobStore = store ?? memoryJobStore();
+  const finishedCallback = onJobFinished ?? (store ? () => scheduleDriveSave(ctx.api) : undefined);
+  const jobs = new AddJobs(linkDepsFactory(ctx), pacing, jobStore, finishedCallback);
+  jobs.restore();
 
   defineTool(server, ctx, {
     name: "add_links",
     title: "Add links",
-    description: `Saves links into a group, like pasting them into Sourcefold's Add links. Works for Grokipedia and Wikipedia articles, YouTube videos (their transcript), web pages, PDFs and arXiv papers, Reddit and Hacker News threads, Bluesky posts and Substack posts. A YouTube playlist or channel, or a Substack publication, is expanded into its videos or posts (up to limit_per_collection each; Substack can be narrowed by date). X posts can't be added here (the user saves them with the browser extension).
-
-Saving runs in the background, one link after another; YouTube videos are spaced a few seconds apart and wait when YouTube pushes back, so many videos take minutes. This waits up to wait_seconds, then answers with the progress and a job id: call get_add_progress with it until it says Finished. Links already saved in the group are reported, not saved twice. Use list_collection first to look at a playlist or publication without saving.`,
+    description: `Saves links into a group, like pasting them into Sourcefold's Add links. Works for Grokipedia and Wikipedia articles, YouTube videos (their transcript), web pages, PDFs and arXiv papers, Reddit and Hacker News threads, Bluesky posts and Substack posts. A YouTube playlist or channel, or a Substack publication, is expanded into its videos or posts (up to limit_per_collection each; Substack can be narrowed by date). X posts can't be added here (the user saves them with the browser extension).\n\nSaving runs in the background, one link after another; YouTube videos are spaced a few seconds apart and wait when YouTube pushes back, so many videos take minutes. This waits up to wait_seconds, then answers with the progress and a job id: call get_add_progress with it until it says Finished. Links already saved in the group are reported, not saved twice. Use list_collection first to look at a playlist or publication without saving.`,
     input: {
       group_id: z.string().describe("The group to save into (not a project)."),
       links: z
@@ -178,7 +237,7 @@ Saving runs in the background, one link after another; YouTube videos are spaced
         },
       );
       await jobs.waitForEnd(job, (args.wait_seconds ?? 25) * 1000);
-      return formatJob(job);
+      return formatJob(job, Date.now(), jobs.ahead(job));
     },
   });
 
@@ -205,7 +264,7 @@ Saving runs in the background, one link after another; YouTube videos are spaced
     run: async (args) => {
       if (!args.job_id) {
         const recent = jobs.list();
-        if (recent.length === 0) return "No add jobs since Claude Desktop started.";
+        if (recent.length === 0) return "No add jobs.";
         return recent
           .map((job) => {
             const done = job.rows.filter(isRowDone).length;
@@ -216,7 +275,7 @@ Saving runs in the background, one link after another; YouTube videos are spaced
       const job = jobs.get(args.job_id);
       if (!job) {
         throw new Error(
-          `No add job ${args.job_id}. Jobs are kept until Claude Desktop restarts; call get_add_progress without a job_id to list them.`,
+          `No add job ${args.job_id}. Only the last 20 jobs are kept; call get_add_progress without a job_id to list them.`,
         );
       }
       if (args.stop) {
@@ -225,7 +284,7 @@ Saving runs in the background, one link after another; YouTube videos are spaced
       } else {
         await jobs.waitForEnd(job, (args.wait_seconds ?? 20) * 1000);
       }
-      return formatJob(job);
+      return formatJob(job, Date.now(), jobs.ahead(job));
     },
   });
 

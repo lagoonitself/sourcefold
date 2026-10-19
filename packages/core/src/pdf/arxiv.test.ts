@@ -77,12 +77,21 @@ describe("arxivHtmlToCapture", () => {
     expect(capture.markdown).toMatch(/^\$\$$/m);
   });
 
-  it("refuses HTML without a document title", () => {
+  it("returns an empty title when the HTML has no document title", () => {
     const html =
       '<html><body><article class="ltx_document"><p>no title</p></article></body></html>';
-    expect(() => arxivHtmlToCapture(html, "1706.03762", parseHtml)).toThrowError(
-      /Couldn't read this paper/,
-    );
+    const result = arxivHtmlToCapture(html, "1706.03762", parseHtml);
+    expect(result.title).toBe("");
+    expect(result.url).toBe("https://arxiv.org/abs/1706.03762");
+  });
+
+  it("extracts content from HTML lacking h1 title", () => {
+    const noTitleHtml = readFileSync(join(fixtures, "arxiv-no-title.html"), "utf8");
+    const result = arxivHtmlToCapture(noTitleHtml, "2308.08708", parseHtml);
+    expect(result.title).toBe("");
+    expect(result.url).toBe("https://arxiv.org/abs/2308.08708");
+    expect(result.markdown).toContain("Introduction");
+    expect(result.markdown).toContain("Scientific Theories of Consciousness");
   });
 
   it("reports a parse failure when the HTML cannot be parsed", () => {

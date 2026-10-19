@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { SourceError, type SourceFetch } from "@sourcefold/core";
+import { nodeFetch } from "./node-transport";
 
 // Network access for links Claude adds. Like the web app's `publicFetch` (apps/web/src/lib/
 // public-fetch.ts, copied here because the MCP server can't import the web app) and the desktop's
@@ -14,6 +15,22 @@ const MAX_BODY_BYTES = 50 * 1024 * 1024;
 /** The desktop's `web_fetch` sends the same, so sites see an ordinary browser. */
 export const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+
+export const CHROME_HEADERS: Record<string, string> = {
+  "user-agent": BROWSER_USER_AGENT,
+  accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+  "accept-language": "en-US,en;q=0.9",
+  "accept-encoding": "gzip, deflate, br",
+  "sec-ch-ua": '"Chromium";v="141", "Google Chrome";v="141", "Not?A_Brand";v="99"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+  "sec-fetch-dest": "document",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-site": "none",
+  "sec-fetch-user": "?1",
+  "upgrade-insecure-requests": "1",
+};
 
 export class BlockedAddressError extends Error {
   constructor() {
@@ -104,16 +121,79 @@ export interface PublicFetchDeps {
   lookup?: Lookup;
 }
 
+interface StoredCookie {
+  name: string;
+  value: string;
+  domain: string;
+}
+
+function parseSetCookie(header: string, defaultDomain: string): StoredCookie | null {
+  const parts = header.split(";");
+  const nv = parts[0]?.trim();
+  if (!nv) return null;
+  const eq = nv.indexOf("=");
+  const name = eq >= 0 ? nv.slice(0, eq).trim() : nv;
+  const value = eq >= 0 ? nv.slice(eq + 1).trim() : "";
+  let domain = defaultDomain.toLowerCase();
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i]!.trim();
+    const pEq = part.indexOf("=");
+    const attrName = (pEq >= 0 ? part.slice(0, pEq) : part).trim().toLowerCase();
+    const attrVal = (pEq >= 0 ? part.slice(pEq + 1) : "").trim();
+    if (attrName === "domain" && attrVal) {
+      domain = attrVal.toLowerCase().replace(/^\./, "");
+    }
+  }
+  return { name, value, domain };
+}
+
 /** `fetch` that refuses private addresses on every hop. */
 export function createPublicFetch(deps: PublicFetchDeps = {}): typeof fetch {
-  const fetchImpl = deps.fetch ?? fetch;
+  const fetchImpl = deps.fetch ?? nodeFetch;
   return (async (input: string | URL | Request, init?: RequestInit) => {
     let url = new URL(input instanceof Request ? input.url : input.toString());
     let currentInit: RequestInit = { ...init, redirect: "manual" };
+    const jar: StoredCookie[] = [];
 
     for (let hop = 0; ; hop++) {
       await assertPublicUrl(url, deps.lookup);
+
+      if (jar.length > 0) {
+        const nextHost = url.hostname.toLowerCase();
+        const matching = jar.filter(
+          (c) => nextHost === c.domain || nextHost.endsWith("." + c.domain),
+        );
+        if (matching.length > 0) {
+          const cookieVal = matching.map((c) => `${c.name}=${c.value}`).join("; ");
+          const headers = new Headers(currentInit.headers);
+          const existing = headers.get("cookie");
+          headers.set("cookie", existing ? `${existing}; ${cookieVal}` : cookieVal);
+          currentInit = { ...currentInit, headers };
+        }
+      }
+
       const res = await fetchImpl(url.href, currentInit);
+
+      const setCookies =
+        typeof res.headers.getSetCookie === "function"
+          ? res.headers.getSetCookie()
+          : res.headers.get("set-cookie")
+            ? [res.headers.get("set-cookie")!]
+            : [];
+      for (const cookieStr of setCookies) {
+        const parsed = parseSetCookie(cookieStr, url.hostname);
+        if (parsed) {
+          const existingIdx = jar.findIndex(
+            (c) => c.name === parsed.name && c.domain === parsed.domain,
+          );
+          if (existingIdx >= 0) {
+            jar[existingIdx] = parsed;
+          } else {
+            jar.push(parsed);
+          }
+        }
+      }
+
       const location = res.headers.get("location");
       if (res.status < 300 || res.status >= 400 || !location) {
         // Node's Response.url is empty for a hand-built request chain; record where we ended.
@@ -161,16 +241,26 @@ async function readCapped(res: Response): Promise<Uint8Array> {
   return out;
 }
 
+function isTlsErrorCode(code?: string): boolean {
+  if (!code) return false;
+  return (
+    code.startsWith("ERR_TLS_") ||
+    code.startsWith("CERT_") ||
+    code.startsWith("ERR_SSL_") ||
+    code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE" ||
+    code === "DEPTH_ZERO_SELF_SIGNED_CERT" ||
+    code === "EPROTO"
+  );
+}
+
 /** The `SourceFetch` the core extractors get: this computer's own connection, like the desktop. */
 export function createNodeSourceFetch(deps: PublicFetchDeps = {}): SourceFetch {
   const guarded = createPublicFetch(deps);
   return async (request) => {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...CHROME_HEADERS };
     for (const [name, value] of Object.entries(request.headers ?? {})) {
       headers[name.toLowerCase()] = value;
     }
-    headers["user-agent"] ??= BROWSER_USER_AGENT;
-    headers["accept-language"] ??= "en-US,en;q=0.9";
 
     let res: Response;
     try {
@@ -182,7 +272,44 @@ export function createNodeSourceFetch(deps: PublicFetchDeps = {}): SourceFetch {
       });
     } catch (err) {
       if (err instanceof BlockedAddressError) throw new SourceError("blocked", err.message);
-      if (err instanceof Error && err.name === "AbortError") throw err;
+      if (err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError")) {
+        throw err;
+      }
+
+      const code = (err as { code?: string })?.code;
+      const message = (err as Error)?.message ?? "";
+
+      if (
+        code === "ENOTFOUND" ||
+        code === "EAI_AGAIN" ||
+        (err instanceof TypeError && message.startsWith("Couldn't look up"))
+      ) {
+        throw new SourceError(
+          "fetch_failed",
+          "Couldn't find the site's address (DNS lookup failed). Check the link.",
+        );
+      }
+      if (code === "ECONNREFUSED") {
+        throw new SourceError("fetch_failed", "The site refused the connection.");
+      }
+      if (code === "ECONNRESET" || code === "EPIPE") {
+        throw new SourceError("fetch_failed", "The site closed the connection before answering.");
+      }
+      if (code === "ETIMEDOUT") {
+        throw new SourceError("fetch_failed", "The site didn't answer in time.");
+      }
+      if (isTlsErrorCode(code)) {
+        throw new SourceError(
+          "fetch_failed",
+          "Couldn't make a secure connection to the site (its certificate or encryption was refused).",
+        );
+      }
+      if (err instanceof TypeError && message === "Too many redirects") {
+        throw new SourceError(
+          "fetch_failed",
+          "The site kept redirecting, so the page never loaded.",
+        );
+      }
       throw new SourceError(
         "fetch_failed",
         "Couldn't reach the site. Check your connection and try again.",

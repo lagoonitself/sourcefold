@@ -87,7 +87,6 @@ export function arxivHtmlToCapture(
       doc.querySelector("h1.ltx_title")?.textContent ??
       "",
   );
-  if (!title) throw new SourceError("parse_failed", "Couldn't read this paper.");
 
   const author = readAuthors(article);
 

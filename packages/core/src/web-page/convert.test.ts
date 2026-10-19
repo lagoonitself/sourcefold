@@ -1,9 +1,16 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import Defuddle from "defuddle";
 import { parseHTML } from "linkedom";
 import { describe, expect, it } from "vitest";
-import { normalizeWebPageDate, webPageTextLength, webPageToCapture } from "./convert";
+import {
+  MIN_WEB_PAGE_TEXT_LENGTH,
+  fallbackMainText,
+  normalizeWebPageDate,
+  webPageTextLength,
+  webPageToCapture,
+} from "./convert";
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixture = (name: string) => readFileSync(join(fixtures, name), "utf8");
@@ -108,6 +115,29 @@ describe("webPageToCapture", () => {
       "</article></body></html>";
     const capture = webPageToCapture(html, "https://news.example.com/story", parseHtml);
     expect(capture.title).toBe("news.example.com");
+  });
+
+  it("falls back to the page's main text when defuddle returns too little content", () => {
+    const url = "https://example.com/announcement";
+    const rawHtml = fixture("defuddle-fallback.html");
+
+    // 1. Verify defuddle alone on this document returns under the minimum text length
+    const initialDoc = parseHtml(rawHtml);
+    const defuddleResult = new Defuddle(initialDoc, { url, useAsync: false }).parse();
+    expect(webPageTextLength(defuddleResult.content)).toBeLessThan(MIN_WEB_PAGE_TEXT_LENGTH);
+
+    // 2. Verify fallbackMainText extracts content from the main container
+    const freshDoc = parseHtml(rawHtml);
+    const fallbackText = fallbackMainText(freshDoc, url, "Announcement Update");
+    expect(webPageTextLength(fallbackText)).toBeGreaterThanOrEqual(MIN_WEB_PAGE_TEXT_LENGTH);
+    expect(fallbackText).toContain("sharing an important update regarding the recent changes");
+    expect(fallbackText).not.toContain("Home"); // Nav was dropped
+
+    // 3. Verify webPageToCapture uses the fallback and returns the capture
+    const capture = webPageToCapture(rawHtml, url, parseHtml);
+    expect(capture.title).toBe("Announcement Update");
+    expect(webPageTextLength(capture.markdown)).toBeGreaterThanOrEqual(MIN_WEB_PAGE_TEXT_LENGTH);
+    expect(capture.markdown).toContain("sharing an important update regarding the recent changes");
   });
 });
 

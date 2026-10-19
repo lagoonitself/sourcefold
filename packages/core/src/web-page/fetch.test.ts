@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { parseHTML } from "linkedom";
 import { describe, expect, it } from "vitest";
 import {
+  SourceError,
   type SourceFetch,
   type SourceFetchRequest,
   type SourceFetchResponse,
@@ -70,7 +71,7 @@ describe("fetchWebPageCapture", () => {
   });
 
   it("reports a site that refused the request", async () => {
-    for (const status of [401, 403, 429]) {
+    for (const status of [401, 403, 407, 429]) {
       const { run } = options(response({ status, text: "" }));
       await expect(run("https://example.com/walled")).rejects.toMatchObject({
         code: "blocked",
@@ -83,12 +84,40 @@ describe("fetchWebPageCapture", () => {
   it("reports a server error and a network failure", async () => {
     for (const status of [500, 503]) {
       const { run } = options(response({ status, text: "" }));
-      await expect(run("https://example.com/down")).rejects.toMatchObject({ code: "fetch_failed" });
+      await expect(run("https://example.com/down")).rejects.toMatchObject({
+        code: "fetch_failed",
+        message: `The site answered with an error (HTTP ${status}). It may be down; try again later.`,
+      });
+    }
+    for (const status of [400, 451]) {
+      const { run } = options(response({ status, text: "" }));
+      await expect(run("https://example.com/other-status")).rejects.toMatchObject({
+        code: "fetch_failed",
+        message: `The site answered HTTP ${status} instead of the page.`,
+      });
     }
     const { run } = options(new TypeError("offline"));
     await expect(run("https://example.com/offline")).rejects.toMatchObject({
       code: "fetch_failed",
+      message: "Couldn't reach that page. Check the link and try again.",
     });
+  });
+
+  it("keeps a SourceError thrown by the fetch unchanged", async () => {
+    const customError = new SourceError("blocked", "Custom block from proxy");
+    const { run } = options(customError);
+    await expect(run("https://example.com/proxy-blocked")).rejects.toBe(customError);
+  });
+
+  it("reports a bot wall page answering 200 as blocked", async () => {
+    for (const fixtureName of ["apa.html", "nyt.html"]) {
+      const { run } = options(response({ text: fixture(fixtureName) }));
+      await expect(run("https://example.com/walled")).rejects.toMatchObject({
+        code: "blocked",
+        message:
+          "The site refused the request. Try saving it with the Sourcefold extension while you have the page open.",
+      });
+    }
   });
 
   it("lets an abort through instead of calling it a network failure", async () => {

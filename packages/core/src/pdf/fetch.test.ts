@@ -79,7 +79,53 @@ describe("fetchPdfCapture, arXiv links", () => {
     expect(result.capture.url).toBe("https://arxiv.org/abs/2401.01234");
     expect(result.capture.title).toBe("Attention Is All You Need");
     expect(result.capture.meta.arxiv).toBe("2401.01234");
-    expect(requested).toEqual(["https://arxiv.org/html/2401.01234"]);
+    expect(requested).toEqual([
+      "https://arxiv.org/html/2401.01234",
+      "https://export.arxiv.org/api/query?id_list=2401.01234",
+    ]);
+  });
+
+  it("uses arXiv's HTML version and completes the title from the Atom API when the HTML has no document title", async () => {
+    const noTitleHtml = readFileSync(join(fixtures, "arxiv-no-title.html"), "utf8");
+    const requested: string[] = [];
+    const ATOM_2308 = `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title type="html">ArXiv Query: search_query=&amp;id_list=2308.08708</title>
+  <entry>
+    <id>http://arxiv.org/abs/2308.08708</id>
+    <published>2023-08-16T17:00:00Z</published>
+    <title>Consciousness in Artificial Intelligence: Insights from the Science of Consciousness</title>
+    <author><name>Patrick Butlin</name></author>
+    <author><name>Robert Long</name></author>
+  </entry>
+</feed>`;
+
+    const fetch = sourceFetch((request) => {
+      requested.push(request.url);
+      if (request.url === "https://arxiv.org/html/2308.08708") {
+        return text(request.url, noTitleHtml);
+      }
+      if (request.url.startsWith("https://export.arxiv.org/api/query")) {
+        return text(request.url, ATOM_2308, { contentType: "application/atom+xml" });
+      }
+      return statusOnly(request.url, 404);
+    });
+
+    const result = await fetchPdfCapture("https://arxiv.org/abs/2308.08708", { fetch, parseHtml });
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+
+    expect(result.kind).toBe("pdf");
+    expect(result.capture.url).toBe("https://arxiv.org/abs/2308.08708");
+    expect(result.capture.title).toBe(
+      "Consciousness in Artificial Intelligence: Insights from the Science of Consciousness",
+    );
+    expect(result.capture.meta.arxiv).toBe("2308.08708");
+    expect(result.capture.meta.author).toBe("Patrick Butlin, Robert Long");
+    expect(result.capture.meta.published).toBe("2023-08-16");
+    expect(result.capture.markdown).toContain("Introduction");
+    expect(result.capture.markdown).toContain("Scientific Theories of Consciousness");
+    expect(requested.some((url) => url.includes("/pdf/"))).toBe(false);
   });
 
   it("falls back to the PDF and reads arXiv's Atom metadata", async () => {
@@ -105,7 +151,11 @@ describe("fetchPdfCapture, arXiv links", () => {
     expect(result.status).toBe("ok");
     if (result.status !== "ok") return;
 
-    expect(requested).toContain("https://arxiv.org/pdf/2401.01234v2");
+    expect(requested).toEqual([
+      "https://arxiv.org/html/2401.01234v2",
+      "https://arxiv.org/pdf/2401.01234v2",
+      "https://export.arxiv.org/api/query?id_list=2401.01234",
+    ]);
     expect(result.capture.url).toBe("https://arxiv.org/abs/2401.01234");
     expect(result.capture.meta).toEqual({
       author: "Ada Lovelace, Grace Hopper",
@@ -222,7 +272,17 @@ describe("fetchPdfCapture error mapping", () => {
     [410, "not_found", "Couldn't find that PDF. Check the link."],
     [403, "blocked", "The site refused the request. Try again later."],
     [429, "blocked", "The site refused the request. Try again later."],
-    [500, "fetch_failed", "Couldn't download the PDF. Check your connection and try again."],
+    [
+      500,
+      "fetch_failed",
+      "The site answered with an error (HTTP 500). It may be down; try again later.",
+    ],
+    [
+      503,
+      "fetch_failed",
+      "The site answered with an error (HTTP 503). It may be down; try again later.",
+    ],
+    [400, "fetch_failed", "The site answered HTTP 400 instead of the page."],
   ])("maps status %i to %s", async (status, code, message) => {
     const fetch = sourceFetch((request) => statusOnly(request.url, status));
     await expect(
@@ -244,15 +304,17 @@ describe("fetchPdfCapture error mapping", () => {
   });
 
   it("keeps a PDF status error when both arXiv paths fail", async () => {
-    const fetch = sourceFetch((request) =>
-      request.url.startsWith("https://arxiv.org/pdf/")
-        ? statusOnly(request.url, 403)
-        : statusOnly(request.url, 404),
-    );
+    const fetch = sourceFetch((request) => {
+      if (request.url.startsWith("https://arxiv.org/html/")) return statusOnly(request.url, 404);
+      if (request.url.startsWith("https://arxiv.org/pdf/")) return statusOnly(request.url, 403);
+      return statusOnly(request.url, 404);
+    });
+
     await expect(
       fetchPdfCapture("https://arxiv.org/abs/2401.01234", { fetch, parseHtml }),
     ).rejects.toMatchObject({
       code: "blocked",
+      message: "The site refused the request. Try again later.",
     });
   });
 });

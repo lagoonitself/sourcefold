@@ -47,17 +47,32 @@ function web(overrides: Record<string, Parameters<typeof fakeWeb>[0][string]> = 
 }
 
 let storage: ReturnType<typeof vi.fn>;
+let downloadFetch: ReturnType<typeof vi.fn>;
+const fakeLookup = vi.fn(async (_host: string) => [{ address: "93.184.216.34" }]);
+
+const registerWithDeps = (
+  server: Parameters<typeof registerImagesTools>[0],
+  ctx: Parameters<typeof registerImagesTools>[1],
+) =>
+  registerImagesTools(server, ctx, {
+    fetch: downloadFetch as typeof fetch,
+    lookup: fakeLookup,
+  });
 
 beforeEach(() => {
-  storage = vi.fn(async (input: string | URL | Request) => {
+  downloadFetch = vi.fn(async (input: string | URL | Request) => {
     const url = String(input);
     if (url === "https://img.test/photo.png") {
       return new Response(PNG, { status: 200, headers: { "content-type": "image/png" } });
     }
     if (url === "https://img.test/page") return new Response("<html>", { status: 200 });
     if (url === "https://img.test/missing.png") return new Response("no", { status: 404 });
+    throw new Error(`unexpected download fetch ${url}`);
+  });
+  storage = vi.fn(async (input: string | URL | Request) => {
+    const url = String(input);
     if (url === "https://storage.test/upload") return new Response("{}", { status: 200 });
-    throw new Error(`unexpected fetch ${url}`);
+    throw new Error(`unexpected storage fetch ${url}`);
   });
   vi.stubGlobal("fetch", storage);
 });
@@ -80,7 +95,7 @@ describe("add_image", () => {
     const path = join(dir, "turbo diagram.png");
     writeFileSync(path, PNG);
     const fake = web();
-    const h = await connect(registerImagesTools, { web: fake });
+    const h = await connect(registerWithDeps, { web: fake });
     const { text, isError } = await h.call("add_image", { group_id: "g1", path });
     expect(isError).toBe(false);
     expect(text).toBe('Added image "pic" [img1] to Cars › Engines.');
@@ -111,7 +126,7 @@ describe("add_image", () => {
 
   it("downloads from a url and passes on a title", async () => {
     const fake = web();
-    const h = await connect(registerImagesTools, { web: fake });
+    const h = await connect(registerWithDeps, { web: fake });
     const { text, isError } = await h.call("add_image", {
       group_id: "g1",
       url: "https://img.test/photo.png",
@@ -123,12 +138,14 @@ describe("add_image", () => {
       file_name: "photo.png",
     });
     // Wikimedia answers 400 to downloads without a User-Agent that names the app.
-    const download = storage.mock.calls.find((c) => String(c[0]) === "https://img.test/photo.png")!;
+    const download = downloadFetch.mock.calls.find(
+      (c) => String(c[0]) === "https://img.test/photo.png",
+    )!;
     expect(download[1].headers["User-Agent"]).toMatch(/^Sourcefold\//);
   });
 
   it("wants exactly one of path and url", async () => {
-    const h = await connect(registerImagesTools, { web: web() });
+    const h = await connect(registerWithDeps, { web: web() });
     for (const args of [{}, { path: "a.png", url: "https://img.test/photo.png" }]) {
       const { text, isError } = await h.call("add_image", { group_id: "g1", ...args });
       expect(isError).toBe(true);
@@ -137,7 +154,7 @@ describe("add_image", () => {
   });
 
   it("rejects the wrong extension, a missing file, a fake image and a too-big file", async () => {
-    const h = await connect(registerImagesTools, { web: web() });
+    const h = await connect(registerWithDeps, { web: web() });
     const call = (path: string) => h.call("add_image", { group_id: "g1", path });
 
     const pdf = join(dir, "doc.pdf");
@@ -158,7 +175,7 @@ describe("add_image", () => {
   });
 
   it("rejects bad urls, failed downloads and pages that are not images", async () => {
-    const h = await connect(registerImagesTools, { web: web() });
+    const h = await connect(registerWithDeps, { web: web() });
     const call = (url: string) => h.call("add_image", { group_id: "g1", url });
     expect((await call("ftp://img.test/a.png")).text).toContain("Only http and https");
     expect((await call("not a url")).text).toContain("isn't a web address");
@@ -169,7 +186,7 @@ describe("add_image", () => {
   });
 
   it("refuses a project as the target before reading anything", async () => {
-    const h = await connect(registerImagesTools, { web: web() });
+    const h = await connect(registerWithDeps, { web: web() });
     const { text, isError } = await h.call("add_image", {
       group_id: "p1",
       url: "https://img.test/photo.png",
@@ -183,9 +200,9 @@ describe("add_image", () => {
     storage.mockImplementation(async (input: string | URL | Request) =>
       String(input) === "https://storage.test/upload"
         ? new Response(JSON.stringify({ message: "Bucket is full" }), { status: 413 })
-        : new Response(PNG, { status: 200 }),
+        : new Response("{}", { status: 200 }),
     );
-    const h = await connect(registerImagesTools, { web: web() });
+    const h = await connect(registerWithDeps, { web: web() });
     const { text, isError } = await h.call("add_image", {
       group_id: "g1",
       url: "https://img.test/photo.png",

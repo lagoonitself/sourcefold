@@ -1,11 +1,27 @@
 import { z } from "zod";
+import { isSourceCaptureKind } from "@sourcefold/core";
 import { jsonData, jsonError, requireApiUser } from "@/lib/api";
 import { ITEM_LIST_COLUMNS } from "@/features/items/item-columns";
 import { invalidFolderMessage, nextPosition } from "@/features/capture/find-duplicate";
+import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
 
 export const dynamic = "force-dynamic";
 
 const idSchema = z.string().uuid("Invalid item ID");
+
+const NOTE_MARKDOWN_MAX = 200000;
+// A long Grokipedia article is about 200 KB and a YouTube transcript can be more.
+const SOURCE_MARKDOWN_MAX = 2000000;
+
+/** A source's text is the page as it was saved, and the user may cut parts out of it. */
+function hasEditableSourceText(kind: string): boolean {
+  return (
+    kind === "grokipedia" ||
+    kind === "wikipedia" ||
+    kind === "substack" ||
+    isSourceCaptureKind(kind)
+  );
+}
 
 const patchItemSchema = z
   .object({
@@ -23,7 +39,10 @@ const patchItemSchema = z
       .optional()
       // Only an explicit empty string clears the note; a missing key must stay undefined.
       .transform((val) => (val === "" ? null : val)),
-    markdown: z.string().max(200000, "Markdown must be at most 200000 characters.").optional(),
+    markdown: z
+      .string()
+      .max(SOURCE_MARKDOWN_MAX, `Text must be at most ${SOURCE_MARKDOWN_MAX} characters.`)
+      .optional(),
   })
   .refine(
     (data) =>
@@ -101,8 +120,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return jsonError(404, "Item not found.");
   }
 
-  if (parsed.data.markdown !== undefined && existing.kind !== "note") {
-    return jsonError(400, "Only notes have editable text.");
+  if (parsed.data.markdown !== undefined) {
+    if (existing.kind === "note") {
+      if (parsed.data.markdown.length > NOTE_MARKDOWN_MAX) {
+        return jsonError(400, `Markdown must be at most ${NOTE_MARKDOWN_MAX} characters.`);
+      }
+    } else if (!hasEditableSourceText(existing.kind)) {
+      return jsonError(400, "This source's text can't be edited.");
+    }
   }
 
   const updateData: {
@@ -161,6 +186,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (!updatedItem) {
     return jsonError(404, "Item not found.");
+  }
+
+  // The new text waits in Supabase until it reaches Drive, like a source that was just saved.
+  if (parsed.data.markdown !== undefined && existing.kind !== "note") {
+    pushToDriveSoon(auth.userId);
   }
 
   return jsonData(updatedItem);

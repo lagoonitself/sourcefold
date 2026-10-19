@@ -291,6 +291,13 @@
   outline-color: var(--marker-strong);
 }
 
+/* "Remove text" mode: the block the trash button beside it would take out of the source. */
+.reader-prose .reader-remove-hover {
+  background-color: color-mix(in srgb, var(--destructive) 9%, transparent);
+  border-radius: 4px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--destructive) 9%, transparent);
+}
+
 /* Keyboard focus: a 2px ink bar in the left margin (j / k). */
 .reader-prose .reader-block-focus {
   position: relative;

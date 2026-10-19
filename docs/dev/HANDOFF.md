@@ -4,7 +4,7 @@ Read this first in any new session. When the user says "continue", pick up at **
 
 This repo is public. Don't put account emails, project IDs, client IDs or other deployment details here; keep them in the agent's private memory.
 
-Last updated: 2026-10-19, after fixing what Claude Desktop found when it tested the MCP server (branch `mcp-test-fixes`, off `main`). Before that: building Sourcefold for Claude (an MCP server, merged into `main`). Before that: the desktop redesign (branch `desktop-redesign`), tidying the repository (developer docs in `docs/dev/`, a user-first README, `docs/INSTALL.md`, `docs/SELF-HOSTING.md`, `CHANGELOG.md`) and releasing v0.3.0 with fixed download names.
+Last updated: 2026-10-19, after building "Remove text" for saved sources (branch `remove-source-text`, off `mcp-test-fixes`, not merged). Before that: fixing what Claude Desktop found when it tested the MCP server (branch `mcp-test-fixes`, off `main`). Before that: building Sourcefold for Claude (an MCP server, merged into `main`). Before that: the desktop redesign (branch `desktop-redesign`), tidying the repository (developer docs in `docs/dev/`, a user-first README, `docs/INSTALL.md`, `docs/SELF-HOSTING.md`, `CHANGELOG.md`) and releasing v0.3.0 with fixed download names.
 
 ## What we're building
 
@@ -103,8 +103,18 @@ Lessons worth keeping:
   - In Git Bash here, a heredoc mangled backslashes in inline Python and Node scripts (`\\n` arrived as a newline). Write edit scripts to a file with the Write tool instead.
 - Two Sonnet 5.5 agents hit the Claude session limit mid-way on 2026-10-18. Resumed with SendMessage the next day, they finished from their files on disk. The owner doesn't want Gemini models used.
 
+- Remove text (2026-10-19): the owner doesn't want everything in a saved source (a sponsor read in a transcript, "related articles" under an article) and wants to cut it out after saving. The body stays the source of truth, so the cut reuses the save path: web `PATCH /api/items/[id]` sets `items.markdown` and calls `pushToDriveSoon` (the Drive file, Doc, images and the local copy all follow the normal "needs saving" rules); offline `update_item_body` rewrites the SQLite copy and the file. The reader renders with `renderMarkdown(text, { sourceMap: true })`, which puts `data-sf-src="start-end"` on paragraphs, headings, top-level list items, quotes, code and tables; `removeFromBody` turns a selection (visible-text offsets inside those blocks) into cuts in the Markdown using marked's inline tokens, and refuses anything it can't place exactly (it checks the page's text length against its own). Highlights: ones whose text was cut are deleted (and restored by Undo); the rest are re-found by their quote as always. Not covered: the footnote list at the end, parts of tables/quotes/multi-line list items (whole block only; use **Edit as text**), X threads.
+
 ## Next steps
 
+1. **Owner tests "Remove text" (built 2026-10-19, branch `remove-source-text`, desktop only; the web needs deploying for signed-in use, the new `PATCH` accepts `markdown` for text sources).** Run `npm run tauri dev -w @sourcefold/desktop`.
+   - Open a YouTube transcript and a Grokipedia or web article in the reader (`Enter`). Press `e` (or the eraser button in the top bar): a strip appears saying how it works. Hover a paragraph: it tints and a trash button shows to its right; click it, and the paragraph disappears and a toast offers **Undo**.
+   - Drag-select a few sentences inside one paragraph, then press **Remove** (or `Backspace`): only those words go, with no stray `**` or double spaces. Select across several paragraphs and list items: the ones fully inside go whole, the two at the ends lose just the selected part. Highlighting is off while the mode is on.
+   - Try a selection that makes a bad cut (inside a table, a quote, or a list item that wraps onto a second line): it says it can't cut part of that and offers whole-block removal or **Edit as text**.
+   - **Edit as text** opens the saved Markdown in a plain box; delete a section, **Save** (or `Ctrl+Enter`). Check the reader shows the change.
+   - Highlight a sentence first, then remove the paragraph holding it: the toast says the highlight went with it; **Undo** brings back both. Check the panel and the group's Highlights tab.
+   - Signed in: press Save to Drive (or wait a few seconds), then open the source's `.md` and Google Doc in Drive and check the removed text is gone. The local copy under `Documents/Sourcefold/...` updates within 30 s, and searching for a removed word no longer finds it. Offline: the file on disk changes at once.
+   - Report anything that cut the wrong thing, left Markdown marks behind, or felt slow.
 1. **Owner tests Sourcefold in Claude Desktop (built 2026-10-19, branch `claude-mcp`, which includes the desktop redesign).**
    - **Setup:** install Claude Desktop. Run `git checkout claude-mcp`, `npm install`, `npm run build -w @sourcefold/mcp` (makes `apps/mcp/dist/Sourcefold-Claude.mcpb`), then `npm run tauri dev -w @sourcefold/desktop`, and sign in.
    - **Install:** in Sourcefold open **Settings → Claude** and click **Add to Claude Desktop**. Claude Desktop shows an install window: click **Install** and leave both settings empty (it uses the desktop app's sign-in). Or double-click the `.mcpb` yourself.

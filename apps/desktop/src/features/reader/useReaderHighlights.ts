@@ -57,6 +57,8 @@ export interface ReaderHighlightsArgs {
   initialHighlightId?: string | null;
   onSaveLinks?: (urls: string[], folderId: string) => void;
   onHighlightsChanged?: (itemId: string) => void;
+  /** True while the reader is in "Remove text" mode: selecting text must not highlight it. */
+  suspended?: boolean;
 }
 
 export type ReaderReference = FootnoteDef;
@@ -91,6 +93,10 @@ export interface ReaderHighlightsController {
   cancelNote: () => void;
   copyHighlight: (id: string) => void;
   removeHighlight: (id: string) => void;
+  /** Deletes highlights whose text was cut out of the source; no undo entry, no toast. */
+  dropHighlights: (ids: string[]) => void;
+  /** Puts back highlights that `dropHighlights` deleted (the user undid the removal). */
+  restoreHighlights: (list: Highlight[]) => void;
   jumpTo: (id: string) => void;
   saveLinks: (urls: string[]) => void;
   navigate: (delta: 1 | -1) => void;
@@ -397,6 +403,34 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
     [addLocal, persistDelete, removeLocal],
   );
 
+  const dropHighlights = React.useCallback(
+    (ids: string[]) => {
+      for (const id of ids) {
+        const h = highlightsRef.current.find((x) => x.id === id);
+        if (!h) continue;
+        removeLocal(id);
+        persistDelete(h, () => {
+          addLocal(h);
+          toast.error("Couldn't delete a highlight that sat in the removed text.");
+        });
+      }
+    },
+    [addLocal, persistDelete, removeLocal],
+  );
+
+  const restoreHighlights = React.useCallback(
+    (list: Highlight[]) => {
+      for (const h of list) {
+        addLocal(h);
+        persistPut(h, () => {
+          removeLocal(h.id);
+          toast.error("Couldn't restore a highlight. Select the passage again.");
+        });
+      }
+    },
+    [addLocal, persistPut, removeLocal],
+  );
+
   const setNote = React.useCallback(
     (id: string, raw: string, record = true) => {
       const h = highlightsRef.current.find((x) => x.id === id);
@@ -598,6 +632,8 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
   // Mouse selection: highlight on release, unless Alt is held or auto-highlight is off.
   const autoRef = React.useRef(autoHighlight);
   autoRef.current = autoHighlight;
+  const suspendedRef = React.useRef(args.suspended ?? false);
+  suspendedRef.current = args.suspended ?? false;
   React.useEffect(() => {
     if (!open || !itemId) return;
     const onMouseUp = (event: MouseEvent) => {
@@ -611,7 +647,7 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
           suppressClickRef.current = false;
         }, 80);
       }
-      if (!autoRef.current || event.altKey) return;
+      if (!autoRef.current || event.altKey || suspendedRef.current) return;
       // Let the browser settle the selection (a click inside a selection collapses it on release).
       window.setTimeout(() => {
         const root = bodyRef.current;
@@ -629,6 +665,7 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
         event.preventDefault();
         return true;
       }
+      if (suspendedRef.current) return false;
       const target = event.target as HTMLElement;
       if (target.closest("a")) return false;
       const sel = window.getSelection();
@@ -862,6 +899,8 @@ export function useReaderHighlights(args: ReaderHighlightsArgs): ReaderHighlight
     cancelNote,
     copyHighlight,
     removeHighlight: (id: string) => removeHighlight(id),
+    dropHighlights,
+    restoreHighlights,
     jumpTo,
     saveLinks,
     navigate,

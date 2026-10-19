@@ -596,6 +596,15 @@ export const READER_COMMANDS: ReadonlyArray<ShortcutCommand> = [
     when: "reader",
   },
   {
+    id: "reader.remove-text",
+    title: "Remove text",
+    description:
+      "Remove text you don't want: select it and press Backspace, or use the trash button beside a paragraph",
+    group: "Reader",
+    combos: ["e"],
+    when: "reader",
+  },
+  {
     id: "reader.panel",
     title: "Highlights panel",
     description: "Show or hide the side panel",

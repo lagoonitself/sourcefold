@@ -313,6 +313,21 @@ export async function deleteItem(id: string): Promise<void> {
   });
 }
 
+/**
+ * Replaces a saved source's text with `body` (the part between the title and the note): the
+ * reader's "Remove text" and "Edit as text". Signed in, the web app keeps it until it reaches
+ * Drive; offline, the file on disk is rewritten.
+ */
+export async function updateItemBody(id: string, body: string): Promise<void> {
+  if (shouldUseTauri()) {
+    return await tauriInvoke<void>("update_item_body", { id, body });
+  }
+  await httpFetch<void>(`/items/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ markdown: body }),
+  });
+}
+
 export async function updateItemNote(id: string, note: string | null): Promise<void> {
   if (shouldUseTauri()) {
     return await tauriInvoke<void>("update_item_note", { id, note });

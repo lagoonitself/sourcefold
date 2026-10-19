@@ -5,7 +5,9 @@ import { registerModalLayer } from "@/components/ui/Dialog";
 import { loadReaderText } from "@/lib/api";
 import { errorMessage, openUrl } from "@/lib/utils";
 import { ReaderView } from "./ReaderView";
+import { canEditText } from "./removal";
 import type { ReaderLoadState, ReaderModalProps } from "./types";
+import { useReaderCleanup } from "./use-reader-cleanup";
 import { useReaderContent } from "./use-reader-content";
 import { useReaderFind } from "./use-reader-find";
 import { useReaderHighlights } from "./useReaderHighlights";
@@ -83,7 +85,15 @@ export function ReaderModal({
     if (!open) setState({ status: "loading" });
   }, [open]);
 
+  // Loads the text again after it was changed here, keeping the page and scroll position.
+  const reloadText = React.useCallback(async (id: string) => {
+    const text = await loadReaderText(id);
+    if (itemRef.current?.id === id) setState({ status: "ready", text, itemId: id });
+  }, []);
+
   const content = useReaderContent(state.status === "ready" ? state.text : null);
+
+  const [removing, setRemoving] = React.useState(false);
 
   const highlights = useReaderHighlights({
     item,
@@ -96,6 +106,22 @@ export function ReaderModal({
     initialHighlightId,
     onSaveLinks,
     onHighlightsChanged,
+    suspended: removing,
+  });
+
+  const cleanup = useReaderCleanup({
+    open,
+    itemId,
+    enabled: Boolean(
+      item && canEditText(item.kind) && state.status === "ready" && content.bodyHtml,
+    ),
+    body: content.parsed?.body ?? null,
+    bodyHtml: content.bodyHtml,
+    bodyRef,
+    highlights,
+    reloadText,
+    active: removing,
+    setActive: setRemoving,
   });
 
   const find = useReaderFind({
@@ -119,6 +145,8 @@ export function ReaderModal({
   highlightsRef.current = highlights;
   const findRef = React.useRef(find);
   findRef.current = find;
+  const cleanupRef = React.useRef(cleanup);
+  cleanupRef.current = cleanup;
 
   const isShown = open && item !== null;
 
@@ -141,6 +169,7 @@ export function ReaderModal({
   // Keyboard shortcuts (the highlight keys live in useReaderHighlights):
   // - Mod+F: find in this source; Enter / Shift+Enter move between matches while the bar is open
   // - Escape: close the small menu, then a panel note field, then the find bar, then the reader
+  // - e: Remove text mode (select text or press the trash button to take it out of the source)
   // - o / O: open original source URL in browser
   // - ArrowDown / ArrowUp: scroll
   // - Space / Shift+Space: page down / page up
@@ -160,6 +189,7 @@ export function ReaderModal({
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
+        if (cleanupRef.current.handleEscape()) return;
         if (highlightsRef.current.handleEscape()) return;
         if (findRef.current.barOpen) {
           findRef.current.closeBar();
@@ -169,6 +199,7 @@ export function ReaderModal({
         return;
       }
 
+      if (cleanupRef.current.handleKey(e)) return;
       if (highlightsRef.current.handleKey(e)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
@@ -256,6 +287,7 @@ export function ReaderModal({
               highlights={highlights}
               bodyRef={bodyRef}
               find={find}
+              cleanup={cleanup}
             />
           </motion.div>
         </motion.div>

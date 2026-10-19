@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ChevronUp,
   Copy,
+  Eraser,
   ExternalLink,
   FileText,
   Highlighter,
@@ -25,6 +26,8 @@ import { SourceTile, getSourceKind, formatSavedDate } from "@/features/items/sou
 import { cn, openUrl } from "@/lib/utils";
 import { HighlightMenu } from "./HighlightMenu";
 import { HighlightsPanel } from "./HighlightsPanel";
+import { ReaderCleanupLayer } from "./ReaderCleanupLayer";
+import { ReaderTextEditor } from "./ReaderTextEditor";
 import { buildReaderHeader, calculateReadingTime } from "./reader-meta";
 import { useReaderContent } from "./use-reader-content";
 import "./reader.css";
@@ -59,6 +62,7 @@ export function ReaderView({
   highlights,
   bodyRef,
   find,
+  cleanup,
 }: ReaderViewProps) {
   const [typography, setTypography] = React.useState<ReaderTypography>(() => {
     try {
@@ -235,6 +239,23 @@ export function ReaderView({
             </Button>
           )}
 
+          {cleanup?.enabled && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={cleanup.toggle}
+              aria-pressed={cleanup.active}
+              aria-label="Remove text you don't want"
+              title="Remove text you don't want (e)"
+              className={cn(
+                "text-muted-foreground hover:text-foreground",
+                cleanup.active && "bg-accent text-accent-foreground",
+              )}
+            >
+              <Eraser className="size-4" aria-hidden="true" />
+            </Button>
+          )}
+
           {/* Typography toggle */}
           <div className="flex items-center rounded-[8px] border border-border bg-muted/60 p-0.5">
             <button
@@ -332,10 +353,38 @@ export function ReaderView({
         </div>
       </header>
 
+      {cleanup?.active && (
+        <div
+          data-reader-ui
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 py-2 font-sans select-none"
+        >
+          <p className="min-w-0 text-[13px] leading-5 text-muted-foreground">
+            Select text to remove it, or use the trash button beside a paragraph. Highlights in
+            removed text go with it.
+          </p>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button variant="outline" size="sm" onClick={cleanup.openEditor}>
+              Edit as text
+            </Button>
+            <Button size="sm" onClick={() => cleanup.setActive(false)}>
+              Done
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Reader Body / Scroll Area, with the highlights panel beside it */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div className="relative min-w-0 flex-1">
           {find?.barOpen && <FindBar find={find} />}
+          {cleanup?.editing && (
+            <ReaderTextEditor
+              initial={cleanup.body}
+              busy={cleanup.busy}
+              onSave={(text) => void cleanup.saveEditor(text)}
+              onCancel={cleanup.closeEditor}
+            />
+          )}
           <div
             ref={scrollRef}
             tabIndex={0}
@@ -515,6 +564,8 @@ export function ReaderView({
                   wrapperRef={articleRef}
                 />
               )}
+
+              {cleanup && <ReaderCleanupLayer cleanup={cleanup} articleRef={articleRef} />}
             </article>
           </div>
         </div>

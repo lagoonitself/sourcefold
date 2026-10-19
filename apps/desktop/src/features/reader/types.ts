@@ -1,8 +1,9 @@
 import type { ItemKind } from "@/lib/types";
 import type { ReaderHighlightsController } from "./useReaderHighlights";
+import type { ReaderCleanupController } from "./use-reader-cleanup";
 import type { InitialSearch, ReaderFindController } from "./use-reader-find";
 
-export type { InitialSearch, ReaderFindController };
+export type { InitialSearch, ReaderFindController, ReaderCleanupController };
 
 export interface ReaderItem {
   id: string;
@@ -44,6 +45,8 @@ export interface ReaderViewProps {
   bodyRef?: React.RefObject<HTMLDivElement | null>;
   /** The find bar (Mod+F) and its state; without it the view has no find bar. */
   find?: ReaderFindController;
+  /** "Remove text" mode and the text editor; without it the view cannot change the text. */
+  cleanup?: ReaderCleanupController;
 }
 
 export interface ReaderContent {

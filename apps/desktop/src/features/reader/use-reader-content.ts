@@ -8,7 +8,11 @@ export function useReaderContent(text: string | null): ReaderContent {
   const parsed = React.useMemo(() => (text === null ? null : parseReaderFile(text)), [text]);
   const body = parsed?.body ?? "";
   const note = parsed?.note ?? null;
-  const bodyHtml = React.useMemo(() => (body.trim() ? renderMarkdown(body) : ""), [body]);
+  // Each removable block carries its place in the text, for "Remove text".
+  const bodyHtml = React.useMemo(
+    () => (body.trim() ? renderMarkdown(body, { sourceMap: true }) : ""),
+    [body],
+  );
   const noteHtml = React.useMemo(() => (note ? renderMarkdown(note) : ""), [note]);
   return React.useMemo(() => ({ parsed, bodyHtml, noteHtml }), [parsed, bodyHtml, noteHtml]);
 }

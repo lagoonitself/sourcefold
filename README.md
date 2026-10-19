@@ -32,6 +32,7 @@ The apps aren't from a paid publisher, so Windows and macOS warn you the first t
 
 - Every source opens in a clean reader in the desktop app: no ads, images in place, footnotes that jump to their references.
 - Select text to highlight it, add a note, and copy a quote with its source. Highlights are written into the source's Markdown file too.
+- Don't want all of it? Remove the parts you don't need (a sponsor read in a transcript, a "related articles" list) and keep the rest; Undo brings it back.
 - On Grokipedia and Wikipedia, see every source an article cites and save the ones you want in one go.
 
 **Find things again**

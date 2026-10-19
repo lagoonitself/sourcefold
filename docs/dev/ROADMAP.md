@@ -124,6 +124,11 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [ ] Phase 3, rest: images inside sources, **Find in other sources** (`f`) on a highlight.
   - [ ] Serve the ONNX Runtime files from the app instead of `cdn.jsdelivr.net` (set `env.backends.onnx.wasm.wasmPaths`), and drop the unused 27 MB asyncify `.wasm` from the build.
 
+- **Remove text from a saved source (built 2026-10-19; [ ] owner's check):**
+  - [x] Desktop reader "Remove text" mode (`e`): select text then **Remove** / `Backspace`, or the trash button beside a block; **Edit as text**; Undo toast and `z`. `removeFromBody` and the `data-sf-src` source map are in `packages/core/src/reader`.
+  - [x] Saving: `PATCH /api/items/[id]` takes `markdown` for text sources and starts a Drive push (Doc and local copy follow); offline, the `update_item_body` command rewrites the file on disk.
+  - [ ] Not covered: the footnote/reference list at the end (use **Edit as text**), parts of a table, quote or multi-line list item (whole block only), X threads, the web app (it has no reader).
+
 - **Sourcefold for Claude, MCP server (built 2026-10-19, contract `docs/dev/handoff-mcp.md`; [ ] owner's check in Claude Desktop):**
   - [x] `apps/mcp`: 26 tools over the web API (browse, read in parts, find, organize, notes, highlights on the reader's own text, add links as background jobs with YouTube pacing, images, Drive, show in app), packed as `Sourcefold-Claude.mcpb`.
   - [x] Desktop bridge: `agent.json` key and `/api/agent/*` (status, keyword search, show, changed, Substack fetch); Settings → Claude → Add to Claude Desktop; live refresh and "show in app".

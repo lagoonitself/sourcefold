@@ -1,4 +1,10 @@
-import { Marked, type TokenizerAndRendererExtension, type Tokens } from "marked";
+import {
+  Marked,
+  Renderer,
+  type Token,
+  type TokenizerAndRendererExtension,
+  type Tokens,
+} from "marked";
 
 /**
  * Markdown to HTML for the reader. The text comes from scraped web pages, so nothing the page
@@ -140,10 +146,81 @@ const footnoteRefExtension: TokenizerAndRendererExtension = {
   },
 };
 
+/**
+ * Where a removable block sits in the Markdown it was rendered from. The reader asks for these
+ * (`renderMarkdown(text, { sourceMap: true })`) so a paragraph, heading, list item, quote, code
+ * block or table on screen can be cut out of the source text.
+ */
+export const SOURCE_SPAN_ATTR = "data-sf-src";
+
+export interface BlockSpan {
+  /** Offsets into the Markdown: `[start, end)` is the block's own text, markers included. */
+  start: number;
+  end: number;
+  token: Token;
+}
+
+const spans = new WeakMap<object, BlockSpan>();
+
+const SPAN_TYPES = new Set(["paragraph", "heading", "blockquote", "code", "table", "hr"]);
+
+/**
+ * The spans of the top-level blocks and of the items of top-level lists. Blocks nested in quotes
+ * or in list items are left out: marked strips their indentation and `>` marks, so their text
+ * does not sit at one place in the source. Empty when the tokens don't add up to the Markdown.
+ */
+export function mapBlockSpans(tokens: Token[], markdown: string): BlockSpan[] {
+  const found: BlockSpan[] = [];
+  let pos = 0;
+  for (const token of tokens) {
+    if (markdown.slice(pos, pos + token.raw.length) !== token.raw) return [];
+    if (SPAN_TYPES.has(token.type)) {
+      found.push({ start: pos, end: pos + token.raw.length, token });
+    } else if (token.type === "list") {
+      let at = pos;
+      for (const item of (token as Tokens.List).items) {
+        if (markdown.slice(at, at + item.raw.length) !== item.raw) break;
+        found.push({ start: at, end: at + item.raw.length, token: item });
+        at += item.raw.length;
+      }
+    }
+    pos += token.raw.length;
+  }
+  return pos === markdown.length ? found : [];
+}
+
+function withSpan(html: string, token: object): string {
+  const span = spans.get(token);
+  if (!span) return html;
+  return html.replace(/^<([a-z0-9]+)/i, `<$1 ${SOURCE_SPAN_ATTR}="${span.start}-${span.end}"`);
+}
+
 const marked = new Marked({ gfm: true, breaks: true, async: false });
 marked.use({
   extensions: [footnoteDefExtension, footnoteRefExtension],
   renderer: {
+    // The spans exist only for a render that asked for them, so other renders are unchanged.
+    paragraph(token) {
+      return withSpan(Renderer.prototype.paragraph.call(this, token), token);
+    },
+    heading(token) {
+      return withSpan(Renderer.prototype.heading.call(this, token), token);
+    },
+    listitem(token) {
+      return withSpan(Renderer.prototype.listitem.call(this, token), token);
+    },
+    blockquote(token) {
+      return withSpan(Renderer.prototype.blockquote.call(this, token), token);
+    },
+    code(token) {
+      return withSpan(Renderer.prototype.code.call(this, token), token);
+    },
+    table(token) {
+      return withSpan(Renderer.prototype.table.call(this, token), token);
+    },
+    hr(token) {
+      return withSpan(Renderer.prototype.hr.call(this, token), token);
+    },
     html(token) {
       return plainTextOfHtml(token.text);
     },
@@ -181,10 +258,30 @@ function footnoteList(defs: FootnoteDefToken[]): string {
   return items.length > 0 ? `<ul class="footnotes">${items.join("")}</ul>` : "";
 }
 
-export function renderMarkdown(markdown: string): string {
+/** The Markdown as tokens, with the footnote syntax of the reader. */
+export function lexMarkdown(markdown: string): Token[] {
+  return marked.lexer(markdown);
+}
+
+/** Labels of the footnotes that have a definition (their references render as `[label]`). */
+export function definedFootnotes(tokens: Token[]): Set<string> {
+  return new Set(
+    tokens.filter((t): t is FootnoteDefToken => t.type === "footnoteDef").map((d) => d.label),
+  );
+}
+
+export interface RenderOptions {
+  /** Mark each removable block with `data-sf-src="start-end"` (see `SOURCE_SPAN_ATTR`). */
+  sourceMap?: boolean;
+}
+
+export function renderMarkdown(markdown: string, options: RenderOptions = {}): string {
   const tokens = marked.lexer(markdown);
   const defs = tokens.filter((t): t is FootnoteDefToken => t.type === "footnoteDef");
   footnotes = { defined: new Set(defs.map((d) => d.label)), refCounts: new Map() };
+  if (options.sourceMap) {
+    for (const span of mapBlockSpans(tokens, markdown)) spans.set(span.token, span);
+  }
   const html = marked.parser(tokens);
   return html + footnoteList(defs);
 }

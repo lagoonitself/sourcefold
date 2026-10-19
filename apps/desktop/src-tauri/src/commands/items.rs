@@ -132,6 +132,15 @@ pub async fn update_item_note(
 }
 
 #[tauri::command]
+pub async fn update_item_body(
+    db: State<'_, Database>,
+    id: String,
+    body: String,
+) -> Result<(), String> {
+    service::update_item_body(&db, &id, &body).map_err(|e| e.message)
+}
+
+#[tauri::command]
 pub async fn create_note(
     db: State<'_, Database>,
     folder_id: String,

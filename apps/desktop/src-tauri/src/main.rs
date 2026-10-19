@@ -112,6 +112,7 @@ fn main() {
             commands::move_item,
             commands::delete_item,
             commands::update_item_note,
+            commands::update_item_body,
             commands::create_note,
             commands::add_image,
             commands::open_item_file,

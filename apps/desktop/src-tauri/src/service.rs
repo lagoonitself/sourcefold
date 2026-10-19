@@ -3483,6 +3483,39 @@ pub fn update_item_note(db: &Database, id: &str, note: Option<&str>) -> Result<(
     Ok(())
 }
 
+/// Replaces a saved source's text (the reader's "Remove text" and "Edit as text"). The file, in
+/// the database and on disk, is rebuilt with the same front matter, highlights and note.
+/// Notes have their own editor, images have no text, and X threads are built from their posts.
+pub fn update_item_body(db: &Database, id: &str, body: &str) -> Result<(), ServiceError> {
+    let item = db.get_item(id).map_err(|e| ServiceError::not_found(format!("Item not found: {}", e)))?;
+    if item.kind == "note" || item.kind == "image" || item.kind == "x" {
+        return Err(ServiceError::bad_request("This source's text can't be edited."));
+    }
+
+    let (_, folder_path_str) = resolve_folder_path(db, &item.folder_id);
+    let folder_opt = if folder_path_str.is_empty() { None } else { Some(folder_path_str) };
+    let fields = item_file_fields(&item, item.title.clone(), folder_opt);
+    let updated_md = build_item_file_with_highlights(
+        &item.kind,
+        &fields,
+        body,
+        item.note.as_deref(),
+        &item_highlights(db, id),
+    );
+    db.update_item_content(id, None, &updated_md)
+        .map_err(|e| ServiceError::internal(format!("Database error: {}", e), "db_error"))?;
+    write_item_file_to_disk(
+        db,
+        &item.folder_id,
+        id,
+        &item.title,
+        "md",
+        &item.created_at,
+        updated_md.as_bytes(),
+    )?;
+    Ok(())
+}
+
 pub fn rename_item(db: &Database, id: &str, new_title: &str) -> Result<(), ServiceError> {
     let item = db.get_item(id).map_err(|e| ServiceError::not_found(format!("Item not found: {}", e)))?;
     let safe_t = safe_name(new_title);
@@ -4960,6 +4993,46 @@ Cited: [sae.org](https://www.sae.org/paper) · Note: Check the date";
         assert!(!body.contains("My highlights"));
         assert_eq!(note.as_deref(), Some("Changed"));
         assert!(!clean_body_markdown("youtube", &file, None).contains("My highlights"));
+    }
+
+    #[test]
+    fn test_update_item_body_rewrites_file_and_keeps_the_rest() {
+        let (db, group) = hl_setup();
+        let url = "https://www.youtube.com/watch?v=abcDEF12345";
+        let item = hl_item(&db, &group.id, "Edit body", url);
+        update_item_note(&db, &item.id, Some("My own thoughts")).unwrap();
+        put_highlight(&db, hl_input("h1", &item.id, "Some words", 0)).unwrap();
+        let before = db.get_item(&item.id).unwrap().updated_at;
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        update_item_body(&db, &item.id, "## Transcript\n\nOnly this stays.").unwrap();
+
+        let file = hl_file(&db, &item.id);
+        assert!(file.contains("## Transcript\n\nOnly this stays."));
+        assert!(!file.contains("Some words here."));
+        // Front matter, source line, highlights and note come through unchanged.
+        assert!(file.starts_with("---\nsource: youtube\n"));
+        assert!(file.contains("# Edit body"));
+        assert!(file.contains("> Some words"));
+        assert!(file.ends_with("## My note\n\nMy own thoughts\n"));
+        assert_eq!(file.matches("## Transcript").count(), 1);
+        // The stored copy is the file, and the item counts as changed for the search index.
+        let stored = db.get_item(&item.id).unwrap();
+        assert_eq!(stored.markdown.as_deref(), Some(file.as_str()));
+        assert!(stored.updated_at > before);
+
+        // Again with the text the reader hands back leaves the same file.
+        let (body, _) = extract_body_and_note(&file);
+        update_item_body(&db, &item.id, &body).unwrap();
+        assert_eq!(hl_file(&db, &item.id), file);
+    }
+
+    #[test]
+    fn test_update_item_body_refuses_notes_images_and_missing_items() {
+        let (db, group) = hl_setup();
+        let note = create_note(&db, &group.id, "A note", "text").unwrap();
+        assert!(update_item_body(&db, &note.id, "changed").is_err());
+        assert!(update_item_body(&db, "missing", "changed").is_err());
     }
 
     #[test]

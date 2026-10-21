@@ -24,6 +24,7 @@ export type {
   SubstackCapture,
   SubstackExtractResult,
   WikipediaCapture,
+  XMedia,
   XPostCapture,
   XTreeNode,
 } from "./capture-types";

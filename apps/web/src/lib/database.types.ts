@@ -429,6 +429,7 @@ export type Database = {
           handle: string
           id: string
           item_id: string
+          media: Json
           parent_id: string | null
           position: number
           post_url: string
@@ -445,6 +446,7 @@ export type Database = {
           handle: string
           id?: string
           item_id: string
+          media?: Json
           parent_id?: string | null
           position?: number
           post_url: string
@@ -461,6 +463,7 @@ export type Database = {
           handle?: string
           id?: string
           item_id?: string
+          media?: Json
           parent_id?: string | null
           position?: number
           post_url?: string

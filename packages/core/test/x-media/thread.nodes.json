@@ -1,0 +1,51 @@
+[
+  {
+    "id": "2001",
+    "parentId": null,
+    "position": 0,
+    "postUrl": "https://x.com/alice/status/2001",
+    "authorName": "Alice",
+    "handle": "alice",
+    "authorUrl": "https://x.com/alice",
+    "postedAt": "2026-10-14T12:00:00.000Z",
+    "text": "Look at these.",
+    "media": [
+      {
+        "type": "photo",
+        "url": "https://pbs.twimg.com/media/AAA111.jpg?name=orig",
+        "alt": "  A cat [sleeping]\n on a \\ sofa "
+      },
+      { "type": "photo", "url": "https://pbs.twimg.com/media/BBB222.png?name=orig", "alt": null }
+    ]
+  },
+  {
+    "id": "2002",
+    "parentId": "2001",
+    "position": 1,
+    "postUrl": "https://x.com/bob/status/2002",
+    "authorName": "Bob",
+    "handle": "bob",
+    "authorUrl": "https://x.com/bob",
+    "postedAt": "2026-10-14T12:05:00.000Z",
+    "text": "",
+    "media": [
+      { "type": "gif", "url": "https://video.twimg.com/tweet_video/CCC333.mp4", "alt": null }
+    ]
+  },
+  {
+    "id": "2003",
+    "parentId": "2002",
+    "position": 2,
+    "postUrl": "https://x.com/alice/status/2003",
+    "authorName": "Alice",
+    "handle": "alice",
+    "authorUrl": "https://x.com/alice",
+    "postedAt": "2026-10-14T12:10:00.000Z",
+    "text": "And a clip.",
+    "media": [
+      { "type": "video", "durationSeconds": 3725.4 },
+      { "type": "video", "durationSeconds": 59.6 },
+      { "type": "video", "durationSeconds": null }
+    ]
+  }
+]

@@ -7,7 +7,20 @@ export interface XPostCapture {
   authorUrl: string;
   postedAt: string | null; // ISO 8601 from time[datetime]
   text: string;
+  /** The post's own photos, GIFs and videos, in order (not a quoted post's). Missing = none known. */
+  media?: XMedia[];
 }
+
+/**
+ * A photo, GIF or video in an X post (docs/dev/handoff-x-media.md). Photos and GIFs are saved
+ * with the post; a video is only linked (the link is the post itself).
+ * - photo url: https://pbs.twimg.com/media/<id>.<ext>?name=orig
+ * - gif url: https://video.twimg.com/tweet_video/<id>.mp4 (X keeps GIFs as short MP4s)
+ */
+export type XMedia =
+  | { type: "photo"; url: string; alt: string | null }
+  | { type: "gif"; url: string; alt: string | null }
+  | { type: "video"; durationSeconds: number | null };
 
 export interface SubstackCapture {
   url: string; // canonical post URL (link rel=canonical)
@@ -102,4 +115,5 @@ export interface XTreeNode {
   authorUrl: string;
   postedAt: string | null;
   text: string;
+  media?: XMedia[];
 }

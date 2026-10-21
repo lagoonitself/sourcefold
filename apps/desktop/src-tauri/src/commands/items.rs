@@ -88,6 +88,11 @@ pub async fn add_x_post(
     db: State<'_, Database>,
     req: AddXPostRequest,
 ) -> Result<(String, String), String> {
+    let media = req
+        .media
+        .as_deref()
+        .and_then(|m| serde_json::from_str(m).ok())
+        .unwrap_or(serde_json::Value::Array(Vec::new()));
     let post = service::XPostCapture {
         post_url: req.post_url,
         author_name: req.author_name,
@@ -95,6 +100,7 @@ pub async fn add_x_post(
         author_url: req.author_url,
         posted_at: req.posted_at,
         text: req.text,
+        media,
     };
     service::add_x_post(&db, &req.item_id, post, req.parent_post_url).map_err(|e| e.message)
 }

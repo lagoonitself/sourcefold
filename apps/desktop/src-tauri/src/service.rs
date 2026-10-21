@@ -35,6 +35,14 @@ static X_I_WEB_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^/i/web/status/([^/]+)(?:/.*)?$").expect("invalid X_I_WEB_RE regex"));
 static X_STATUS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^/([^/]+)/status/([^/]+)(?:/.*)?$").expect("invalid X_STATUS_RE regex"));
+static PHOTO_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/media/([A-Za-z0-9_-]{1,100})(?:\.([A-Za-z0-9_-]+))?$")
+        .expect("invalid PHOTO_PATH_RE regex")
+});
+static GIF_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^/tweet_video/([A-Za-z0-9_-]{1,100})\.mp4$")
+        .expect("invalid GIF_PATH_RE regex")
+});
 
 // --- The 2026-10 source kinds (packages/core/src/source-links.ts mirrors these) ---
 
@@ -116,6 +124,34 @@ fn default_access() -> String {
     "free".to_string()
 }
 
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum XMedia {
+    #[serde(rename = "photo")]
+    Photo {
+        url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        alt: Option<String>,
+    },
+    #[serde(rename = "gif")]
+    Gif {
+        url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        alt: Option<String>,
+    },
+    #[serde(rename = "video")]
+    Video {
+        #[serde(
+            default,
+            rename = "durationSeconds",
+            alias = "duration_seconds",
+            skip_serializing_if = "Option::is_none"
+        )]
+        duration_seconds: Option<f64>,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct XPostCapture {
     #[serde(rename = "postUrl", alias = "post_url", alias = "url")]
@@ -130,19 +166,31 @@ pub struct XPostCapture {
     pub posted_at: Option<String>,
     #[serde(default)]
     pub text: String,
+    #[serde(default)]
+    pub media: serde_json::Value,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct XTreeNode {
     pub id: String,
+    #[serde(default, rename = "parentId", alias = "parent_id")]
     pub parent_id: Option<String>,
+    #[serde(default)]
     pub position: i32,
+    #[serde(rename = "postUrl", alias = "post_url")]
     pub post_url: String,
+    #[serde(default, rename = "authorName", alias = "author_name")]
     pub author_name: String,
+    #[serde(default)]
     pub handle: String,
+    #[serde(default, rename = "authorUrl", alias = "author_url")]
     pub author_url: String,
+    #[serde(default, rename = "postedAt", alias = "posted_at")]
     pub posted_at: Option<String>,
+    #[serde(default)]
     pub text: String,
+    #[serde(default)]
+    pub media: Vec<XMedia>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2206,6 +2254,193 @@ pub fn build_substack_markdown(
 // X Thread Formatter (Ported from packages/core/src/x/markdown.ts)
 // -----------------------------------------------------------------------------
 
+
+fn normalize_alt(raw: Option<&serde_json::Value>) -> Option<String> {
+    let s = raw?.as_str()?;
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let chars: Vec<char> = trimmed.chars().collect();
+    if chars.len() > 1000 {
+        Some(chars[..1000].iter().collect())
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+pub fn normalize_x_media(raw: &serde_json::Value) -> Vec<XMedia> {
+    let arr = match raw.as_array() {
+        Some(a) => a,
+        None => return Vec::new(),
+    };
+
+    let mut result = Vec::new();
+    for item in arr {
+        if result.len() >= 10 {
+            break;
+        }
+        let obj = match item.as_object() {
+            Some(o) => o,
+            None => continue,
+        };
+        let media_type = match obj.get("type").and_then(|t| t.as_str()) {
+            Some(t) => t,
+            None => continue,
+        };
+
+        match media_type {
+            "photo" => {
+                let raw_url = match obj.get("url").and_then(|u| u.as_str()) {
+                    Some(u) => u,
+                    None => continue,
+                };
+                let parsed = match reqwest::Url::parse(raw_url) {
+                    Ok(u) => u,
+                    Err(_) => continue,
+                };
+                if parsed.scheme() != "https" {
+                    continue;
+                }
+                if parsed.host_str() != Some("pbs.twimg.com") || parsed.port().is_some() {
+                    continue;
+                }
+                let caps = match PHOTO_PATH_RE.captures(parsed.path()) {
+                    Some(c) => c,
+                    None => continue,
+                };
+                let id = &caps[1];
+                let ext = if let Some(path_ext) = caps.get(2) {
+                    let e = path_ext.as_str().to_ascii_lowercase();
+                    if !["jpg", "jpeg", "png", "webp", "gif"].contains(&e.as_str()) {
+                        continue;
+                    }
+                    e
+                } else {
+                    let format_param = parsed
+                        .query_pairs()
+                        .find(|(k, _)| k == "format")
+                        .map(|(_, v)| v.to_ascii_lowercase());
+                    match format_param {
+                        Some(f) if ["jpg", "jpeg", "png", "webp", "gif"].contains(&f.as_str()) => f,
+                        _ => "jpg".to_string(),
+                    }
+                };
+                let alt = normalize_alt(obj.get("alt"));
+                result.push(XMedia::Photo {
+                    url: format!("https://pbs.twimg.com/media/{}.{}?name=orig", id, ext),
+                    alt,
+                });
+            }
+            "gif" => {
+                let raw_url = match obj.get("url").and_then(|u| u.as_str()) {
+                    Some(u) => u,
+                    None => continue,
+                };
+                let parsed = match reqwest::Url::parse(raw_url) {
+                    Ok(u) => u,
+                    Err(_) => continue,
+                };
+                if parsed.scheme() != "https" {
+                    continue;
+                }
+                if parsed.host_str() != Some("video.twimg.com") || parsed.port().is_some() {
+                    continue;
+                }
+                let caps = match GIF_PATH_RE.captures(parsed.path()) {
+                    Some(c) => c,
+                    None => continue,
+                };
+                let id = &caps[1];
+                let alt = normalize_alt(obj.get("alt"));
+                result.push(XMedia::Gif {
+                    url: format!("https://video.twimg.com/tweet_video/{}.mp4", id),
+                    alt,
+                });
+            }
+            "video" => {
+                let raw_duration = obj
+                    .get("durationSeconds")
+                    .or_else(|| obj.get("duration_seconds"))
+                    .and_then(|d| d.as_f64());
+                let duration_seconds = match raw_duration {
+                    Some(d) if d.is_finite() && (0.0..=86400.0).contains(&d) => Some(d),
+                    _ => None,
+                };
+                result.push(XMedia::Video { duration_seconds });
+            }
+            _ => continue,
+        }
+    }
+    result
+}
+
+pub fn format_duration(seconds: f64) -> String {
+    let total = seconds.round() as u64;
+    let h = total / 3600;
+    let m = (total % 3600) / 60;
+    let s = total % 60;
+    if h > 0 {
+        format!("{}:{:02}:{:02}", h, m, s)
+    } else {
+        format!("{}:{:02}", m, s)
+    }
+}
+
+fn format_alt(raw: &str) -> String {
+    let collapsed = WHITESPACE_COLLAPSE_RE.replace_all(raw.trim(), " ");
+    let chars: Vec<char> = collapsed.chars().collect();
+    let trimmed_str: String = if chars.len() > 300 {
+        chars[..300].iter().collect()
+    } else {
+        collapsed.to_string()
+    };
+    trimmed_str
+        .replace('\\', r"\\")
+        .replace('[', r"\[")
+        .replace(']', r"\]")
+}
+
+pub fn format_x_media_line(media: &XMedia, post_url: &str) -> String {
+    match media {
+        XMedia::Photo { url, alt } => {
+            let label = match alt {
+                Some(a) => {
+                    let formatted = format_alt(a);
+                    if formatted.is_empty() {
+                        "Image".to_string()
+                    } else {
+                        formatted
+                    }
+                }
+                None => "Image".to_string(),
+            };
+            format!("![{}]({})", label, url)
+        }
+        XMedia::Gif { url, alt } => {
+            let label = match alt {
+                Some(a) => {
+                    let formatted = format_alt(a);
+                    if formatted.is_empty() {
+                        "GIF".to_string()
+                    } else {
+                        formatted
+                    }
+                }
+                None => "GIF".to_string(),
+            };
+            format!("![{}]({})", label, url)
+        }
+        XMedia::Video { duration_seconds } => {
+            let label = match duration_seconds {
+                Some(secs) => format!("Video ({}) on X", format_duration(*secs)),
+                None => "Video on X".to_string(),
+            };
+            format!("[{}]({})", label, post_url)
+        }
+    }
+}
+
 pub fn x_thread_title(nodes: &[XTreeNode]) -> String {
     if nodes.is_empty() {
         return "X Post".to_string();
@@ -2233,24 +2468,9 @@ pub fn x_thread_title(nodes: &[XTreeNode]) -> String {
     }
 }
 
-fn render_x_node_block(node: &XTreeNode) -> String {
-    let mut lines = Vec::new();
-
+fn render_x_node_block(node: &XTreeNode, depth: usize) -> Vec<String> {
     let clean_handle = node.handle.trim_start_matches('@');
-    let handle_part = if clean_handle.is_empty() {
-        String::new()
-    } else {
-        format!(" (@{})", clean_handle)
-    };
-    let author_bold = if !node.author_name.is_empty() {
-        format!("**{}**", node.author_name)
-    } else if !clean_handle.is_empty() {
-        format!("**@{}**", clean_handle)
-    } else {
-        "**Unknown**".to_string()
-    };
-
-    let author_str = format!("{}{}", author_bold, handle_part);
+    let author_str = format!("**{}** (@{})", node.author_name, clean_handle);
     let date_str = clean_date(node.posted_at.as_deref());
     let link_str = format!("[link]({})", node.post_url);
 
@@ -2261,16 +2481,37 @@ fn render_x_node_block(node: &XTreeNode) -> String {
         }
     }
     header_parts.push(link_str);
+    let header_text = header_parts.join(" · ");
 
-    lines.push(header_parts.join(" · "));
+    let prefix = "> ".repeat(depth);
+    let trimmed_prefix = prefix.trim_end().to_string();
 
-    let text_trimmed = node.text.trim();
-    if !text_trimmed.is_empty() {
-        lines.push(String::new());
-        lines.push(text_trimmed.to_string());
+    let mut lines = Vec::new();
+    lines.push(format!("{}{}", prefix, header_text));
+
+    let has_text = !node.text.trim().is_empty();
+    if has_text {
+        lines.push(trimmed_prefix.clone());
+        for raw_line in node.text.lines() {
+            if raw_line.is_empty() {
+                lines.push(trimmed_prefix.clone());
+            } else {
+                let escaped = if raw_line.starts_with('#') {
+                    format!("\\{}", raw_line)
+                } else {
+                    raw_line.to_string()
+                };
+                lines.push(format!("{}{}", prefix, escaped));
+            }
+        }
     }
 
-    lines.join("\n")
+    for item in &node.media {
+        lines.push(trimmed_prefix.clone());
+        lines.push(format!("{}{}", prefix, format_x_media_line(item, &node.post_url)));
+    }
+
+    lines
 }
 
 pub fn render_x_thread_body(nodes: &[XTreeNode]) -> String {
@@ -2278,91 +2519,95 @@ pub fn render_x_thread_body(nodes: &[XTreeNode]) -> String {
         return String::new();
     }
 
-    let mut children_map: std::collections::BTreeMap<Option<String>, Vec<usize>> = std::collections::BTreeMap::new();
-    let mut id_to_index: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
-
+    let mut id_to_index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for (idx, node) in nodes.iter().enumerate() {
         id_to_index.insert(node.id.clone(), idx);
         id_to_index.insert(node.post_url.clone(), idx);
     }
 
+    let mut roots: Vec<usize> = Vec::new();
+    let mut children_map: std::collections::HashMap<usize, Vec<usize>> = std::collections::HashMap::new();
+
     for (idx, node) in nodes.iter().enumerate() {
-        let parent_key = node.parent_id.as_ref().and_then(|pid| {
-            if id_to_index.contains_key(pid) {
-                Some(pid.clone())
-            } else {
-                None
+        let parent_idx = node.parent_id.as_ref().and_then(|pid| id_to_index.get(pid).copied());
+        match parent_idx {
+            Some(p_idx) if p_idx != idx => {
+                children_map.entry(p_idx).or_default().push(idx);
             }
-        });
-        children_map.entry(parent_key).or_default().push(idx);
+            _ => {
+                roots.push(idx);
+            }
+        }
     }
 
-    let mut chunks = Vec::new();
-    let mut visited = HashSet::new();
+    let compare_nodes = |&a: &usize, &b: &usize| -> std::cmp::Ordering {
+        let na = &nodes[a];
+        let nb = &nodes[b];
+        if na.position != nb.position {
+            return na.position.cmp(&nb.position);
+        }
+        let da = na.posted_at.as_deref().unwrap_or("");
+        let db = nb.posted_at.as_deref().unwrap_or("");
+        da.cmp(db)
+    };
 
-    fn walk(
+    roots.sort_by(compare_nodes);
+    for children in children_map.values_mut() {
+        children.sort_by(compare_nodes);
+    }
+
+    let mut ordered: Vec<(usize, usize)> = Vec::new();
+    let mut visited: std::collections::HashSet<usize> = std::collections::HashSet::new();
+
+    fn traverse(
         idx: usize,
         depth: usize,
-        nodes: &[XTreeNode],
-        children_map: &std::collections::BTreeMap<Option<String>, Vec<usize>>,
-        visited: &mut HashSet<usize>,
-        chunks: &mut Vec<String>,
+        children_map: &std::collections::HashMap<usize, Vec<usize>>,
+        visited: &mut std::collections::HashSet<usize>,
+        ordered: &mut Vec<(usize, usize)>,
     ) {
-        if !visited.insert(idx) {
+        if visited.contains(&idx) {
             return;
         }
-
-        let node = &nodes[idx];
-        let block = render_x_node_block(node);
-        let prefix = "> ".repeat(depth);
-
-        let prefixed = block
-            .lines()
-            .map(|l| {
-                if l.is_empty() {
-                    prefix.trim_end().to_string()
-                } else {
-                    format!("{}{}", prefix, l)
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        chunks.push(prefixed);
-
-        // Visit children
-        if let Some(children) = children_map.get(&Some(node.id.clone())) {
-            for &child_idx in children {
-                walk(child_idx, depth + 1, nodes, children_map, visited, chunks);
-            }
-        }
-        if let Some(children) = children_map.get(&Some(node.post_url.clone())) {
-            for &child_idx in children {
-                walk(child_idx, depth + 1, nodes, children_map, visited, chunks);
+        visited.insert(idx);
+        ordered.push((idx, depth));
+        if let Some(children) = children_map.get(&idx) {
+            for &child in children {
+                traverse(child, depth + 1, children_map, visited, ordered);
             }
         }
     }
 
-    // Walk roots
-    if let Some(roots) = children_map.get(&None) {
-        for &root_idx in roots {
-            walk(root_idx, 0, nodes, &children_map, &mut visited, &mut chunks);
+    for root in roots {
+        traverse(root, 0, &children_map, &mut visited, &mut ordered);
+    }
+
+    if visited.len() < nodes.len() {
+        let mut unvisited: Vec<usize> = (0..nodes.len()).filter(|i| !visited.contains(i)).collect();
+        unvisited.sort_by(compare_nodes);
+        for orphan in unvisited {
+            traverse(orphan, 0, &children_map, &mut visited, &mut ordered);
         }
     }
 
-    // Walk any unvisited nodes
-    for idx in 0..nodes.len() {
-        if !visited.contains(&idx) {
-            walk(idx, 0, nodes, &children_map, &mut visited, &mut chunks);
+    let mut lines: Vec<String> = Vec::new();
+    for i in 0..ordered.len() {
+        if i > 0 {
+            let min_depth = std::cmp::min(ordered[i - 1].1, ordered[i].1);
+            let sep = "> ".repeat(min_depth).trim_end().to_string();
+            lines.push(sep);
         }
+        let (node_idx, depth) = ordered[i];
+        lines.extend(render_x_node_block(&nodes[node_idx], depth));
     }
 
-    chunks.join("\n\n---\n\n")
+    lines.join("\n") + "\n"
 }
 
 pub fn build_x_thread_markdown(posts: &[XPostCapture], title: &str) -> String {
     let nodes: Vec<XTreeNode> = posts.iter().enumerate().map(|(i, p)| {
         let parent_id = if i == 0 { None } else { Some(posts[i - 1].post_url.clone()) };
+        let media = normalize_x_media(&p.media);
         XTreeNode {
             id: p.post_url.clone(),
             parent_id,
@@ -2373,6 +2618,7 @@ pub fn build_x_thread_markdown(posts: &[XPostCapture], title: &str) -> String {
             author_url: p.author_url.clone(),
             posted_at: p.posted_at.clone(),
             text: p.text.clone(),
+            media,
         }
     }).collect();
 
@@ -2862,6 +3108,7 @@ pub fn save_x_thread(
 
     let nodes: Vec<XTreeNode> = posts.iter().enumerate().map(|(i, p)| {
         let parent_id = if i == 0 { None } else { Some(posts[i - 1].post_url.clone()) };
+        let media = normalize_x_media(&p.media);
         XTreeNode {
             id: p.post_url.clone(),
             parent_id,
@@ -2872,6 +3119,7 @@ pub fn save_x_thread(
             author_url: p.author_url.clone(),
             posted_at: p.posted_at.clone(),
             text: p.text.clone(),
+            media,
         }
     }).collect();
 
@@ -2923,6 +3171,8 @@ pub fn save_x_thread(
     let mut parent_post_url: Option<String> = None;
     for (i, p) in posts.iter().enumerate() {
         let p_canonical = canonicalize_url(&p.post_url).unwrap_or_else(|_| p.post_url.clone());
+        let media = normalize_x_media(&p.media);
+        let media_json = serde_json::to_string(&media).unwrap_or_else(|_| "[]".to_string());
         let add_req = AddXPostRequest {
             item_id: item.id.clone(),
             parent_post_url: parent_post_url.clone(),
@@ -2933,6 +3183,7 @@ pub fn save_x_thread(
             author_url: p.author_url.clone(),
             posted_at: p.posted_at.clone(),
             text: p.text.clone(),
+            media: Some(media_json),
             position: Some(i as i32),
         };
         let _ = db.add_x_post(add_req);
@@ -2960,6 +3211,8 @@ pub fn add_x_post(
     parent_post_url: Option<String>,
 ) -> Result<(String, String), ServiceError> {
     let p_canonical = canonicalize_url(&post.post_url).unwrap_or_else(|_| post.post_url.clone());
+    let media = normalize_x_media(&post.media);
+    let media_json = serde_json::to_string(&media).unwrap_or_else(|_| "[]".to_string());
     let add_req = AddXPostRequest {
         item_id: item_id.to_string(),
         parent_post_url,
@@ -2970,6 +3223,7 @@ pub fn add_x_post(
         author_url: post.author_url.clone(),
         posted_at: post.posted_at.clone(),
         text: post.text.clone(),
+        media: Some(media_json),
         position: None,
     };
 
@@ -2980,16 +3234,20 @@ pub fn add_x_post(
     // Refresh markdown file on disk if item exists
     if let Ok(item) = db.get_item(item_id) {
         if let Ok(all_posts) = db.get_x_posts(item_id) {
-            let nodes: Vec<XTreeNode> = all_posts.iter().map(|p| XTreeNode {
-                id: p.id.clone(),
-                parent_id: p.parent_id.clone(),
-                position: p.position,
-                post_url: p.post_url.clone(),
-                author_name: p.author_name.clone(),
-                handle: p.handle.clone(),
-                author_url: p.author_url.clone(),
-                posted_at: p.posted_at.clone(),
-                text: p.text.clone(),
+            let nodes: Vec<XTreeNode> = all_posts.iter().map(|p| {
+                let media: Vec<XMedia> = serde_json::from_str(&p.media).unwrap_or_default();
+                XTreeNode {
+                    id: p.id.clone(),
+                    parent_id: p.parent_id.clone(),
+                    position: p.position,
+                    post_url: p.post_url.clone(),
+                    author_name: p.author_name.clone(),
+                    handle: p.handle.clone(),
+                    author_url: p.author_url.clone(),
+                    posted_at: p.posted_at.clone(),
+                    text: p.text.clone(),
+                    media,
+                }
             }).collect();
 
             let new_title = x_thread_title(&nodes);
@@ -4542,6 +4800,63 @@ mod tests {
         assert_eq!(name3, "ARTIFICIAL INTELLIGENCE (3).md");
     }
 
+
+    #[test]
+    fn test_format_duration() {
+        assert_eq!(format_duration(0.0), "0:00");
+        assert_eq!(format_duration(59.4), "0:59");
+        assert_eq!(format_duration(59.6), "1:00");
+        assert_eq!(format_duration(60.0), "1:00");
+        assert_eq!(format_duration(3600.0), "1:00:00");
+        assert_eq!(format_duration(3725.4), "1:02:05");
+    }
+
+    #[test]
+    fn test_normalize_x_media_hostile_and_valid() {
+        let raw = serde_json::json!([
+            { "type": "photo", "url": "https://pbs.twimg.com/media/AAA111.jpg?name=orig", "alt": " cat " },
+            { "type": "photo", "url": "http://pbs.twimg.com/media/AAA111.jpg?name=orig" }, // http dropped
+            { "type": "photo", "url": "https://pbs.twimg.com:8080/media/AAA111.jpg" }, // port dropped
+            { "type": "photo", "url": "https://evil.com/media/AAA111.jpg" }, // wrong host dropped
+            { "type": "photo", "url": "https://pbs.twimg.com/media/invalid_ext.exe" }, // bad ext dropped
+            { "type": "gif", "url": "https://video.twimg.com/tweet_video/CCC333.mp4" },
+            { "type": "gif", "url": "https://video.twimg.com/tweet_video/CCC333.gif" }, // non-mp4 dropped
+            { "type": "video", "durationSeconds": 120.5 },
+            { "type": "video", "durationSeconds": -1.0 }, // negative dropped to None
+            { "type": "video", "durationSeconds": 90000.0 } // > 86400 dropped to None
+        ]);
+        let normalized = normalize_x_media(&raw);
+        assert_eq!(normalized.len(), 5);
+        assert_eq!(normalized[0], XMedia::Photo {
+            url: "https://pbs.twimg.com/media/AAA111.jpg?name=orig".to_string(),
+            alt: Some("cat".to_string()),
+        });
+        assert_eq!(normalized[1], XMedia::Gif {
+            url: "https://video.twimg.com/tweet_video/CCC333.mp4".to_string(),
+            alt: None,
+        });
+        assert_eq!(normalized[2], XMedia::Video { duration_seconds: Some(120.5) });
+        assert_eq!(normalized[3], XMedia::Video { duration_seconds: None });
+        assert_eq!(normalized[4], XMedia::Video { duration_seconds: None });
+    }
+
+    #[test]
+    fn test_x_media_thread_fixtures() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let nodes_path = manifest_dir.join("../../../packages/core/test/x-media/thread.nodes.json");
+        let body_path = manifest_dir.join("../../../packages/core/test/x-media/thread.body.md");
+
+        let nodes_json = fs::read_to_string(&nodes_path).expect("failed to read thread.nodes.json");
+        let expected_body = fs::read_to_string(&body_path).expect("failed to read thread.body.md");
+
+        let nodes: Vec<XTreeNode> = serde_json::from_str(&nodes_json).expect("failed to parse thread.nodes.json");
+        let rendered = render_x_thread_body(&nodes);
+
+        let clean_rendered = rendered.replace("\r\n", "\n");
+        let clean_expected = expected_body.replace("\r\n", "\n");
+        assert_eq!(clean_rendered, clean_expected);
+    }
+
     #[test]
     fn test_x_thread_nested_blockquotes() {
         let nodes: Vec<XTreeNode> = vec![
@@ -4555,6 +4870,7 @@ mod tests {
                 author_url: "https://x.com/alice".to_string(),
                 posted_at: Some("2026-10-01T12:00:00Z".to_string()),
                 text: "First tweet in thread".to_string(),
+                media: Vec::new(),
             },
             XTreeNode {
                 id: "2".to_string(),
@@ -4566,6 +4882,7 @@ mod tests {
                 author_url: "https://x.com/alice".to_string(),
                 posted_at: Some("2026-10-01T12:05:00Z".to_string()),
                 text: "Second tweet replying to first".to_string(),
+                media: Vec::new(),
             },
         ];
 
@@ -6342,6 +6659,7 @@ Cited: [sae.org](https://www.sae.org/paper) · Note: Check the date";
             author_url: "https://x.com/someuser".to_string(),
             posted_at: Some("2026-10-19T00:00:00Z".to_string()),
             text: "First post".to_string(),
+            media: serde_json::Value::Array(Vec::new()),
         }];
 
         let item1 = save_x_thread(&db, &group1.id, posts.clone()).unwrap();

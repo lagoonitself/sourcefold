@@ -177,6 +177,7 @@ impl Database {
                 author_url TEXT NOT NULL,
                 posted_at TEXT,
                 text TEXT NOT NULL,
+                media TEXT NOT NULL DEFAULT '[]',
                 position INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -227,9 +228,24 @@ impl Database {
         Self::migrate_to_projects_and_groups(&conn)?;
         Self::add_local_copy_search_columns(&conn)?;
         Self::migrate_research_tools(&conn)?;
+        Self::migrate_x_posts_media(&conn)?;
 
         Ok(())
     }
+    fn migrate_x_posts_media(conn: &Connection) -> Result<()> {
+        let mut stmt = conn.prepare("PRAGMA table_info(x_posts)")?;
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(Result::ok)
+            .collect();
+
+        if !columns.iter().any(|c| c == "media") {
+            conn.execute_batch("ALTER TABLE x_posts ADD COLUMN media TEXT NOT NULL DEFAULT '[]';")?;
+        }
+
+        Ok(())
+    }
+
 
     /// The search index needs to know which project a local copy file belongs to
     /// (docs/dev/handoff-search.md). Older databases get the columns added; idempotent.
@@ -1076,9 +1092,16 @@ impl Database {
             .unwrap_or(None);
         let position = req.position.unwrap_or_else(|| max_pos.unwrap_or(-1) + 1);
 
+        let media_json = match &req.media {
+            Some(m) if serde_json::from_str::<serde_json::Value>(m).map(|v| v.is_array()).unwrap_or(false) => {
+                m.clone()
+            }
+            _ => "[]".to_string(),
+        };
+
         conn.execute(
-            "INSERT INTO x_posts (id, item_id, parent_id, post_url, canonical_url, author_name, handle, author_url, posted_at, text, position, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)",
+            "INSERT INTO x_posts (id, item_id, parent_id, post_url, canonical_url, author_name, handle, author_url, posted_at, text, media, position, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)",
             params![
                 post_id,
                 req.item_id,
@@ -1090,6 +1113,7 @@ impl Database {
                 req.author_url,
                 req.posted_at,
                 req.text,
+                media_json,
                 position,
                 now,
             ],
@@ -1097,12 +1121,18 @@ impl Database {
 
         // Update item updated_at and post count in meta
         let mut stmt = conn.prepare(
-            "SELECT id, item_id, parent_id, post_url, canonical_url, author_name, handle, author_url, posted_at, text, position, created_at, updated_at
+            "SELECT id, item_id, parent_id, post_url, canonical_url, author_name, handle, author_url, posted_at, text, position, created_at, updated_at, media
              FROM x_posts WHERE item_id = ?1 ORDER BY position ASC, created_at ASC",
         )?;
 
         let all_posts = stmt
             .query_map(params![req.item_id], |row| {
+                let raw_media: String = row.get(13).unwrap_or_else(|_| "[]".to_string());
+                let media = if serde_json::from_str::<serde_json::Value>(&raw_media).map(|v| v.is_array()).unwrap_or(false) {
+                    raw_media
+                } else {
+                    "[]".to_string()
+                };
                 Ok(XPost {
                     id: row.get(0)?,
                     item_id: row.get(1)?,
@@ -1117,6 +1147,7 @@ impl Database {
                     position: row.get(10)?,
                     created_at: row.get(11)?,
                     updated_at: row.get(12)?,
+                    media,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1155,12 +1186,18 @@ impl Database {
         }
 
         let mut stmt = conn.prepare(
-            "SELECT id, item_id, parent_id, post_url, canonical_url, author_name, handle, author_url, posted_at, text, position, created_at, updated_at
+            "SELECT id, item_id, parent_id, post_url, canonical_url, author_name, handle, author_url, posted_at, text, position, created_at, updated_at, media
              FROM x_posts WHERE item_id = ?1 ORDER BY position ASC, created_at ASC",
         )?;
 
         let posts = stmt
             .query_map(params![item_id], |row| {
+                let raw_media: String = row.get(13).unwrap_or_else(|_| "[]".to_string());
+                let media = if serde_json::from_str::<serde_json::Value>(&raw_media).map(|v| v.is_array()).unwrap_or(false) {
+                    raw_media
+                } else {
+                    "[]".to_string()
+                };
                 Ok(XPost {
                     id: row.get(0)?,
                     item_id: row.get(1)?,
@@ -1175,6 +1212,7 @@ impl Database {
                     position: row.get(10)?,
                     created_at: row.get(11)?,
                     updated_at: row.get(12)?,
+                    media,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -2466,6 +2504,7 @@ mod tests {
             text: "Root post content".to_string(),
             parent_post_url: None,
             position: None,
+            media: None,
         }).unwrap();
 
         // Add reply post
@@ -2480,12 +2519,15 @@ mod tests {
             text: "Reply post content".to_string(),
             parent_post_url: Some("https://x.com/alice/status/100".to_string()),
             position: None,
+            media: None,
         }).unwrap();
 
         // Get posts and verify tree order and metadata
         let posts = db.get_x_posts(&item.id).unwrap();
         assert_eq!(posts.len(), 2);
         assert_eq!(posts[0].id, post1_id);
+        assert_eq!(posts[0].media, "[]");
+        assert_eq!(posts[1].media, "[]");
         assert_eq!(posts[0].parent_id, None);
         assert_eq!(posts[1].id, post2_id);
         assert_eq!(posts[1].parent_id.as_deref(), Some("https://x.com/alice/status/100"));

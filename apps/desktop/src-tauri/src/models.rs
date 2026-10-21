@@ -43,6 +43,10 @@ pub struct Item {
     pub author_type: Option<String>,
 }
 
+fn default_media() -> String {
+    "[]".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct XPost {
     pub id: String,
@@ -56,6 +60,8 @@ pub struct XPost {
     pub posted_at: Option<String>,
     pub text: String,
     pub position: i32,
+    #[serde(default = "default_media")]
+    pub media: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -123,6 +129,8 @@ pub struct AddXPostRequest {
     pub parent_post_url: Option<String>,
     #[serde(default)]
     pub position: Option<i32>,
+    #[serde(default)]
+    pub media: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

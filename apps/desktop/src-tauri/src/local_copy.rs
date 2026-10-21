@@ -459,7 +459,7 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
 // -----------------------------------------------------------------------------
 
 const MAX_IMAGE_BYTES: usize = 25 * 1024 * 1024;
-const IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "gif", "webp", "avif", "svg"];
+const IMAGE_EXTENSIONS: [&str; 8] = ["jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "mp4"];
 
 fn image_link_regex() -> &'static regex::Regex {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
@@ -625,7 +625,15 @@ async fn download_image(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> 
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_ascii_lowercase();
-    if !kind.is_empty() && !kind.starts_with("image/") && !kind.starts_with("application/octet-stream") {
+    let is_mp4 = reqwest::Url::parse(url)
+        .ok()
+        .map(|u| u.path().to_ascii_lowercase().ends_with(".mp4"))
+        .unwrap_or(false);
+    let allowed = kind.is_empty()
+        || kind.starts_with("image/")
+        || kind.starts_with("application/octet-stream")
+        || (kind.starts_with("video/mp4") && is_mp4);
+    if !allowed {
         return None;
     }
     if res.content_length().unwrap_or(0) as usize > MAX_IMAGE_BYTES {
@@ -826,13 +834,24 @@ mod tests {
             "https://b.example/y/chart.png",
             "https://c.example/",
             "https://d.example/photo?id=1",
+            "https://pbs.twimg.com/media/AAA111.jpg?name=orig",
+            "https://video.twimg.com/tweet_video/CCC333.mp4",
         ]
         .iter()
         .map(|s| s.to_string())
         .collect();
         assert_eq!(
             image_file_names(&urls),
-            vec!["9a0a_1630x1630.jpeg", "d46a_1320x450.png", "chart.png", "chart (2).png", "image-5.jpg", "photo.jpg"]
+            vec![
+                "9a0a_1630x1630.jpeg",
+                "d46a_1320x450.png",
+                "chart.png",
+                "chart (2).png",
+                "image-5.jpg",
+                "photo.jpg",
+                "AAA111.jpg",
+                "CCC333.mp4"
+            ]
         );
     }
 

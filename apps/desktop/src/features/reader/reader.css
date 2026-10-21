@@ -182,6 +182,15 @@
   margin: 1.75rem 0 0.75rem;
 }
 
+.reader-prose video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  margin: 1.75rem 0 0.75rem;
+}
+
 .reader-prose p:has(> img:only-child) {
   margin-bottom: 0.75rem;
 }

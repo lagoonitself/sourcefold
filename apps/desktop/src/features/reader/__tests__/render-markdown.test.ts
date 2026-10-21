@@ -68,6 +68,47 @@ describe("images", () => {
     );
     expect(html).toContain("<p><em>The caption</em></p>");
   });
+
+  it("renders an mp4 image as an autoplay looping muted playsinline video tag with no img tag", () => {
+    const html = renderMarkdown("![GIF](https://video.twimg.com/tweet_video/AB1.mp4)");
+    expect(html).toContain(
+      '<video src="https://video.twimg.com/tweet_video/AB1.mp4" autoplay loop muted playsinline></video>',
+    );
+    expect(html).not.toContain("<img");
+  });
+
+  it("renders uppercase .MP4 as a video tag too", () => {
+    const html = renderMarkdown("![GIF](https://video.twimg.com/tweet_video/AB1.MP4)");
+    expect(html).toContain(
+      '<video src="https://video.twimg.com/tweet_video/AB1.MP4" autoplay loop muted playsinline></video>',
+    );
+    expect(html).not.toContain("<img");
+  });
+
+  it("drops javascript: or data: URLs ending in .mp4 without rendering video or img", () => {
+    const jsHtml = renderMarkdown("![GIF](javascript:alert(1).mp4)");
+    expect(jsHtml).not.toContain("<video");
+    expect(jsHtml).not.toContain("<img");
+
+    const dataHtml = renderMarkdown("![GIF](data:video/mp4;base64,AAAA.mp4)");
+    expect(dataHtml).not.toContain("<video");
+    expect(dataHtml).not.toContain("<img");
+  });
+
+  it("still renders a normal .png image with an img tag", () => {
+    const html = renderMarkdown("![chart](https://example.com/pic.png)");
+    expect(html).toContain('<img src="https://example.com/pic.png" alt="chart"');
+    expect(html).not.toContain("<video");
+  });
+
+  it("renders a GIF inside a blockquote as a video", () => {
+    const html = renderMarkdown("> ![GIF](https://video.twimg.com/tweet_video/AB1.mp4)");
+    expect(html).toContain("<blockquote>");
+    expect(html).toContain(
+      '<video src="https://video.twimg.com/tweet_video/AB1.mp4" autoplay loop muted playsinline></video>',
+    );
+    expect(html).not.toContain("<img");
+  });
 });
 
 describe("footnotes", () => {

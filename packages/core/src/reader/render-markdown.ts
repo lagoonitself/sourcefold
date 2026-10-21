@@ -67,6 +67,14 @@ export function safeImageUrl(href: string | null | undefined): string | null {
   return safeUrl(href, IMAGE_SCHEMES);
 }
 
+function isMp4Url(url: string): boolean {
+  try {
+    return new URL(url, "https://placeholder.invalid").pathname.toLowerCase().endsWith(".mp4");
+  } catch {
+    return false;
+  }
+}
+
 /** Raw HTML from the page becomes its text. `<br>` stays a line break; script and style go. */
 function plainTextOfHtml(raw: string): string {
   if (/^\s*<br\s*\/?>\s*$/i.test(raw)) return "<br>";
@@ -234,6 +242,9 @@ marked.use({
     image({ href, title, text }) {
       const safe = safeImageUrl(href);
       if (!safe) return escapeHtml(text);
+      if (isMp4Url(safe)) {
+        return `<video src="${escapeHtml(safe)}" autoplay loop muted playsinline></video>`;
+      }
       const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
       return `<img src="${escapeHtml(safe)}" alt="${escapeHtml(text)}"${titleAttr} loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
     },

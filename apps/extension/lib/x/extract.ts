@@ -1,4 +1,4 @@
-import { xStatusId, type XPostCapture } from "@sourcefold/core";
+import { normalizeXMedia, xStatusId, type XMedia, type XPostCapture } from "@sourcefold/core";
 import {
   A_TAG,
   ALT_ATTR,
@@ -13,9 +13,12 @@ import {
   SHOW_MORE_SELECTOR,
   TIME_SELECTOR,
   TITLE_ATTR,
+  TWEET_PHOTO_SELECTOR,
   TWEET_TEXT_SELECTOR,
   USER_NAME_SELECTOR,
   VERIFIED_BADGE_SELECTOR,
+  VIDEO_COMPONENT_SELECTOR,
+  VIDEO_PLAYER_SELECTOR,
 } from "./selectors";
 
 export type XExtractResult =
@@ -39,7 +42,7 @@ function matchesSelector(el: Element, selector: string): boolean {
 }
 
 // Determines if an element is contained within a quoted-post subcontainer inside an article.
-function isInsideQuotedPost(el: Element, article: Element): boolean {
+export function isInsideQuotedPost(el: Element, article: Element): boolean {
   let current: Element | null = el.parentElement;
   while (current && current !== article) {
     if (
@@ -69,6 +72,124 @@ function isInsideTweetText(el: Element, article: Element): boolean {
 function findOwnElement(article: Element, selector: string): Element | null {
   const elements = Array.from(article.querySelectorAll(selector));
   return elements.find((el) => !isInsideQuotedPost(el, article)) ?? null;
+}
+
+// Converts a raw photo URL to the full-size orig URL format on pbs.twimg.com.
+export function convertPhotoUrl(rawUrl: string): string | null {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:" || url.hostname !== "pbs.twimg.com") {
+      return null;
+    }
+    if (!url.pathname.startsWith("/media/")) {
+      return null;
+    }
+    const pathPart = url.pathname.slice("/media/".length);
+    if (!pathPart || pathPart.includes("/")) {
+      return null;
+    }
+    const dotIdx = pathPart.lastIndexOf(".");
+    const id = dotIdx !== -1 ? pathPart.slice(0, dotIdx) : pathPart;
+    const extInPath = dotIdx !== -1 ? pathPart.slice(dotIdx + 1) : null;
+    const format = url.searchParams.get("format");
+    const ext = format || extInPath || "jpg";
+    return `https://pbs.twimg.com/media/${id}.${ext}?name=orig`;
+  } catch {
+    return null;
+  }
+}
+
+// Extracts clean alt text from an image element. Returns null if empty or exactly "Image".
+function extractPhotoAlt(img: Element): string | null {
+  const alt = img.getAttribute(ALT_ATTR);
+  if (!alt) return null;
+  const trimmed = alt.trim();
+  if (trimmed === "" || trimmed === "Image") return null;
+  return trimmed;
+}
+
+// Extracts the URL without query params if the video element is a GIF on video.twimg.com.
+function extractGifVideoUrl(videoEl: Element): string | null {
+  const directSrc = videoEl.getAttribute("src");
+  if (directSrc && directSrc.startsWith("https://video.twimg.com/tweet_video/")) {
+    return directSrc.split("?")[0]!;
+  }
+  const sources = Array.from(videoEl.querySelectorAll("source"));
+  for (const source of sources) {
+    const src = source.getAttribute("src");
+    if (src && src.startsWith("https://video.twimg.com/tweet_video/")) {
+      return src.split("?")[0]!;
+    }
+  }
+  return null;
+}
+
+// Checks if an element is or contains a GIF video.
+function containsOrIsGif(el: Element): boolean {
+  if (el.tagName.toLowerCase() === "video") {
+    return extractGifVideoUrl(el) !== null;
+  }
+  const videos = Array.from(el.querySelectorAll("video"));
+  return videos.some((v) => extractGifVideoUrl(v) !== null);
+}
+
+// Extracts media items from an article in page order.
+export function extractMediaFromArticle(article: Element): XMedia[] {
+  const media: XMedia[] = [];
+  const seenVideoPlayers: Element[] = [];
+
+  const candidates = Array.from(
+    article.querySelectorAll(
+      '[data-testid="tweetPhoto"] img, [data-testid="videoPlayer"], [data-testid="videoComponent"], video',
+    ),
+  );
+
+  for (const el of candidates) {
+    if (isInsideQuotedPost(el, article)) {
+      continue;
+    }
+
+    const tag = el.tagName.toLowerCase();
+
+    // Check GIF video element
+    if (tag === "video") {
+      const gifUrl = extractGifVideoUrl(el);
+      if (gifUrl) {
+        media.push({ type: "gif", url: gifUrl, alt: null });
+      }
+      continue;
+    }
+
+    // Check video player / component
+    const isVideoPlayer =
+      matchesSelector(el, VIDEO_PLAYER_SELECTOR) || matchesSelector(el, VIDEO_COMPONENT_SELECTOR);
+
+    if (isVideoPlayer) {
+      if (containsOrIsGif(el)) {
+        continue;
+      }
+      // Avoid double counting nested video components inside players or vice versa
+      if (seenVideoPlayers.some((p) => p.contains(el) || el.contains(p))) {
+        continue;
+      }
+      seenVideoPlayers.push(el);
+      media.push({ type: "video", durationSeconds: null });
+      continue;
+    }
+
+    // Check photo img
+    if (tag === "img" && el.closest(TWEET_PHOTO_SELECTOR)) {
+      const src = el.getAttribute("src") ?? "";
+      const converted = convertPhotoUrl(src);
+      if (converted) {
+        const alt = extractPhotoAlt(el);
+        media.push({ type: "photo", url: converted, alt });
+      }
+      continue;
+    }
+  }
+
+  return normalizeXMedia(media);
 }
 
 // Finds the article's own status ID from permalink anchors, excluding links inside quoted posts or tweet text.
@@ -318,6 +439,7 @@ export function extractXThread(doc: Document, pageUrl: string): XExtractResult {
       authorUrl: string;
       postedAt: string | null;
       text: string;
+      media: XMedia[];
       hasOwnTimeWithoutWrappingLink: boolean;
     }
 
@@ -347,6 +469,7 @@ export function extractXThread(doc: Document, pageUrl: string): XExtractResult {
 
       const ownTweetText = findOwnElement(article, TWEET_TEXT_SELECTOR);
       const text = ownTweetText ? extractTweetText(ownTweetText) : "";
+      const media = extractMediaFromArticle(article);
 
       candidates.push({
         statusId,
@@ -355,6 +478,7 @@ export function extractXThread(doc: Document, pageUrl: string): XExtractResult {
         authorUrl,
         postedAt,
         text,
+        media,
         hasOwnTimeWithoutWrappingLink,
       });
     }
@@ -384,6 +508,7 @@ export function extractXThread(doc: Document, pageUrl: string): XExtractResult {
             authorUrl: c.authorUrl,
             postedAt: c.postedAt,
             text: c.text,
+            media: c.media,
           },
         });
       }

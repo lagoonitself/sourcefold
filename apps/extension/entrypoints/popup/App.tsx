@@ -46,6 +46,7 @@ import { SourceIcon, sourceColor } from "./SourceMark";
 import { ProjectMenu } from "./ProjectMenu";
 import { GroupList, type VisibleGroup } from "./GroupList";
 import { ThreadPicker } from "./ThreadPicker";
+import { enrichXPostsMedia } from "../../lib/x/media";
 
 const CANNOT_SAVE_MESSAGE =
   "This page can't be saved. Open a web page, YouTube video, Reddit, Hacker News or Bluesky post, Substack post, Grokipedia article or X post.";
@@ -537,7 +538,8 @@ export default function App() {
           setResult({ tone: "error", text: res.message });
           return;
         }
-        const { item } = await capture({ kind: "x", folder_id: groupId, posts: res.posts });
+        const posts = await enrichXPostsMedia(res.posts);
+        const { item } = await capture({ kind: "x", folder_id: groupId, posts });
         done(item);
       }
     } catch (err: unknown) {
@@ -576,8 +578,9 @@ export default function App() {
       const post = index === -1 ? undefined : posts[index];
       if (!post) return { message: notFound, isError: true };
 
+      const [enrichedPost] = await enrichXPostsMedia([post]);
       const parent_post_url = index > 0 ? posts[index - 1]?.postUrl : undefined;
-      await addXPost(item.id, { post, parent_post_url });
+      await addXPost(item.id, { post: enrichedPost ?? post, parent_post_url });
       return { message: `Added to ${item.title}`, isError: false };
     } catch (err: unknown) {
       if (err instanceof ApiError && (err.status === 409 || err.code === "duplicate")) {

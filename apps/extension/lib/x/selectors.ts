@@ -48,3 +48,11 @@ export const IMG_TAG = "img";
 
 // HTML anchor tag name.
 export const A_TAG = "a";
+
+// Media selectors for photo, GIF, and video extraction.
+export const TWEET_PHOTO_SELECTOR = '[data-testid="tweetPhoto"]';
+export const TWEET_PHOTO_IMG_SELECTOR = '[data-testid="tweetPhoto"] img';
+export const VIDEO_PLAYER_SELECTOR = '[data-testid="videoPlayer"]';
+export const VIDEO_COMPONENT_SELECTOR = '[data-testid="videoComponent"]';
+export const VIDEO_TAG = "video";
+export const SRC_ATTR = "src";

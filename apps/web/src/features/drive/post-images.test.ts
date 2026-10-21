@@ -141,4 +141,42 @@ describe("syncPostImages", () => {
     expect(live()).toEqual(["f1/a.png", "g/Post_files"]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("accepts video/mp4 only when the URL ends in .mp4, and rejects text/html", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("test_gif.mp4")) {
+        return new Response(new Uint8Array([1, 2, 3, 4]), {
+          headers: { "content-type": "video/mp4" },
+        });
+      }
+      if (url.includes("not-mp4.png")) {
+        return new Response(new Uint8Array([1, 2, 3, 4]), {
+          headers: { "content-type": "video/mp4" },
+        });
+      }
+      if (url.includes("html-fake.mp4")) {
+        return new Response("<html>Not an MP4</html>", {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const GIF_MP4 = "https://video.twimg.com/tweet_video/test_gif.mp4";
+    const WRONG_EXT_VIDEO = "https://video.twimg.com/tweet_video/not-mp4.png";
+    const HTML_MP4 = "https://video.twimg.com/tweet_video/html-fake.mp4";
+
+    await syncPostImages(
+      "t",
+      { parentId: "g", fileName: "Post.md" },
+      null,
+      md(GIF_MP4, WRONG_EXT_VIDEO, HTML_MP4),
+      new Set(),
+    );
+
+    // Only GIF_MP4 should be downloaded and uploaded
+    expect(live()).toEqual(["f1/test_gif.mp4", "g/Post_files"]);
+    const uploaded = [...drive.values()].find((n) => n.name === "test_gif.mp4");
+    expect(uploaded?.mimeType).toBe("video/mp4");
+  });
 });

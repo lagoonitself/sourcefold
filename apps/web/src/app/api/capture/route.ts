@@ -53,6 +53,7 @@ const xPostCaptureSchema = z.object({
   authorUrl: z.string().trim(),
   postedAt: z.string().trim().nullable().optional(),
   text: z.string(),
+  media: z.array(z.unknown()).max(20).optional(),
 });
 
 const httpUrlSchema = z

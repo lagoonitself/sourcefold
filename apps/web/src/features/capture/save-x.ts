@@ -1,5 +1,6 @@
 import {
   canonicalizeUrl,
+  normalizeXMedia,
   renderXThreadMarkdown,
   xThreadTitle,
   type XTreeNode,
@@ -52,6 +53,7 @@ export interface XPostInput {
   authorUrl: string;
   postedAt?: string | null;
   text: string;
+  media?: unknown;
 }
 
 export async function rerenderXItem(
@@ -62,7 +64,9 @@ export async function rerenderXItem(
   // Load all x_posts of the item (user filtered)
   const { data: posts, error: postsError } = await db
     .from("x_posts")
-    .select("*")
+    .select(
+      "id, parent_id, position, post_url, author_name, handle, author_url, posted_at, text, media",
+    )
     .eq("item_id", itemId)
     .eq("user_id", userId);
 
@@ -81,6 +85,7 @@ export async function rerenderXItem(
     authorUrl: r.author_url,
     postedAt: r.posted_at,
     text: r.text,
+    media: normalizeXMedia(r.media),
   }));
 
   // Load the item's current title
@@ -230,6 +235,7 @@ export async function saveXThread(
     authorUrl: p.authorUrl,
     postedAt: p.postedAt ?? null,
     text: p.text,
+    media: normalizeXMedia(p.media),
   }));
 
   const title = xThreadTitle(nodes);
@@ -323,6 +329,7 @@ export async function saveXThread(
     posted_at: post.postedAt || null,
     text: post.text,
     position: 0,
+    media: normalizeXMedia(post.media),
   }));
 
   try {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canonicalizeUrl } from "@sourcefold/core";
+import { canonicalizeUrl, normalizeXMedia } from "@sourcefold/core";
 import { jsonData, requireApiUser } from "@/lib/api";
 import { rerenderXItem } from "@/features/capture/save-x";
 import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
@@ -16,6 +16,7 @@ const addPostSchema = z.object({
     authorUrl: z.string().trim(),
     postedAt: z.string().trim().nullable().optional(),
     text: z.string(),
+    media: z.array(z.unknown()).max(20).optional(),
   }),
   parent_post_url: z.string().trim().optional(),
 });
@@ -162,6 +163,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ite
       posted_at: parsed.data.post.postedAt || null,
       text: parsed.data.post.text,
       position,
+      media: normalizeXMedia(parsed.data.post.media),
     })
     .select("id")
     .single();

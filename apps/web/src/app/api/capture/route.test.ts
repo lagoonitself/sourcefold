@@ -4,6 +4,7 @@ import { callsOf, createFakeDb } from "@/test/fake-db";
 const requireApiUser = vi.fn();
 const pushToDriveSoon = vi.fn();
 const findDuplicate = vi.fn();
+const findDuplicateElsewhere = vi.fn();
 const nextPosition = vi.fn();
 
 vi.mock("@/lib/api", () => ({
@@ -15,6 +16,7 @@ vi.mock("@/features/drive/push-to-drive-soon", () => ({
 vi.mock("@/features/capture/find-duplicate", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/capture/find-duplicate")>()),
   findDuplicate: (...args: unknown[]) => findDuplicate(...args),
+  findDuplicateElsewhere: (...args: unknown[]) => findDuplicateElsewhere(...args),
   nextPosition: (...args: unknown[]) => nextPosition(...args),
 }));
 
@@ -237,6 +239,91 @@ describe("POST /api/capture with a new source kind", () => {
     });
     expect(badReason.status).toBe(400);
 
+    expect(fake.queries).toHaveLength(0);
+  });
+});
+
+describe("POST /api/capture with an X thread", () => {
+  let fake: ReturnType<typeof createFakeDb>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fake = createFakeDb({ items: ITEM_ROW, x_posts: [] });
+    requireApiUser.mockResolvedValue({ db: fake.db, userId: USER_ID, via: "token" });
+    findDuplicate.mockResolvedValue(null);
+    findDuplicateElsewhere.mockResolvedValue(null);
+    nextPosition.mockResolvedValue(0);
+  });
+
+  it("keeps valid media, drops invalid silently, and saves normalized media in x_posts", async () => {
+    const media = [
+      { type: "photo", url: "https://pbs.twimg.com/media/goodPhoto.jpg", alt: "Good photo" },
+      { type: "photo", url: "https://evil.com/pic.jpg", alt: "Evil host" },
+      { type: "photo", url: "javascript:alert(1)" },
+      { type: "gif", url: "https://video.twimg.com/tweet_video/goodGif.mp4", alt: "Good GIF" },
+      { type: "video", durationSeconds: 60 },
+      { type: "unexpected", something: true },
+    ];
+
+    const response = await post({
+      kind: "x",
+      folder_id: FOLDER_ID,
+      posts: [
+        {
+          postUrl: "https://x.com/dan/status/1001",
+          authorName: "Dan",
+          handle: "dan",
+          authorUrl: "https://x.com/dan",
+          text: "Post with media",
+          media,
+        },
+      ],
+    });
+
+    expect(response.status).toBe(201);
+    expect(pushToDriveSoon).toHaveBeenCalledWith(USER_ID);
+
+    const xPostsInsert = fake.queries.find(
+      (q) => q.table === "x_posts" && callsOf(q, "insert").length > 0,
+    );
+    expect(xPostsInsert).toBeDefined();
+    const rows = callsOf(xPostsInsert!, "insert")[0]![0] as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.media).toEqual([
+      {
+        type: "photo",
+        url: "https://pbs.twimg.com/media/goodPhoto.jpg?name=orig",
+        alt: "Good photo",
+      },
+      { type: "gif", url: "https://video.twimg.com/tweet_video/goodGif.mp4", alt: "Good GIF" },
+      { type: "video", durationSeconds: 60 },
+    ]);
+  });
+
+  it("returns 400 when a post in the thread has more than 20 media elements", async () => {
+    const tooMany = Array.from({ length: 21 }, (_, i) => ({
+      type: "photo",
+      url: `https://pbs.twimg.com/media/photo_${i}.jpg`,
+    }));
+
+    const response = await post({
+      kind: "x",
+      folder_id: FOLDER_ID,
+      posts: [
+        {
+          postUrl: "https://x.com/dan/status/1001",
+          authorName: "Dan",
+          handle: "dan",
+          authorUrl: "https://x.com/dan",
+          text: "Post with too much media",
+          media: tooMany,
+        },
+      ],
+    });
+
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.error.code).toBe("invalid_request");
     expect(fake.queries).toHaveLength(0);
   });
 });

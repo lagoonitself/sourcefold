@@ -37,7 +37,12 @@ async function fetchImage(url: string): Promise<{ body: Uint8Array; mimeType: st
     const res = await publicFetch(url, { signal: AbortSignal.timeout(20_000) });
     if (!res.ok) return null;
     const mimeType = (res.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
-    if (mimeType && !mimeType.startsWith("image/") && mimeType !== "application/octet-stream") {
+    const isMp4 = new URL(url).pathname.toLowerCase().endsWith(".mp4");
+    const isAllowedMime =
+      mimeType.startsWith("image/") ||
+      mimeType === "application/octet-stream" ||
+      (isMp4 && mimeType === "video/mp4");
+    if (mimeType && !isAllowedMime) {
       return null;
     }
     if (Number(res.headers.get("content-length") ?? 0) > MAX_IMAGE_BYTES) return null;

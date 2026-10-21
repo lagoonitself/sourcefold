@@ -29,8 +29,8 @@ JSON on the wire uses exactly these field names (`type`, `url`, `alt`, `duration
 
 Input is untrusted JSON. Go through the array in order, **drop** any element that fails (never reject the whole request), and keep at most 10.
 
-- `photo`: `url` is a string that parses as a URL, protocol `https:`, host exactly `pbs.twimg.com`, path starts with `/media/`. `alt`: a string, trimmed, at most 1000 characters (longer is cut), empty → `null`; anything else → `null`.
-- `gif`: `url` parses, `https:`, host exactly `video.twimg.com`, path starts with `/tweet_video/` and ends with `.mp4`. `alt` as for photo.
+- `photo`: `url` is a string that parses as a URL, protocol `https:`, host exactly `pbs.twimg.com` (no port), and the path is `/media/<id>` or `/media/<id>.<ext>` where `<id>` is `[A-Za-z0-9_-]{1,100}` and `<ext>` is one of `jpg`, `jpeg`, `png`, `webp`, `gif` (case-insensitive). Without an extension in the path, `<ext>` comes from the `format` query parameter if it's one of those, else `jpg`. **The kept `url` is always rebuilt** as `https://pbs.twimg.com/media/<id>.<ext lowercased>?name=orig`; the input string is never kept as is (so nothing like `)` or spaces can reach the Markdown). `alt`: a string, trimmed, at most 1000 characters (longer is cut), empty → `null`; anything else → `null`.
+- `gif`: `url` parses, `https:`, host exactly `video.twimg.com` (no port), path exactly `/tweet_video/<id>.mp4` with `<id>` `[A-Za-z0-9_-]{1,100}`. **The kept `url` is rebuilt** as `https://video.twimg.com/tweet_video/<id>.mp4` (no query). `alt` as for photo.
 - `video`: `durationSeconds` is a finite number, 0 ≤ n ≤ 86400, else `null`. Any `url` field is ignored and not kept.
 - Any other `type`, or a non-object element: dropped. A `media` that is missing or not an array → `[]`.
 

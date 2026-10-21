@@ -38,6 +38,7 @@ export {
   type SourceFetchRequest,
   type SourceFetchResponse,
 } from "./source-fetch";
+export { fetchXPostMedia, formatXMediaLine, normalizeXMedia } from "./x/media";
 export { renderXThreadMarkdown, xThreadTitle } from "./x/markdown";
 export {
   SubstackDiscoveryError,

@@ -4,7 +4,7 @@ import { safeName } from "./file-name";
 // the web, and a copy of each file sits in `<file name>_files/` next to the post's file.
 
 const IMAGE_LINK = /!\[(?:[^\]\\]|\\.)*\]\((https?:\/\/[^\s)]+)\)/g;
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "svg"]);
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "mp4"]);
 
 /** The web image links in a Markdown body, each once, in order. */
 export function markdownImageUrls(markdown: string): string[] {

@@ -1,5 +1,6 @@
 import type { XTreeNode } from "../capture-types";
 import { formatDate } from "../front-matter";
+import { formatXMediaLine } from "./media";
 
 function compareNodes(a: XTreeNode, b: XTreeNode): number {
   if (a.position !== b.position) {
@@ -56,15 +57,25 @@ function renderNodeBlock(node: XTreeNode, depth: number): string[] {
 
   const lines: string[] = [];
   lines.push(`${prefix}${headerText}`);
-  lines.push(trimmedPrefix);
 
-  const textLines = node.text.split(/\r?\n/);
-  for (const rawLine of textLines) {
-    if (rawLine === "") {
+  const hasText = node.text.trim().length > 0;
+  if (hasText) {
+    lines.push(trimmedPrefix);
+    const textLines = node.text.split(/\r?\n/);
+    for (const rawLine of textLines) {
+      if (rawLine === "") {
+        lines.push(trimmedPrefix);
+      } else {
+        const escaped = rawLine.startsWith("#") ? `\\${rawLine}` : rawLine;
+        lines.push(`${prefix}${escaped}`);
+      }
+    }
+  }
+
+  if (node.media && node.media.length > 0) {
+    for (const item of node.media) {
       lines.push(trimmedPrefix);
-    } else {
-      const escaped = rawLine.startsWith("#") ? `\\${rawLine}` : rawLine;
-      lines.push(`${prefix}${escaped}`);
+      lines.push(`${prefix}${formatXMediaLine(item, node.postUrl)}`);
     }
   }
 

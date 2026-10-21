@@ -37,6 +37,15 @@ describe("postImageFileNames", () => {
       ]),
     ).toEqual(["chart.png", "chart (2).png", "image-3.jpg", "photo.jpg"]);
   });
+
+  it("handles X media URLs including photos with queries and mp4 GIFs", () => {
+    expect(
+      postImageFileNames([
+        "https://pbs.twimg.com/media/AAA111.jpg?name=orig",
+        "https://video.twimg.com/tweet_video/CCC333.mp4",
+      ]),
+    ).toEqual(["AAA111.jpg", "CCC333.mp4"]);
+  });
 });
 
 describe("postImagesFolderName", () => {

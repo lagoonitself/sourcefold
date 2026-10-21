@@ -4221,11 +4221,9 @@ fn validate_card(card: &CardInput) -> Result<(), ServiceError> {
             return Err(ServiceError::bad_request("The script line is too long."));
         }
     }
-    for s in [card.seconds, card.end_seconds] {
-        if let Some(sec) = s {
-            if sec < 0 {
-                return Err(ServiceError::bad_request("Times are whole seconds."));
-            }
+    for sec in [card.seconds, card.end_seconds].into_iter().flatten() {
+        if sec < 0 {
+            return Err(ServiceError::bad_request("Times are whole seconds."));
         }
     }
     if let Some(end) = card.end_seconds {
@@ -4253,11 +4251,10 @@ fn validate_card(card: &CardInput) -> Result<(), ServiceError> {
                 return Err(ServiceError::bad_request("Only b-roll clips have a link or an end time."));
             }
         }
-        "broll" => {
-            if card.item_id.is_none() && card.url.is_none() {
-                return Err(ServiceError::bad_request("A b-roll clip needs a saved video or a link."));
-            }
+        "broll" if card.item_id.is_none() && card.url.is_none() => {
+            return Err(ServiceError::bad_request("A b-roll clip needs a saved video or a link."));
         }
+        "broll" => {}
         "line" => {
             if card.item_id.is_some() || card.highlight_id.is_some() || card.url.is_some() {
                 return Err(ServiceError::bad_request("A line has no source."));
@@ -6418,7 +6415,7 @@ Cited: [sae.org](https://www.sae.org/paper) · Note: Check the date";
         assert_eq!(card.item_id.as_deref(), Some(item2.id.as_str()));
 
         // Merge item 2 into item 1
-        let merge_res = merge_items(&db, &item1.id, &[item2.id.clone()]).unwrap();
+        let merge_res = merge_items(&db, &item1.id, std::slice::from_ref(&item2.id)).unwrap();
         assert_eq!(merge_res.moved_cards, 1);
         assert_eq!(merge_res.item.tags, vec!["Tag1", "Tag2"]);
         assert_eq!(merge_res.item.summary.as_deref(), Some("Other summary"));

@@ -199,7 +199,9 @@ describe("PUT /api/cards/[id]", () => {
       const q = origFrom(table);
       if (table === "cards") {
         const origThen = q.then;
-        q.then = (resolve: any) => {
+        (q as { then: unknown }).then = (
+          resolve: (value: { data: unknown; error: null }) => unknown,
+        ) => {
           const isCheck = callsOf(q, "select").length > 0 && callsOf(q, "insert").length === 0;
           if (isCheck && callsOf(q, "eq").some((c) => c[0] === "id")) {
             return Promise.resolve({ data: null, error: null }).then(resolve);
@@ -243,7 +245,9 @@ describe("PUT /api/cards/[id]", () => {
       const q = origFrom(table);
       if (table === "cards") {
         const origThen = q.then;
-        q.then = (resolve: any) => {
+        (q as { then: unknown }).then = (
+          resolve: (value: { data: unknown; error: null }) => unknown,
+        ) => {
           const isCheck = callsOf(q, "select").length > 0 && callsOf(q, "insert").length === 0;
           if (isCheck && callsOf(q, "eq").some((c) => c[0] === "id")) {
             return Promise.resolve({ data: null, error: null }).then(resolve);

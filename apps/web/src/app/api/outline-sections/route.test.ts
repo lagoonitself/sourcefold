@@ -87,7 +87,9 @@ describe("PUT /api/outline-sections/[id]", () => {
       const q = origFrom(table);
       if (table === "outline_sections") {
         const origThen = q.then;
-        q.then = (resolve: any) => {
+        (q as { then: unknown }).then = (
+          resolve: (value: { data: unknown; error: null }) => unknown,
+        ) => {
           const isCheck = callsOf(q, "select").length > 0 && callsOf(q, "insert").length === 0;
           if (isCheck && callsOf(q, "eq").some((c) => c[0] === "id")) {
             return Promise.resolve({ data: null, error: null }).then(resolve);
@@ -137,7 +139,9 @@ describe("PUT /api/outline-sections/[id]", () => {
       const q = origFrom(table);
       if (table === "outline_sections") {
         const origThen = q.then;
-        q.then = (resolve: any) => {
+        (q as { then: unknown }).then = (
+          resolve: (value: { data: unknown; error: null }) => unknown,
+        ) => {
           const isCheck = callsOf(q, "select").length > 0 && callsOf(q, "update").length === 0;
           if (isCheck && callsOf(q, "eq").some((c) => c[0] === "id")) {
             return Promise.resolve({ data: existingSection, error: null }).then(resolve);
@@ -168,7 +172,7 @@ describe("PUT /api/outline-sections/[id]", () => {
         callsOf(q, "update").length > 0,
     )!;
     expect(itemUpdateQuery).toBeDefined();
-    const updateArg = callsOf(itemUpdateQuery, "update")[0]![0] as any;
+    const updateArg = callsOf(itemUpdateQuery, "update")[0]![0] as Record<string, unknown>;
     expect(updateArg.tags).toEqual(["New Title", "Keep Tag"]);
   });
 

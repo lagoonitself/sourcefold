@@ -1895,7 +1895,7 @@ mod tests {
         .unwrap();
         assert_eq!(call(&[host.clone(), bearer.clone(), origin], Some(&ctx)), 403);
         // No key, and no agent context at all.
-        assert_eq!(call(&[host.clone()], Some(&ctx)), 403);
+        assert_eq!(call(std::slice::from_ref(&host), Some(&ctx)), 403);
         assert_eq!(call(&[host.clone(), bearer.clone()], None), 403);
         // The plain entry point has no agent routes.
         let resp = handle_request(&db, &Method::Post, "/api/agent/changed", "", b"{}", &[host.clone(), bearer.clone()]);

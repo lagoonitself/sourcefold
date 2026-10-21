@@ -84,7 +84,9 @@ describe("POST /api/items/check", () => {
       if (table === "items") {
         queryCount++;
         const origThen = q.then;
-        q.then = (resolve: any) => {
+        (q as { then: unknown }).then = (
+          resolve: (value: { data: unknown; error: null }) => unknown,
+        ) => {
           if (queryCount === 1) {
             // Check in current folder -> not found
             return Promise.resolve({ data: null, error: null }).then(resolve);

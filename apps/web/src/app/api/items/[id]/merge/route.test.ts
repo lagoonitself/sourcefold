@@ -91,7 +91,9 @@ describe("POST /api/items/[id]/merge", () => {
       const q = origFrom(table);
       if (table === "items") {
         const origThen = q.then;
-        q.then = (resolve: any) => {
+        (q as { then: unknown }).then = (
+          resolve: (value: { data: unknown; error: null }) => unknown,
+        ) => {
           const eqCalls = callsOf(q, "eq");
           const isKeepQuery = eqCalls.some((c) => c[0] === "id" && c[1] === KEEP_ID);
           if (isKeepQuery) {
@@ -131,7 +133,7 @@ describe("POST /api/items/[id]/merge", () => {
         callsOf(q, "eq").some((c) => c[0] === "id" && c[1] === KEEP_ID) &&
         callsOf(q, "update").length > 0,
     )!;
-    const updateArg = callsOf(keepUpdateQuery, "update")[0]![0] as any;
+    const updateArg = callsOf(keepUpdateQuery, "update")[0]![0] as Record<string, unknown>;
     expect(updateArg.tags).toEqual(["Alpha", "Beta", "Gamma"]);
     expect(updateArg.triage).toBe("keep"); // from other1
     expect(updateArg.summary).toBe("First summary"); // from other1
@@ -144,7 +146,9 @@ describe("POST /api/items/[id]/merge", () => {
       (q) =>
         q.table === "items" &&
         callsOf(q, "in").length > 0 &&
-        callsOf(q, "update").some((u) => (u[0] as any)?.deleted_at !== undefined),
+        callsOf(q, "update").some(
+          (u) => (u[0] as Record<string, unknown> | undefined)?.deleted_at !== undefined,
+        ),
     )!;
     expect(deleteQuery).toBeDefined();
   });
@@ -187,7 +191,9 @@ describe("POST /api/items/[id]/merge", () => {
       const q = origFrom(table);
       if (table === "items") {
         const origThen = q.then;
-        q.then = (resolve: any) => {
+        (q as { then: unknown }).then = (
+          resolve: (value: { data: unknown; error: null }) => unknown,
+        ) => {
           const eqCalls = callsOf(q, "eq");
           if (eqCalls.some((c) => c[0] === "id" && c[1] === KEEP_ID)) {
             return Promise.resolve({ data: keepItem, error: null }).then(resolve);

@@ -192,6 +192,17 @@ export function buildGoogleDocHtml(markdownFile: string): string {
       image({ href, text }) {
         const url = safeUrl(href);
         if (!url || url.startsWith("mailto:")) return escapeHtml(text);
+        const parsed = new URL(url);
+        if (parsed.pathname.toLowerCase().endsWith(".mp4")) {
+          const gifMatch =
+            parsed.protocol === "https:" &&
+            parsed.hostname === "video.twimg.com" &&
+            /^\/tweet_video\/([A-Za-z0-9_-]{1,100})\.mp4$/.exec(parsed.pathname);
+          if (gifMatch) {
+            return `<a href="${escapeHtml(url)}"><img src="https://pbs.twimg.com/tweet_video_thumb/${gifMatch[1]}.jpg" alt="${escapeHtml(text)}" style="max-width:${PAGE_WIDTH_PX}px;"></a>`;
+          }
+          return `<a href="${escapeHtml(url)}">${escapeHtml(text.trim() || "Video")}</a>`;
+        }
         const size = imageSize(url);
         const dimensions = size ? ` width="${size.width}" height="${size.height}"` : "";
         return `<img src="${escapeHtml(url)}" alt="${escapeHtml(text)}"${dimensions} style="max-width:${PAGE_WIDTH_PX}px;">`;

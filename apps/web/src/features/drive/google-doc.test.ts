@@ -193,4 +193,47 @@ describe("buildGoogleDocHtml", () => {
     expect(bare).not.toContain("<h1");
     expect(bare).toContain("Only a paragraph.");
   });
+
+  it("renders an X animated GIF as a linked thumbnail image", () => {
+    const out = buildGoogleDocHtml(
+      "![A funny reaction](https://video.twimg.com/tweet_video/abc_123-XYZ.mp4)\n",
+    );
+    expect(out).toContain(
+      '<a href="https://video.twimg.com/tweet_video/abc_123-XYZ.mp4"><img src="https://pbs.twimg.com/tweet_video_thumb/abc_123-XYZ.jpg" alt="A funny reaction" style="max-width:624px;"></a>',
+    );
+  });
+
+  it("renders a generic https mp4 with text and with empty text as Video", () => {
+    const withText = buildGoogleDocHtml("![Product Demo](https://example.com/videos/demo.mp4)\n");
+    expect(withText).toContain('<a href="https://example.com/videos/demo.mp4">Product Demo</a>');
+    expect(withText).not.toContain("<img ");
+
+    const emptyText = buildGoogleDocHtml("![](https://example.com/clip.MP4)\n");
+    expect(emptyText).toContain('<a href="https://example.com/clip.MP4">Video</a>');
+
+    const whitespaceText = buildGoogleDocHtml("![   ](https://example.com/clip.mp4)\n");
+    expect(whitespaceText).toContain('<a href="https://example.com/clip.mp4">Video</a>');
+  });
+
+  it("rejects unsafe URLs even when ending in .mp4", () => {
+    const out = buildGoogleDocHtml(
+      [
+        "![bad js](javascript:alert('x').mp4)",
+        "",
+        "![bad data](data:video/mp4;base64,AAAA.mp4)",
+      ].join("\n"),
+    );
+    expect(out).not.toContain("<a href=");
+    expect(out).not.toContain("<img ");
+    expect(out).toContain("bad js");
+    expect(out).toContain("bad data");
+  });
+
+  it("renders an X animated GIF inside a blockquote reply", () => {
+    const out = buildGoogleDocHtml("> ![GIF](https://video.twimg.com/tweet_video/AB1.mp4)\n");
+    expect(out).toContain("<blockquote");
+    expect(out).toContain(
+      '<a href="https://video.twimg.com/tweet_video/AB1.mp4"><img src="https://pbs.twimg.com/tweet_video_thumb/AB1.jpg" alt="GIF" style="max-width:624px;"></a>',
+    );
+  });
 });

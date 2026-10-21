@@ -133,6 +133,7 @@ All tables have `user_id uuid not null references auth.users`, `created_at`, `up
 - `id uuid pk`, `item_id uuid references items`, `parent_id uuid null references x_posts`
 - `post_url text`, `canonical_url text`, unique per item
 - `author_name text`, `handle text`, `author_url text`, `posted_at timestamptz`, `text text`, `position int`
+- `media jsonb` (default `[]`, at most 10): the post's photos and GIFs as links (`{type, url, alt}`) and videos as `{type: "video", durationSeconds}`. Only links live here; the files go to Drive and the local copy. See `docs/dev/handoff-x-media.md`.
 
 **api_tokens**: `id`, `name`, `token_hash`, `last_used_at`, `revoked_at`
 

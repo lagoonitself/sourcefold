@@ -55,7 +55,7 @@ create table public.cards (
   position double precision not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint cards_end_seconds_check check (end_seconds is null or end_seconds >= seconds)
+  constraint cards_end_after_start_check check (end_seconds is null or end_seconds >= seconds)
 );
 
 create index cards_user_id_project_id_idx on public.cards (user_id, project_id);

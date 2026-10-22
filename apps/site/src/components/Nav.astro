@@ -1,0 +1,163 @@
+---
+import { Moon, Sun } from "@lucide/astro";
+import GithubIcon from "./GithubIcon.astro";
+import Logo from "./Logo.astro";
+import { links, sections } from "../lib/site";
+---
+
+<header class="nav" data-nav>
+  <div class="container nav-inner">
+    <a href="#top" class="brand" aria-label="Sourcefold, back to top">
+      <Logo size={28} />
+      <span class="brand-name">Sourcefold</span>
+    </a>
+    <nav aria-label="Sections" class="nav-links">
+      {
+        sections
+          .filter((s) => s.nav)
+          .map((s) => (
+            <a href={`#${s.id}`} data-nav-link={s.id}>
+              {s.label}
+            </a>
+          ))
+      }
+    </nav>
+    <div class="nav-actions">
+      <button class="btn btn-ghost btn-sm icon" type="button" data-theme-toggle aria-label="Switch light or dark" title="Switch light or dark">
+        <Sun size={16} class="sun" />
+        <Moon size={16} class="moon" />
+      </button>
+      <a class="btn btn-ghost btn-sm icon" href={links.repo} aria-label="Sourcefold on GitHub" title="Sourcefold on GitHub">
+        <GithubIcon size={16} />
+      </a>
+      <a class="btn btn-ink btn-sm" href="#download">Download</a>
+    </div>
+  </div>
+</header>
+
+<script>
+  const nav = document.querySelector<HTMLElement>("[data-nav]")!;
+  const onScroll = () => nav.classList.toggle("scrolled", window.scrollY > 8);
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+
+  document.querySelector("[data-theme-toggle]")!.addEventListener("click", () => {
+    const dark = document.documentElement.classList.toggle("dark");
+    localStorage.setItem("sf-theme", dark ? "dark" : "light");
+  });
+
+  // The link of the section on screen gets the highlighter.
+  const linksById = new Map(
+    Array.from(document.querySelectorAll<HTMLAnchorElement>("[data-nav-link]")).map((a) => [
+      a.dataset.navLink!,
+      a,
+    ]),
+  );
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        linksById.forEach((a, id) => a.classList.toggle("active", id === entry.target.id));
+      }
+    },
+    { rootMargin: "-45% 0px -50% 0px" },
+  );
+  document.querySelectorAll("main section[id]").forEach((s) => observer.observe(s));
+</script>
+
+<style>
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    transition:
+      background-color 200ms var(--ease-out),
+      box-shadow 200ms var(--ease-out);
+  }
+  .nav.scrolled {
+    background: color-mix(in oklab, var(--desk) 86%, transparent);
+    backdrop-filter: saturate(1.4) blur(12px);
+    -webkit-backdrop-filter: saturate(1.4) blur(12px);
+    box-shadow: 0 1px 0 var(--border);
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    height: 64px;
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .brand-name {
+    font-family: var(--font-serif);
+    font-size: 21px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+  }
+  .nav-links {
+    display: flex;
+    gap: 4px;
+    margin-inline: auto;
+  }
+  .nav-links a {
+    position: relative;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    transition:
+      color 140ms var(--ease-out),
+      background-color 140ms var(--ease-out);
+  }
+  .nav-links a:hover {
+    color: var(--foreground);
+    background: color-mix(in oklab, var(--background) 60%, transparent);
+  }
+  .nav-links a::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 3px;
+    height: 6px;
+    border-radius: 2px;
+    background: var(--marker);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 360ms var(--ease-out);
+    z-index: -1;
+  }
+  .nav-links a.active {
+    color: var(--foreground);
+  }
+  .nav-links a.active::after {
+    transform: scaleX(1);
+  }
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .icon {
+    width: 34px;
+    padding: 0;
+  }
+  :global(html.dark) .sun,
+  :global(html:not(.dark)) .moon {
+    display: none;
+  }
+  @media (max-width: 820px) {
+    .nav-links {
+      display: none;
+    }
+    .nav-actions {
+      margin-left: auto;
+    }
+  }
+</style>

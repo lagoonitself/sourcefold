@@ -1,0 +1,279 @@
+---
+/**
+ * Research Tool 2: Short summary saved on each source (typed by user or Claude).
+ */
+import SourceTile from "../SourceTile.astro";
+import { Sparkles, PenLine, Check, Cloud } from "@lucide/astro";
+---
+
+<div class="summary-tool">
+  <div class="tool-intro">
+    <div class="tool-intro-text">
+      <h3 class="tool-heading serif">Short summary saved on each source</h3>
+      <p class="muted">
+        Keep the core argument in front of you. Draft your own takeaway or ask Claude to summarize
+        the transcript while staying strictly offline-first.
+      </p>
+    </div>
+    <div class="sync-indicator muted">
+      <Cloud size={14} stroke-width={1.75} />
+      <span>Saved to item file · Offline & Drive</span>
+    </div>
+  </div>
+
+  <div class="summary-card card">
+    <div class="summary-source-header">
+      <SourceTile kind="youtube" size={32} />
+      <div class="source-header-titles">
+        <h4 class="source-title serif">How turbo lag actually works</h4>
+        <span class="source-subtitle muted">Engineering Explained · YouTube · 12:04</span>
+      </div>
+      <div class="summary-mode-toggles">
+        <button type="button" class="btn btn-sm btn-ink is-active" id="tab-claude-summary">
+          <Sparkles size={13} stroke-width={1.75} />
+          <span>Claude</span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline" id="tab-manual-summary">
+          <PenLine size={13} stroke-width={1.75} />
+          <span>Your note</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Claude Generated Content -->
+    <div id="claude-summary-panel" class="summary-content-block">
+      <div class="ai-meta-banner">
+        <div class="ai-badge">
+          <Sparkles size={12} stroke-width={2} />
+          <span>Claude 3.7 Sonnet via MCP</span>
+        </div>
+        <span class="muted font-mono nums text-xs">Generated in 1.4s · 142 words</span>
+      </div>
+      <p class="summary-body">
+        Engineering Explained breaks down turbo lag into two separate delays: <em>throttle hesitation</em> (intake air mass filling the plenum) and <em>spool time</em> (exhaust mass flow accelerating the turbine wheel from rest). At low engine speeds (&lt;2,000 rpm), exhaust kinetic energy is insufficient to spin the compressor wheel past atmospheric pressure. Modern twin-scroll manifolds segregate firing pulses to maintain exhaust pulse velocity, cutting spool lag by 45%.
+      </p>
+      <div class="key-takeaways">
+        <span class="takeaway-label muted">Key takeaways:</span>
+        <ul class="takeaway-list">
+          <li><strong>Lag vs Threshold:</strong> Boost threshold is mechanical rpm limit; lag is the time delay above that threshold.</li>
+          <li><strong>Twin-scroll:</strong> Prevents cylinder blowdown pulses from interfering with adjacent exhaust valves.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Manual Note Content (Hidden by default) -->
+    <div id="manual-summary-panel" class="summary-content-block" style="display: none;">
+      <div class="textarea-wrap">
+        <textarea
+          class="summary-textarea"
+          id="summary-input"
+          rows="4"
+          placeholder="Write a concise 2–3 sentence summary of this source..."
+        >Key for intro: Contrast 1980s Porsche 930 widowmaker lag with modern twin-scroll response. The audience thinks lag is a single phenomenon, but Jason proves it's throttle delay plus turbine spool inertia.</textarea>
+      </div>
+      <div class="textarea-footer">
+        <span class="char-count muted nums"><span id="char-num">228</span> / 5,000 chars</span>
+        <span class="save-status muted">
+          <Check size={13} stroke-width={2} class="save-icon" />
+          <span>Autosaved</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const tool = document.querySelector(".summary-tool");
+  if (tool) {
+    const btnClaude = tool.querySelector("#tab-claude-summary") as HTMLButtonElement | null;
+    const btnManual = tool.querySelector("#tab-manual-summary") as HTMLButtonElement | null;
+    const panelClaude = tool.querySelector("#claude-summary-panel") as HTMLElement | null;
+    const panelManual = tool.querySelector("#manual-summary-panel") as HTMLElement | null;
+    const textarea = tool.querySelector("#summary-input") as HTMLTextAreaElement | null;
+    const charNum = tool.querySelector("#char-num") as HTMLElement | null;
+
+    btnClaude?.addEventListener("click", () => {
+      btnClaude.classList.add("btn-ink", "is-active");
+      btnClaude.classList.remove("btn-outline");
+      btnManual?.classList.remove("btn-ink", "is-active");
+      btnManual?.classList.add("btn-outline");
+
+      if (panelClaude) panelClaude.style.display = "block";
+      if (panelManual) panelManual.style.display = "none";
+    });
+
+    btnManual?.addEventListener("click", () => {
+      btnManual.classList.add("btn-ink", "is-active");
+      btnManual.classList.remove("btn-outline");
+      btnClaude?.classList.remove("btn-ink", "is-active");
+      btnClaude?.classList.add("btn-outline");
+
+      if (panelClaude) panelClaude.style.display = "none";
+      if (panelManual) panelManual.style.display = "block";
+    });
+
+    textarea?.addEventListener("input", () => {
+      if (charNum) charNum.textContent = String(textarea.value.length);
+    });
+  }
+</script>
+
+<style>
+  .summary-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tool-intro {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-heading {
+    font-size: 20px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .sync-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+  }
+
+  .summary-card {
+    padding: 20px;
+    border: 1px solid var(--border);
+  }
+
+  .summary-source-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .source-header-titles {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .source-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .source-subtitle {
+    font-size: 12.5px;
+  }
+
+  .summary-mode-toggles {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ai-meta-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: color-mix(in oklab, var(--marker) 25%, transparent);
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .summary-body {
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--foreground);
+    margin-bottom: 14px;
+  }
+
+  .key-takeaways {
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--muted);
+    font-size: 13.5px;
+  }
+
+  .takeaway-label {
+    display: block;
+    font-weight: 600;
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .takeaway-list {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    line-height: 1.45;
+  }
+
+  /* Manual Textarea */
+  .textarea-wrap {
+    width: 100%;
+  }
+
+  .summary-textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--input);
+    border-radius: 8px;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    transition: border-color 140ms var(--ease-out);
+  }
+
+  .summary-textarea:focus {
+    border-color: var(--ring);
+  }
+
+  .textarea-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 12.5px;
+  }
+
+  .save-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .save-icon {
+    color: var(--success);
+  }
+</style>

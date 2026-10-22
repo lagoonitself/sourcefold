@@ -1,0 +1,513 @@
+---
+/**
+ * Research Tool 4: Quote cards & drag into outline sections.
+ */
+import SourceTile from "../SourceTile.astro";
+import { GripVertical, Clock, CornerDownRight } from "@lucide/astro";
+
+interface QuoteCardData {
+  id: string;
+  kind: "youtube" | "x" | "substack" | "hackernews";
+  sourceTitle: string;
+  timestamp?: string;
+  quote: string;
+  sectionId: string | null;
+}
+
+const CARDS: QuoteCardData[] = [
+  {
+    id: "c1",
+    kind: "youtube",
+    sourceTitle: "How turbo lag actually works",
+    timestamp: "12:04",
+    quote: "The delay before boost hits is throttle lag plus spool time. At low rpm exhaust volume is too small.",
+    sectionId: "s-lag",
+  },
+  {
+    id: "c2",
+    kind: "x",
+    sourceTitle: "Thread: why twin-scroll beats twin-turbo",
+    quote: "Separating exhaust pulses avoids cylinder backpressure interference, maintaining pulse velocity.",
+    sectionId: null, // In pile
+  },
+  {
+    id: "c3",
+    kind: "substack",
+    sourceTitle: "The last rotary",
+    quote: "Sequential bypass valves cut low-rpm hesitation, but the complex vacuum plumbing was fragile.",
+    sectionId: null, // In pile
+  },
+  {
+    id: "c4",
+    kind: "hackernews",
+    sourceTitle: "Electric turbos are finally here",
+    quote: "A 48-volt motor spins the compressor wheel in 200 milliseconds, completely erasing turbo lag.",
+    sectionId: "s-verdict",
+  },
+];
+---
+
+<div class="outline-tool">
+  <div class="tool-intro">
+    <div class="tool-intro-text">
+      <h3 class="tool-heading serif">Quote cards into outline</h3>
+      <p class="muted">
+        Turn any highlight into a card with its exact source and timestamp. Drag cards from your
+        pile into outline sections to structure your narrative.
+      </p>
+    </div>
+    <span class="muted font-mono text-xs">Drag or tap to place</span>
+  </div>
+
+  <div class="outline-layout">
+    <!-- Left: Card Pile -->
+    <div class="card-pile-col">
+      <div class="pile-header">
+        <span class="pile-title serif">Unplaced cards (<span id="pile-count" class="nums">2</span>)</span>
+      </div>
+
+      <div class="cards-pile" id="cards-pile" data-section-target="pile">
+        {
+          CARDS.filter((c) => !c.sectionId).map((c) => (
+            <div
+              class="quote-card card"
+              data-card-id={c.id}
+              draggable="true"
+            >
+              <div class="card-topline">
+                <div class="card-source-info">
+                  <SourceTile kind={c.kind} size={20} />
+                  <span class="card-source-title">{c.sourceTitle}</span>
+                </div>
+                {c.timestamp && (
+                  <span class="timestamp-badge font-mono nums">
+                    <Clock size={11} stroke-width={1.75} />
+                    <span>{c.timestamp}</span>
+                  </span>
+                )}
+                <div class="card-grip" aria-hidden="true">
+                  <GripVertical size={13} stroke-width={1.75} />
+                </div>
+              </div>
+              <blockquote class="card-quote serif">“{c.quote}”</blockquote>
+
+              <!-- Mobile quick-place buttons -->
+              <div class="mobile-place-actions">
+                <span class="place-label muted">Move to:</span>
+                <button type="button" class="btn-place-chip" data-target="s-intro">Intro</button>
+                <button type="button" class="btn-place-chip" data-target="s-work">How it works</button>
+                <button type="button" class="btn-place-chip" data-target="s-lag">Lag</button>
+                <button type="button" class="btn-place-chip" data-target="s-verdict">Verdict</button>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+
+    <!-- Right: Outline Sections -->
+    <div class="outline-sections-col">
+      <div class="section-box" data-section-id="s-intro">
+        <div class="section-box-header">
+          <span class="section-number nums font-mono">1</span>
+          <h4 class="section-name serif">Intro: The myth of turbo lag</h4>
+        </div>
+        <div class="section-dropzone" data-section-target="s-intro">
+          <div class="empty-drop-placeholder muted">
+            <CornerDownRight size={13} stroke-width={1.75} />
+            <span>Drop cards here</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-box" data-section-id="s-work">
+        <div class="section-box-header">
+          <span class="section-number nums font-mono">2</span>
+          <h4 class="section-name serif">How turbos work</h4>
+        </div>
+        <div class="section-dropzone" data-section-target="s-work">
+          <div class="empty-drop-placeholder muted">
+            <CornerDownRight size={13} stroke-width={1.75} />
+            <span>Drop cards here</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-box" data-section-id="s-lag">
+        <div class="section-box-header">
+          <span class="section-number nums font-mono">3</span>
+          <h4 class="section-name serif">Lag vs boost threshold</h4>
+        </div>
+        <div class="section-dropzone" data-section-target="s-lag">
+          <!-- Pre-placed card c1 -->
+          {
+            CARDS.filter((c) => c.sectionId === "s-lag").map((c) => (
+              <div class="quote-card card" data-card-id={c.id} draggable="true">
+                <div class="card-topline">
+                  <div class="card-source-info">
+                    <SourceTile kind={c.kind} size={20} />
+                    <span class="card-source-title">{c.sourceTitle}</span>
+                  </div>
+                  {c.timestamp && (
+                    <span class="timestamp-badge font-mono nums">
+                      <Clock size={11} stroke-width={1.75} />
+                      <span>{c.timestamp}</span>
+                    </span>
+                  )}
+                  <div class="card-grip" aria-hidden="true">
+                    <GripVertical size={13} stroke-width={1.75} />
+                  </div>
+                </div>
+                <blockquote class="card-quote serif">“{c.quote}”</blockquote>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="section-box" data-section-id="s-verdict">
+        <div class="section-box-header">
+          <span class="section-number nums font-mono">4</span>
+          <h4 class="section-name serif">Verdict: Twin-scroll & 48V future</h4>
+        </div>
+        <div class="section-dropzone" data-section-target="s-verdict">
+          <!-- Pre-placed card c4 -->
+          {
+            CARDS.filter((c) => c.sectionId === "s-verdict").map((c) => (
+              <div class="quote-card card" data-card-id={c.id} draggable="true">
+                <div class="card-topline">
+                  <div class="card-source-info">
+                    <SourceTile kind={c.kind} size={20} />
+                    <span class="card-source-title">{c.sourceTitle}</span>
+                  </div>
+                  {c.timestamp && (
+                    <span class="timestamp-badge font-mono nums">
+                      <Clock size={11} stroke-width={1.75} />
+                      <span>{c.timestamp}</span>
+                    </span>
+                  )}
+                  <div class="card-grip" aria-hidden="true">
+                    <GripVertical size={13} stroke-width={1.75} />
+                  </div>
+                </div>
+                <blockquote class="card-quote serif">“{c.quote}”</blockquote>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { animate } from "motion";
+  import { prefersReducedMotion } from "../../lib/reveal";
+
+  const tool = document.querySelector(".outline-tool");
+  if (tool) {
+    const pile = tool.querySelector("#cards-pile") as HTMLElement | null;
+    const dropzones = Array.from(tool.querySelectorAll(".section-dropzone, #cards-pile")) as HTMLElement[];
+    const pileCount = tool.querySelector("#pile-count") as HTMLElement | null;
+    let draggedCard: HTMLElement | null = null;
+
+    function updatePileCount() {
+      if (!pile || !pileCount) return;
+      const count = pile.querySelectorAll(".quote-card").length;
+      pileCount.textContent = String(count);
+    }
+
+    function initCardEvents(card: HTMLElement) {
+      card.addEventListener("dragstart", (e) => {
+        draggedCard = card;
+        card.classList.add("is-dragging");
+        if (e.dataTransfer) {
+          e.dataTransfer.setData("text/plain", card.dataset.cardId || "");
+          e.dataTransfer.effectAllowed = "move";
+        }
+      });
+
+      card.addEventListener("dragend", () => {
+        card.classList.remove("is-dragging");
+        dropzones.forEach((dz) => dz.classList.remove("is-drag-hover"));
+        draggedCard = null;
+        updatePileCount();
+      });
+
+      // Mobile place button chips
+      const placeButtons = card.querySelectorAll(".btn-place-chip");
+      placeButtons.forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const targetSectionId = (btn as HTMLElement).dataset.target;
+          if (!targetSectionId) return;
+          const targetDropzone = tool?.querySelector(`[data-section-target="${targetSectionId}"]`);
+          if (targetDropzone) {
+            targetDropzone.appendChild(card);
+            updatePileCount();
+            if (!prefersReducedMotion()) {
+              animate(card, { scale: [0.95, 1], opacity: [0.8, 1] }, { duration: 0.2 });
+            }
+          }
+        });
+      });
+    }
+
+    const cards = Array.from(tool.querySelectorAll(".quote-card")) as HTMLElement[];
+    cards.forEach(initCardEvents);
+
+    dropzones.forEach((zone) => {
+      zone.addEventListener("dragover", (e) => {
+        if (!draggedCard) return;
+        e.preventDefault();
+        zone.classList.add("is-drag-hover");
+      });
+
+      zone.addEventListener("dragleave", () => {
+        zone.classList.remove("is-drag-hover");
+      });
+
+      zone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        zone.classList.remove("is-drag-hover");
+        if (!draggedCard) return;
+
+        zone.appendChild(draggedCard);
+        updatePileCount();
+
+        if (!prefersReducedMotion()) {
+          animate(draggedCard, { scale: [0.96, 1], opacity: [0.7, 1] }, { duration: 0.24, ease: [0.32, 0.72, 0, 1] });
+        }
+      });
+    });
+  }
+</script>
+
+<style>
+  .outline-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tool-intro {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-heading {
+    font-size: 20px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .outline-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 860px) {
+    .outline-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Card Pile */
+  .card-pile-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--desk);
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  .pile-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .pile-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .cards-pile {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 120px;
+  }
+
+  /* Quote Cards */
+  .quote-card {
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    cursor: grab;
+    transition:
+      box-shadow 140ms var(--ease-out),
+      transform 140ms var(--ease-out),
+      opacity 140ms var(--ease-out);
+    user-select: none;
+  }
+
+  .quote-card:hover {
+    box-shadow: var(--shadow-raised);
+  }
+
+  .quote-card.is-dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+  }
+
+  .card-topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .card-source-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .card-source-title {
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .timestamp-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--muted);
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+
+  .card-grip {
+    color: var(--muted-foreground);
+    opacity: 0.4;
+  }
+
+  .quote-card:hover .card-grip {
+    opacity: 1;
+  }
+
+  .card-quote {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--foreground);
+  }
+
+  .mobile-place-actions {
+    display: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 860px) {
+    .mobile-place-actions {
+      display: flex;
+    }
+  }
+
+  .place-label {
+    font-size: 11px;
+  }
+
+  .btn-place-chip {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--muted);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    cursor: pointer;
+  }
+
+  /* Outline Sections */
+  .outline-sections-col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .section-box {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: var(--card);
+  }
+
+  .section-box-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .section-number {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .section-name {
+    font-size: 15.5px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .section-dropzone {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 48px;
+    border-radius: 8px;
+    padding: 4px;
+    transition: background-color 140ms var(--ease-out);
+  }
+
+  .section-dropzone.is-drag-hover {
+    background: color-mix(in oklab, var(--marker) 15%, transparent);
+    outline: 2px dashed var(--primary);
+  }
+
+  .empty-drop-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .section-dropzone:has(.quote-card) .empty-drop-placeholder {
+    display: none;
+  }
+</style>

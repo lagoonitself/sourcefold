@@ -1,7 +1,1531 @@
 ---
-// Placeholder. The agent that owns this section replaces it.
+/**
+ * Organize section: "Organize".
+ * Desktop-style sidebar tree (project switcher, groups inside groups, drag to reorder and nest),
+ * group view with rows (sources, note row, image row), multi-select action bar, and toast.
+ */
+import SectionHeader from "../SectionHeader.astro";
+import SourceTile from "../SourceTile.astro";
+import {
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  Plus,
+  Archive,
+  Check,
+  Copy,
+  FolderInput,
+  GripVertical,
+  Ellipsis,
+  Image as ImageIcon,
+  StickyNote,
+} from "@lucide/astro";
 ---
 
 <section id="organize" class="section">
-  <div class="container"><p class="muted">Organize section</p></div>
+  <div class="container">
+    <SectionHeader
+      label="Organize"
+      title="Groups inside groups,"
+      marked="as deep as you like"
+      lede="Projects (one per video or article you're working on), groups inside groups as deep as you like. Drag to reorder and nest, with notes and images right next to your sources."
+    />
+
+    <!-- Interactive Desktop App Frame -->
+    <div class="sheet organize-frame" data-reveal>
+      <!-- App Window Top Bar -->
+      <div class="app-topbar">
+        <div class="topbar-left">
+          <!-- Window traffic dots -->
+          <div class="window-controls" aria-hidden="true">
+            <span class="control-dot close"></span>
+            <span class="control-dot min"></span>
+            <span class="control-dot max"></span>
+          </div>
+
+          <!-- Project switcher -->
+          <div class="project-dropdown-wrap">
+            <button
+              type="button"
+              id="project-switcher-btn"
+              class="project-switcher-btn"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <span class="project-name">Cars</span>
+              <ChevronDown size={14} stroke-width={1.75} class="project-chevron" />
+            </button>
+
+            <!-- Project menu -->
+            <div id="project-menu" class="card project-menu" style="display: none;">
+              <div class="menu-header muted">Projects</div>
+              <button type="button" class="menu-item is-active">
+                <Check size={14} stroke-width={2} class="item-check" />
+                <span>Cars</span>
+              </button>
+              <button type="button" class="menu-item">
+                <span class="item-check-placeholder"></span>
+                <span>Autonomous driving</span>
+              </button>
+              <button type="button" class="menu-item">
+                <span class="item-check-placeholder"></span>
+                <span>Solid-state batteries</span>
+              </button>
+              <div class="menu-divider"></div>
+              <button type="button" id="archive-project-btn" class="menu-item menu-item-archive">
+                <Archive size={14} stroke-width={1.75} class="muted" />
+                <span>Archive project</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Breadcrumb -->
+          <nav class="breadcrumb-trail" aria-label="Breadcrumb">
+            <span class="muted">Cars</span>
+            <span class="crumb-sep muted">/</span>
+            <span id="breadcrumb-parent" class="muted">Engines</span>
+            <span class="crumb-sep muted">/</span>
+            <span id="breadcrumb-current" class="crumb-active">Turbocharging</span>
+          </nav>
+        </div>
+
+        <div class="topbar-right">
+          <span class="sync-status muted">
+            <span class="sync-dot" aria-hidden="true"></span>
+            <span>Synced</span>
+          </span>
+          <button type="button" class="btn btn-ink btn-sm" id="add-links-btn">
+            <Plus size={14} stroke-width={2} />
+            <span>Add links</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- App Workspace Body -->
+      <div class="app-body">
+        <!-- Sidebar Tree -->
+        <aside class="app-sidebar" aria-label="Project groups">
+          <div class="sidebar-header">
+            <span class="sidebar-title muted">Groups</span>
+            <button
+              type="button"
+              class="btn-icon-subtle"
+              id="new-group-btn"
+              aria-label="New group"
+              title="New group"
+            >
+              <Plus size={14} stroke-width={2} />
+            </button>
+          </div>
+
+          <!-- Tree View -->
+          <div class="sidebar-tree" role="tree" id="sidebar-tree">
+            <!-- Group 1: Engines -->
+            <div class="tree-branch" data-group-id="engines">
+              <div
+                class="tree-row"
+                role="treeitem"
+                aria-expanded="true"
+                data-group="Engines"
+                data-count="14"
+                draggable="true"
+              >
+                <button
+                  type="button"
+                  class="chevron-toggle"
+                  aria-label="Toggle Engines"
+                >
+                  <ChevronDown size={14} stroke-width={1.75} class="branch-chevron" />
+                </button>
+                <span class="group-folder-icon" aria-hidden="true">
+                  <FolderOpen size={14} stroke-width={1.75} />
+                </span>
+                <span class="group-label">Engines</span>
+                <span class="group-count nums muted">14</span>
+              </div>
+
+              <!-- Children of Engines -->
+              <div class="tree-children">
+                <!-- Child 1: Turbocharging (Active) -->
+                <div class="tree-branch" data-group-id="turbocharging">
+                  <div
+                    class="tree-row is-open"
+                    role="treeitem"
+                    aria-expanded="true"
+                    data-group="Turbocharging"
+                    data-parent="Engines"
+                    data-count="6"
+                    draggable="true"
+                  >
+                    <button
+                      type="button"
+                      class="chevron-toggle"
+                      aria-label="Toggle Turbocharging"
+                    >
+                      <ChevronDown size={14} stroke-width={1.75} class="branch-chevron" />
+                    </button>
+                    <span class="group-folder-icon" aria-hidden="true">
+                      <FolderOpen size={14} stroke-width={1.75} />
+                    </span>
+                    <span class="group-label">
+                      <span class="marker marker-pill">Turbocharging</span>
+                    </span>
+                    <span class="group-count nums muted">6</span>
+                  </div>
+
+                  <!-- Subgroups of Turbocharging -->
+                  <div class="tree-children">
+                    <div
+                      class="tree-row"
+                      role="treeitem"
+                      data-group="Lag and boost"
+                      data-parent="Turbocharging"
+                      data-count="3"
+                      draggable="true"
+                    >
+                      <span class="tree-indent" aria-hidden="true"></span>
+                      <span class="group-folder-icon" aria-hidden="true">
+                        <Folder size={14} stroke-width={1.75} />
+                      </span>
+                      <span class="group-label">Lag and boost</span>
+                      <span class="group-count nums muted">3</span>
+                    </div>
+
+                    <div
+                      class="tree-row"
+                      role="treeitem"
+                      data-group="Twin-scroll"
+                      data-parent="Turbocharging"
+                      data-count="3"
+                      draggable="true"
+                    >
+                      <span class="tree-indent" aria-hidden="true"></span>
+                      <span class="group-folder-icon" aria-hidden="true">
+                        <Folder size={14} stroke-width={1.75} />
+                      </span>
+                      <span class="group-label">Twin-scroll</span>
+                      <span class="group-count nums muted">3</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Child 2: Naturally aspirated -->
+                <div
+                  class="tree-row"
+                  role="treeitem"
+                  data-group="Naturally aspirated"
+                  data-parent="Engines"
+                  data-count="5"
+                  draggable="true"
+                >
+                  <span class="tree-indent" aria-hidden="true"></span>
+                  <span class="group-folder-icon" aria-hidden="true">
+                    <Folder size={14} stroke-width={1.75} />
+                  </span>
+                  <span class="group-label">Naturally aspirated</span>
+                  <span class="group-count nums muted">5</span>
+                </div>
+
+                <!-- Child 3: Rotary & Wankel -->
+                <div
+                  class="tree-row"
+                  role="treeitem"
+                  data-group="Rotary & Wankel"
+                  data-parent="Engines"
+                  data-count="3"
+                  draggable="true"
+                >
+                  <span class="tree-indent" aria-hidden="true"></span>
+                  <span class="group-folder-icon" aria-hidden="true">
+                    <Folder size={14} stroke-width={1.75} />
+                  </span>
+                  <span class="group-label">Rotary & Wankel</span>
+                  <span class="group-count nums muted">3</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 2: Aerodynamics -->
+            <div class="tree-branch is-collapsed" data-group-id="aero">
+              <div
+                class="tree-row"
+                role="treeitem"
+                aria-expanded="false"
+                data-group="Aerodynamics"
+                data-count="8"
+                draggable="true"
+              >
+                <button
+                  type="button"
+                  class="chevron-toggle"
+                  aria-label="Toggle Aerodynamics"
+                >
+                  <ChevronRight size={14} stroke-width={1.75} class="branch-chevron" />
+                </button>
+                <span class="group-folder-icon" aria-hidden="true">
+                  <Folder size={14} stroke-width={1.75} />
+                </span>
+                <span class="group-label">Aerodynamics</span>
+                <span class="group-count nums muted">8</span>
+              </div>
+              <div class="tree-children" style="display: none;">
+                <div
+                  class="tree-row"
+                  role="treeitem"
+                  data-group="Ground effect"
+                  data-parent="Aerodynamics"
+                  data-count="4"
+                  draggable="true"
+                >
+                  <span class="tree-indent" aria-hidden="true"></span>
+                  <span class="group-folder-icon" aria-hidden="true">
+                    <Folder size={14} stroke-width={1.75} />
+                  </span>
+                  <span class="group-label">Ground effect</span>
+                  <span class="group-count nums muted">4</span>
+                </div>
+                <div
+                  class="tree-row"
+                  role="treeitem"
+                  data-group="Active wings"
+                  data-parent="Aerodynamics"
+                  data-count="4"
+                  draggable="true"
+                >
+                  <span class="tree-indent" aria-hidden="true"></span>
+                  <span class="group-folder-icon" aria-hidden="true">
+                    <Folder size={14} stroke-width={1.75} />
+                  </span>
+                  <span class="group-label">Active wings</span>
+                  <span class="group-count nums muted">4</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 3: Chassis & suspension -->
+            <div class="tree-branch is-collapsed" data-group-id="chassis">
+              <div
+                class="tree-row"
+                role="treeitem"
+                aria-expanded="false"
+                data-group="Chassis & suspension"
+                data-count="6"
+                draggable="true"
+              >
+                <button
+                  type="button"
+                  class="chevron-toggle"
+                  aria-label="Toggle Chassis"
+                >
+                  <ChevronRight size={14} stroke-width={1.75} class="branch-chevron" />
+                </button>
+                <span class="group-folder-icon" aria-hidden="true">
+                  <Folder size={14} stroke-width={1.75} />
+                </span>
+                <span class="group-label">Chassis & suspension</span>
+                <span class="group-count nums muted">6</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Main Group View -->
+        <main class="app-main-content">
+          <!-- Group View Header -->
+          <div class="group-view-header">
+            <div class="header-titles">
+              <h3 class="group-title serif">
+                <span id="group-name-heading" class="marker marker-sweep is-in">
+                  Turbocharging
+                </span>
+              </h3>
+              <p class="group-meta muted" id="group-meta-text">
+                2 subgroups, 6 sources · 14 highlights
+              </p>
+            </div>
+
+            <div class="group-actions">
+              <button type="button" class="btn btn-outline btn-sm">
+                <span>New subgroup</span>
+              </button>
+              <button type="button" class="btn btn-outline btn-sm">
+                <ImageIcon size={14} stroke-width={1.75} />
+                <span>Add image</span>
+              </button>
+              <button type="button" class="btn btn-outline btn-sm">
+                <StickyNote size={14} stroke-width={1.75} />
+                <span>New note</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Multi-select Action Bar (Floating when items selected) -->
+          <div id="selection-action-bar" class="selection-action-bar card" style="display: none;">
+            <div class="selection-count">
+              <span id="selected-items-count" class="nums">0</span> selected
+            </div>
+            <div class="selection-buttons">
+              <button type="button" class="btn btn-outline btn-sm" id="batch-move-btn">
+                <FolderInput size={14} stroke-width={1.75} />
+                <span>Move</span>
+              </button>
+              <button type="button" class="btn btn-ink btn-sm" id="batch-copy-links-btn">
+                <Copy size={14} stroke-width={1.75} />
+                <span>Copy links</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                id="batch-deselect-btn"
+                aria-label="Clear selection"
+              >
+                <span>Deselect</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Draggable Rows List -->
+          <div class="group-rows-list" id="group-rows-list" role="list">
+            <!-- Row 1: YouTube -->
+            <div
+              class="item-row"
+              role="listitem"
+              data-id="row-yt"
+              data-url="youtube.com/watch?v=Q3pWg1Zt9ac"
+            >
+              <div class="row-drag-handle" title="Drag to reorder" aria-hidden="true">
+                <GripVertical size={14} stroke-width={1.75} />
+              </div>
+              <label class="row-checkbox-wrap">
+                <input type="checkbox" class="row-checkbox sr-only" />
+                <span class="checkbox-visual" aria-hidden="true">
+                  <Check size={11} stroke-width={2.5} class="check-icon" />
+                </span>
+                <span class="sr-only">Select How turbo lag actually works</span>
+              </label>
+              <SourceTile kind="youtube" size={30} />
+              <div class="row-text">
+                <span class="row-title serif">How turbo lag actually works</span>
+                <span class="row-subtext muted">Engineering Explained · YouTube · 12:04</span>
+              </div>
+              <div class="row-type-badge muted">YouTube</div>
+              <div class="row-date muted nums">Oct 17</div>
+              <button
+                type="button"
+                class="btn-icon-subtle row-more-btn"
+                aria-label="Row actions"
+              >
+                <Ellipsis size={15} stroke-width={1.75} />
+              </button>
+            </div>
+
+            <!-- Row 2: Grokipedia -->
+            <div
+              class="item-row"
+              role="listitem"
+              data-id="row-grok"
+              data-url="grokipedia.com/page/Turbocharger"
+            >
+              <div class="row-drag-handle" title="Drag to reorder" aria-hidden="true">
+                <GripVertical size={14} stroke-width={1.75} />
+              </div>
+              <label class="row-checkbox-wrap">
+                <input type="checkbox" class="row-checkbox sr-only" />
+                <span class="checkbox-visual" aria-hidden="true">
+                  <Check size={11} stroke-width={2.5} class="check-icon" />
+                </span>
+                <span class="sr-only">Select Turbocharger</span>
+              </label>
+              <SourceTile kind="grokipedia" size={30} />
+              <div class="row-text">
+                <span class="row-title serif">Turbocharger</span>
+                <span class="row-subtext muted">Grokipedia · 8 footnotes · Complete article</span>
+              </div>
+              <div class="row-type-badge muted">Grokipedia</div>
+              <div class="row-date muted nums">Oct 16</div>
+              <button
+                type="button"
+                class="btn-icon-subtle row-more-btn"
+                aria-label="Row actions"
+              >
+                <Ellipsis size={15} stroke-width={1.75} />
+              </button>
+            </div>
+
+            <!-- Row 3: Substack -->
+            <div
+              class="item-row"
+              role="listitem"
+              data-id="row-sub"
+              data-url="enginebay.substack.com/p/the-last-rotary"
+            >
+              <div class="row-drag-handle" title="Drag to reorder" aria-hidden="true">
+                <GripVertical size={14} stroke-width={1.75} />
+              </div>
+              <label class="row-checkbox-wrap">
+                <input type="checkbox" class="row-checkbox sr-only" />
+                <span class="checkbox-visual" aria-hidden="true">
+                  <Check size={11} stroke-width={2.5} class="check-icon" />
+                </span>
+                <span class="sr-only">Select The last rotary</span>
+              </label>
+              <SourceTile kind="substack" size={30} />
+              <div class="row-text">
+                <span class="row-title serif">The last rotary</span>
+                <span class="row-subtext muted">Engine Bay · Substack · 3 images</span>
+              </div>
+              <div class="row-type-badge muted">Substack</div>
+              <div class="row-date muted nums">Oct 14</div>
+              <button
+                type="button"
+                class="btn-icon-subtle row-more-btn"
+                aria-label="Row actions"
+              >
+                <Ellipsis size={15} stroke-width={1.75} />
+              </button>
+            </div>
+
+            <!-- Row 4: Note (EXTRA_KINDS) -->
+            <div class="item-row" role="listitem" data-id="row-note" data-url="">
+              <div class="row-drag-handle" title="Drag to reorder" aria-hidden="true">
+                <GripVertical size={14} stroke-width={1.75} />
+              </div>
+              <label class="row-checkbox-wrap">
+                <input type="checkbox" class="row-checkbox sr-only" />
+                <span class="checkbox-visual" aria-hidden="true">
+                  <Check size={11} stroke-width={2.5} class="check-icon" />
+                </span>
+                <span class="sr-only">Select Script ideas for the intro</span>
+              </label>
+              <SourceTile kind="note" size={30} />
+              <div class="row-text">
+                <span class="row-title serif">Script ideas for the intro</span>
+                <span class="row-subtext muted">Markdown note · "Hook: 930 turbo lag vs EV instant torque"</span>
+              </div>
+              <div class="row-type-badge muted">Note</div>
+              <div class="row-date muted nums">Oct 18</div>
+              <button
+                type="button"
+                class="btn-icon-subtle row-more-btn"
+                aria-label="Row actions"
+              >
+                <Ellipsis size={15} stroke-width={1.75} />
+              </button>
+            </div>
+
+            <!-- Row 5: Image (EXTRA_KINDS) -->
+            <div class="item-row" role="listitem" data-id="row-img" data-url="">
+              <div class="row-drag-handle" title="Drag to reorder" aria-hidden="true">
+                <GripVertical size={14} stroke-width={1.75} />
+              </div>
+              <label class="row-checkbox-wrap">
+                <input type="checkbox" class="row-checkbox sr-only" />
+                <span class="checkbox-visual" aria-hidden="true">
+                  <Check size={11} stroke-width={2.5} class="check-icon" />
+                </span>
+                <span class="sr-only">Select Dyno chart</span>
+              </label>
+              <SourceTile kind="image" size={30} />
+              <div class="row-text">
+                <span class="row-title serif">Dyno chart, 2JZ stock vs single turbo</span>
+                <span class="row-subtext muted">Image · PNG · 1.4 MB · Kept in Drive</span>
+              </div>
+              <div class="row-type-badge muted">Image</div>
+              <div class="row-date muted nums">Oct 17</div>
+              <button
+                type="button"
+                class="btn-icon-subtle row-more-btn"
+                aria-label="Row actions"
+              >
+                <Ellipsis size={15} stroke-width={1.75} />
+              </button>
+            </div>
+
+            <!-- Row 6: Reddit -->
+            <div
+              class="item-row"
+              role="listitem"
+              data-id="row-reddit"
+              data-url="reddit.com/r/cars/comments/1g7"
+            >
+              <div class="row-drag-handle" title="Drag to reorder" aria-hidden="true">
+                <GripVertical size={14} stroke-width={1.75} />
+              </div>
+              <label class="row-checkbox-wrap">
+                <input type="checkbox" class="row-checkbox sr-only" />
+                <span class="checkbox-visual" aria-hidden="true">
+                  <Check size={11} stroke-width={2.5} class="check-icon" />
+                </span>
+                <span class="sr-only">Select Is the 2JZ overrated</span>
+              </label>
+              <SourceTile kind="reddit" size={30} />
+              <div class="row-text">
+                <span class="row-title serif">Is the 2JZ overrated?</span>
+                <span class="row-subtext muted">r/cars · Reddit · 342 comments</span>
+              </div>
+              <div class="row-type-badge muted">Reddit</div>
+              <div class="row-date muted nums">Oct 15</div>
+              <button
+                type="button"
+                class="btn-icon-subtle row-more-btn"
+                aria-label="Row actions"
+              >
+                <Ellipsis size={15} stroke-width={1.75} />
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      <!-- Toast Notification -->
+      <div id="organize-toast" class="organize-toast card" style="display: none;" role="status">
+        <Check size={16} stroke-width={2} class="toast-check" />
+        <span id="toast-text">Copied 3 links</span>
+      </div>
+    </div>
+
+    <!-- Feature Pillars under the desktop mock -->
+    <div class="organize-grid" data-reveal="stagger">
+      <div class="feature-point card">
+        <h3 class="point-title serif">Projects</h3>
+        <p class="muted">
+          One project per video, article, or thesis. Everything inside stays organized, isolated,
+          and ready for AI prompting.
+        </p>
+      </div>
+
+      <div class="feature-point card">
+        <h3 class="point-title serif">Groups as deep as you like</h3>
+        <p class="muted">
+          Nest sub-topics, chapters, and tangents naturally. No arbitrary folder depth limits or
+          rigid taxonomy schemes.
+        </p>
+      </div>
+
+      <div class="feature-point card">
+        <h3 class="point-title serif">Drag to reorder and nest</h3>
+        <p class="muted">
+          Reorder items to build your narrative flow, or drop a group onto another to nest it. Real
+          spring physics with instant feedback.
+        </p>
+      </div>
+
+      <div class="feature-point card">
+        <h3 class="point-title serif">Notes and images next to sources</h3>
+        <p class="muted">
+          Keep your thoughts, scratchpads, screenshots, and dyno charts right alongside the articles
+          and videos that inspired them.
+        </p>
+      </div>
+    </div>
+  </div>
 </section>
+
+<script>
+  import { animate } from "motion";
+  import { prefersReducedMotion } from "../../lib/reveal";
+
+  const section = document.querySelector("#organize");
+  if (section) {
+    const projectBtn = section.querySelector("#project-switcher-btn") as HTMLButtonElement | null;
+    const projectMenu = section.querySelector("#project-menu") as HTMLElement | null;
+    const archiveBtn = section.querySelector("#archive-project-btn") as HTMLButtonElement | null;
+    const toast = section.querySelector("#organize-toast") as HTMLElement | null;
+    const toastText = section.querySelector("#toast-text") as HTMLElement | null;
+
+    const groupHeading = section.querySelector("#group-name-heading") as HTMLElement | null;
+    const groupMeta = section.querySelector("#group-meta-text") as HTMLElement | null;
+    const breadcrumbParent = section.querySelector("#breadcrumb-parent") as HTMLElement | null;
+    const breadcrumbCurrent = section.querySelector("#breadcrumb-current") as HTMLElement | null;
+
+    const selectionBar = section.querySelector("#selection-action-bar") as HTMLElement | null;
+    const selectionCount = section.querySelector("#selected-items-count") as HTMLElement | null;
+    const copyLinksBtn = section.querySelector("#batch-copy-links-btn") as HTMLButtonElement | null;
+    const deselectBtn = section.querySelector("#batch-deselect-btn") as HTMLButtonElement | null;
+
+    const rowsList = section.querySelector("#group-rows-list") as HTMLElement | null;
+    const itemRows = Array.from(section.querySelectorAll(".item-row")) as HTMLElement[];
+    const treeRows = Array.from(section.querySelectorAll(".tree-row")) as HTMLElement[];
+    const chevrons = Array.from(section.querySelectorAll(".chevron-toggle")) as HTMLButtonElement[];
+
+    let toastTimer: number | null = null;
+
+    function showToast(message: string) {
+      if (!toast || !toastText) return;
+      toastText.textContent = message;
+      toast.style.display = "inline-flex";
+
+      if (!prefersReducedMotion()) {
+        animate(toast, { opacity: [0, 1], y: [16, 0] }, { duration: 0.24, ease: [0.32, 0.72, 0, 1] });
+      }
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => {
+        if (!prefersReducedMotion()) {
+          animate(toast, { opacity: [1, 0], y: [0, 8] }, { duration: 0.2, ease: [0.16, 1, 0.3, 1] }).then(
+            () => {
+              toast.style.display = "none";
+            }
+          );
+        } else {
+          toast.style.display = "none";
+        }
+      }, 2400);
+    }
+
+    // Project Switcher Dropdown
+    projectBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!projectMenu) return;
+      const isOpen = projectMenu.style.display === "block";
+      projectMenu.style.display = isOpen ? "none" : "block";
+      projectBtn.setAttribute("aria-expanded", String(!isOpen));
+    });
+
+    document.addEventListener("click", (e) => {
+      if (projectMenu && !projectMenu.contains(e.target as Node) && e.target !== projectBtn) {
+        projectMenu.style.display = "none";
+        projectBtn?.setAttribute("aria-expanded", "false");
+      }
+    });
+
+    archiveBtn?.addEventListener("click", () => {
+      if (projectMenu) projectMenu.style.display = "none";
+      showToast("Archived project 'Cars'");
+    });
+
+    // Expand / Collapse Chevron Toggles
+    chevrons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const branch = btn.closest(".tree-branch") as HTMLElement | null;
+        if (!branch) return;
+        const children = branch.querySelector(".tree-children") as HTMLElement | null;
+        const chevronIcon = btn.querySelector(".branch-chevron") as HTMLElement | null;
+
+        const isCurrentlyCollapsed = branch.classList.contains("is-collapsed");
+
+        if (isCurrentlyCollapsed) {
+          branch.classList.remove("is-collapsed");
+          if (children) children.style.display = "block";
+          if (chevronIcon) chevronIcon.style.transform = "rotate(0deg)";
+        } else {
+          branch.classList.add("is-collapsed");
+          if (children) children.style.display = "none";
+          if (chevronIcon) chevronIcon.style.transform = "rotate(-90deg)";
+        }
+      });
+    });
+
+    // Sidebar group selection & heading marker sweep
+    treeRows.forEach((row) => {
+      row.addEventListener("click", () => {
+        const groupName = row.dataset.group;
+        if (!groupName) return;
+
+        // Update active class in sidebar
+        treeRows.forEach((r) => {
+          r.classList.remove("is-open");
+          const pill = r.querySelector(".marker-pill");
+          if (pill) {
+            pill.classList.remove("marker", "marker-pill");
+          }
+        });
+
+        row.classList.add("is-open");
+        const labelEl = row.querySelector(".group-label");
+        if (labelEl && !labelEl.querySelector(".marker")) {
+          labelEl.innerHTML = `<span class="marker marker-pill">${groupName}</span>`;
+        }
+
+        // Update breadcrumb
+        const parentName = row.dataset.parent || "Cars";
+        if (breadcrumbParent) breadcrumbParent.textContent = parentName;
+        if (breadcrumbCurrent) breadcrumbCurrent.textContent = groupName;
+
+        // Update group header with re-sweeping marker
+        if (groupHeading) {
+          groupHeading.innerHTML = `<span class="marker marker-sweep">${groupName}</span>`;
+          // Force layout reflow to re-trigger marker-sweep transition
+          void groupHeading.offsetWidth;
+          groupHeading.classList.add("is-in");
+        }
+
+        if (groupMeta) {
+          const count = row.dataset.count || "6";
+          groupMeta.textContent = `${count} sources in this group`;
+        }
+
+        // Stagger rows entrance (20ms stagger)
+        if (!prefersReducedMotion() && rowsList) {
+          const currentRows = Array.from(rowsList.querySelectorAll(".item-row")) as HTMLElement[];
+          animate(
+            currentRows,
+            { opacity: [0, 1], y: [12, 0] },
+            { duration: 0.35, delay: (i) => i * 0.02, ease: [0.16, 1, 0.3, 1] }
+          );
+        }
+      });
+    });
+
+    // Multi-select checkboxes
+    function updateSelectionState() {
+      const selected = itemRows.filter((r) => {
+        const cb = r.querySelector(".row-checkbox") as HTMLInputElement | null;
+        return cb?.checked ?? false;
+      });
+
+      itemRows.forEach((r) => {
+        const cb = r.querySelector(".row-checkbox") as HTMLInputElement | null;
+        if (cb?.checked) {
+          r.classList.add("is-selected");
+        } else {
+          r.classList.remove("is-selected");
+        }
+      });
+
+      if (!selectionBar || !selectionCount) return;
+
+      if (selected.length > 0) {
+        selectionCount.textContent = String(selected.length);
+        selectionBar.style.display = "flex";
+      } else {
+        selectionBar.style.display = "none";
+      }
+    }
+
+    itemRows.forEach((row) => {
+      const cb = row.querySelector(".row-checkbox") as HTMLInputElement | null;
+      cb?.addEventListener("change", () => {
+        updateSelectionState();
+      });
+
+      // Clicking row toggles selection if clicking outside buttons
+      row.addEventListener("click", (e) => {
+        const target = e.target as HTMLElement;
+        if (
+          target.tagName === "BUTTON" ||
+          target.closest("button") ||
+          target.tagName === "INPUT" ||
+          target.closest(".row-drag-handle")
+        ) {
+          return;
+        }
+        if (cb) {
+          cb.checked = !cb.checked;
+          updateSelectionState();
+        }
+      });
+    });
+
+    deselectBtn?.addEventListener("click", () => {
+      itemRows.forEach((r) => {
+        const cb = r.querySelector(".row-checkbox") as HTMLInputElement | null;
+        if (cb) cb.checked = false;
+      });
+      updateSelectionState();
+    });
+
+    copyLinksBtn?.addEventListener("click", () => {
+      const selected = itemRows.filter((r) => {
+        const cb = r.querySelector(".row-checkbox") as HTMLInputElement | null;
+        return cb?.checked ?? false;
+      });
+      const count = selected.length || 3;
+      showToast(`Copied ${count} links`);
+    });
+
+    // Reorder Rows via Pointer Events (Touch & Mouse with Pointer Capture)
+    let draggedRow: HTMLElement | null = null;
+    let placeholder: HTMLElement | null = null;
+    let startY = 0;
+
+    itemRows.forEach((row) => {
+      const handle = row.querySelector(".row-drag-handle") as HTMLElement | null;
+      if (!handle) return;
+
+      handle.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        draggedRow = row;
+        startY = e.clientY;
+
+        handle.setPointerCapture(e.pointerId);
+        row.classList.add("is-dragging");
+
+        // Insert placeholder
+        placeholder = document.createElement("div");
+        placeholder.className = "row-drop-placeholder";
+        placeholder.style.height = `${row.offsetHeight}px`;
+        row.parentNode?.insertBefore(placeholder, row.nextSibling);
+
+        const onPointerMove = (ev: PointerEvent) => {
+          if (!draggedRow || !rowsList) return;
+          const deltaY = ev.clientY - startY;
+          draggedRow.style.transform = `translateY(${deltaY}px)`;
+
+          // Check hit position against sibling rows
+          const siblings = Array.from(rowsList.querySelectorAll(".item-row:not(.is-dragging)")) as HTMLElement[];
+          for (const sib of siblings) {
+            const rect = sib.getBoundingClientRect();
+            if (ev.clientY > rect.top && ev.clientY < rect.bottom) {
+              const mid = rect.top + rect.height / 2;
+              if (ev.clientY < mid) {
+                rowsList.insertBefore(placeholder!, sib);
+              } else {
+                rowsList.insertBefore(placeholder!, sib.nextSibling);
+              }
+              break;
+            }
+          }
+        };
+
+        const onPointerUp = (ev: PointerEvent) => {
+          handle.releasePointerCapture(ev.pointerId);
+          window.removeEventListener("pointermove", onPointerMove);
+          window.removeEventListener("pointerup", onPointerUp);
+          window.removeEventListener("pointercancel", onPointerUp);
+
+          if (!draggedRow || !placeholder) return;
+
+          // Settle into placeholder
+          placeholder.parentNode?.insertBefore(draggedRow, placeholder);
+          placeholder.remove();
+          placeholder = null;
+
+          draggedRow.classList.remove("is-dragging");
+          draggedRow.style.transform = "";
+          draggedRow = null;
+        };
+
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
+        window.addEventListener("pointercancel", onPointerUp);
+      });
+    });
+
+    // Group Nesting Drag and Drop in Sidebar Tree
+    let draggedGroup: HTMLElement | null = null;
+    treeRows.forEach((row) => {
+      row.addEventListener("dragstart", (e) => {
+        draggedGroup = row;
+        row.classList.add("is-group-dragging");
+        if (e.dataTransfer) {
+          e.dataTransfer.setData("text/plain", row.dataset.group || "");
+          e.dataTransfer.effectAllowed = "move";
+        }
+      });
+
+      row.addEventListener("dragend", () => {
+        row.classList.remove("is-group-dragging");
+        treeRows.forEach((r) => r.classList.remove("is-drop-target"));
+        draggedGroup = null;
+      });
+
+      row.addEventListener("dragover", (e) => {
+        if (!draggedGroup || draggedGroup === row) return;
+        e.preventDefault();
+        row.classList.add("is-drop-target");
+      });
+
+      row.addEventListener("dragleave", () => {
+        row.classList.remove("is-drop-target");
+      });
+
+      row.addEventListener("drop", (e) => {
+        e.preventDefault();
+        row.classList.remove("is-drop-target");
+        if (!draggedGroup || draggedGroup === row) return;
+
+        const sourceName = draggedGroup.dataset.group;
+        const targetName = row.dataset.group;
+        showToast(`Nested '${sourceName}' inside '${targetName}'`);
+      });
+    });
+  }
+</script>
+
+<style>
+  .organize-frame {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin-bottom: 36px;
+    position: relative;
+  }
+
+  /* App Window Top Bar */
+  .app-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 50px;
+    padding-inline: 16px;
+    background: var(--desk);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .window-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .control-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+  }
+
+  .control-dot.close {
+    background: color-mix(in oklab, var(--destructive) 80%, transparent);
+  }
+
+  .control-dot.min {
+    background: color-mix(in oklab, var(--warning) 80%, transparent);
+  }
+
+  .control-dot.max {
+    background: color-mix(in oklab, var(--success) 80%, transparent);
+  }
+
+  .project-dropdown-wrap {
+    position: relative;
+  }
+
+  .project-switcher-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    background: var(--card);
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--foreground);
+    cursor: pointer;
+    box-shadow: var(--shadow-raised);
+    transition: background-color 140ms var(--ease-out);
+  }
+
+  .project-switcher-btn:hover {
+    background: var(--muted);
+  }
+
+  .project-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 40;
+    min-width: 200px;
+    padding: 6px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-float);
+  }
+
+  .menu-header {
+    padding: 4px 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--foreground);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .menu-item:hover {
+    background: var(--muted);
+  }
+
+  .item-check {
+    color: var(--primary);
+  }
+
+  .item-check-placeholder {
+    width: 14px;
+  }
+
+  .menu-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
+  .menu-item-archive {
+    color: var(--muted-foreground);
+  }
+
+  .menu-item-archive:hover {
+    color: var(--foreground);
+  }
+
+  .breadcrumb-trail {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .crumb-active {
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .sync-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+  }
+
+  .sync-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--success);
+  }
+
+  /* App Workspace Body */
+  .app-body {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 480px;
+    background: var(--background);
+  }
+
+  @media (max-width: 860px) {
+    .app-body {
+      grid-template-columns: 1fr;
+    }
+    .app-sidebar {
+      display: none;
+    }
+  }
+
+  /* Sidebar */
+  .app-sidebar {
+    padding: 16px 12px;
+    background: var(--desk);
+    border-right: 1px solid var(--border);
+    user-select: none;
+  }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-inline: 6px;
+  }
+
+  .sidebar-title {
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .btn-icon-subtle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+
+  .btn-icon-subtle:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  .sidebar-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .tree-branch {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tree-children {
+    display: flex;
+    flex-direction: column;
+    padding-left: 14px;
+    gap: 2px;
+  }
+
+  .tree-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding-inline: 6px;
+    border-radius: 7px;
+    font-size: 13px;
+    color: var(--foreground);
+    cursor: pointer;
+    transition: background-color 120ms var(--ease-out);
+  }
+
+  .tree-row:hover {
+    background: color-mix(in oklab, var(--card) 60%, transparent);
+  }
+
+  .tree-row.is-open {
+    background: var(--card);
+    box-shadow: var(--shadow-raised);
+    font-weight: 500;
+  }
+
+  .tree-row.is-drop-target {
+    outline: 2px dashed var(--primary);
+    background: color-mix(in oklab, var(--marker) 20%, transparent);
+  }
+
+  .chevron-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .branch-chevron {
+    transition: transform 160ms var(--ease-spring);
+  }
+
+  .group-folder-icon {
+    display: inline-flex;
+    color: var(--muted-foreground);
+  }
+
+  .group-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .marker-pill {
+    padding-inline: 4px;
+  }
+
+  .group-count {
+    font-size: 11.5px;
+  }
+
+  .tree-indent {
+    width: 16px;
+  }
+
+  /* Main Group View */
+  .app-main-content {
+    display: flex;
+    flex-direction: column;
+    padding: 28px 32px;
+    position: relative;
+  }
+
+  @media (max-width: 640px) {
+    .app-main-content {
+      padding: 18px 16px;
+    }
+  }
+
+  .group-view-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .group-title {
+    font-size: 32px;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+
+  .group-meta {
+    font-size: 13.5px;
+  }
+
+  .group-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Selection Action Bar */
+  .selection-action-bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-float);
+    animation: barSlide 160ms var(--ease-spring);
+  }
+
+  @keyframes barSlide {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .selection-count {
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+
+  .selection-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Rows List */
+  .group-rows-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .item-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 52px;
+    padding: 0 10px;
+    border-radius: 10px;
+    transition:
+      background-color 140ms var(--ease-out),
+      box-shadow 140ms var(--ease-out);
+    user-select: none;
+  }
+
+  .item-row:hover {
+    background: var(--muted);
+  }
+
+  .item-row.is-selected {
+    background: var(--marker-soft);
+  }
+
+  .item-row.is-dragging {
+    background: var(--card);
+    box-shadow: var(--shadow-float);
+    opacity: 0.95;
+    z-index: 30;
+    cursor: grabbing;
+  }
+
+  .row-drop-placeholder {
+    height: 52px;
+    border-radius: 10px;
+    border: 2px dashed var(--border-strong);
+    background: color-mix(in oklab, var(--muted) 40%, transparent);
+    margin-block: 2px;
+  }
+
+  .row-drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 32px;
+    color: var(--muted-foreground);
+    cursor: grab;
+    opacity: 0.4;
+    transition: opacity 120ms var(--ease-out);
+    touch-action: none;
+  }
+
+  .item-row:hover .row-drag-handle {
+    opacity: 1;
+  }
+
+  .row-checkbox-wrap {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .checkbox-visual {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    border-radius: 4px;
+    border: 1px solid var(--border-strong);
+    background: var(--card);
+    transition:
+      background-color 120ms var(--ease-out),
+      border-color 120ms var(--ease-out);
+  }
+
+  .check-icon {
+    display: none;
+    color: var(--primary-foreground);
+  }
+
+  .row-checkbox:checked + .checkbox-visual {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+
+  .row-checkbox:checked + .checkbox-visual .check-icon {
+    display: block;
+  }
+
+  .row-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .row-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--foreground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row-subtext {
+    font-size: 12.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row-type-badge {
+    font-size: 12.5px;
+    min-width: 80px;
+  }
+
+  .row-date {
+    font-size: 12.5px;
+    min-width: 50px;
+    text-align: right;
+  }
+
+  @media (max-width: 600px) {
+    .row-type-badge,
+    .row-date {
+      display: none;
+    }
+  }
+
+  .row-more-btn {
+    opacity: 0;
+    transition: opacity 120ms var(--ease-out);
+  }
+
+  .item-row:hover .row-more-btn {
+    opacity: 1;
+  }
+
+  /* Toast */
+  .organize-toast {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-float);
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .toast-check {
+    color: var(--success);
+  }
+
+  /* Feature Grid Below Mock */
+  .organize-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  @media (max-width: 1024px) {
+    .organize-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 600px) {
+    .organize-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .feature-point {
+    padding: 22px;
+    border: 1px solid var(--border);
+  }
+
+  .point-title {
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+</style>

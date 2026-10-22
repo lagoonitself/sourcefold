@@ -1,7 +1,899 @@
 ---
-// Placeholder. The agent that owns this section replaces it.
+/**
+ * Reader.astro (section id "read") — "Read and highlight"
+ * A big, genuinely interactive desktop app reader mock inside a .sheet.
+ * Body in Newsreader ~18px, narrow column, no ads, in-place diagram, jumping footnotes.
+ * Real text selection, floating toolbar (Highlight, Add note, Copy quote, Remove text),
+ * live highlights count, live Markdown file update, guided hint, and undo toast.
+ */
+import { RotateCcw } from "@lucide/astro";
+import SectionHeader from "../SectionHeader.astro";
+import SourceTile from "../SourceTile.astro";
+import ArticleContent from "../reader/ArticleContent.astro";
+import HighlightsPanel from "../reader/HighlightsPanel.astro";
+import ReaderToolbar from "../reader/ReaderToolbar.astro";
 ---
 
 <section id="read" class="section">
-  <div class="container"><p class="muted">Reader section</p></div>
+  <div class="container">
+    <SectionHeader
+      label="Read and highlight"
+      title="A clean desk for reading, with "
+      marked="highlights that stay"
+      after="."
+      lede="Every source opens in the desktop app's distraction-free reader: no ads, images in place, and footnotes that jump straight to their references. Highlights and notes write directly into your source's Markdown file."
+    />
+
+    <!-- Short feature callouts beside/above the reader -->
+    <div class="reader-features-row" data-reveal="stagger">
+      <div class="feature-pill">
+        <span class="pill-dot"></span>
+        <span>No ads or cookie banners</span>
+      </div>
+      <div class="feature-pill">
+        <span class="pill-dot"></span>
+        <span>Images kept in place</span>
+      </div>
+      <div class="feature-pill">
+        <span class="pill-dot"></span>
+        <span>Footnotes jump to references</span>
+      </div>
+      <div class="feature-pill">
+        <span class="pill-dot"></span>
+        <span>Writes to local Markdown</span>
+      </div>
+    </div>
+
+    <!-- The main desktop app reader mock in a .sheet -->
+    <div class="sheet reader-window-frame" id="reader-window" data-reveal>
+      <!-- Desktop window top titlebar -->
+      <div class="reader-titlebar">
+        <div class="titlebar-left">
+          <div class="window-controls">
+            <span class="control-dot close"></span>
+            <span class="control-dot minimize"></span>
+            <span class="control-dot zoom"></span>
+          </div>
+          <div class="titlebar-breadcrumb">
+            <span class="muted">Cars</span>
+            <span class="sep">/</span>
+            <span class="muted">Engines</span>
+            <span class="sep">/</span>
+            <span class="crumb-current">Turbocharging</span>
+          </div>
+        </div>
+
+        <div class="titlebar-center">
+          <div class="doc-status-chip">
+            <SourceTile kind="grokipedia" size={18} />
+            <span class="doc-status-title">grokipedia.com/page/Turbocharger</span>
+            <span class="status-dot-green" title="Synced to folder"></span>
+          </div>
+        </div>
+
+        <div class="titlebar-right">
+          <!-- Mobile tab switch -->
+          <div class="mobile-view-toggle">
+            <button type="button" class="btn btn-ghost btn-sm is-active" id="mobile-tab-article">
+              Article
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" id="mobile-tab-panel">
+              Highlights (<span class="nums" id="mobile-hl-count">1</span>)
+            </button>
+          </div>
+          <div class="reader-view-opts">
+            <span class="reading-estimate nums muted">1,240 words · 4 min</span>
+            <button type="button" class="btn-icon-reader" id="reader-reset-demo" title="Reset reader demo">
+              <RotateCcw size={13} stroke-width={2} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Reader split workspace -->
+      <div class="reader-workspace" id="reader-workspace">
+        <!-- Left: Article reading column -->
+        <div class="reader-article-scroll" id="reader-scroll-container">
+          <div class="article-wrapper">
+            <ArticleContent />
+          </div>
+
+          <!-- Floating selection toolbar and toasts -->
+          <ReaderToolbar />
+
+          <!-- Guided Hint fake cursor -->
+          <div class="fake-cursor" id="fake-cursor" aria-hidden="true" style="display: none;">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" class="cursor-svg">
+              <path
+                d="M4 3L11 20L14 13L21 10L4 3Z"
+                fill="var(--foreground)"
+                stroke="var(--background)"
+                stroke-width="1.5"
+                stroke-linejoin="round"
+              ></path>
+            </svg>
+            <span class="cursor-hint-label">Select to highlight</span>
+          </div>
+        </div>
+
+        <!-- Right: Side panel with Highlights and live Markdown file -->
+        <div class="reader-panel-col" id="reader-panel-column">
+          <HighlightsPanel />
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
+
+<script>
+  import { inView } from "motion";
+  import { prefersReducedMotion } from "../../lib/reveal";
+
+  const root = document.querySelector("#read");
+  if (root) {
+    const scrollContainer = root.querySelector("#reader-scroll-container") as HTMLElement | null;
+    const article = root.querySelector("#reader-article") as HTMLElement | null;
+    const floatingToolbar = root.querySelector("#reader-floating-toolbar") as HTMLElement | null;
+    const notePopover = root.querySelector("#reader-note-popover") as HTMLElement | null;
+    const noteInput = root.querySelector("#reader-note-input") as HTMLInputElement | null;
+    const noteSaveBtn = root.querySelector("#reader-note-save") as HTMLButtonElement | null;
+    const toast = root.querySelector("#reader-toast") as HTMLElement | null;
+    const toastMsg = root.querySelector("#reader-toast-msg") as HTMLElement | null;
+    const toastUndoBtn = root.querySelector("#reader-toast-undo") as HTMLButtonElement | null;
+
+    const toolHighlight = root.querySelector("#tool-btn-highlight") as HTMLButtonElement | null;
+    const toolNote = root.querySelector("#tool-btn-note") as HTMLButtonElement | null;
+    const toolCopy = root.querySelector("#tool-btn-copy") as HTMLButtonElement | null;
+    const toolRemove = root.querySelector("#tool-btn-remove") as HTMLButtonElement | null;
+
+    const sponsorBlock = root.querySelector("#sponsor-block") as HTMLElement | null;
+    const removeSponsorAction = root.querySelector("#remove-sponsor-action") as HTMLButtonElement | null;
+
+    const sidebarBadge = root.querySelector("#sidebar-highlights-badge") as HTMLElement | null;
+    const mobileHlCount = root.querySelector("#mobile-hl-count") as HTMLElement | null;
+    const highlightsList = root.querySelector("#sidebar-highlights-list") as HTMLElement | null;
+    const markdownOutput = root.querySelector("#markdown-live-output code") as HTMLElement | null;
+
+    const tabHighlightsBtn = root.querySelector("#tab-highlights-btn") as HTMLButtonElement | null;
+    const tabMarkdownBtn = root.querySelector("#tab-markdown-btn") as HTMLButtonElement | null;
+    const panelHighlightsView = root.querySelector("#panel-highlights-view") as HTMLElement | null;
+    const panelMarkdownView = root.querySelector("#panel-markdown-view") as HTMLElement | null;
+
+    const mobileTabArticle = root.querySelector("#mobile-tab-article") as HTMLButtonElement | null;
+    const mobileTabPanel = root.querySelector("#mobile-tab-panel") as HTMLButtonElement | null;
+    const panelColumn = root.querySelector("#reader-panel-column") as HTMLElement | null;
+    const resetDemoBtn = root.querySelector("#reader-reset-demo") as HTMLButtonElement | null;
+
+    const fakeCursor = root.querySelector("#fake-cursor") as HTMLElement | null;
+
+    // Active highlights state
+    interface HighlightItem {
+      id: string;
+      quote: string;
+      note?: string;
+      time: string;
+    }
+
+    const highlights: HighlightItem[] = [
+      {
+        id: "hl-1",
+        quote:
+          "Turbo lag, by contrast, is the transient delay between opening the throttle when operating above the boost threshold and the turbocharger reaching full boost",
+        note: "Core distinction from boost threshold.",
+        time: "Oct 22, 10:48",
+      },
+    ];
+
+    let currentSelectedRange: Range | null = null;
+    let currentSelectedText = "";
+    let lastActiveHighlightId = "hl-1";
+    let toastTimeout: number | null = null;
+
+    function showToast(message: string, showUndo = false) {
+      if (!toast || !toastMsg) return;
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastMsg.textContent = message;
+      if (toastUndoBtn) {
+        toastUndoBtn.hidden = !showUndo;
+      }
+      toast.hidden = false;
+      toastTimeout = window.setTimeout(() => {
+        toast.hidden = true;
+      }, 3200);
+    }
+
+    function updateCounts() {
+      const countStr = String(highlights.length);
+      if (sidebarBadge) sidebarBadge.textContent = countStr;
+      if (mobileHlCount) mobileHlCount.textContent = countStr;
+    }
+
+    function syncMarkdownCode() {
+      if (!markdownOutput) return;
+      let md = `---
+title: "How turbo lag actually works"
+url: "https://grokipedia.com/page/Turbocharger"
+saved: 2026-10-22
+---
+
+## My highlights
+`;
+
+      highlights.forEach((hl) => {
+        md += `\n> "${hl.quote}"`;
+        if (hl.note) {
+          md += `\n_Note: ${hl.note}_\n`;
+        } else {
+          md += `\n`;
+        }
+      });
+
+      markdownOutput.textContent = md;
+    }
+
+    function renderHighlightsList() {
+      if (!highlightsList) return;
+      highlightsList.innerHTML = "";
+      highlights.forEach((hl) => {
+        const card = document.createElement("div");
+        card.className = "highlight-card";
+        card.dataset.cardId = hl.id;
+
+        let noteHtml = "";
+        if (hl.note) {
+          noteHtml = `
+            <div class="hl-note-row">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="hl-note-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <span class="hl-note-text">${hl.note}</span>
+            </div>
+          `;
+        }
+
+        card.innerHTML = `
+          <div class="hl-stripe"></div>
+          <div class="hl-body">
+            <blockquote class="hl-quote serif">“${hl.quote}”</blockquote>
+            ${noteHtml}
+            <div class="hl-footer">
+              <span class="hl-time nums">${hl.time}</span>
+              <button type="button" class="hl-jump-btn" data-jump="${hl.id}" title="Scroll to highlight">View in text</button>
+            </div>
+          </div>
+        `;
+        highlightsList.appendChild(card);
+      });
+
+      // Attach jump listeners
+      highlightsList.querySelectorAll(".hl-jump-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const jumpId = (btn as HTMLElement).dataset.jump;
+          if (!jumpId) return;
+          const mark = root?.querySelector(`[data-hl-id="${jumpId}"]`) as HTMLElement | null;
+          if (mark && scrollContainer) {
+            mark.scrollIntoView({ behavior: "smooth", block: "center" });
+            mark.classList.remove("pulse-flash");
+            // trigger reflow
+            void mark.offsetWidth;
+            mark.classList.add("pulse-flash");
+          }
+        });
+      });
+    }
+
+    // Hide floating toolbar
+    function hideToolbar() {
+      if (floatingToolbar) {
+        floatingToolbar.hidden = true;
+      }
+      if (notePopover) {
+        notePopover.hidden = true;
+      }
+    }
+
+    // Position toolbar above active selection
+    function positionToolbar(range: Range) {
+      if (!floatingToolbar || !scrollContainer) return;
+      const rect = range.getBoundingClientRect();
+      const containerRect = scrollContainer.getBoundingClientRect();
+
+      const top = rect.top - containerRect.top + scrollContainer.scrollTop - 8;
+      const left = Math.min(
+        Math.max(rect.left + rect.width / 2 - containerRect.left, 130),
+        containerRect.width - 130,
+      );
+
+      floatingToolbar.style.top = `${top}px`;
+      floatingToolbar.style.left = `${left}px`;
+      floatingToolbar.hidden = false;
+    }
+
+    // Selection listener
+    function handleSelection() {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !article || !scrollContainer) {
+        if (!notePopover || notePopover.hidden) {
+          hideToolbar();
+        }
+        return;
+      }
+
+      const text = sel.toString().trim();
+      if (text.length < 3) {
+        hideToolbar();
+        return;
+      }
+
+      // Check if selection starts and ends inside article body
+      const anchorNode = sel.anchorNode;
+      const focusNode = sel.focusNode;
+      if (!article.contains(anchorNode) || !article.contains(focusNode)) {
+        hideToolbar();
+        return;
+      }
+
+      // Check not inside toolbar or footnotes
+      const footnotes = root?.querySelector("#footnotes");
+      if (footnotes?.contains(anchorNode) || footnotes?.contains(focusNode)) {
+        hideToolbar();
+        return;
+      }
+
+      currentSelectedRange = sel.getRangeAt(0).cloneRange();
+      currentSelectedText = text;
+      positionToolbar(currentSelectedRange);
+    }
+
+    document.addEventListener("selectionchange", () => {
+      // Debounce slightly to allow smooth dragging/selection
+      window.requestAnimationFrame(handleSelection);
+    });
+
+    // 1. Highlight button
+    function applyHighlight(noteText?: string): string {
+      if (!currentSelectedRange || !currentSelectedText) return "";
+
+      const hlId = `hl-${Date.now().toString(36)}`;
+      const mark = document.createElement("mark");
+      mark.className = "reader-mark";
+      mark.dataset.hlId = hlId;
+
+      try {
+        currentSelectedRange.surroundContents(mark);
+      } catch {
+        const contents = currentSelectedRange.extractContents();
+        mark.appendChild(contents);
+        currentSelectedRange.insertNode(mark);
+      }
+
+      const now = new Date();
+      const timeStr = `Oct 22, ${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+
+      highlights.push({
+        id: hlId,
+        quote: currentSelectedText,
+        note: noteText || "",
+        time: timeStr,
+      });
+
+      lastActiveHighlightId = hlId;
+      updateCounts();
+      renderHighlightsList();
+      syncMarkdownCode();
+
+      window.getSelection()?.removeAllRanges();
+      currentSelectedRange = null;
+      currentSelectedText = "";
+      hideToolbar();
+
+      return hlId;
+    }
+
+    if (toolHighlight) {
+      toolHighlight.addEventListener("click", () => {
+        applyHighlight();
+        showToast("Highlighted and saved to Markdown");
+      });
+    }
+
+    // 2. Add note
+    if (toolNote && notePopover && noteInput) {
+      toolNote.addEventListener("click", () => {
+        notePopover.hidden = false;
+        noteInput.value = "";
+        noteInput.focus();
+      });
+    }
+
+    if (noteSaveBtn && noteInput) {
+      noteSaveBtn.addEventListener("click", () => {
+        const noteVal = noteInput.value.trim();
+        if (currentSelectedRange) {
+          applyHighlight(noteVal);
+          showToast("Highlight and note saved to file");
+        } else if (lastActiveHighlightId) {
+          const item = highlights.find((h) => h.id === lastActiveHighlightId);
+          if (item) {
+            item.note = noteVal;
+            renderHighlightsList();
+            syncMarkdownCode();
+            showToast("Note added to highlight");
+          }
+          hideToolbar();
+        }
+      });
+
+      noteInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          noteSaveBtn.click();
+        }
+      });
+    }
+
+    // 3. Copy quote
+    if (toolCopy) {
+      toolCopy.addEventListener("click", () => {
+        if (!currentSelectedText) return;
+        const quoteString = `"${currentSelectedText}" — How turbo lag actually works, https://grokipedia.com/page/Turbocharger`;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(quoteString).catch(() => {});
+        }
+        showToast("Copied with its source");
+        window.getSelection()?.removeAllRanges();
+        hideToolbar();
+      });
+    }
+
+    // 4. Remove text
+    function collapseSponsor() {
+      if (!sponsorBlock) return;
+      sponsorBlock.classList.add("is-removed");
+      hideToolbar();
+      showToast("Removed sponsor read.", true);
+    }
+
+    if (toolRemove) {
+      toolRemove.addEventListener("click", () => {
+        collapseSponsor();
+      });
+    }
+
+    if (removeSponsorAction) {
+      removeSponsorAction.addEventListener("click", () => {
+        collapseSponsor();
+      });
+    }
+
+    if (toastUndoBtn && sponsorBlock) {
+      toastUndoBtn.addEventListener("click", () => {
+        sponsorBlock.classList.remove("is-removed");
+        if (toast) toast.hidden = true;
+        showToast("Restored sponsor read.");
+      });
+    }
+
+    // 5. Footnote jump handling
+    const footnoteLinks = root.querySelectorAll<HTMLAnchorElement>(".fn-link");
+    footnoteLinks.forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        const href = link.getAttribute("href");
+        if (!href) return;
+        const target = root.querySelector(href) as HTMLElement | null;
+        if (target && scrollContainer) {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          target.classList.remove("flash-highlight");
+          void target.offsetWidth;
+          target.classList.add("flash-highlight");
+          setTimeout(() => {
+            target.classList.remove("flash-highlight");
+          }, 1600);
+        }
+      });
+    });
+
+    const footnoteBackLinks = root.querySelectorAll<HTMLAnchorElement>(".fn-back");
+    footnoteBackLinks.forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        const href = link.getAttribute("href");
+        if (!href) return;
+        const target = root.querySelector(href) as HTMLElement | null;
+        if (target && scrollContainer) {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      });
+    });
+
+    // 6. Tabs inside side panel (Highlights vs Markdown)
+    if (tabHighlightsBtn && tabMarkdownBtn && panelHighlightsView && panelMarkdownView) {
+      tabHighlightsBtn.addEventListener("click", () => {
+        tabHighlightsBtn.classList.add("is-active");
+        tabHighlightsBtn.setAttribute("aria-selected", "true");
+        tabMarkdownBtn.classList.remove("is-active");
+        tabMarkdownBtn.setAttribute("aria-selected", "false");
+        panelHighlightsView.hidden = false;
+        panelMarkdownView.hidden = true;
+      });
+
+      tabMarkdownBtn.addEventListener("click", () => {
+        tabMarkdownBtn.classList.add("is-active");
+        tabMarkdownBtn.setAttribute("aria-selected", "true");
+        tabHighlightsBtn.classList.remove("is-active");
+        tabHighlightsBtn.setAttribute("aria-selected", "false");
+        panelMarkdownView.hidden = false;
+        panelHighlightsView.hidden = true;
+      });
+    }
+
+    // 7. Mobile toggle (Article vs Highlights panel)
+    if (mobileTabArticle && mobileTabPanel && scrollContainer && panelColumn) {
+      mobileTabArticle.addEventListener("click", () => {
+        mobileTabArticle.classList.add("is-active");
+        mobileTabPanel.classList.remove("is-active");
+        scrollContainer.style.display = "block";
+        panelColumn.style.display = "none";
+      });
+
+      mobileTabPanel.addEventListener("click", () => {
+        mobileTabPanel.classList.add("is-active");
+        mobileTabArticle.classList.remove("is-active");
+        scrollContainer.style.display = "none";
+        panelColumn.style.display = "block";
+      });
+    }
+
+    // Reset demo
+    if (resetDemoBtn) {
+      resetDemoBtn.addEventListener("click", () => {
+        if (sponsorBlock) sponsorBlock.classList.remove("is-removed");
+        highlights.length = 0;
+        highlights.push({
+          id: "hl-1",
+          quote:
+            "Turbo lag, by contrast, is the transient delay between opening the throttle when operating above the boost threshold and the turbocharger reaching full boost",
+          note: "Core distinction from boost threshold.",
+          time: "Oct 22, 10:48",
+        });
+        updateCounts();
+        renderHighlightsList();
+        syncMarkdownCode();
+        showToast("Reader reset to initial state");
+      });
+    }
+
+    // 8. One-time Guided Hint Animation
+    let hintAborted = false;
+    let hintPlayed = false;
+
+    function abortHint() {
+      hintAborted = true;
+      if (fakeCursor) {
+        fakeCursor.style.display = "none";
+      }
+    }
+
+    // If user touches, moves mouse, or keys in the reader, stop the hint
+    scrollContainer?.addEventListener("pointerdown", abortHint, { once: true });
+    scrollContainer?.addEventListener("keydown", abortHint, { once: true });
+
+    function runGuidedHint() {
+      if (hintPlayed || hintAborted || prefersReducedMotion()) {
+        return;
+      }
+      hintPlayed = true;
+
+      const p2 = root?.querySelector("#p-2") as HTMLElement | null;
+      if (!p2 || !fakeCursor || !scrollContainer) return;
+
+      fakeCursor.style.display = "flex";
+      const pRect = p2.getBoundingClientRect();
+      const scRect = scrollContainer.getBoundingClientRect();
+
+      const startX = pRect.left - scRect.left + 20;
+      const startY = pRect.top - scRect.top + 30;
+
+      fakeCursor.style.transform = `translate(${startX}px, ${startY}px)`;
+      fakeCursor.style.opacity = "0";
+
+      // Fade in cursor
+      setTimeout(() => {
+        if (hintAborted) return;
+        fakeCursor.style.opacity = "1";
+        fakeCursor.style.transition = "transform 1.1s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease";
+
+        // Drag across
+        setTimeout(() => {
+          if (hintAborted) return;
+          fakeCursor.style.transform = `translate(${startX + 180}px, ${startY + 2}px)`;
+
+          // Show floating toolbar simulated
+          setTimeout(() => {
+            if (hintAborted) return;
+            if (floatingToolbar) {
+              floatingToolbar.style.top = `${startY - 40}px`;
+              floatingToolbar.style.left = `${startX + 90}px`;
+              floatingToolbar.hidden = false;
+            }
+
+            // Click Highlight button
+            setTimeout(() => {
+              if (hintAborted) return;
+              fakeCursor.style.transform = `translate(${startX + 40}px, ${startY - 35}px)`;
+
+              setTimeout(() => {
+                if (hintAborted) return;
+                fakeCursor.style.opacity = "0";
+                setTimeout(() => {
+                  fakeCursor.style.display = "none";
+                  hideToolbar();
+                }, 400);
+              }, 600);
+            }, 700);
+          }, 1100);
+        }, 500);
+      }, 400);
+    }
+
+    // Trigger guided hint once when reader becomes visible
+    inView(
+      root,
+      () => {
+        runGuidedHint();
+      },
+      { margin: "0px 0px -15% 0px" },
+    );
+  }
+</script>
+
+<style>
+  .reader-features-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px clamp(12px, 3vw, 24px);
+    margin-bottom: 24px;
+  }
+
+  .feature-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    background: var(--card);
+    padding: 6px 14px;
+    border-radius: 999px;
+    box-shadow: var(--shadow-raised);
+    border: 1px solid var(--border);
+  }
+
+  .pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--marker-strong);
+  }
+
+  /* The outer Sheet */
+  .reader-window-frame {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    height: clamp(600px, 78vh, 860px);
+    position: relative;
+  }
+
+  /* Window Titlebar */
+  .reader-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: color-mix(in oklab, var(--card) 90%, var(--desk));
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-sans);
+    flex-shrink: 0;
+  }
+
+  .titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .window-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .control-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .control-dot.close {
+    background: #ff5f56;
+  }
+
+  .control-dot.minimize {
+    background: #ffbd2e;
+  }
+
+  .control-dot.zoom {
+    background: #27c93f;
+  }
+
+  .titlebar-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+  }
+
+  .sep {
+    color: var(--border-strong);
+  }
+
+  .crumb-current {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .titlebar-center {
+    display: flex;
+    align-items: center;
+  }
+
+  .doc-status-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: var(--muted);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--foreground);
+  }
+
+  .doc-status-title {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .status-dot-green {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+  }
+
+  .titlebar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .mobile-view-toggle {
+    display: none;
+    background: var(--muted);
+    border-radius: 6px;
+    padding: 2px;
+  }
+
+  .reader-view-opts {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .reading-estimate {
+    font-size: 12px;
+  }
+
+  .btn-icon-reader {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+  }
+
+  .btn-icon-reader:hover {
+    color: var(--foreground);
+    background: var(--muted);
+  }
+
+  /* Workspace Layout */
+  .reader-workspace {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .reader-article-scroll {
+    overflow-y: auto;
+    padding: clamp(24px, 4vw, 48px) clamp(20px, 4vw, 44px);
+    position: relative;
+    scroll-behavior: smooth;
+    background: var(--background);
+  }
+
+  .article-wrapper {
+    position: relative;
+  }
+
+  .reader-panel-col {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* Fake cursor for guided hint */
+  .fake-cursor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    pointer-events: none;
+    z-index: 80;
+  }
+
+  .cursor-svg {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  }
+
+  .cursor-hint-label {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 7px;
+    border-radius: 5px;
+    white-space: nowrap;
+    box-shadow: var(--shadow-float);
+  }
+
+  /* Responsive behavior */
+  @media (max-width: 900px) {
+    .reader-workspace {
+      grid-template-columns: 1fr;
+    }
+
+    .mobile-view-toggle {
+      display: flex;
+    }
+
+    .reader-panel-col {
+      display: none;
+    }
+
+    .reading-estimate {
+      display: none;
+    }
+
+    .titlebar-center {
+      display: none;
+    }
+  }
+</style>

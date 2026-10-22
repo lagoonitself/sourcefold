@@ -1,7 +1,216 @@
 ---
-// Placeholder. The agent that owns this section replaces it.
+/**
+ * Hero section (section id "top").
+ * The first screen: makes someone get Sourcefold in five seconds and want to play with it.
+ *
+ * Left/top:
+ * - Newsreader .display headline with marker-sweep on load
+ * - Lede from README's first paragraph
+ * - "Download for Windows" / "Download for Mac" with client-side platform detection
+ * - Secondary note + GitHub link
+ *
+ * Right/below:
+ * - Interactive "Add links" demo in desktop app .sheet mock
+ *
+ * Under hero:
+ * - Quiet drifting marquee strip of all SOURCES linking to #sources
+ */
+import GithubIcon from "../GithubIcon.astro";
+import AddLinksDemo from "../hero/AddLinksDemo.astro";
+import SourceMarquee from "../hero/SourceMarquee.astro";
+import { links } from "../../lib/site";
 ---
 
-<section id="top" class="section">
-  <div class="container"><p class="muted">Hero section</p></div>
+<section id="top" class="section hero-section">
+  <div class="container">
+    <div class="hero-layout">
+      <!-- Left / top: story and downloads -->
+      <div class="hero-copy" data-reveal="stagger">
+        <h1 class="display hero-title">
+          Everything you read for a project, in <span class="marker marker-sweep hero-marker">one folder</span>
+        </h1>
+
+        <div class="hero-lede-group">
+          <p class="lede hero-lede">
+            Save articles, YouTube transcripts, Wikipedia and Grokipedia, Substack, Reddit, X, and
+            PDFs as clean Markdown in folders. Read it, highlight it, search inside it, and send it
+            to your Google Drive ready for NotebookLM, Gemini or Claude.
+          </p>
+          <p class="hero-audience muted">
+            Built for people who gather a lot of reading before they write or make a video.
+          </p>
+        </div>
+
+        <div class="hero-cta-group">
+          <div class="hero-buttons">
+            <a href={links.windows} class="btn btn-ink hero-dl-btn" data-download-btn="windows">
+              <span>Download for Windows</span>
+            </a>
+            <a href={links.mac} class="btn btn-outline hero-dl-btn" data-download-btn="mac">
+              <span>Download for Mac</span>
+            </a>
+            <a
+              href={links.repo}
+              class="btn btn-ghost hero-gh-btn"
+              title="View Sourcefold on GitHub"
+              aria-label="View Sourcefold on GitHub"
+            >
+              <GithubIcon size={16} />
+              <span>GitHub</span>
+            </a>
+          </div>
+
+          <p class="hero-ecosystem muted">
+            Free and open source. Also a Chrome extension, a website and a Claude Desktop extension.
+          </p>
+        </div>
+      </div>
+
+      <!-- Right / below: interactive desktop app demo -->
+      <div class="hero-demo-col">
+        <AddLinksDemo />
+      </div>
+    </div>
+
+    <!-- Under the hero: quiet drifting marquee strip of all source kinds -->
+    <SourceMarquee />
+  </div>
 </section>
+
+<script>
+  // Platform detection for primary download button
+  const navData = (navigator as unknown as { userAgentData?: { platform?: string } }).userAgentData;
+  const platform = (
+    navData?.platform ||
+    navigator.userAgent ||
+    ""
+  ).toLowerCase();
+
+  const isMac =
+    platform.includes("mac") ||
+    platform.includes("iphone") ||
+    platform.includes("ipad") ||
+    platform.includes("darwin");
+
+  const winBtn = document.querySelector<HTMLAnchorElement>('[data-download-btn="windows"]');
+  const macBtn = document.querySelector<HTMLAnchorElement>('[data-download-btn="mac"]');
+
+  if (isMac && winBtn && macBtn) {
+    macBtn.classList.remove("btn-outline");
+    macBtn.classList.add("btn-ink");
+    winBtn.classList.remove("btn-ink");
+    winBtn.classList.add("btn-outline");
+  }
+
+  // Ensure hero marker sweep runs on load
+  const heroMarker = document.querySelector<HTMLElement>(".hero-marker");
+  if (heroMarker) {
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        heroMarker.classList.add("is-in");
+      }, 140);
+    });
+  }
+</script>
+
+<style>
+  .hero-section {
+    padding-top: clamp(24px, 4vw, 56px);
+    padding-bottom: clamp(48px, 7vw, 96px);
+    overflow: hidden;
+  }
+
+  .hero-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(36px, 5vw, 64px);
+    align-items: center;
+  }
+
+  @media (min-width: 1024px) {
+    .hero-layout {
+      grid-template-columns: 1.05fr 1.15fr;
+      gap: clamp(40px, 4.5vw, 72px);
+    }
+  }
+
+  .hero-copy {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(20px, 2.8vw, 32px);
+  }
+
+  .hero-title {
+    max-width: 18ch;
+  }
+
+  .hero-marker {
+    white-space: nowrap;
+  }
+
+  .hero-lede-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .hero-lede {
+    font-size: clamp(17px, 1.4vw, 19.5px);
+    line-height: 1.52;
+    color: var(--foreground);
+    opacity: 0.92;
+  }
+
+  .hero-audience {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .hero-cta-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 4px;
+  }
+
+  .hero-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .hero-dl-btn {
+    font-weight: 500;
+  }
+
+  .hero-gh-btn {
+    color: var(--muted-foreground);
+    gap: 7px;
+  }
+
+  .hero-gh-btn:hover {
+    color: var(--foreground);
+  }
+
+  .hero-ecosystem {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .hero-demo-col {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  @media (max-width: 640px) {
+    .hero-buttons {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .hero-buttons .btn {
+      width: 100%;
+    }
+  }
+</style>

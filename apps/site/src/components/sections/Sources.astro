@@ -1,7 +1,983 @@
 ---
-// Placeholder. The agent that owns this section replaces it.
+/**
+ * Sources section (section id "sources").
+ *
+ * SectionHeader:
+ * - label: "Supported sources"
+ * - title: "Save from the ten places research "
+ * - marked: "comes from"
+ * - lede: "Every source becomes a clean Markdown file. Paste 30–40 links of any mix."
+ *
+ * Interactive picker:
+ * - List/grid of 10 SOURCES (SourceTile + name)
+ * - Selected item gets bg-accent fill and source colour's 3px left bar
+ * - Beside it: .sheet file preview that cross-fades
+ *   - "Save it with" (savedWith)
+ *   - "What you get" (youGet)
+ *   - Realistic Markdown preview in Geist Mono with syntax-tinted front matter & body
+ * - Auto-cycle every ~3.5s while visible until user interacts, with thin progress line
+ * - Roving tabindex + arrow key navigation (role="tablist" / "tab" + "tabpanel")
+ *
+ * Below:
+ * - Honest note about sites that refuse pasted links (save with extension)
+ * - Mention notes and images sit next to sources (EXTRA_KINDS)
+ */
+import SectionHeader from "../SectionHeader.astro";
+import SourceTile from "../SourceTile.astro";
+import { SOURCES, EXTRA_KINDS, type SourceKind } from "../../lib/sources";
+
+interface SourceDetail {
+  kind: SourceKind;
+  authorLabel: "author" | "channel";
+  authorValue: string;
+  savedDate: string;
+  bodyLines: Array<{
+    type: "p" | "heading" | "quote" | "subquote" | "ref-header" | "ref-item" | "image" | "timestamp" | "comment" | "math";
+    text: string;
+    subtext?: string;
+    url?: string;
+  }>;
+}
+
+const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
+  grokipedia: {
+    kind: "grokipedia",
+    authorLabel: "author",
+    authorValue: "Grokipedia contributors",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      {
+        type: "p",
+        text: "A turbocharger consists of a turbine and a compressor linked by a shared shaft.[^1] The turbine converts engine exhaust heat and velocity into rotational energy, driving the compressor to force ambient air into the combustion chamber.[^2]",
+      },
+      {
+        type: "p",
+        text: "Compared with naturally aspirated induction, forced induction increases volumetric efficiency by packing more oxygen mass into each intake stroke.[^3]",
+      },
+      { type: "ref-header", text: "## References" },
+      { type: "ref-item", text: "[^1]: Watson, N. & Janota, M. (1982). Turbocharging the Internal Combustion Engine." },
+      { type: "ref-item", text: "[^2]: Baines, N. C. (2005). Fundamentals of Turbocharging. Concepts ETI." },
+      { type: "ref-item", text: "[^3]: Heywood, J. B. (2018). Internal Combustion Engine Fundamentals." },
+    ],
+  },
+  wikipedia: {
+    kind: "wikipedia",
+    authorLabel: "author",
+    authorValue: "Wikipedia contributors",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      {
+        type: "p",
+        text: "The Wankel engine is an internal combustion engine using an eccentric rotary design to convert pressure into rotating motion.[^1] All four strokes of an Otto cycle take place in a four-sided epitrochoid housing around an oval-ish rotor.",
+      },
+      {
+        type: "p",
+        text: "Due to its compact design and high power-to-weight ratio, it was famously adapted by Mazda in the RX-7 and RX-8 sports cars.[^2]",
+      },
+      { type: "ref-header", text: "## References" },
+      { type: "ref-item", text: "[^1]: Sherman, Don (February 2008). 'The Rotary Club'. Automobile Magazine." },
+      { type: "ref-item", text: "[^2]: Yamaguchi, Jack K. (2003). The Mazda RX-8: World's First 4-Door Sports Car." },
+    ],
+  },
+  youtube: {
+    kind: "youtube",
+    authorLabel: "channel",
+    authorValue: "Engineering Explained",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      {
+        type: "timestamp",
+        text: "[00:00](https://youtu.be/Q3pWg1Zt9ac?t=0)",
+        subtext: "Today we're looking at what causes turbo lag, and why threshold is often confused with lag itself.",
+      },
+      {
+        type: "timestamp",
+        text: "[00:42](https://youtu.be/Q3pWg1Zt9ac?t=42)",
+        subtext: "Boost threshold is the minimum engine speed required before exhaust gas volume can produce positive manifold pressure.",
+      },
+      {
+        type: "timestamp",
+        text: "[01:18](https://youtu.be/Q3pWg1Zt9ac?t=78)",
+        subtext: "Turbo lag, by contrast, is the delay between pressing the accelerator at an operating engine speed and the spool-up of the compressor.",
+      },
+      {
+        type: "timestamp",
+        text: "[02:05](https://youtu.be/Q3pWg1Zt9ac?t=125)",
+        subtext: "Twin-scroll housings divide pulses from alternating cylinders, preventing reverse-flow scavenging and improving transient throttle response by up to 30%.",
+      },
+    ],
+  },
+  substack: {
+    kind: "substack",
+    authorLabel: "author",
+    authorValue: "Marcus Chen (Engine Bay)",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      {
+        type: "p",
+        text: "When the last RX-8 rolled off the Hiroshima line in June 2012, engineers gathered around the chassis in complete silence.",
+      },
+      {
+        type: "image",
+        text: "![Assembly technicians signing the final 13B-MSP Renesis engine block](https://substackcdn.com/image/fetch/w_1456/rx8-final-line.webp)",
+      },
+      {
+        type: "p",
+        text: "The apex seal dilemma had finally met Euro 5 emission mandates. But the rotary never truly died—it just waited for hybrid range-extender packaging.",
+      },
+      {
+        type: "image",
+        text: "![Thermal efficiency diagram comparing trochoid chamber to reciprocating piston](https://substackcdn.com/image/fetch/w_1456/rotary-thermal-map.webp)",
+      },
+    ],
+  },
+  x: {
+    kind: "x",
+    authorLabel: "author",
+    authorValue: "@boostlab (Alex Vance)",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      {
+        type: "p",
+        text: "1/ Twin-scroll single turbos give you 85% of the spool response of parallel twins with half the plumbing complexity and thermal mass. Here is the dyno proof:",
+      },
+      {
+        type: "image",
+        text: "![Transient response dyno graph: twin-scroll vs parallel twins at 2,400 RPM](https://pbs.twimg.com/media/GbX982.jpg)",
+      },
+      {
+        type: "quote",
+        text: "> @turbotech: What about backpressure in the high RPM band (>6800 rpm)?",
+      },
+      {
+        type: "subquote",
+        text: "> > @boostlab: The divided volute keeps exhaust pulses from 1 & 4 from interfering with 2 & 3. Backpressure stays low right up to redline.",
+      },
+    ],
+  },
+  reddit: {
+    kind: "reddit",
+    authorLabel: "author",
+    authorValue: "u/boosted_daily",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      {
+        type: "comment",
+        text: "**u/boosted_daily** (1,248 points): People talk about the 2JZ-GTE like it makes 1,000hp out of the box. In reality, the stock sequential twins tap out around 420whp, and you need a huge single turbo, fuel system, and standalone ECU to reach four figures.",
+      },
+      {
+        type: "quote",
+        text: "- **u/inline6_fan** (482 points): The iron closed-deck block and forged crank are why it's legendary. You don't have to sleeve it or touch the bottom end even when pushing 800hp.",
+      },
+      {
+        type: "subquote",
+        text: "  - **u/rotorhead** (115 points): True, but it weighs nearly 600 lbs iron cast. Modern aluminum blocks like the B58 hold similar power with 150 lbs less nose weight.",
+      },
+    ],
+  },
+  hackernews: {
+    kind: "hackernews",
+    authorLabel: "author",
+    authorValue: "t_vance",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      {
+        type: "comment",
+        text: "**t_vance** (412 points, 189 comments): Garrett and BorgWarner are now shipping 48V electric exhaust gas turbochargers in production road cars. A 6kW motor on the shaft spools the wheel to 100,000 RPM in 200 milliseconds.",
+      },
+      {
+        type: "quote",
+        text: "- **j_miller** (84 points): The interesting part isn't just eliminating lag; it's regeneration. When lift-off happens at high exhaust flow, the motor acts as a generator feeding 48V back into the pack.",
+      },
+      {
+        type: "subquote",
+        text: "  - **d_wright** (32 points): F1 has run MGU-H for a decade, but thermal management at commercial warranty scale was the real engineering bottleneck.",
+      },
+    ],
+  },
+  bluesky: {
+    kind: "bluesky",
+    authorLabel: "author",
+    authorValue: "torque.dev",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      {
+        type: "p",
+        text: "Dyno session finished with the new BorgWarner EFR 7163. Full boost (24 psi) reached by 3,200 RPM with the titanium-aluminide turbine wheel. Transient recovery after gear changes feels instantaneous on the log traces.",
+      },
+      {
+        type: "p",
+        text: "Clean 482 wheel hp on pump 93 octane. Next step: testing ethanol blends on Saturday.",
+      },
+    ],
+  },
+  pdf: {
+    kind: "pdf",
+    authorLabel: "author",
+    authorValue: "K. Lindgren, S. Eriksson",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      { type: "heading", text: "### Abstract" },
+      {
+        type: "p",
+        text: "Variable-geometry turbochargers (VGT) regulate turbine inlet area via movable guide vanes to match fluctuating exhaust mass flows:",
+      },
+      {
+        type: "math",
+        text: "$$\\dot{m}_t = A_{\\text{eff}}(\\alpha) \\frac{p_{01}}{\\sqrt{R T_{01}}} \\Psi(\\Pi_t)$$",
+      },
+      {
+        type: "p",
+        text: "where $A_{\\text{eff}}(\\alpha)$ denotes effective flow area parameterized by guide vane angle $\\alpha$. Experimental validation reveals a 42% reduction in turbo lag compared to fixed nozzles.",
+      },
+    ],
+  },
+  web: {
+    kind: "web",
+    authorLabel: "author",
+    authorValue: "Technical Editor",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      {
+        type: "p",
+        text: "For over a century, internal combustion engines threw away more than a third of fuel energy right out the exhaust tailpipe as pressurized heat.",
+      },
+      {
+        type: "p",
+        text: "The turbocharger recaptures that expanding thermal wave to spin an impeller at speeds exceeding 200,000 revolutions per minute. The denser charge air allows smaller-displacement engines to match the low-end torque and peak output of larger multi-cylinder units while cruising with minimal frictional drag.",
+      },
+    ],
+  },
+  note: {
+    kind: "note",
+    authorLabel: "author",
+    authorValue: "You",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      { type: "p", text: "Your own Markdown note, written right inside Sourcefold next to your sources." },
+    ],
+  },
+  image: {
+    kind: "image",
+    authorLabel: "author",
+    authorValue: "You",
+    savedDate: "2026-10-18",
+    bodyLines: [
+      { type: "p", text: "The original image, saved directly in your Google Drive." },
+    ],
+  },
+};
 ---
 
-<section id="sources" class="section">
-  <div class="container"><p class="muted">Sources section</p></div>
+<section id="sources" class="section sources-section">
+  <div class="container">
+    <SectionHeader
+      label="Supported sources"
+      title="Save from the ten places research "
+      marked="comes from"
+      lede="Every source becomes a clean Markdown file. Paste 30–40 links of any mix, or save the page you're on."
+    />
+
+    <!-- Interactive source picker and preview container -->
+    <div class="sources-interactive" data-sources-picker>
+      <!-- Left side: Source tablist -->
+      <div
+        class="sources-list"
+        role="tablist"
+        aria-label="Supported source types"
+        data-reveal="stagger"
+      >
+        {
+          SOURCES.map((source, index) => {
+            const isSelected = index === 0;
+            return (
+              <button
+                type="button"
+                role="tab"
+                id={`source-tab-${source.kind}`}
+                class:list={["source-tab", { "is-selected": isSelected }]}
+                aria-selected={isSelected ? "true" : "false"}
+                aria-controls={`source-panel-${source.kind}`}
+                tabindex={isSelected ? 0 : -1}
+                data-source-kind={source.kind}
+                style={`--source-brand:${source.color}`}
+              >
+                <div class="tab-accent-bar" aria-hidden="true" />
+                <SourceTile kind={source.kind} size={28} />
+                <span class="source-tab-name">{source.name}</span>
+                <div class="tab-progress-line" aria-hidden="true" />
+              </button>
+            );
+          })
+        }
+      </div>
+
+      <!-- Right side: File preview sheet -->
+      <div class="preview-column">
+        <div class="sheet preview-sheet" aria-live="polite">
+          {
+            SOURCES.map((source, index) => {
+              const detail = SOURCE_DETAILS[source.kind];
+              const isSelected = index === 0;
+              return (
+                <div
+                  id={`source-panel-${source.kind}`}
+                  role="tabpanel"
+                  aria-labelledby={`source-tab-${source.kind}`}
+                  class:list={["preview-panel", { "is-active": isSelected }]}
+                  data-panel-kind={source.kind}
+                  hidden={!isSelected}
+                >
+                  <!-- Preview header metadata -->
+                  <div class="preview-meta-header">
+                    <div class="meta-row">
+                      <span class="meta-label">Save it with:</span>
+                      <span class="meta-value">{source.savedWith}</span>
+                    </div>
+                    <div class="meta-row">
+                      <span class="meta-label">What you get:</span>
+                      <span class="meta-value">{source.youGet}</span>
+                    </div>
+                  </div>
+
+                  <!-- Markdown file surface -->
+                  <div class="markdown-preview mono">
+                    <div class="markdown-file-tab">
+                      <span class="file-name">{source.exampleTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md</span>
+                      <span class="file-kind-badge" style={`color:${source.color}`}>
+                        {source.kind}
+                      </span>
+                    </div>
+
+                    <div class="markdown-content">
+                      <!-- Front matter -->
+                      <div class="md-frontmatter">
+                        <span class="md-fence">---</span>
+                        <div class="md-line">
+                          <span class="md-key">title:</span>
+                          <span class="md-val">"{source.exampleTitle}"</span>
+                        </div>
+                        <div class="md-line">
+                          <span class="md-key">url:</span>
+                          <span class="md-val">"https://{source.exampleUrl}"</span>
+                        </div>
+                        <div class="md-line">
+                          <span class="md-key">{detail.authorLabel}:</span>
+                          <span class="md-val">"{detail.authorValue}"</span>
+                        </div>
+                        <div class="md-line">
+                          <span class="md-key">saved:</span>
+                          <span class="md-val">"{detail.savedDate}"</span>
+                        </div>
+                        <div class="md-line">
+                          <span class="md-key">kind:</span>
+                          <span class="md-kind" style={`color:${source.color}`}>
+                            {source.kind}
+                          </span>
+                        </div>
+                        <span class="md-fence">---</span>
+                      </div>
+
+                      <!-- Realistic body lines -->
+                      <div class="md-body">
+                        {detail.bodyLines.map((line) => {
+                          if (line.type === "heading" || line.type === "ref-header") {
+                            return <div class="md-heading serif">{line.text}</div>;
+                          }
+                          if (line.type === "timestamp") {
+                            return (
+                              <div class="md-timestamp-line">
+                                <span class="md-time-link">{line.text}</span>
+                                <span class="md-time-text">{line.subtext}</span>
+                              </div>
+                            );
+                          }
+                          if (line.type === "quote") {
+                            return <div class="md-quote">{line.text}</div>;
+                          }
+                          if (line.type === "subquote") {
+                            return <div class="md-subquote">{line.text}</div>;
+                          }
+                          if (line.type === "image") {
+                            return <div class="md-image-line">{line.text}</div>;
+                          }
+                          if (line.type === "math") {
+                            return <div class="md-math-block">{line.text}</div>;
+                          }
+                          if (line.type === "ref-item") {
+                            return <div class="md-ref-item">{line.text}</div>;
+                          }
+                          return <div class="md-p">{line.text}</div>;
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Below: Honest note + mention of notes and images -->
+    <div class="sources-footer" data-reveal>
+      <div class="honest-note">
+        <p class="muted">
+          Some sites (Reddit, paywalled news) refuse pasted links. Save those with the extension
+          while the page is open; it saves the page as you see it.
+        </p>
+      </div>
+
+      <div class="extra-kinds-bar">
+        <span class="extra-label muted">Also lives next to your sources:</span>
+        <div class="extra-chips">
+          {
+            EXTRA_KINDS.map((extra) => (
+              <span class="extra-chip" title={extra.youGet}>
+                <SourceTile kind={extra.kind} size={22} />
+                <span class="extra-name">{extra.name}</span>
+                <span class="extra-desc muted">({extra.savedWith})</span>
+              </span>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
+
+<script>
+  import { whileVisible } from "../../lib/reveal";
+
+  const root = document.querySelector<HTMLElement>("[data-sources-picker]");
+  if (root) {
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+
+    let currentIndex = 0;
+    let userInteracted = false;
+    let autoCycleTimer: ReturnType<typeof setTimeout> | null = null;
+    let isVisible = false;
+
+    function selectTab(index: number, options: { focus?: boolean; programmatic?: boolean } = {}) {
+      if (index < 0 || index >= tabs.length) return;
+      currentIndex = index;
+
+      tabs.forEach((tab, i) => {
+        const isMatch = i === index;
+        tab.classList.toggle("is-selected", isMatch);
+        tab.setAttribute("aria-selected", isMatch ? "true" : "false");
+        tab.tabIndex = isMatch ? 0 : -1;
+        if (isMatch && options.focus) {
+          tab.focus();
+        }
+      });
+
+      panels.forEach((panel, i) => {
+        const isMatch = i === index;
+        panel.classList.toggle("is-active", isMatch);
+        panel.hidden = !isMatch;
+      });
+
+      // Manage auto-cycle progress bar
+      if (!userInteracted && isVisible) {
+        restartCycleTimer();
+      } else {
+        clearCycleTimer();
+      }
+    }
+
+    function clearCycleTimer() {
+      if (autoCycleTimer) {
+        clearTimeout(autoCycleTimer);
+        autoCycleTimer = null;
+      }
+      tabs.forEach((t) => t.classList.remove("is-cycling"));
+    }
+
+    function restartCycleTimer() {
+      clearCycleTimer();
+      if (userInteracted || !isVisible) return;
+
+      const activeTab = tabs[currentIndex];
+      if (activeTab) {
+        activeTab.classList.remove("is-cycling");
+        void activeTab.offsetWidth; // Trigger reflow for animation restart
+        activeTab.classList.add("is-cycling");
+      }
+
+      autoCycleTimer = setTimeout(() => {
+        if (!userInteracted && isVisible) {
+          const nextIndex = (currentIndex + 1) % tabs.length;
+          selectTab(nextIndex);
+        }
+      }, 3500);
+    }
+
+    // Keyboard navigation (roving tabindex)
+    root.addEventListener("keydown", (e) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (!activeEl || activeEl.getAttribute("role") !== "tab") return;
+
+      let targetIndex = -1;
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+        e.preventDefault();
+        userInteracted = true;
+        clearCycleTimer();
+        targetIndex = (currentIndex + 1) % tabs.length;
+      } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        userInteracted = true;
+        clearCycleTimer();
+        targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        userInteracted = true;
+        clearCycleTimer();
+        targetIndex = 0;
+      } else if (e.key === "End") {
+        e.preventDefault();
+        userInteracted = true;
+        clearCycleTimer();
+        targetIndex = tabs.length - 1;
+      }
+
+      if (targetIndex !== -1) {
+        selectTab(targetIndex, { focus: true });
+      }
+    });
+
+    // Tab click & pointer events
+    tabs.forEach((tab, idx) => {
+      tab.addEventListener("click", () => {
+        userInteracted = true;
+        clearCycleTimer();
+        selectTab(idx);
+      });
+
+      tab.addEventListener("mouseenter", () => {
+        if (!userInteracted) {
+          userInteracted = true;
+          clearCycleTimer();
+        }
+        selectTab(idx);
+      });
+
+      tab.addEventListener("focus", () => {
+        if (!userInteracted) {
+          userInteracted = true;
+          clearCycleTimer();
+        }
+        selectTab(idx);
+      });
+    });
+
+    // Auto-cycle only while visible
+    whileVisible(root, () => {
+      isVisible = true;
+      if (!userInteracted) {
+        restartCycleTimer();
+      }
+      return () => {
+        isVisible = false;
+        clearCycleTimer();
+      };
+    });
+  }
+</script>
+
+<style>
+  .sources-section {
+    padding-top: clamp(48px, 8vw, 96px);
+  }
+
+  .sources-interactive {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(24px, 3.5vw, 44px);
+    align-items: start;
+    margin-bottom: clamp(36px, 5vw, 56px);
+  }
+
+  @media (min-width: 960px) {
+    .sources-interactive {
+      grid-template-columns: 310px 1fr;
+      gap: 36px;
+    }
+  }
+
+  /* Sources Tablist */
+  .sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--card);
+    padding: 8px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-raised);
+  }
+
+  @media (max-width: 959px) {
+    .sources-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 6px;
+    }
+  }
+
+  .source-tab {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 44px;
+    padding-inline: 12px 14px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--foreground);
+    cursor: pointer;
+    text-align: left;
+    outline: none;
+    overflow: hidden;
+    transition:
+      background-color 140ms var(--ease-out),
+      color 140ms var(--ease-out);
+  }
+
+  .source-tab:hover {
+    background: var(--muted);
+  }
+
+  .source-tab:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+
+  /* 3px source color bar on left when selected */
+  .tab-accent-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3.5px;
+    background: var(--source-brand);
+    opacity: 0;
+    transition: opacity 140ms var(--ease-out);
+  }
+
+  .source-tab.is-selected {
+    background: var(--accent);
+    font-weight: 500;
+  }
+
+  .source-tab.is-selected .tab-accent-bar {
+    opacity: 1;
+  }
+
+  .source-tab-name {
+    font-size: 14px;
+    flex: 1;
+  }
+
+  /* Auto-cycle progress bar on active tab */
+  .tab-progress-line {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--source-brand);
+    opacity: 0;
+    transform-origin: left;
+    transform: scaleX(0);
+  }
+
+  .source-tab.is-cycling .tab-progress-line {
+    opacity: 0.65;
+    animation: sf-tab-progress 3.5s linear forwards;
+  }
+
+  @keyframes sf-tab-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  /* Preview Sheet */
+  .preview-column {
+    min-width: 0;
+  }
+
+  .preview-sheet {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    min-height: 480px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .preview-panel {
+    display: flex;
+    flex-direction: column;
+    animation: sf-panel-fade 220ms var(--ease-out);
+    flex: 1;
+  }
+
+  .preview-panel[hidden] {
+    display: none;
+  }
+
+  @keyframes sf-panel-fade {
+    from {
+      opacity: 0.4;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Metadata header */
+  .preview-meta-header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13.5px;
+  }
+
+  .meta-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    line-height: 1.45;
+  }
+
+  .meta-label {
+    color: var(--muted-foreground);
+    font-weight: 500;
+    flex-shrink: 0;
+    min-width: 105px;
+    font-size: 12.5px;
+  }
+
+  .meta-value {
+    color: var(--foreground);
+    font-size: 13px;
+  }
+
+  /* Markdown preview styling */
+  .markdown-preview {
+    padding: 20px 24px 28px;
+    background: var(--background);
+    flex: 1;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .markdown-file-tab {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--border);
+  }
+
+  .file-name {
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+
+  .file-kind-badge {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .markdown-content {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Front matter syntax tinting */
+  .md-frontmatter {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .md-fence {
+    color: var(--border-strong);
+    user-select: none;
+  }
+
+  .md-line {
+    display: flex;
+    gap: 8px;
+  }
+
+  .md-key {
+    color: var(--muted-foreground);
+    min-width: 68px;
+  }
+
+  .md-val {
+    color: var(--foreground);
+  }
+
+  .md-kind {
+    font-weight: 500;
+  }
+
+  /* Body lines */
+  .md-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    color: var(--foreground);
+  }
+
+  .md-heading {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--foreground);
+    margin-top: 4px;
+  }
+
+  .md-p {
+    color: var(--foreground);
+    text-wrap: pretty;
+  }
+
+  .md-timestamp-line {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .md-time-link {
+    color: var(--source-youtube);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .md-time-text {
+    color: var(--foreground);
+  }
+
+  .md-quote {
+    padding-left: 12px;
+    border-left: 2px solid var(--border-strong);
+    color: var(--foreground);
+  }
+
+  .md-subquote {
+    padding-left: 24px;
+    border-left: 2px solid var(--border-strong);
+    color: var(--muted-foreground);
+  }
+
+  .md-image-line {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    word-break: break-all;
+    background: var(--muted);
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
+
+  .md-math-block {
+    background: var(--muted);
+    padding: 8px 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    color: var(--foreground);
+  }
+
+  .md-ref-item {
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+
+  /* Honest note & Extra kinds below */
+  .sources-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .honest-note p {
+    font-size: 13.5px;
+    line-height: 1.5;
+    max-width: 68ch;
+  }
+
+  .extra-kinds-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+
+  .extra-label {
+    font-size: 13px;
+  }
+
+  .extra-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .extra-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding-inline: 8px 12px;
+    border-radius: 999px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-raised);
+    font-size: 12.5px;
+  }
+
+  .extra-name {
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .extra-desc {
+    font-size: 11.5px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .preview-panel {
+      animation: none !important;
+    }
+    .tab-progress-line {
+      animation: none !important;
+    }
+  }
+</style>

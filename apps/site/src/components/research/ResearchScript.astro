@@ -1,0 +1,351 @@
+---
+/**
+ * Research Tool 5: Script view with citations [1] and Export reference list sliding drawer.
+ */
+import { FileDown, Copy } from "@lucide/astro";
+
+interface CitationRef {
+  num: number;
+  author: string;
+  source: string;
+  kindName: string;
+  detail: string;
+}
+
+const REFERENCES: CitationRef[] = [
+  {
+    num: 1,
+    author: "Jason Fenske (Engineering Explained)",
+    source: "How turbo lag actually works",
+    kindName: "YouTube",
+    detail: "Timestamp 12:04 · Spool inertia vs intake plenum volume",
+  },
+  {
+    num: 2,
+    author: "@boostlab",
+    source: "Thread: why twin-scroll beats twin-turbo",
+    kindName: "X / Twitter",
+    detail: "Pulse velocity and exhaust valve pairing",
+  },
+  {
+    num: 3,
+    author: "Matt Farah (Engine Bay)",
+    source: "The last rotary",
+    kindName: "Substack",
+    detail: "Sequential bypass valve reliability and turbo sizing",
+  },
+  {
+    num: 4,
+    author: "Community discussion",
+    source: "Electric turbos are finally here",
+    kindName: "Hacker News",
+    detail: "48-volt Garrett e-turbo transient response times",
+  },
+];
+---
+
+<div class="script-tool">
+  <div class="tool-intro">
+    <div class="tool-intro-text">
+      <h3 class="tool-heading serif">Script view & automatic citations</h3>
+      <p class="muted">
+        Your research outline assembled into a continuous teleprompter script. Every quote
+        transforms into a numbered citation <span class="mono">[1]</span>, backed by full source provenance.
+      </p>
+    </div>
+    <div class="script-actions">
+      <button type="button" class="btn btn-outline btn-sm" id="export-refs-btn">
+        <FileDown size={14} stroke-width={1.75} />
+        <span>Export reference list</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="script-container">
+    <!-- Teleprompter Script Paper -->
+    <div class="script-paper card">
+      <div class="script-chapter">
+        <span class="chapter-number nums font-mono">01 // INTRO</span>
+        <h4 class="chapter-title serif">The myth of turbo lag</h4>
+        <p class="script-paragraph">
+          Ask anyone in the car world why they dislike turbochargers, and they will tell you the same thing:
+          turbos are sluggish. But that delay isn't a single mysterious pause. It's actually two separate
+          mechanical events happening back-to-back
+          <button type="button" class="cite-ref" data-ref="1" title="Engineering Explained · 12:04">[1]</button>.
+        </p>
+      </div>
+
+      <div class="script-chapter">
+        <span class="chapter-number nums font-mono">02 // HOW TURBOS WORK</span>
+        <h4 class="chapter-title serif">The twin-scroll solution</h4>
+        <p class="script-paragraph">
+          First, intake plenum lag occurs when air rushes past the throttle plate. Second, spool time begins as
+          exhaust flow slowly overcomes the rotational inertia of the turbine wheel. Splitting the exhaust ports
+          into a divided turbine housing preserves kinetic pulses without mutual cylinder interference
+          <button type="button" class="cite-ref" data-ref="2" title="@boostlab · X Thread">[2]</button>.
+        </p>
+      </div>
+
+      <div class="script-chapter">
+        <span class="chapter-number nums font-mono">03 // LAG VS BOOST THRESHOLD</span>
+        <h4 class="chapter-title serif">Lessons from rotaries</h4>
+        <p class="script-paragraph">
+          Mazda tried tackling this in the 1990s with sequential twin turbos, but the rats' nest of vacuum
+          lines proved notoriously fragile under sustained track heat
+          <button type="button" class="cite-ref" data-ref="3" title="Engine Bay · Substack">[3]</button>.
+          Today, 48-volt motor assists spin the compressor in under 200 milliseconds, effectively closing the chapter
+          on mechanical turbo lag once and for all
+          <button type="button" class="cite-ref" data-ref="4" title="Hacker News discussion">[4]</button>.
+        </p>
+      </div>
+    </div>
+
+    <!-- Export Reference List Drawer (Toggles open) -->
+    <aside id="reference-drawer" class="reference-drawer card" style="display: none;">
+      <div class="drawer-header">
+        <h4 class="drawer-title serif">Reference List (Chicago format)</h4>
+        <button type="button" class="btn btn-ink btn-sm" id="copy-refs-clipboard-btn">
+          <Copy size={13} stroke-width={1.75} />
+          <span id="copy-refs-label">Copy bibliography</span>
+        </button>
+      </div>
+
+      <div class="references-list" role="list">
+        {
+          REFERENCES.map((ref) => (
+            <div class="reference-row" id={`ref-item-${ref.num}`}>
+              <span class="ref-num nums font-mono">[{ref.num}]</span>
+              <div class="ref-content">
+                <span class="ref-author">{ref.author}.</span>
+                <span class="ref-title serif">"{ref.source}."</span>
+                <span class="ref-kind muted">({ref.kindName})</span>
+                <p class="ref-detail muted">{ref.detail}</p>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+  import { animate } from "motion";
+  import { prefersReducedMotion } from "../../lib/reveal";
+
+  const tool = document.querySelector(".script-tool");
+  if (tool) {
+    const exportBtn = tool.querySelector("#export-refs-btn") as HTMLButtonElement | null;
+    const drawer = tool.querySelector("#reference-drawer") as HTMLElement | null;
+    const copyBtn = tool.querySelector("#copy-refs-clipboard-btn") as HTMLButtonElement | null;
+    const copyLabel = tool.querySelector("#copy-refs-label") as HTMLElement | null;
+    const citeButtons = Array.from(tool.querySelectorAll(".cite-ref")) as HTMLButtonElement[];
+
+    exportBtn?.addEventListener("click", () => {
+      if (!drawer) return;
+      const isVisible = drawer.style.display === "block";
+      if (isVisible) {
+        drawer.style.display = "none";
+      } else {
+        drawer.style.display = "block";
+        if (!prefersReducedMotion()) {
+          animate(drawer, { opacity: [0, 1], x: [16, 0] }, { duration: 0.25, ease: [0.16, 1, 0.3, 1] });
+        }
+      }
+    });
+
+    citeButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (drawer && drawer.style.display === "none") {
+          drawer.style.display = "block";
+        }
+        const refNum = btn.dataset.ref;
+        if (!refNum) return;
+        const targetRow = tool?.querySelector(`#ref-item-${refNum}`) as HTMLElement | null;
+        if (targetRow) {
+          tool?.querySelectorAll(".reference-row").forEach((r) => r.classList.remove("is-highlighted"));
+          targetRow.classList.add("is-highlighted");
+          targetRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      });
+    });
+
+    copyBtn?.addEventListener("click", () => {
+      if (!copyLabel) return;
+      const oldText = copyLabel.textContent;
+      copyLabel.textContent = "Copied to clipboard!";
+      setTimeout(() => {
+        copyLabel.textContent = oldText;
+      }, 2000);
+    });
+  }
+</script>
+
+<style>
+  .script-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tool-intro {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-heading {
+    font-size: 20px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .script-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .script-container:has(.reference-drawer[style*="display: block"]) {
+    grid-template-columns: 1.2fr 1fr;
+  }
+
+  @media (max-width: 860px) {
+    .script-container:has(.reference-drawer[style*="display: block"]) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Script Paper */
+  .script-paper {
+    padding: 24px 28px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .script-chapter {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chapter-number {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+    margin-bottom: 2px;
+  }
+
+  .chapter-title {
+    font-size: 17px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+
+  .script-paragraph {
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--foreground);
+    margin: 0;
+  }
+
+  .cite-ref {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    margin-inline: 2px;
+    border-radius: 4px;
+    border: 1px solid var(--border-strong);
+    background: var(--desk);
+    color: var(--foreground);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    vertical-align: baseline;
+    transition:
+      background-color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out);
+  }
+
+  .cite-ref:hover {
+    background: var(--marker);
+    border-color: var(--foreground);
+  }
+
+  /* Reference Drawer */
+  .reference-drawer {
+    padding: 20px;
+    border: 1px solid var(--border);
+    background: var(--card);
+  }
+
+  .drawer-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 14px;
+  }
+
+  .drawer-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .references-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .reference-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.45;
+    transition: background-color 160ms var(--ease-out);
+  }
+
+  .reference-row.is-highlighted {
+    background: var(--marker-soft);
+  }
+
+  .ref-num {
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .ref-author {
+    font-weight: 500;
+    margin-right: 4px;
+  }
+
+  .ref-title {
+    margin-right: 4px;
+  }
+
+  .ref-kind {
+    font-size: 12px;
+  }
+
+  .ref-detail {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+  }
+</style>

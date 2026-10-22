@@ -1,7 +1,456 @@
 ---
-// Placeholder. The agent that owns this section replaces it.
+/**
+ * Download.astro (id "download") — final CTA + footer
+ * Big closing sheet with the logo, Newsreader headline with marker sweep,
+ * OS-detected download buttons with mono file names, unsigned publisher note,
+ * and quiet footer with license and community links.
+ */
+import {
+  CircleAlert,
+  Bot,
+  Download as DownloadIcon,
+  Laptop,
+} from "@lucide/astro";
+import Logo from "../Logo.astro";
+import { links } from "../../lib/site";
 ---
 
-<section id="download" class="section">
-  <div class="container"><p class="muted">Download section</p></div>
+<section id="download" class="section" data-download-section>
+  <div class="container">
+    <!-- Big Closing Sheet CTA -->
+    <div class="sheet download-sheet" data-reveal>
+      <div class="sheet-inner">
+        <div class="logo-wrap" aria-hidden="true">
+          <Logo size={52} />
+        </div>
+
+        <h2 class="h2 download-headline">
+          Save everything you read for your <span class="marker marker-sweep">next project</span>
+        </h2>
+
+        <p class="lede download-subhead">
+          Free and open source. Works offline on your computer or backed up to your Google Drive.
+        </p>
+
+        <!-- 4 Download Options Grid -->
+        <div class="downloads-grid" data-downloads-grid>
+          <!-- 1. Windows -->
+          <div class="download-card card" data-os-card="windows">
+            <div class="dl-card-top">
+              <div class="os-icon-wrap" aria-hidden="true">
+                <Laptop size={20} />
+              </div>
+              <div class="os-info">
+                <div class="os-title-row">
+                  <h3 class="os-title">Windows</h3>
+                  <span class="os-badge chip" data-os-badge>Windows 10 or 11</span>
+                </div>
+                <div class="os-file mono text-xs muted">Sourcefold-Windows-Setup.exe</div>
+              </div>
+            </div>
+            <div class="dl-action">
+              <a
+                href={links.windows}
+                class="btn btn-ink dl-btn"
+                data-os-btn="windows"
+              >
+                <DownloadIcon size={15} />
+                <span>Download for Windows</span>
+              </a>
+            </div>
+            <p class="muted dl-note text-xs">64-bit installer · auto-updates</p>
+          </div>
+
+          <!-- 2. Mac -->
+          <div class="download-card card" data-os-card="mac">
+            <div class="dl-card-top">
+              <div class="os-icon-wrap" aria-hidden="true">
+                <Laptop size={20} />
+              </div>
+              <div class="os-info">
+                <div class="os-title-row">
+                  <h3 class="os-title">Mac</h3>
+                  <span class="os-badge chip" data-os-badge>macOS 11+</span>
+                </div>
+                <div class="os-file mono text-xs muted">Sourcefold-Mac.dmg</div>
+              </div>
+            </div>
+            <div class="dl-action">
+              <a
+                href={links.mac}
+                class="btn btn-outline dl-btn"
+                data-os-btn="mac"
+              >
+                <DownloadIcon size={15} />
+                <span>Download for Mac</span>
+              </a>
+            </div>
+            <p class="muted dl-note text-xs">Apple Silicon or Intel · universal build</p>
+          </div>
+
+          <!-- 3. Chrome Extension -->
+          <div class="download-card card" data-os-card="extension">
+            <div class="dl-card-top">
+              <div class="os-icon-wrap" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><line x1="21.17" x2="12" y1="8" y2="8"></line><line x1="3.95" x2="8.54" y1="6.06" y2="14"></line><line x1="10.88" x2="15.46" y1="21.94" y2="14"></line></svg>
+              </div>
+              <div class="os-info">
+                <div class="os-title-row">
+                  <h3 class="os-title">Extension</h3>
+                  <span class="os-badge chip">Chrome, Edge, Brave, Arc</span>
+                </div>
+                <div class="os-file mono text-xs muted">Sourcefold-Chrome-Extension.zip</div>
+              </div>
+            </div>
+            <div class="dl-action">
+              <a
+                href={links.extension}
+                class="btn btn-outline dl-btn"
+                data-os-btn="extension"
+              >
+                <DownloadIcon size={15} />
+                <span>Download extension</span>
+              </a>
+            </div>
+            <p class="muted dl-note text-xs">Load unpacked in chrome://extensions</p>
+          </div>
+
+          <!-- 4. Claude Desktop -->
+          <div class="download-card card" data-os-card="claude">
+            <div class="dl-card-top">
+              <div class="os-icon-wrap" aria-hidden="true">
+                <Bot size={20} />
+              </div>
+              <div class="os-info">
+                <div class="os-title-row">
+                  <h3 class="os-title">Claude Desktop</h3>
+                  <span class="os-badge chip">MCP Bundle</span>
+                </div>
+                <div class="os-file mono text-xs muted">Sourcefold-Claude.mcpb</div>
+              </div>
+            </div>
+            <div class="dl-action">
+              <a
+                href={links.claude}
+                class="btn btn-outline dl-btn"
+                data-os-btn="claude"
+              >
+                <DownloadIcon size={15} />
+                <span>Download MCP bundle</span>
+              </a>
+            </div>
+            <p class="muted dl-note text-xs">Or Settings → Claude in desktop app</p>
+          </div>
+        </div>
+
+        <!-- Unsigned publisher warning notice -->
+        <div class="install-notice card">
+          <CircleAlert size={18} class="notice-icon" />
+          <div class="notice-text">
+            <span>
+              The apps aren't from a paid publisher, so Windows and macOS warn the first time.
+              <a href={links.install} class="notice-link" target="_blank" rel="noopener noreferrer">
+                INSTALL.md shows the two clicks that get past it
+              </a>, how to load the extension, and how to sign in.
+            </span>
+          </div>
+        </div>
+
+        <div class="web-alt-note muted text-sm">
+          <span>Website (nothing to install): Ask whoever runs your Sourcefold for the address, or </span>
+          <a href={links.selfHosting} class="web-link" target="_blank" rel="noopener noreferrer">run your own copy</a>.
+        </div>
+      </div>
+    </div>
+
+    <!-- Quiet Footer -->
+    <footer class="site-footer">
+      <div class="footer-primary-row">
+        <div class="footer-brand">
+          <Logo size={22} />
+          <span class="footer-brand-name">Sourcefold</span>
+        </div>
+        <p class="footer-mission muted">
+          Built for people who gather a lot of reading before they write or make a video.
+        </p>
+        <div class="footer-license">
+          <a href={links.license} class="license-link" target="_blank" rel="noopener noreferrer">
+            MIT license
+          </a>
+        </div>
+      </div>
+
+      <div class="footer-links-row">
+        <nav class="footer-nav" aria-label="Footer navigation">
+          <a href={links.repo} target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href={links.install} target="_blank" rel="noopener noreferrer">Install guide</a>
+          <a href={links.selfHosting} target="_blank" rel="noopener noreferrer">Self-hosting</a>
+          <a href={links.privacy} target="_blank" rel="noopener noreferrer">Privacy</a>
+          <a href={links.changelog} target="_blank" rel="noopener noreferrer">Changelog</a>
+          <a href={links.issues} target="_blank" rel="noopener noreferrer">Report a problem</a>
+        </nav>
+      </div>
+    </footer>
+  </div>
 </section>
+
+<script>
+  // Detect visitor's OS and prioritize matching installer button as ink
+  const root = document.querySelector<HTMLElement>("[data-download-section]");
+  if (root) {
+    const grid = root.querySelector<HTMLElement>("[data-downloads-grid]");
+    const winCard = root.querySelector<HTMLElement>('[data-os-card="windows"]');
+    const macCard = root.querySelector<HTMLElement>('[data-os-card="mac"]');
+    const winBtn = root.querySelector<HTMLElement>('[data-os-btn="windows"]');
+    const macBtn = root.querySelector<HTMLElement>('[data-os-btn="mac"]');
+
+    const ua = navigator.userAgent.toLowerCase();
+    const isMac = /macintosh|mac os x/.test(ua);
+    const isWin = /windows|win32|win64/.test(ua);
+
+    if (isMac && macCard && macBtn && winBtn && grid) {
+      // Prioritize Mac
+      macBtn.classList.remove("btn-outline");
+      macBtn.classList.add("btn-ink");
+      winBtn.classList.remove("btn-ink");
+      winBtn.classList.add("btn-outline");
+
+      const badge = macCard.querySelector<HTMLElement>("[data-os-badge]");
+      if (badge) badge.textContent = "For your Mac";
+
+      // Move Mac card to first position in grid
+      grid.prepend(macCard);
+    } else if (isWin && winCard) {
+      const badge = winCard.querySelector<HTMLElement>("[data-os-badge]");
+      if (badge) badge.textContent = "For your PC";
+    }
+  }
+</script>
+
+<style>
+  .download-sheet {
+    padding: clamp(36px, 6vw, 64px) clamp(24px, 5vw, 56px);
+    border: 1px solid var(--border);
+    margin-bottom: 56px;
+  }
+
+  .sheet-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 920px;
+    margin-inline: auto;
+  }
+
+  .logo-wrap {
+    margin-bottom: 20px;
+  }
+
+  .download-headline {
+    margin-bottom: 14px;
+    max-width: 24ch;
+  }
+
+  .download-subhead {
+    margin-bottom: 36px;
+    text-align: center;
+  }
+
+  /* 4 Downloads Grid */
+  .downloads-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    width: 100%;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 680px) {
+    .downloads-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .download-card {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    border: 1px solid var(--border);
+    text-align: left;
+    transition:
+      transform 140ms var(--ease-out),
+      border-color 140ms var(--ease-out),
+      box-shadow 140ms var(--ease-out);
+  }
+
+  .download-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-raised);
+  }
+
+  .dl-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .os-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    background: var(--muted);
+    color: var(--foreground);
+    flex-shrink: 0;
+  }
+
+  .os-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .os-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .os-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .os-badge {
+    font-size: 11px;
+    padding-inline: 8px;
+    height: 20px;
+  }
+
+  .dl-action {
+    margin-bottom: 8px;
+  }
+
+  .dl-btn {
+    width: 100%;
+    font-size: 13.5px;
+    gap: 8px;
+  }
+
+  .dl-note {
+    line-height: 1.4;
+  }
+
+  /* Notice */
+  .install-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    background: var(--muted);
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: left;
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .notice-icon {
+    color: var(--warning);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .notice-link {
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .web-alt-note {
+    line-height: 1.5;
+  }
+
+  .web-link {
+    color: var(--foreground);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* Quiet Footer */
+  .site-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-top: 24px;
+    padding-bottom: 48px;
+    border-top: 1px solid var(--border);
+  }
+
+  .footer-primary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .footer-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .footer-brand-name {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  .footer-mission {
+    font-size: 13.5px;
+    max-width: 52ch;
+  }
+
+  .license-link {
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--muted);
+  }
+
+  .license-link:hover {
+    color: var(--foreground);
+  }
+
+  .footer-links-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 13px;
+  }
+
+  .footer-nav a {
+    color: var(--muted-foreground);
+    text-decoration: none;
+    transition: color 140ms var(--ease-out);
+  }
+
+  .footer-nav a:hover {
+    color: var(--foreground);
+  }
+</style>

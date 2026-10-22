@@ -1,0 +1,128 @@
+---
+/**
+ * A quiet strip of source tiles + names (all of SOURCES) drifting slowly as a marquee.
+ * Pauses on hover/focus, duplicated list for seamless loop, mask fades on edges,
+ * stops under reduced motion, linking to #sources.
+ */
+import SourceTile from "../SourceTile.astro";
+import { SOURCES } from "../../lib/sources";
+---
+
+<div class="marquee-wrapper" aria-label="Supported source types strip">
+  <div class="marquee-track">
+    <div class="marquee-group">
+      {
+        SOURCES.map((source) => (
+          <a href="#sources" class="marquee-pill" title={`Learn about saving from ${source.name}`}>
+            <SourceTile kind={source.kind} size={24} />
+            <span class="source-name">{source.name}</span>
+          </a>
+        ))
+      }
+    </div>
+    <div class="marquee-group" aria-hidden="true">
+      {
+        SOURCES.map((source) => (
+          <a href="#sources" class="marquee-pill" tabindex="-1">
+            <SourceTile kind={source.kind} size={24} />
+            <span class="source-name">{source.name}</span>
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</div>
+
+<style>
+  .marquee-wrapper {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    padding-block: 14px;
+    margin-top: clamp(24px, 4vw, 44px);
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      black 8%,
+      black 92%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0%,
+      black 8%,
+      black 92%,
+      transparent 100%
+    );
+  }
+
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    gap: 12px;
+    animation: marquee-drift 42s linear infinite;
+    will-change: transform;
+  }
+
+  .marquee-wrapper:hover .marquee-track,
+  .marquee-wrapper:focus-within .marquee-track {
+    animation-play-state: paused;
+  }
+
+  .marquee-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .marquee-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding-inline: 10px 14px;
+    border-radius: 999px;
+    background: var(--background);
+    box-shadow: var(--shadow-raised);
+    color: var(--foreground);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition:
+      background-color 140ms var(--ease-out),
+      transform 140ms var(--ease-out),
+      box-shadow 140ms var(--ease-out);
+    white-space: nowrap;
+  }
+
+  .marquee-pill:hover {
+    background: var(--card);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sheet);
+  }
+
+  .source-name {
+    color: var(--foreground);
+  }
+
+  @keyframes marquee-drift {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(calc(-50% - 6px));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track {
+      animation: none !important;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .marquee-group[aria-hidden="true"] {
+      display: none;
+    }
+  }
+</style>

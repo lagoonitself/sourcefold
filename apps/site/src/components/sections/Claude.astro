@@ -1,7 +1,1011 @@
 ---
-// Placeholder. The agent that owns this section replaces it.
+/**
+ * Claude.astro (id "claude") — "Work with Claude"
+ * Shows Claude Desktop interacting with the local Sourcefold MCP server:
+ * streaming conversation, tool-call chips with spinners resolving to checkmarks,
+ * and a live mini Sourcefold desktop window reacting in real time.
+ */
+import {
+  Download,
+  ExternalLink,
+  Folder,
+  Search,
+  Sparkles,
+} from "@lucide/astro";
+import SectionHeader from "../SectionHeader.astro";
+import { links } from "../../lib/site";
 ---
 
 <section id="claude" class="section">
-  <div class="container"><p class="muted">Claude section</p></div>
+  <div class="container">
+    <SectionHeader
+      label="Work with Claude"
+      title="Ask Claude to research, organize and "
+      marked="save to your library"
+      lede="Add Sourcefold to Claude Desktop from the desktop app (Settings → Claude → Add to Claude Desktop) or download Sourcefold-Claude.mcpb. It uses the desktop app's sign-in with nothing to set up. With the desktop app open, Claude can also search inside your sources and open things in the app for you."
+    />
+
+    <div class="sheet workbench" data-claude-workbench data-reveal>
+      <!-- Workbench Top Bar -->
+      <div class="workbench-bar">
+        <div class="workbench-window-dots" aria-hidden="true">
+          <span class="dot dot-close"></span>
+          <span class="dot dot-min"></span>
+          <span class="dot dot-max"></span>
+        </div>
+        <div class="workbench-titles">
+          <div class="pane-title active-pane">
+            <span class="status-indicator"></span>
+            <span>Claude Desktop</span>
+            <span class="badge">Sourcefold MCP</span>
+          </div>
+          <div class="pane-title right-pane-label">
+            <Folder size={14} class="muted" />
+            <span>Sourcefold Desktop</span>
+            <span class="sync-status" data-claude-sync>
+              <span class="sync-dot"></span>
+              <span class="sync-text">Synced</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scenarios Selector Chips -->
+      <div class="scenario-selector" role="tablist" aria-label="Conversation examples">
+        <span class="selector-label">Try a prompt:</span>
+        <button
+          type="button"
+          class="scenario-chip is-active"
+          role="tab"
+          aria-selected="true"
+          data-scenario="playlist"
+        >
+          Add playlist & highlight
+        </button>
+        <button
+          type="button"
+          class="scenario-chip"
+          role="tab"
+          aria-selected="false"
+          data-scenario="search"
+        >
+          Search inside sources
+        </button>
+        <button
+          type="button"
+          class="scenario-chip"
+          role="tab"
+          aria-selected="false"
+          data-scenario="note"
+        >
+          Summarize & write note
+        </button>
+      </div>
+
+      <!-- Two-pane Workspace Split -->
+      <div class="workbench-body">
+        <!-- Left Pane: Claude Chat -->
+        <div class="chat-pane" aria-label="Claude conversation mockup">
+          <div class="chat-scroll" data-claude-chat>
+            <div class="chat-bubble user-bubble">
+              <div class="bubble-header">
+                <span class="bubble-author">You</span>
+              </div>
+              <p class="bubble-prompt" data-claude-prompt>
+                Add this playlist to Engines / Lag and boost and highlight anything about anti-lag.
+              </p>
+            </div>
+
+            <div class="chat-bubble assistant-bubble">
+              <div class="bubble-header">
+                <div class="claude-avatar" aria-hidden="true">
+                  <Sparkles size={13} />
+                </div>
+                <span class="bubble-author">Claude</span>
+                <span class="bubble-time">via desktop MCP</span>
+              </div>
+
+              <!-- Tool Calls Appearing One by One -->
+              <div class="tool-calls" data-claude-tools aria-live="polite">
+                <!-- Injected via script -->
+              </div>
+
+              <!-- Streaming Word-by-Word Text -->
+              <div class="bubble-text" data-claude-reply>
+                <!-- Injected via script -->
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-input-bar" aria-hidden="true">
+            <span class="chat-placeholder">Reply to Claude or select another prompt above…</span>
+            <span class="chat-kbd kbd">Return</span>
+          </div>
+        </div>
+
+        <!-- Right Pane: Mini Sourcefold Window -->
+        <div class="preview-pane" aria-label="Sourcefold desktop preview">
+          <div class="mini-app-header">
+            <div class="mini-breadcrumbs">
+              <span class="crumb muted">Cars</span>
+              <span class="crumb-sep">/</span>
+              <span class="crumb muted">Engines</span>
+              <span class="crumb-sep">/</span>
+              <span class="crumb current" data-claude-folder>Lag and boost</span>
+            </div>
+            <div class="mini-search" data-claude-search-box>
+              <Search size={13} class="muted" />
+              <span class="mini-search-text" data-claude-search-query>Search project...</span>
+            </div>
+          </div>
+
+          <div class="mini-view-heading">
+            <h3 class="h3 mini-folder-title" data-claude-heading>Lag and boost</h3>
+            <span class="mini-meta" data-claude-count>3 sources</span>
+          </div>
+
+          <!-- Dynamic Sourcefold Rows -->
+          <div class="mini-rows" data-claude-rows>
+            <!-- Injected / animated via script -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Workbench Footer / MCP Info Bar -->
+      <div class="workbench-footer">
+        <div class="footer-instruction">
+          <span class="mono step-tag">Settings → Claude → Add to Claude Desktop</span>
+          <span class="muted text-sm">uses desktop app's sign-in · zero configuration</span>
+        </div>
+        <div class="footer-actions">
+          <a
+            href={links.claude}
+            class="btn btn-outline btn-sm download-mcp-btn"
+            title="Download Sourcefold-Claude.mcpb bundle"
+          >
+            <Download size={14} />
+            <span>Sourcefold-Claude.mcpb</span>
+          </a>
+          <a
+            href={`${links.install}#claude-desktop`}
+            class="btn btn-ghost btn-sm doc-link"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span>Claude setup guide</span>
+            <ExternalLink size={13} />
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
+
+<script>
+  import { whileVisible, sleep, prefersReducedMotion } from "../../lib/reveal";
+
+  interface Scenario {
+    prompt: string;
+    folder: string;
+    heading: string;
+    searchQuery?: string;
+    tools: { name: string; params: string }[];
+    replyWords: string[];
+    renderPreview: (stage: number) => string;
+    itemCountText: string;
+  }
+
+  const SCENARIOS: Record<string, Scenario> = {
+    playlist: {
+      prompt: "Add this playlist to Engines / Lag and boost and highlight anything about anti-lag.",
+      folder: "Lag and boost",
+      heading: "Lag and boost",
+      tools: [
+        { name: "add_links", params: "3 videos -> Engines/Lag and boost" },
+        { name: "list_sources", params: "folder: 'Engines/Lag and boost'" },
+        { name: "highlight", params: "source_id: 'turbo-lag', term: 'anti-lag'" },
+        { name: "save_to_drive", params: "project: 'Cars'" },
+      ],
+      replyWords: [
+        "Added", "3", "YouTube", "transcripts", "to", "Engines / Lag and boost.",
+        "Scanned", "the", "texts", "and", "highlighted", "two", "passages",
+        "explaining", "how", "combustion", "in", "the", "manifold", "keeps",
+        "the", "turbine", "spooled", "off-throttle.",
+        "Your", "Markdown", "files", "and", "Google", "Docs", "are", "synced", "to", "Drive."
+      ],
+      itemCountText: "3 sources",
+      renderPreview: (stage: number) => {
+        if (stage === 0) {
+          return `
+            <div class="mini-empty muted">Adding sources to group...</div>
+          `;
+        }
+        const showSecond = stage >= 1;
+        const showThird = stage >= 2;
+        const isHighlighted = stage >= 3;
+
+        return `
+          <div class="mini-row is-in">
+            <span class="source-tile" style="--tile:var(--source-youtube);--size:28px" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m10 15 5-3-5-3v6Z"></path><rect width="20" height="14" x="2" y="5" rx="3"></rect></svg>
+            </span>
+            <div class="mini-row-content">
+              <div class="mini-row-title">How turbo lag actually works</div>
+              <div class="mini-row-sub muted">Engineering Explained · 12:40</div>
+              ${
+                isHighlighted
+                  ? `<div class="mini-row-highlight marker is-highlighted">"Anti-lag ignites unburned fuel inside the exhaust manifold to keep the turbine spooled."</div>`
+                  : ""
+              }
+            </div>
+            <span class="mini-row-tag">YouTube</span>
+          </div>
+          ${
+            showSecond
+              ? `
+            <div class="mini-row is-in">
+              <span class="source-tile" style="--tile:var(--source-youtube);--size:28px" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m10 15 5-3-5-3v6Z"></path><rect width="20" height="14" x="2" y="5" rx="3"></rect></svg>
+              </span>
+              <div class="mini-row-content">
+                <div class="mini-row-title">Anti-lag vs 2-step rev limiters</div>
+                <div class="mini-row-sub muted">HPAcademy · 8:15</div>
+              </div>
+              <span class="mini-row-tag">YouTube</span>
+            </div>
+          `
+              : ""
+          }
+          ${
+            showThird
+              ? `
+            <div class="mini-row is-in">
+              <span class="source-tile" style="--tile:var(--source-pdf);--size:28px" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
+              </span>
+              <div class="mini-row-content">
+                <div class="mini-row-title">Transient response of variable-geometry turbines</div>
+                <div class="mini-row-sub muted">SAE Technical Paper · arXiv:2308.08708</div>
+              </div>
+              <span class="mini-row-tag">PDF</span>
+            </div>
+          `
+              : ""
+          }
+        `;
+      },
+    },
+    search: {
+      prompt: "Search inside my sources for variable-geometry turbine data.",
+      folder: "Search results",
+      heading: "Search inside sources",
+      searchQuery: "variable-geometry",
+      tools: [
+        { name: "search_sources", params: "query: 'variable-geometry', scope: 'Cars'" },
+        { name: "list_sources", params: "matched: 4 passages" },
+      ],
+      replyWords: [
+        "Found", "4", "matching", "passages", "inside", "your", "papers", "and",
+        "video", "transcripts.", "Variable", "nozzle", "vanes", "pivot", "at",
+        "low", "RPM", "to", "increase", "exhaust", "gas", "velocity,", "virtually",
+        "eliminating", "turbo", "lag", "without", "a", "wastegate."
+      ],
+      itemCountText: "4 matches in 2 files",
+      renderPreview: (_stage: number) => {
+        return `
+          <div class="mini-row is-in">
+            <span class="source-tile" style="--tile:var(--source-pdf);--size:28px" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>
+            </span>
+            <div class="mini-row-content">
+              <div class="mini-row-title">Transient response of variable-geometry turbines</div>
+              <div class="mini-row-highlight marker is-highlighted">"...matched: <mark>variable-geometry</mark> vanes pivot to narrow exhaust throat at 1800 RPM..."</div>
+            </div>
+            <span class="mini-row-tag">PDF · p. 14</span>
+          </div>
+          <div class="mini-row is-in">
+            <span class="source-tile" style="--tile:var(--source-youtube);--size:28px" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m10 15 5-3-5-3v6Z"></path><rect width="20" height="14" x="2" y="5" rx="3"></rect></svg>
+            </span>
+            <div class="mini-row-content">
+              <div class="mini-row-title">How turbo lag actually works</div>
+              <div class="mini-row-highlight marker is-highlighted">"...matched: modern VTG turbos use <mark>variable-geometry</mark> guides on the turbine wheel..."</div>
+            </div>
+            <span class="mini-row-tag">04:18</span>
+          </div>
+        `;
+      },
+    },
+    note: {
+      prompt: "Summarize the differences between twin-scroll and twin-turbo into a note.",
+      folder: "Engines",
+      heading: "Engines",
+      tools: [
+        { name: "read_source", params: "slug: 'twin-scroll-vs-twin-turbo'" },
+        { name: "write_note", params: "title: 'Twin-scroll vs Twin-turbo Summary'" },
+        { name: "save_to_drive", params: "folder: 'Cars/Engines'" },
+      ],
+      replyWords: [
+        "Compared", "both", "approaches", "from", "your", "saved", "X", "threads",
+        "and", "Car", "and", "Driver", "article.", "Created", "a", "structured",
+        "note", "in", "Engines", "highlighting", "exhaust", "pulse", "separation,",
+        "packaging", "costs,", "and", "spool", "latencies.", "Pushed", "to", "Drive."
+      ],
+      itemCountText: "1 new note · 5 sources",
+      renderPreview: (_stage: number) => {
+        return `
+          <div class="mini-row is-in highlight-row">
+            <span class="source-tile" style="--tile:var(--source-note);--size:28px" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"></path><path d="M15 3v5a1 1 0 0 0 1 1h5"></path></svg>
+            </span>
+            <div class="mini-row-content">
+              <div class="mini-row-title">Twin-scroll vs Twin-turbo Summary</div>
+              <div class="mini-row-sub muted">Note written by Claude · Synced to Drive</div>
+              <div class="mini-row-highlight marker is-highlighted">Twin-scroll pairs out-of-phase cylinders (1+4, 2+3) to keep exhaust pulses from colliding.</div>
+            </div>
+            <span class="mini-row-tag">Note</span>
+          </div>
+          <div class="mini-row">
+            <span class="source-tile" style="--tile:var(--source-x);--size:28px" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            </span>
+            <div class="mini-row-content">
+              <div class="mini-row-title">Thread: why twin-scroll beats twin-turbo</div>
+              <div class="mini-row-sub muted">@boostlab · 14 replies</div>
+            </div>
+            <span class="mini-row-tag">X</span>
+          </div>
+        `;
+      },
+    },
+  };
+
+  const root = document.querySelector<HTMLElement>("[data-claude-workbench]");
+  if (root) {
+    const chips = root.querySelectorAll<HTMLButtonElement>("[data-scenario]");
+    const promptEl = root.querySelector<HTMLElement>("[data-claude-prompt]")!;
+    const toolsContainer = root.querySelector<HTMLElement>("[data-claude-tools]")!;
+    const replyEl = root.querySelector<HTMLElement>("[data-claude-reply]")!;
+    const folderEl = root.querySelector<HTMLElement>("[data-claude-folder]")!;
+    const headingEl = root.querySelector<HTMLElement>("[data-claude-heading]")!;
+    const countEl = root.querySelector<HTMLElement>("[data-claude-count]")!;
+    const rowsEl = root.querySelector<HTMLElement>("[data-claude-rows]")!;
+    const searchBoxEl = root.querySelector<HTMLElement>("[data-claude-search-box]")!;
+    const searchQueryEl = root.querySelector<HTMLElement>("[data-claude-search-query]")!;
+    const syncDot = root.querySelector<HTMLElement>("[data-claude-sync] .sync-dot")!;
+    const syncText = root.querySelector<HTMLElement>("[data-claude-sync] .sync-text")!;
+
+    let activeKey = "playlist";
+    let cancelToken = { cancelled: false };
+
+    async function playScenario(key: string) {
+      cancelToken.cancelled = true;
+      cancelToken = { cancelled: false };
+      const currentToken = cancelToken;
+
+      const sc = SCENARIOS[key];
+      if (!sc) return;
+
+      promptEl.textContent = sc.prompt;
+      folderEl.textContent = sc.folder;
+      headingEl.textContent = sc.heading;
+      countEl.textContent = sc.itemCountText;
+      replyEl.textContent = "";
+      toolsContainer.innerHTML = "";
+
+      if (sc.searchQuery) {
+        searchBoxEl.classList.add("is-active-search");
+        searchQueryEl.textContent = `"${sc.searchQuery}"`;
+      } else {
+        searchBoxEl.classList.remove("is-active-search");
+        searchQueryEl.textContent = "Search project...";
+      }
+
+      // Initial state of preview
+      rowsEl.innerHTML = sc.renderPreview(0);
+      syncDot.classList.remove("is-saved");
+      syncText.textContent = "Syncing...";
+
+      if (prefersReducedMotion()) {
+        // Render completed state directly
+        toolsContainer.innerHTML = sc.tools
+          .map(
+            (t) => `
+          <div class="tool-chip is-done">
+            <span class="tool-icon check-icon">✓</span>
+            <span class="tool-name mono">${t.name}</span>
+            <span class="tool-param mono">${t.params}</span>
+          </div>
+        `,
+          )
+          .join("");
+        replyEl.textContent = sc.replyWords.join(" ");
+        rowsEl.innerHTML = sc.renderPreview(sc.tools.length);
+        syncDot.classList.add("is-saved");
+        syncText.textContent = "Saved to Drive";
+        return;
+      }
+
+      // Sequential tool calls
+      for (let i = 0; i < sc.tools.length; i++) {
+        if (currentToken.cancelled) return;
+        const tool = sc.tools[i];
+
+        // Add tool in 'running' state with spinner
+        const chip = document.createElement("div");
+        chip.className = "tool-chip is-running";
+        chip.innerHTML = `
+          <span class="tool-spinner"><span class="spin-dot"></span></span>
+          <span class="tool-name mono">${tool.name}</span>
+          <span class="tool-param mono">${tool.params}</span>
+        `;
+        toolsContainer.appendChild(chip);
+
+        await sleep(380);
+        if (currentToken.cancelled) return;
+
+        // Tool finishes -> green check
+        chip.className = "tool-chip is-done";
+        chip.querySelector(".tool-spinner")!.innerHTML = `<span class="check-icon">✓</span>`;
+
+        // Update preview pane alongside tool finish
+        rowsEl.innerHTML = sc.renderPreview(i + 1);
+
+        await sleep(180);
+      }
+
+      // Sync finishes
+      syncDot.classList.add("is-saved");
+      syncText.textContent = "Saved to Drive";
+
+      // Stream words
+      let accumulated = "";
+      for (let w = 0; w < sc.replyWords.length; w++) {
+        if (currentToken.cancelled) return;
+        accumulated += (w === 0 ? "" : " ") + sc.replyWords[w];
+        replyEl.textContent = accumulated;
+        await sleep(40);
+      }
+    }
+
+    chips.forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const key = chip.dataset.scenario;
+        if (!key || key === activeKey) return;
+        chips.forEach((c) => {
+          c.classList.toggle("is-active", c === chip);
+          c.setAttribute("aria-selected", c === chip ? "true" : "false");
+        });
+        activeKey = key;
+        playScenario(activeKey);
+      });
+    });
+
+    // Auto-play when scrolled into view
+    whileVisible(root, () => {
+      playScenario(activeKey);
+      return () => {
+        cancelToken.cancelled = true;
+      };
+    });
+  }
+</script>
+
+<style>
+  .workbench {
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .workbench-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 48px;
+    padding-inline: 18px;
+    background: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .workbench-window-dots {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .dot-close {
+    background: color-mix(in oklab, var(--destructive) 80%, transparent);
+  }
+  .dot-min {
+    background: color-mix(in oklab, var(--warning) 80%, transparent);
+  }
+  .dot-max {
+    background: color-mix(in oklab, var(--success) 80%, transparent);
+  }
+
+  .workbench-titles {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .pane-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-indicator {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--success) 24%, transparent);
+  }
+
+  .badge {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--muted-foreground);
+  }
+
+  .sync-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+
+  .sync-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--warning);
+    transition: background-color 200ms var(--ease-out);
+  }
+
+  :global(.sync-dot.is-saved) {
+    background: var(--success);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--success) 30%, transparent);
+  }
+
+  /* Scenario chips */
+  .scenario-selector {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    background: color-mix(in oklab, var(--background) 90%, var(--card));
+    border-bottom: 1px solid var(--border);
+  }
+
+  .selector-label {
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+    margin-right: 4px;
+  }
+
+  .scenario-chip {
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--foreground);
+    cursor: pointer;
+    transition:
+      border-color 140ms var(--ease-out),
+      background-color 140ms var(--ease-out),
+      transform 140ms var(--ease-out);
+  }
+
+  .scenario-chip:hover {
+    border-color: var(--border-strong);
+    background: var(--muted);
+  }
+
+  .scenario-chip.is-active {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+  }
+
+  /* Workbench body split */
+  .workbench-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 480px;
+    background: var(--background);
+  }
+
+  @media (max-width: 860px) {
+    .workbench-body {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Left chat pane */
+  .chat-pane {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border-right: 1px solid var(--border);
+    background: color-mix(in oklab, var(--desk) 35%, var(--background));
+    padding: 20px;
+  }
+
+  @media (max-width: 860px) {
+    .chat-pane {
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+  }
+
+  .chat-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .chat-bubble {
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: var(--card);
+    box-shadow: var(--shadow-raised);
+    border: 1px solid var(--border);
+  }
+
+  .user-bubble {
+    background: var(--card);
+  }
+
+  .bubble-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .bubble-author {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .bubble-time {
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+
+  .bubble-prompt {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--foreground);
+  }
+
+  .claude-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  .tool-calls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-block: 10px;
+  }
+
+  :global(.tool-chip) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    font-size: 12px;
+    background: var(--muted);
+    border: 1px solid var(--border);
+    animation: fadeIn 200ms var(--ease-out);
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  :global(.tool-chip.is-running) {
+    border-color: color-mix(in oklab, var(--warning) 40%, var(--border));
+  }
+
+  :global(.tool-chip.is-done) {
+    border-color: color-mix(in oklab, var(--success) 35%, var(--border));
+    background: color-mix(in oklab, var(--card) 90%, var(--success));
+  }
+
+  :global(.tool-spinner) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+  }
+
+  :global(.spin-dot) {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warning);
+    animation: pulseDot 800ms infinite alternate;
+  }
+
+  @keyframes pulseDot {
+    from {
+      transform: scale(0.6);
+      opacity: 0.5;
+    }
+    to {
+      transform: scale(1.1);
+      opacity: 1;
+    }
+  }
+
+  :global(.check-icon) {
+    color: var(--success);
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  :global(.tool-name) {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  :global(.tool-param) {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bubble-text {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--foreground);
+    min-height: 48px;
+  }
+
+  .chat-input-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 40px;
+    padding-inline: 14px;
+    margin-top: 16px;
+    border-radius: 999px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+  }
+
+  /* Right preview pane */
+  .preview-pane {
+    display: flex;
+    flex-direction: column;
+    background: var(--background);
+    padding: 22px;
+  }
+
+  .mini-app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .mini-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .crumb.current {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .mini-search {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--muted);
+    border: 1px solid var(--border);
+    font-size: 11.5px;
+    color: var(--muted-foreground);
+  }
+
+  .mini-search.is-active-search {
+    border-color: var(--primary);
+    background: var(--card);
+    color: var(--foreground);
+  }
+
+  .mini-view-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .mini-folder-title {
+    font-size: 20px;
+  }
+
+  .mini-meta {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mini-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  :global(.mini-empty) {
+    padding: 24px 12px;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  :global(.mini-row) {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 9px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-raised);
+    transition:
+      background-color 200ms var(--ease-out),
+      transform 200ms var(--ease-out);
+  }
+
+  :global(.mini-row.is-in) {
+    animation: rowSlideIn 240ms var(--ease-spring);
+  }
+
+  @keyframes rowSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  :global(.mini-row-content) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  :global(.mini-row-title) {
+    font-family: var(--font-serif);
+    font-size: 14.5px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--foreground);
+  }
+
+  :global(.mini-row-sub) {
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  :global(.mini-row-highlight) {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  :global(.mini-row-tag) {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  /* Workbench footer */
+  .workbench-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 20px;
+    background: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+
+  .footer-instruction {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .step-tag {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--card);
+    border: 1px solid var(--border-strong);
+    color: var(--foreground);
+  }
+
+  .text-sm {
+    font-size: 12.5px;
+  }
+
+  .footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .download-mcp-btn {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  @media (max-width: 640px) {
+    .right-pane-label {
+      display: none;
+    }
+    .workbench-footer {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>

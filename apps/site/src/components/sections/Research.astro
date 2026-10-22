@@ -1,7 +1,469 @@
 ---
-// Placeholder. The agent that owns this section replaces it.
+/**
+ * Research section: "Research tools".
+ * Covers all 7 research tools as one flowing interactive story in a single .sheet with a sliding tab bar:
+ * 1. Keep / Maybe / Cut + tags
+ * 2. Short summary (typed or Claude)
+ * 3. Who wrote it (author + author type + guess)
+ * 4. Quote cards & outline drag
+ * 5. Script view + export reference list
+ * 6. B-roll list (CSS thumbnails, timestamps)
+ * 7. Duplicate check across groups & merge
+ */
+import SectionHeader from "../SectionHeader.astro";
+import ResearchTriage from "../research/ResearchTriage.astro";
+import ResearchSummary from "../research/ResearchSummary.astro";
+import ResearchAuthor from "../research/ResearchAuthor.astro";
+import ResearchOutline from "../research/ResearchOutline.astro";
+import ResearchScript from "../research/ResearchScript.astro";
+import ResearchBroll from "../research/ResearchBroll.astro";
+import ResearchDuplicates from "../research/ResearchDuplicates.astro";
+
+import {
+  SquareCheck,
+  Sparkles,
+  UserCheck,
+  LayoutList,
+  FileText,
+  Film,
+  GitMerge,
+  ArrowRight,
+  ArrowLeft,
+  ShieldCheck,
+  HardDrive,
+  Cpu,
+} from "@lucide/astro";
+
+const TABS = [
+  { id: "triage", label: "Triage & tags", num: "1", icon: SquareCheck },
+  { id: "summary", label: "Summary", num: "2", icon: Sparkles },
+  { id: "author", label: "Author & type", num: "3", icon: UserCheck },
+  { id: "outline", label: "Quote cards", num: "4", icon: LayoutList },
+  { id: "script", label: "Script view", num: "5", icon: FileText },
+  { id: "broll", label: "B-roll list", num: "6", icon: Film },
+  { id: "duplicates", label: "Duplicates", num: "7", icon: GitMerge },
+];
 ---
 
 <section id="research" class="section">
-  <div class="container"><p class="muted">Research section</p></div>
+  <div class="container">
+    <SectionHeader
+      label="Research tools"
+      title="From a pile of sources"
+      marked="to a finished script"
+      lede="Seven tools built specifically for long-form creators, journalists, and researchers. Triage in seconds, synthesize with Claude, drag cards into an outline, and export citations with zero cloud lock-in."
+    />
+
+    <!-- Main Interactive Story Sheet -->
+    <div class="sheet research-sheet" data-reveal>
+      <!-- Top Stepper / Tab Bar -->
+      <div class="research-tabbar-wrap">
+        <div class="research-tabbar" role="tablist" aria-label="Research tools stepper">
+          {
+            TABS.map((tab, idx) => (
+              <button
+                type="button"
+                role="tab"
+                class:list={["tab-btn", idx === 0 && "is-active"]}
+                id={`tab-btn-${tab.id}`}
+                data-tab-target={tab.id}
+                data-tab-index={idx}
+                aria-selected={idx === 0 ? "true" : "false"}
+                aria-controls={`panel-${tab.id}`}
+              >
+                <tab.icon size={14} stroke-width={1.75} class="tab-icon" />
+                <span class="tab-num font-mono nums">{tab.num}.</span>
+                <span class="tab-label">{tab.label}</span>
+              </button>
+            ))
+          }
+          <!-- Animated sliding underline indicator -->
+          <div class="tab-indicator" id="tab-indicator" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <!-- Tab Content Panels -->
+      <div class="research-content-area">
+        <!-- Tool 1: Triage -->
+        <div
+          role="tabpanel"
+          id="panel-triage"
+          class="tool-panel is-active"
+          aria-labelledby="tab-btn-triage"
+        >
+          <ResearchTriage />
+        </div>
+
+        <!-- Tool 2: Summary -->
+        <div
+          role="tabpanel"
+          id="panel-summary"
+          class="tool-panel"
+          style="display: none;"
+          aria-labelledby="tab-btn-summary"
+        >
+          <ResearchSummary />
+        </div>
+
+        <!-- Tool 3: Author & Type -->
+        <div
+          role="tabpanel"
+          id="panel-author"
+          class="tool-panel"
+          style="display: none;"
+          aria-labelledby="tab-btn-author"
+        >
+          <ResearchAuthor />
+        </div>
+
+        <!-- Tool 4: Quote Cards & Outline -->
+        <div
+          role="tabpanel"
+          id="panel-outline"
+          class="tool-panel"
+          style="display: none;"
+          aria-labelledby="tab-btn-outline"
+        >
+          <ResearchOutline />
+        </div>
+
+        <!-- Tool 5: Script View & Citations -->
+        <div
+          role="tabpanel"
+          id="panel-script"
+          class="tool-panel"
+          style="display: none;"
+          aria-labelledby="tab-btn-script"
+        >
+          <ResearchScript />
+        </div>
+
+        <!-- Tool 6: B-roll List -->
+        <div
+          role="tabpanel"
+          id="panel-broll"
+          class="tool-panel"
+          style="display: none;"
+          aria-labelledby="tab-btn-broll"
+        >
+          <ResearchBroll />
+        </div>
+
+        <!-- Tool 7: Duplicates Check & Merge -->
+        <div
+          role="tabpanel"
+          id="panel-duplicates"
+          class="tool-panel"
+          style="display: none;"
+          aria-labelledby="tab-btn-duplicates"
+        >
+          <ResearchDuplicates />
+        </div>
+      </div>
+
+      <!-- Bottom Step Navigation Footer -->
+      <div class="research-footer">
+        <button type="button" class="btn btn-outline btn-sm" id="prev-tool-btn" disabled>
+          <ArrowLeft size={14} stroke-width={1.75} />
+          <span>Previous tool</span>
+        </button>
+
+        <div class="step-progress-counter muted">
+          <span>Step <strong id="current-step-display" class="nums">1</strong> of 7</span>
+        </div>
+
+        <button type="button" class="btn btn-ink btn-sm" id="next-tool-btn">
+          <span>Next tool</span>
+          <ArrowRight size={14} stroke-width={1.75} />
+        </button>
+      </div>
+    </div>
+
+    <!-- 3 Value Pillars below the sheet -->
+    <div class="research-pillars-grid" data-reveal="stagger">
+      <div class="card pillar-card">
+        <div class="pillar-header">
+          <HardDrive size={18} stroke-width={1.75} class="pillar-icon" />
+          <h3 class="pillar-title serif">Signed in and offline</h3>
+        </div>
+        <p class="muted">
+          Every tool works without an internet connection. Your quotes, cards, outlines, and summaries
+          are plain files stored locally and synced through your personal Google Drive or iCloud.
+        </p>
+      </div>
+
+      <div class="card pillar-card">
+        <div class="pillar-header">
+          <Cpu size={18} stroke-width={1.75} class="pillar-icon" />
+          <h3 class="pillar-title serif">Claude without lock-in</h3>
+        </div>
+        <p class="muted">
+          Connect your Claude subscription through native Model Context Protocol. Summaries and tags
+          stay attached directly to your files—never trapped in an AI chat silo.
+        </p>
+      </div>
+
+      <div class="card pillar-card">
+        <div class="pillar-header">
+          <ShieldCheck size={18} stroke-width={1.75} class="pillar-icon" />
+          <h3 class="pillar-title serif">Full provenance tracking</h3>
+        </div>
+        <p class="muted">
+          From a raw YouTube transcript line or research PDF footnote straight into your teleprompter
+          script. You never lose the exact timestamp or author byline.
+        </p>
+      </div>
+    </div>
+  </div>
 </section>
+
+<script>
+  import { animate } from "motion";
+  import { prefersReducedMotion } from "../../lib/reveal";
+
+  const section = document.querySelector("#research");
+  if (section) {
+    const tabButtons = Array.from(section.querySelectorAll(".tab-btn")) as HTMLButtonElement[];
+    const panels = Array.from(section.querySelectorAll(".tool-panel")) as HTMLElement[];
+    const indicator = section.querySelector("#tab-indicator") as HTMLElement | null;
+    const prevBtn = section.querySelector("#prev-tool-btn") as HTMLButtonElement | null;
+    const nextBtn = section.querySelector("#next-tool-btn") as HTMLButtonElement | null;
+    const stepDisplay = section.querySelector("#current-step-display") as HTMLElement | null;
+
+    let currentIndex = 0;
+
+    function updateIndicator(activeBtn: HTMLButtonElement) {
+      if (!indicator) return;
+      const btnRect = activeBtn.getBoundingClientRect();
+      const parentRect = activeBtn.parentElement?.getBoundingClientRect();
+      if (!parentRect) return;
+
+      const left = btnRect.left - parentRect.left;
+      const width = btnRect.width;
+
+      indicator.style.left = `${left}px`;
+      indicator.style.width = `${width}px`;
+    }
+
+    function switchTab(index: number) {
+      if (index < 0 || index >= tabButtons.length) return;
+      currentIndex = index;
+
+      tabButtons.forEach((btn, idx) => {
+        const isActive = idx === index;
+        btn.classList.toggle("is-active", isActive);
+        btn.setAttribute("aria-selected", String(isActive));
+      });
+
+      panels.forEach((panel, idx) => {
+        const isActive = idx === index;
+        if (isActive) {
+          panel.style.display = "block";
+          if (!prefersReducedMotion()) {
+            animate(panel, { opacity: [0, 1], y: [8, 0] }, { duration: 0.22, ease: [0.16, 1, 0.3, 1] });
+          }
+        } else {
+          panel.style.display = "none";
+        }
+      });
+
+      const activeBtn = tabButtons[index];
+      if (activeBtn) updateIndicator(activeBtn);
+
+      // Update footer buttons
+      if (prevBtn) {
+        prevBtn.disabled = index === 0;
+      }
+      if (nextBtn) {
+        if (index === tabButtons.length - 1) {
+          nextBtn.innerHTML = `<span>Back to start</span>`;
+        } else {
+          nextBtn.innerHTML = `<span>Next tool</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`;
+        }
+      }
+
+      if (stepDisplay) {
+        stepDisplay.textContent = String(index + 1);
+      }
+    }
+
+    tabButtons.forEach((btn, idx) => {
+      btn.addEventListener("click", () => {
+        switchTab(idx);
+      });
+    });
+
+    prevBtn?.addEventListener("click", () => {
+      if (currentIndex > 0) switchTab(currentIndex - 1);
+    });
+
+    nextBtn?.addEventListener("click", () => {
+      if (currentIndex < tabButtons.length - 1) {
+        switchTab(currentIndex + 1);
+      } else {
+        switchTab(0);
+      }
+    });
+
+    // Initialize indicator position
+    const initialBtn = tabButtons[0];
+    if (initialBtn) {
+      setTimeout(() => {
+        updateIndicator(initialBtn);
+      }, 50);
+      window.addEventListener("resize", () => {
+        const curBtn = tabButtons[currentIndex];
+        if (curBtn) updateIndicator(curBtn);
+      });
+    }
+  }
+</script>
+
+<style>
+  .research-sheet {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 36px;
+  }
+
+  /* Tab Bar */
+  .research-tabbar-wrap {
+    background: var(--desk);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .research-tabbar-wrap::-webkit-scrollbar {
+    display: none;
+  }
+
+  .research-tabbar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+    padding: 0 12px;
+  }
+
+  .tab-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 48px;
+    padding: 0 14px;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    transition: color 140ms var(--ease-out);
+    white-space: nowrap;
+  }
+
+  .tab-btn:hover {
+    color: var(--foreground);
+  }
+
+  .tab-btn.is-active {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+
+  .tab-num {
+    opacity: 0.6;
+    font-size: 12px;
+  }
+
+  .tab-btn.is-active .tab-num {
+    opacity: 1;
+    color: var(--primary);
+  }
+
+  .tab-indicator {
+    position: absolute;
+    bottom: 0;
+    left: 12px;
+    width: 80px;
+    height: 2px;
+    background: var(--primary);
+    border-radius: 999px;
+    transition:
+      left 220ms var(--ease-spring),
+      width 220ms var(--ease-spring);
+    pointer-events: none;
+  }
+
+  /* Content Area */
+  .research-content-area {
+    padding: 24px 28px;
+    min-height: 420px;
+    background: var(--background);
+  }
+
+  @media (max-width: 640px) {
+    .research-content-area {
+      padding: 16px;
+    }
+  }
+
+  .tool-panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Footer Stepper */
+  .research-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: var(--desk);
+    border-top: 1px solid var(--border);
+  }
+
+  .step-progress-counter {
+    font-size: 12.5px;
+  }
+
+  /* Value Pillars Grid */
+  .research-pillars-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  @media (max-width: 860px) {
+    .research-pillars-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .pillar-card {
+    padding: 22px;
+    border: 1px solid var(--border);
+  }
+
+  .pillar-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .pillar-icon {
+    color: var(--primary);
+  }
+
+  .pillar-title {
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--foreground);
+    margin: 0;
+  }
+</style>

@@ -1,0 +1,427 @@
+---
+/**
+ * Believable 4–5 paragraph article about turbo lag for the desktop reader mock.
+ * Uses Newsreader ~18px, narrow column, in-place diagram, removable sponsor block, and jumping footnote references.
+ */
+import { Trash } from "@lucide/astro";
+---
+
+<article class="article-body serif" id="reader-article">
+  <header class="article-meta">
+    <h1 class="article-title serif">
+      How turbo lag actually works: inertia, boost threshold and transient response
+    </h1>
+    <div class="article-byline">
+      <span>Marcus Vance</span>
+      <span class="meta-sep">/</span>
+      <span class="nums">Oct 2026</span>
+      <span class="meta-sep">/</span>
+      <span class="nums">5 min read</span>
+    </div>
+  </header>
+
+  <p class="article-p" id="p-1">
+    The difference between boost threshold and turbo lag is often misunderstood in automotive
+    engineering. Boost threshold is the engine speed below which the exhaust gas volume lacks
+    sufficient enthalpy to spin the turbine fast enough to produce positive manifold pressure, no
+    matter how wide the throttle is held open.
+    <mark class="reader-mark pre-marked" data-hl-id="hl-1"
+      ><span class="mark-inner"
+        >Turbo lag, by contrast, is the transient delay between opening the throttle when operating
+        above the boost threshold and the turbocharger reaching full boost</span
+      ></mark
+    ><sup class="fn-ref"><a href="#ref-1" id="fnref-1" class="fn-link" title="Jump to reference 1">1</a></sup>.
+  </p>
+
+  <p class="article-p" id="p-2">
+    This transient delay is governed primarily by the rotational inertia of the rotating
+    assembly—the compressor wheel, turbine wheel, and connecting shaft. Because rotational inertia
+    scales with the fourth power of the wheel radius, even a modest reduction in wheel diameter
+    yields dramatic reductions in spool-up delay<sup class="fn-ref"
+      ><a href="#ref-2" id="fnref-2" class="fn-link" title="Jump to reference 2">2</a></sup
+    >. Modern performance designs employ lightweight titanium-aluminide turbine wheels and ceramic
+    ball bearings to cut physical spool inertia by more than forty percent compared to traditional
+    journal-bearing cast Inconel wheels.
+  </p>
+
+  <figure class="reader-figure">
+    <div class="figure-graphic">
+      <svg
+        viewBox="0 0 540 180"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        class="chart-svg"
+        aria-label="Graph comparing boost response curves over time"
+      >
+        <!-- Grid lines -->
+        <line x1="60" y1="20" x2="60" y2="140" stroke="var(--border)" stroke-width="1"></line>
+        <line x1="60" y1="140" x2="500" y2="140" stroke="var(--border)" stroke-width="1"></line>
+        <line x1="60" y1="80" x2="500" y2="80" stroke="var(--border)" stroke-dasharray="3 3" stroke-width="1"></line>
+        <line x1="60" y1="20" x2="500" y2="20" stroke="var(--border)" stroke-dasharray="3 3" stroke-width="1"></line>
+
+        <!-- Labels -->
+        <text x="52" y="144" fill="var(--muted-foreground)" font-size="11" text-anchor="end" font-family="var(--font-sans)">0 bar</text>
+        <text x="52" y="84" fill="var(--muted-foreground)" font-size="11" text-anchor="end" font-family="var(--font-sans)">0.8 bar</text>
+        <text x="52" y="24" fill="var(--muted-foreground)" font-size="11" text-anchor="end" font-family="var(--font-sans)">1.6 bar</text>
+        <text x="60" y="158" fill="var(--muted-foreground)" font-size="11" font-family="var(--font-sans)">0.0s (Throttle)</text>
+        <text x="220" y="158" fill="var(--muted-foreground)" font-size="11" font-family="var(--font-sans)">0.6s</text>
+        <text x="380" y="158" fill="var(--muted-foreground)" font-size="11" font-family="var(--font-sans)">1.2s</text>
+
+        <!-- Twin-scroll curve (faster response) -->
+        <path
+          d="M 60 140 C 110 138, 140 70, 240 24 L 500 22"
+          stroke="var(--foreground)"
+          stroke-width="2.5"
+          fill="none"
+        ></path>
+        <circle cx="240" cy="24" r="4" fill="var(--foreground)"></circle>
+        <text x="252" y="32" fill="var(--foreground)" font-size="11.5" font-weight="600" font-family="var(--font-sans)">
+          Twin-scroll (0.58s to peak)
+        </text>
+
+        <!-- Single open scroll curve (slower lag) -->
+        <path
+          d="M 60 140 C 170 140, 240 100, 390 24 L 500 24"
+          stroke="var(--muted-foreground)"
+          stroke-width="1.75"
+          stroke-dasharray="4 3"
+          fill="none"
+        ></path>
+        <text x="396" y="44" fill="var(--muted-foreground)" font-size="11" font-family="var(--font-sans)">
+          Open volute (1.12s)
+        </text>
+      </svg>
+    </div>
+    <figcaption class="figure-caption">
+      Figure 1: Manifold boost pressure rise following throttle step at 3,400 RPM. Split turbine
+      scrolls isolate exhaust pulses to spool the wheel faster.
+    </figcaption>
+  </figure>
+
+  <!-- Removable sponsor block -->
+  <div class="removable-block" id="sponsor-block" data-removable="true">
+    <div class="removable-inner">
+      <div class="removable-top">
+        <span class="removable-badge">Sponsor read</span>
+        <button
+          type="button"
+          class="remove-inline-btn"
+          id="remove-sponsor-action"
+          title="Remove sponsor read from article"
+        >
+          <Trash size={13} stroke-width={1.75} />
+          <span>Remove text</span>
+        </button>
+      </div>
+      <p class="removable-text">
+        This teardown is supported by Apex Flow Ceramic Coatings. Protect turbine housings against
+        thermal oxidation and keep exhaust gas kinetic energy inside the manifold. Use code
+        TURBO15 for testing samples.
+      </p>
+    </div>
+  </div>
+
+  <p class="article-p" id="p-3">
+    Exhaust manifold volume also plays a decisive role in throttle response. Long, large-diameter
+    tubular headers expand the total volume that exhaust gases must pressurize before reaching the
+    turbine housing nozzle. Short-runner exhaust manifolds, or cylinder heads with integrated exhaust
+    collectors surrounded by cooling jackets, shrink this pre-turbine volume and sharpen transient
+    throttle response significantly<sup class="fn-ref"
+      ><a href="#ref-3" id="fnref-3" class="fn-link" title="Jump to reference 3">3</a></sup
+    >.
+  </p>
+
+  <p class="article-p" id="p-4">
+    When sizing a turbocharger, matching the compressor map and turbine housing area-to-radius ratio
+    (A/R) to the engine displacement ensures reliable boost without choking top-end breathing or
+    causing compressor surge under rapid throttle closure.
+  </p>
+
+  <footer class="footnotes-section" id="footnotes">
+    <div class="footnotes-divider"></div>
+    <h3 class="footnotes-title sans">References cited</h3>
+    <ol class="footnotes-list">
+      <li id="ref-1" class="footnote-item">
+        <span class="fn-number nums">1.</span>
+        <span class="fn-text"
+          >Watson, N. &amp; Janota, M. (1982). <em>Turbocharging the Internal Combustion Engine</em>,
+          Macmillan Press, pp. 45–62.</span
+        >
+        <a href="#fnref-1" class="fn-back" title="Back to text">↩ back</a>
+      </li>
+      <li id="ref-2" class="footnote-item">
+        <span class="fn-number nums">2.</span>
+        <span class="fn-text"
+          >SAE Technical Paper 2004-01-0988: <em>Transient Response Modeling of Variable-Geometry
+          Turbochargers</em>.</span
+        >
+        <a href="#fnref-2" class="fn-back" title="Back to text">↩ back</a>
+      </li>
+      <li id="ref-3" class="footnote-item">
+        <span class="fn-number nums">3.</span>
+        <span class="fn-text"
+          >Baines, N. C. (2005). <em>Fundamentals of Turbocharging</em>, Concepts NREC, pp. 112–129.</span
+        >
+        <a href="#fnref-3" class="fn-back" title="Back to text">↩ back</a>
+      </li>
+    </ol>
+  </footer>
+</article>
+
+<style>
+  .article-body {
+    max-width: 62ch;
+    margin-inline: auto;
+    font-size: 17.5px;
+    line-height: 1.68;
+    color: var(--foreground);
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  .article-meta {
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .article-title {
+    font-size: clamp(26px, 3.2vw, 34px);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+    margin-bottom: 12px;
+  }
+
+  .article-byline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--muted-foreground);
+  }
+
+  .meta-sep {
+    color: var(--border-strong);
+  }
+
+  .article-p {
+    margin-bottom: 22px;
+    text-wrap: pretty;
+  }
+
+  /* Footnote link styling */
+  .fn-ref {
+    font-size: 0.72em;
+    line-height: 0;
+    vertical-align: super;
+    padding-inline: 2px;
+  }
+
+  .fn-link {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    padding: 1px 3px;
+    border-radius: 4px;
+    transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out);
+  }
+
+  .fn-link:hover {
+    color: var(--foreground);
+    background: var(--muted);
+  }
+
+  /* In-place figure */
+  .reader-figure {
+    margin: 32px 0;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    overflow: hidden;
+  }
+
+  .figure-graphic {
+    padding: 18px 16px 12px;
+    background: color-mix(in oklab, var(--muted) 45%, var(--card));
+  }
+
+  .chart-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .figure-caption {
+    padding: 10px 16px 12px;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--muted-foreground);
+    border-top: 1px solid var(--border);
+  }
+
+  /* Removable sponsor block */
+  .removable-block {
+    margin: 26px 0;
+    border-radius: 10px;
+    border: 1px dashed var(--border-strong);
+    background: color-mix(in oklab, var(--muted) 55%, var(--card));
+    padding: 14px 18px;
+    transition:
+      height 300ms var(--ease-out),
+      opacity 240ms var(--ease-out),
+      margin 300ms var(--ease-out),
+      padding 300ms var(--ease-out);
+    overflow: hidden;
+  }
+
+  .removable-block.is-removed {
+    height: 0 !important;
+    opacity: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-color: transparent !important;
+  }
+
+  .removable-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-family: var(--font-sans);
+  }
+
+  .removable-badge {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .remove-inline-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: 0;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out);
+  }
+
+  .remove-inline-btn:hover {
+    color: var(--destructive);
+    background: color-mix(in oklab, var(--destructive) 10%, transparent);
+  }
+
+  .removable-text {
+    font-size: 14.5px;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+    font-family: var(--font-sans);
+  }
+
+  /* Marks in reader */
+  :global(.reader-mark) {
+    background-color: var(--marker-soft);
+    color: inherit;
+    padding-inline: 0.12em;
+    margin-inline: -0.12em;
+    border-radius: 0.14em;
+    transition: background-color 220ms var(--ease-out);
+  }
+
+  :global(.reader-mark.pulse-flash) {
+    animation: markerPulse 1.2s var(--ease-out);
+  }
+
+  @keyframes markerPulse {
+    0% {
+      background-color: var(--marker-strong);
+    }
+    100% {
+      background-color: var(--marker-soft);
+    }
+  }
+
+  /* Footnotes */
+  .footnotes-section {
+    margin-top: 48px;
+    padding-top: 24px;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    color: var(--muted-foreground);
+  }
+
+  .footnotes-divider {
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 20px;
+    width: 120px;
+  }
+
+  .footnotes-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--foreground);
+    margin-bottom: 12px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .footnotes-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .footnote-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: background-color 300ms var(--ease-out);
+  }
+
+  .footnote-item.flash-highlight {
+    background-color: var(--marker-soft);
+  }
+
+  .fn-number {
+    font-weight: 500;
+    color: var(--foreground);
+    flex-shrink: 0;
+  }
+
+  .fn-text {
+    flex: 1;
+    line-height: 1.45;
+  }
+
+  .fn-back {
+    color: var(--muted-foreground);
+    text-decoration: none;
+    font-size: 12px;
+    margin-left: 6px;
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+
+  .fn-back:hover {
+    color: var(--foreground);
+    background: var(--muted);
+  }
+</style>

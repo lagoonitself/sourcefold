@@ -1,0 +1,328 @@
+---
+/**
+ * Research Tool 7: Duplicate check across groups & smooth merge animation ("moved 3 highlights, 1 card").
+ */
+import SourceTile from "../SourceTile.astro";
+import { CircleAlert, GitMerge, Check, RotateCcw } from "@lucide/astro";
+---
+
+<div class="duplicates-tool">
+  <div class="tool-intro">
+    <div class="tool-intro-text">
+      <h3 class="tool-heading serif">Duplicate check across groups</h3>
+      <p class="muted">
+        When you research for weeks, saving the same article across multiple subtopics is inevitable.
+        Sourcefold catches duplicates instantly and lets you merge them without losing a single highlight.
+      </p>
+    </div>
+    <div class="duplicate-warning">
+      <CircleAlert size={14} stroke-width={2} class="warning-icon" />
+      <span>Already saved in <strong>Engines / Lag and boost</strong></span>
+    </div>
+  </div>
+
+  <div class="duplicates-view card">
+    <div class="view-header">
+      <div class="header-left">
+        <GitMerge size={16} stroke-width={1.75} class="merge-icon" />
+        <h4 class="view-title serif">Found 1 duplicate source across 2 groups</h4>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-reset-duplicate" style="display: none;">
+        <RotateCcw size={13} stroke-width={1.75} />
+        <span>Replay merge</span>
+      </button>
+    </div>
+
+    <div class="duplicates-container" id="duplicates-container">
+      <!-- Target Row (Master) -->
+      <div class="dup-row is-master card" id="dup-master">
+        <div class="dup-tile">
+          <SourceTile kind="youtube" size={32} />
+        </div>
+        <div class="dup-info">
+          <div class="dup-headline">
+            <span class="dup-title serif">How turbo lag actually works</span>
+            <span class="chip master-chip">Master copy</span>
+          </div>
+          <div class="dup-location muted">
+            <span>Location: <strong>Engines / Turbocharging</strong></span>
+          </div>
+          <div class="dup-stats muted font-mono text-xs">
+            <span id="master-highlight-count" class="nums">6</span> highlights · <span id="master-note-count" class="nums">2</span> notes
+          </div>
+        </div>
+        <div class="dup-action">
+          <button type="button" class="btn btn-ink btn-sm" id="btn-merge-action">
+            <Check size={14} stroke-width={2} />
+            <span>Keep this one</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Merged Success Toast / Banner (Inserted between/above) -->
+      <div id="merge-success-pill" class="merge-success-pill" style="display: none;">
+        <GitMerge size={13} stroke-width={2} />
+        <span id="merge-pill-text">Moved 3 highlights, 1 card into master copy</span>
+      </div>
+
+      <!-- Duplicate Row (To be merged and removed) -->
+      <div class="dup-row is-copy card" id="dup-copy">
+        <div class="dup-tile">
+          <SourceTile kind="youtube" size={32} />
+        </div>
+        <div class="dup-info">
+          <div class="dup-headline">
+            <span class="dup-title serif">How turbo lag actually works</span>
+            <span class="chip duplicate-chip">Duplicate</span>
+          </div>
+          <div class="dup-location muted">
+            <span>Location: <strong>Engines / Lag and boost</strong></span>
+          </div>
+          <div class="dup-stats muted font-mono text-xs">
+            <span class="nums">3</span> highlights · <span class="nums">1</span> quote card
+          </div>
+        </div>
+        <div class="dup-action">
+          <span class="muted text-xs">Will merge into master</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { animate } from "motion";
+  import { prefersReducedMotion } from "../../lib/reveal";
+
+  const tool = document.querySelector(".duplicates-tool");
+  if (tool) {
+    const mergeBtn = tool.querySelector("#btn-merge-action") as HTMLButtonElement | null;
+    const resetBtn = tool.querySelector("#btn-reset-duplicate") as HTMLButtonElement | null;
+    const masterRow = tool.querySelector("#dup-master") as HTMLElement | null;
+    const copyRow = tool.querySelector("#dup-copy") as HTMLElement | null;
+    const successPill = tool.querySelector("#merge-success-pill") as HTMLElement | null;
+    const highlightCount = tool.querySelector("#master-highlight-count") as HTMLElement | null;
+    const noteCount = tool.querySelector("#master-note-count") as HTMLElement | null;
+
+    mergeBtn?.addEventListener("click", async () => {
+      if (!copyRow || !successPill) return;
+
+      if (!prefersReducedMotion()) {
+        // Animate duplicate row sliding up and collapsing into master
+        await animate(
+          copyRow,
+          { opacity: [1, 0], y: [0, -20], scale: [1, 0.95], height: [copyRow.offsetHeight, 0] },
+          { duration: 0.35, ease: [0.32, 0.72, 0, 1] }
+        );
+        copyRow.style.display = "none";
+
+        // Show merged success pill
+        successPill.style.display = "inline-flex";
+        await animate(successPill, { opacity: [0, 1], scale: [0.92, 1] }, { duration: 0.25 });
+
+        // Flash highlight on master row
+        if (masterRow) {
+          animate(masterRow, { scale: [1, 1.02, 1] }, { duration: 0.3, ease: [0.32, 0.72, 0, 1] });
+        }
+      } else {
+        copyRow.style.display = "none";
+        successPill.style.display = "inline-flex";
+      }
+
+      // Update counters
+      if (highlightCount) highlightCount.textContent = "9";
+      if (noteCount) noteCount.textContent = "3 (1 card moved)";
+
+      if (mergeBtn) {
+        mergeBtn.innerHTML = `<span>Merged</span>`;
+        mergeBtn.disabled = true;
+        mergeBtn.classList.remove("btn-ink");
+        mergeBtn.classList.add("btn-outline");
+      }
+
+      if (resetBtn) resetBtn.style.display = "inline-flex";
+    });
+
+    resetBtn?.addEventListener("click", () => {
+      if (copyRow) {
+        copyRow.style.display = "flex";
+        copyRow.style.height = "";
+        copyRow.style.transform = "";
+        copyRow.style.opacity = "1";
+      }
+      if (successPill) successPill.style.display = "none";
+      if (highlightCount) highlightCount.textContent = "6";
+      if (noteCount) noteCount.textContent = "2";
+
+      if (mergeBtn) {
+        mergeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Keep this one</span>`;
+        mergeBtn.disabled = false;
+        mergeBtn.classList.add("btn-ink");
+        mergeBtn.classList.remove("btn-outline");
+      }
+
+      resetBtn.style.display = "none";
+    });
+  }
+</script>
+
+<style>
+  .duplicates-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tool-intro {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-heading {
+    font-size: 20px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .duplicate-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: color-mix(in oklab, var(--warning) 15%, transparent);
+    color: var(--foreground);
+    font-size: 12.5px;
+    border: 1px solid color-mix(in oklab, var(--warning) 30%, transparent);
+  }
+
+  .warning-icon {
+    color: var(--warning);
+  }
+
+  .duplicates-view {
+    padding: 20px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .view-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .merge-icon {
+    color: var(--primary);
+  }
+
+  .view-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .duplicates-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .dup-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+  }
+
+  .dup-row.is-master {
+    border-color: color-mix(in oklab, var(--success) 50%, var(--border));
+    background: var(--card);
+  }
+
+  .dup-row.is-copy {
+    opacity: 0.85;
+    background: var(--desk);
+  }
+
+  .dup-tile {
+    display: flex;
+    align-items: center;
+  }
+
+  .dup-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .dup-headline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dup-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .master-chip {
+    background: color-mix(in oklab, var(--success) 20%, transparent);
+    color: var(--success);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+  }
+
+  .duplicate-chip {
+    background: var(--muted);
+    font-size: 11px;
+    padding: 2px 7px;
+  }
+
+  .dup-location {
+    font-size: 12.5px;
+  }
+
+  .dup-stats {
+    font-size: 12px;
+  }
+
+  .dup-action {
+    display: flex;
+    align-items: center;
+  }
+
+  .merge-success-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--marker) 30%, transparent);
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 500;
+    margin-block: 4px;
+  }
+</style>

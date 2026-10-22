@@ -1,7 +1,7 @@
 ---
 /**
  * OpenSource.astro (id "open-source"): "Open source & self-hosted"
- * Self-hosting commands matching docs/SELF-HOSTING.md verbatim.
+ * Self-hosting commands matching docs/SELF-HOSTING.md verbatim line by line.
  * Real stack: Supabase (Auth + Postgres RLS), Google Cloud (drive.file scope), Next.js on Vercel, Tauri v2.
  * Interactive copy-to-clipboard terminal with real step tabs, plus clean doc links.
  */
@@ -35,43 +35,49 @@ const TERMINAL_STEPS: TerminalStep[] = [
   {
     id: "run-local",
     tabTitle: "1. Run locally",
-    command: `git clone https://github.com/lagoonitself/sourcefold.git\ncd sourcefold\nnpm install\ncp apps/web/.env.example apps/web/.env.local\nnpm run dev`,
-    annotation: "Clones the monorepo, installs dependencies, copies environment template, and starts local Next.js dev server on :3000.",
+    // docs/SELF-HOSTING.md lines 46, 47, 48, 55, 75
+    command: `git clone https://github.com/<your-username>/sourcefold.git\ncd sourcefold\nnpm install\ncp apps/web/.env.example apps/web/.env.local\nnpm run dev`,
+    annotation: "Clones your fork, installs dependencies, copies environment template, and starts local Next.js dev server on :3000.",
     lines: [
-      { type: "cmd", text: "git clone https://github.com/lagoonitself/sourcefold.git" },
-      { type: "cmd", text: "cd sourcefold && npm install" },
-      { type: "comment", text: "# Copy environment template and fill in your Supabase & Google Cloud credentials:" },
-      { type: "cmd", text: "cp apps/web/.env.example apps/web/.env.local" },
-      { type: "cmd", text: "npm run dev" },
+      { type: "cmd", text: "git clone https://github.com/<your-username>/sourcefold.git" }, // line 46
+      { type: "cmd", text: "cd sourcefold" }, // line 47
+      { type: "cmd", text: "npm install" }, // line 48
+      { type: "comment", text: "# Copy environment template:" },
+      { type: "cmd", text: "cp apps/web/.env.example apps/web/.env.local" }, // line 55
+      { type: "cmd", text: "npm run dev" }, // line 75
       { type: "out", text: "Ready in 1.4s at http://localhost:3000" },
     ],
   },
   {
     id: "desktop-ext",
     tabTitle: "2. Build desktop & extension",
-    command: `npm run tauri dev -w @sourcefold/desktop\nnpm run build -w @sourcefold/extension`,
-    annotation: "Runs the Tauri v2 desktop app locally and builds the Chrome MV3 unpacked extension bundle.",
+    // docs/SELF-HOSTING.md lines 124, 158
+    command: `npm run build -w @sourcefold/extension\nnpm run tauri dev -w @sourcefold/desktop`,
+    annotation: "Builds the unpacked Chrome extension and runs the desktop app locally in development.",
     lines: [
-      { type: "comment", text: "# Run desktop app with hot reload (needs Rust toolchain):" },
-      { type: "cmd", text: "npm run tauri dev -w @sourcefold/desktop" },
-      { type: "out", text: "Running Tauri application on local window..." },
       { type: "comment", text: "# Build Chrome extension (load unpacked from apps/extension/.output/chrome-mv3):" },
-      { type: "cmd", text: "npm run build -w @sourcefold/extension" },
+      { type: "cmd", text: "npm run build -w @sourcefold/extension" }, // line 124
       { type: "out", text: "Built extension into apps/extension/.output/chrome-mv3" },
+      { type: "comment", text: "# Run desktop app with hot reload (requires Rust toolchain):" },
+      { type: "cmd", text: "npm run tauri dev -w @sourcefold/desktop" }, // line 158
+      { type: "out", text: "Running Tauri application on local window..." },
     ],
   },
   {
-    id: "deploy-vercel",
-    tabTitle: "3. Deploy to Vercel",
-    command: `ALLOWED_EMAIL="you@example.com"\nNEXT_PUBLIC_SUPABASE_URL="https://your-ref.supabase.co"`,
-    annotation: "Set environment variables in your Vercel project settings. ALLOWED_EMAIL restricts sign-in to authorized users.",
+    id: "deploy-release",
+    tabTitle: "3. Deploy & release",
+    // docs/SELF-HOSTING.md lines 95, 106, 112, 113
+    command: `gh variable set APP_URL --body https://<app>.vercel.app\ngh variable set SOURCEFOLD_WEB_URL --body https://<app>.vercel.app\ngit tag v0.3.0\ngit push origin v0.3.0`,
+    annotation: "Sets GitHub repository variables for daily Supabase keep-alive and installer URLs, then pushes a version tag to trigger release builds.",
     lines: [
-      { type: "comment", text: "# Deploy repo to Vercel (preset: Next.js), set env variables in project dashboard:" },
-      { type: "cmd", text: "NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co" },
-      { type: "cmd", text: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sbp_..." },
-      { type: "cmd", text: "ALLOWED_EMAIL=your-email@gmail.com" },
-      { type: "cmd", text: "GOOGLE_CLIENT_ID=... && GOOGLE_CLIENT_SECRET=..." },
-      { type: "out", text: "Deployment complete. Production URL: https://sourcefold.yourdomain.com" },
+      { type: "comment", text: "# Set APP_URL for daily keep-alive so Supabase does not pause:" },
+      { type: "cmd", text: "gh variable set APP_URL --body https://<app>.vercel.app" }, // line 95
+      { type: "comment", text: "# Set website address for desktop & extension installers:" },
+      { type: "cmd", text: "gh variable set SOURCEFOLD_WEB_URL --body https://<app>.vercel.app" }, // line 106
+      { type: "comment", text: "# Push version tag to build release installers:" },
+      { type: "cmd", text: "git tag v0.3.0" }, // line 112
+      { type: "cmd", text: "git push origin v0.3.0" }, // line 113
+      { type: "out", text: "Release workflow started on GitHub Actions" },
     ],
   },
 ];
@@ -98,7 +104,7 @@ const TERMINAL_STEPS: TerminalStep[] = [
             <span class="dot dot-max"></span>
           </div>
           <div class="terminal-title">
-            <Terminal size={14} class="muted" />
+            <Terminal size={14} class="muted" aria-hidden="true" />
             <code>bash: sourcefold setup</code>
           </div>
           <button
@@ -107,9 +113,9 @@ const TERMINAL_STEPS: TerminalStep[] = [
             data-copy-trigger
             aria-label="Copy shell commands to clipboard"
           >
-            <Copy size={13} class="copy-icon-ready" />
-            <Check size={13} class="copy-icon-done" />
-            <span class="copy-text">Copy</span>
+            <Copy size={13} class="copy-icon-ready" aria-hidden="true" />
+            <Check size={13} class="copy-icon-done" aria-hidden="true" />
+            <span class="copy-text" aria-live="polite">Copy</span>
           </button>
         </div>
 
@@ -119,9 +125,12 @@ const TERMINAL_STEPS: TerminalStep[] = [
             TERMINAL_STEPS.map((step, idx) => (
               <button
                 type="button"
+                id={`tab-${step.id}`}
                 class:list={["term-tab-btn", idx === 0 && "is-active"]}
                 role="tab"
                 aria-selected={idx === 0 ? "true" : "false"}
+                aria-controls={`panel-${step.id}`}
+                tabindex={idx === 0 ? 0 : -1}
                 data-step-id={step.id}
               >
                 {step.tabTitle}
@@ -135,16 +144,18 @@ const TERMINAL_STEPS: TerminalStep[] = [
           {
             TERMINAL_STEPS.map((step, idx) => (
               <div
+                id={`panel-${step.id}`}
                 class:list={["step-pane", idx === 0 && "is-active"]}
                 data-pane-id={step.id}
                 role="tabpanel"
+                aria-labelledby={`tab-${step.id}`}
               >
                 <div class="code-lines">
                   {step.lines.map((line) => (
                     <div class:list={["code-row", `row-${line.type}`]}>
-                      {line.type === "cmd" && <span class="prompt-symbol">$</span>}
-                      {line.type === "comment" && <span class="comment-symbol"></span>}
-                      {line.type === "out" && <span class="out-symbol">→</span>}
+                      {line.type === "cmd" && <span class="prompt-symbol" aria-hidden="true">$</span>}
+                      {line.type === "comment" && <span class="comment-symbol" aria-hidden="true"></span>}
+                      {line.type === "out" && <span class="out-symbol" aria-hidden="true">&rarr;</span>}
                       <code class="line-text">{line.text}</code>
                     </div>
                   ))}
@@ -169,9 +180,10 @@ const TERMINAL_STEPS: TerminalStep[] = [
             class="btn btn-outline btn-xs"
             target="_blank"
             rel="noopener noreferrer"
+            aria-label="docs/SELF-HOSTING.md (opens in new tab)"
           >
             <span>docs/SELF-HOSTING.md</span>
-            <ExternalLink size={12} />
+            <ExternalLink size={12} aria-hidden="true" />
           </a>
         </div>
       </div>
@@ -219,7 +231,7 @@ const TERMINAL_STEPS: TerminalStep[] = [
     <!-- Clean Documentation Index -->
     <div class="docs-index-sheet sheet" data-reveal>
       <div class="docs-header">
-        <FileText size={16} class="muted" />
+        <FileText size={16} class="muted" aria-hidden="true" />
         <span class="docs-title">Project documentation &amp; sources</span>
       </div>
       <div class="docs-grid">
@@ -229,27 +241,27 @@ const TERMINAL_STEPS: TerminalStep[] = [
           <span class="doc-badge chip">MIT License</span>
         </a>
         <a href={links.selfHosting} class="doc-link-item" target="_blank" rel="noopener noreferrer">
-          <FileCode size={14} class="doc-icon muted" />
+          <FileCode size={14} class="doc-icon muted" aria-hidden="true" />
           <span class="doc-name">docs/SELF-HOSTING.md</span>
           <span class="doc-desc muted">Setup &amp; deploy</span>
         </a>
         <a href={links.privacy} class="doc-link-item" target="_blank" rel="noopener noreferrer">
-          <Lock size={14} class="doc-icon muted" />
+          <Lock size={14} class="doc-icon muted" aria-hidden="true" />
           <span class="doc-name">PRIVACY.md</span>
           <span class="doc-desc muted">Scopes &amp; retention</span>
         </a>
         <a href={links.install} class="doc-link-item" target="_blank" rel="noopener noreferrer">
-          <Package size={14} class="doc-icon muted" />
+          <Package size={14} class="doc-icon muted" aria-hidden="true" />
           <span class="doc-name">docs/INSTALL.md</span>
           <span class="doc-desc muted">Unsigned app steps</span>
         </a>
         <a href={links.changelog} class="doc-link-item" target="_blank" rel="noopener noreferrer">
-          <ScrollText size={14} class="doc-icon muted" />
+          <ScrollText size={14} class="doc-icon muted" aria-hidden="true" />
           <span class="doc-name">CHANGELOG.md</span>
           <span class="doc-desc muted">Release history</span>
         </a>
         <a href={links.issues} class="doc-link-item" target="_blank" rel="noopener noreferrer">
-          <MessageSquare size={14} class="doc-icon muted" />
+          <MessageSquare size={14} class="doc-icon muted" aria-hidden="true" />
           <span class="doc-name">GitHub Issues</span>
           <span class="doc-desc muted">Feedback &amp; bugs</span>
         </a>
@@ -261,28 +273,54 @@ const TERMINAL_STEPS: TerminalStep[] = [
 <script>
   const root = document.querySelector<HTMLElement>("[data-terminal-card]");
   if (root) {
-    const tabs = root.querySelectorAll<HTMLButtonElement>("[data-step-id]");
-    const panes = root.querySelectorAll<HTMLElement>("[data-pane-id]");
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-step-id]"));
+    const panes = Array.from(root.querySelectorAll<HTMLElement>("[data-pane-id]"));
     const copyBtn = root.querySelector<HTMLButtonElement>("[data-copy-trigger]")!;
     const copyText = copyBtn.querySelector<HTMLElement>(".copy-text")!;
 
     let currentStep = "run-local";
 
-    tabs.forEach((tab) => {
+    function setStep(id: string) {
+      if (!id || id === currentStep) return;
+      currentStep = id;
+      tabs.forEach((t) => {
+        const active = t.dataset.stepId === id;
+        t.classList.toggle("is-active", active);
+        t.setAttribute("aria-selected", active ? "true" : "false");
+        t.tabIndex = active ? 0 : -1;
+      });
+
+      panes.forEach((p) => {
+        p.classList.toggle("is-active", p.dataset.paneId === id);
+      });
+    }
+
+    tabs.forEach((tab, index) => {
       tab.addEventListener("click", () => {
         const id = tab.dataset.stepId;
-        if (!id || id === currentStep) return;
+        if (id) setStep(id);
+      });
 
-        currentStep = id;
-        tabs.forEach((t) => {
-          const active = t === tab;
-          t.classList.toggle("is-active", active);
-          t.setAttribute("aria-selected", active ? "true" : "false");
-        });
+      // Keyboard arrow navigation
+      tab.addEventListener("keydown", (e) => {
+        let targetIndex = -1;
+        if (e.key === "ArrowRight") {
+          targetIndex = (index + 1) % tabs.length;
+        } else if (e.key === "ArrowLeft") {
+          targetIndex = (index - 1 + tabs.length) % tabs.length;
+        } else if (e.key === "Home") {
+          targetIndex = 0;
+        } else if (e.key === "End") {
+          targetIndex = tabs.length - 1;
+        }
 
-        panes.forEach((p) => {
-          p.classList.toggle("is-active", p.dataset.paneId === id);
-        });
+        if (targetIndex >= 0) {
+          e.preventDefault();
+          const targetTab = tabs[targetIndex];
+          targetTab.focus();
+          const id = targetTab.dataset.stepId;
+          if (id) setStep(id);
+        }
       });
     });
 
@@ -379,6 +417,11 @@ const TERMINAL_STEPS: TerminalStep[] = [
     padding-inline: 8px;
   }
 
+  [data-ui="terminal"] .copy-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
   [data-ui="terminal"] .copy-icon-done {
     display: none;
     color: var(--success);
@@ -417,6 +460,11 @@ const TERMINAL_STEPS: TerminalStep[] = [
 
   [data-ui="terminal"] .term-tab-btn:hover {
     color: var(--foreground);
+  }
+
+  [data-ui="terminal"] .term-tab-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
   }
 
   [data-ui="terminal"] .term-tab-btn.is-active {
@@ -595,6 +643,11 @@ const TERMINAL_STEPS: TerminalStep[] = [
   .doc-link-item:hover {
     border-color: var(--primary);
     background: var(--muted);
+  }
+
+  .doc-link-item:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 
   .doc-icon {

@@ -15,54 +15,43 @@
 import ArticleContent from "../reader/ArticleContent.astro";
 import HighlightsPanel from "../reader/HighlightsPanel.astro";
 import ReaderToolbar from "../reader/ReaderToolbar.astro";
+import SectionHeader from "../SectionHeader.astro";
 import {
   Copy,
   FileText,
-  FolderSync,
   Highlighter,
   RotateCcw,
+  Trash,
 } from "@lucide/astro";
 ---
 
-<section
-  id="read"
-  class="section-pad relative overflow-hidden"
-  aria-labelledby="reader-heading"
->
-  <div class="container-tight">
-    <!-- Section Header -->
-    <div class="mb-10 text-left">
-      <span class="eyebrow block mb-3 text-muted-foreground">Read and highlight</span>
-      <h2
-        id="reader-heading"
-        class="heading-display text-balance mb-4 max-w-[24ch]"
-      >
-        A clean desk for reading, with highlights that stay.
-      </h2>
-      <p class="text-body text-muted-foreground text-balance max-w-[62ch]">
-        Open any captured source in an undisturbed view. Mark key passages with a single click,
-        attach marginal notes, and watch them write directly into your project's local Markdown
-        files.
-      </p>
-    </div>
+<section id="read" class="section">
+  <div class="container">
+    <SectionHeader
+      label="Read and highlight"
+      title="A clean desk for reading, with "
+      marked="highlights"
+      after=" that stay."
+      lede="Every source opens in a clean reader in the desktop app: no ads, images in place, footnotes that jump to their references. Highlights and notes are written into the source's Markdown file too."
+    />
 
     <!-- Feature Highlights Pills -->
     <div class="reader-features-row" role="list">
       <div class="feature-pill" role="listitem">
         <Highlighter size={13} stroke-width={2} class="pill-icon marker-accent" />
-        <span>One-click highlighter</span>
+        <span>Select text to highlight</span>
       </div>
       <div class="feature-pill" role="listitem">
         <FileText size={13} stroke-width={2} class="pill-icon" />
-        <span>Notes written into Markdown</span>
+        <span>Highlights and notes in Markdown</span>
       </div>
       <div class="feature-pill" role="listitem">
         <Copy size={13} stroke-width={2} class="pill-icon" />
-        <span>Copy quote with source URL</span>
+        <span>Copy quote with its source</span>
       </div>
       <div class="feature-pill" role="listitem">
-        <FolderSync size={13} stroke-width={2} class="pill-icon" />
-        <span>Footnote and sponsor cleanup</span>
+        <Trash size={13} stroke-width={2} class="pill-icon" />
+        <span>Remove text you don't need</span>
       </div>
     </div>
 
@@ -964,6 +953,10 @@ import {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .crumb-muted {
+    color: var(--muted-foreground);
   }
 
   .sep {

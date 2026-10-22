@@ -45,7 +45,7 @@ import { links } from "../../lib/site";
                 <h3 class="h4 platform-name">Windows</h3>
                 <span class="chip os-chip" data-os-chip="windows">Windows 10 or 11</span>
               </div>
-              <span class="platform-sub muted text-xs">64-bit installer · auto-updates</span>
+              <span class="platform-sub muted text-xs">64-bit installer, auto-updates</span>
             </div>
           </div>
 
@@ -59,7 +59,7 @@ import { links } from "../../lib/site";
               class="btn btn-ink btn-download"
               data-download-btn="windows"
             >
-              <DownloadIcon size={16} />
+              <DownloadIcon size={16} aria-hidden="true" />
               <span>Download for Windows</span>
             </a>
           </div>
@@ -76,7 +76,7 @@ import { links } from "../../lib/site";
                 <h3 class="h4 platform-name">macOS</h3>
                 <span class="chip os-chip" data-os-chip="mac">macOS 11+</span>
               </div>
-              <span class="platform-sub muted text-xs">Apple Silicon or Intel · universal build</span>
+              <span class="platform-sub muted text-xs">Apple Silicon or Intel, universal build</span>
             </div>
           </div>
 
@@ -90,7 +90,7 @@ import { links } from "../../lib/site";
               class="btn btn-outline btn-download"
               data-download-btn="mac"
             >
-              <DownloadIcon size={16} />
+              <DownloadIcon size={16} aria-hidden="true" />
               <span>Download for Mac</span>
             </a>
           </div>
@@ -120,7 +120,7 @@ import { links } from "../../lib/site";
               href={links.extension}
               class="btn btn-outline btn-download"
             >
-              <DownloadIcon size={16} />
+              <DownloadIcon size={16} aria-hidden="true" />
               <span>Download extension</span>
             </a>
           </div>
@@ -150,7 +150,7 @@ import { links } from "../../lib/site";
               href={links.claude}
               class="btn btn-outline btn-download"
             >
-              <DownloadIcon size={16} />
+              <DownloadIcon size={16} aria-hidden="true" />
               <span>Download MCP bundle</span>
             </a>
           </div>
@@ -163,7 +163,7 @@ import { links } from "../../lib/site";
           <Info size={18} />
         </div>
         <div class="advisory-content">
-          <h4 class="h4 advisory-title">First-run security note</h4>
+          <h3 class="h4 advisory-title">First-run security note</h3>
           <p class="advisory-text">
             The apps aren't from a paid publisher, so Windows and macOS warn you the first time you open them. <a href={links.install} class="underline-link" target="_blank" rel="noopener noreferrer">INSTALL.md</a> shows the two clicks that get past it, how to load the extension, and how to sign in.
           </p>
@@ -175,7 +175,7 @@ import { links } from "../../lib/site";
           rel="noopener noreferrer"
         >
           <span>Read INSTALL.md</span>
-          <ExternalLink size={13} />
+          <ExternalLink size={13} aria-hidden="true" />
         </a>
       </div>
 
@@ -197,9 +197,7 @@ import { links } from "../../lib/site";
         </div>
         <div class="footer-meta muted text-xs">
           <span>MIT License</span>
-          <span>·</span>
           <span>Zero telemetry</span>
-          <span>·</span>
           <span>Google Drive OAuth</span>
         </div>
       </div>
@@ -300,6 +298,10 @@ import { links } from "../../lib/site";
 
   .download-card:hover {
     transform: translateY(-2px);
+    border-color: var(--primary);
+  }
+
+  .download-card:focus-within {
     border-color: var(--primary);
   }
 
@@ -476,7 +478,7 @@ import { links } from "../../lib/site";
   .footer-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 16px;
   }
 
   .footer-links {

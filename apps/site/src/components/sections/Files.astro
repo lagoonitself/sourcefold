@@ -35,25 +35,31 @@ import SourceTile from "../SourceTile.astro";
       <!-- Top Toolbar: Toggle Mode & Save Trigger -->
       <div class="diagram-toolbar">
         <div class="mode-toggle-group" role="tablist" aria-label="Drive sync mode">
-          <span class="toggle-caption muted">Mode:</span>
+          <span class="toggle-caption muted" id="mode-caption">Mode:</span>
           <button
             type="button"
+            id="mode-tab-signed-in"
             class="toggle-btn is-active"
             role="tab"
             aria-selected="true"
+            aria-controls="dest-card-drive"
+            tabindex="0"
             data-mode="signed-in"
           >
-            <Cloud size={14} />
+            <Cloud size={14} aria-hidden="true" />
             <span>Signed in (Drive sync)</span>
           </button>
           <button
             type="button"
+            id="mode-tab-offline"
             class="toggle-btn"
             role="tab"
             aria-selected="false"
+            aria-controls="dest-card-drive"
+            tabindex="-1"
             data-mode="offline"
           >
-            <CloudOff size={14} />
+            <CloudOff size={14} aria-hidden="true" />
             <span>Offline (local only)</span>
           </button>
         </div>
@@ -65,14 +71,14 @@ import SourceTile from "../SourceTile.astro";
             data-files-save-btn
             aria-label="Save to Drive (Ctrl+S or Cmd+S)"
           >
-            <RefreshCw size={14} class="save-icon" />
+            <RefreshCw size={14} class="save-icon" aria-hidden="true" />
             <span class="save-label">Save to Drive</span>
             <span class="kbd-combo" aria-hidden="true">
               <kbd class="kbd">Ctrl</kbd>
               <kbd class="kbd">S</kbd>
             </span>
           </button>
-          <div class="save-status-indicator" data-save-status>
+          <div class="save-status-indicator" data-save-status aria-live="polite">
             <span class="ping-dot" aria-hidden="true"></span>
             <span class="status-msg">Ready to sync</span>
           </div>
@@ -138,10 +144,10 @@ import SourceTile from "../SourceTile.astro";
           </div>
 
           <!-- 2. Google Drive Folder Mirror -->
-          <div class="dest-card card" data-dest-card="drive">
+          <div id="dest-card-drive" class="dest-card card" data-dest-card="drive">
             <div class="dest-card-header">
               <div class="dest-title-wrap">
-                <Cloud size={16} class="dest-icon-cloud" />
+                <Cloud size={16} class="dest-icon-cloud" aria-hidden="true" />
                 <h3 class="h4 dest-title">Google Drive mirror</h3>
               </div>
               <span class="dest-chip chip gdoc-chip">Google Docs copy</span>
@@ -150,22 +156,22 @@ import SourceTile from "../SourceTile.astro";
             <!-- Drive Tree View -->
             <div class="tree-preview" data-drive-tree>
               <div class="tree-node root-folder">
-                <Folder size={14} class="folder-icon" />
+                <Folder size={14} class="folder-icon" aria-hidden="true" />
                 <code class="folder-name">Sourcefold/</code>
               </div>
               <div class="tree-children">
                 <div class="tree-node">
-                  <Folder size={14} class="folder-icon" />
+                  <Folder size={14} class="folder-icon" aria-hidden="true" />
                   <code class="folder-name">Cars/</code>
                 </div>
                 <div class="tree-children">
                   <div class="tree-node">
-                    <Folder size={14} class="folder-icon" />
+                    <Folder size={14} class="folder-icon" aria-hidden="true" />
                     <code class="folder-name">Engines/</code>
                   </div>
                   <div class="tree-children">
                     <div class="tree-node">
-                      <Folder size={14} class="folder-icon" />
+                      <Folder size={14} class="folder-icon" aria-hidden="true" />
                       <code class="folder-name">Lag and boost/</code>
                     </div>
                     <div class="tree-children file-children">
@@ -185,8 +191,8 @@ import SourceTile from "../SourceTile.astro";
             </div>
 
             <!-- Offline Dim Overlay -->
-            <div class="offline-overlay" data-offline-overlay>
-              <CloudOff size={24} />
+            <div class="offline-overlay" data-offline-overlay aria-hidden="true">
+              <CloudOff size={24} aria-hidden="true" />
               <div class="offline-msg">
                 <strong>Offline mode</strong>
                 <span>No Google account required. Local SQLite and Markdown on disk; Drive mirror is skipped.</span>
@@ -202,7 +208,7 @@ import SourceTile from "../SourceTile.astro";
           <div class="dest-card card" data-dest-card="local">
             <div class="dest-card-header">
               <div class="dest-title-wrap">
-                <HardDrive size={16} class="dest-icon-disk" />
+                <HardDrive size={16} class="dest-icon-disk" aria-hidden="true" />
                 <h3 class="h4 dest-title">Desktop Documents / Sourcefold</h3>
               </div>
               <span class="dest-chip chip docx-chip">Word .docx beside each file</span>
@@ -241,13 +247,13 @@ import SourceTile from "../SourceTile.astro";
       <!-- Privacy & Architecture Callouts -->
       <div class="privacy-strip">
         <div class="privacy-pill">
-          <Lock size={15} class="privacy-icon" />
+          <Lock size={15} class="privacy-icon" aria-hidden="true" />
           <div class="privacy-text">
             <strong>drive.file scope only</strong>: Sourcefold can only see and touch files it created inside its own folder. It cannot see your other Drive documents.
           </div>
         </div>
         <div class="privacy-pill">
-          <Sparkles size={15} class="privacy-icon" />
+          <Sparkles size={15} class="privacy-icon" aria-hidden="true" />
           <div class="privacy-text">
             <strong>Ephemeral Supabase cache</strong>: Full article text and images live in Supabase only for the few seconds until they are mirrored into your Drive.
           </div>
@@ -265,7 +271,7 @@ import SourceTile from "../SourceTile.astro";
     const saveBtn = section.querySelector<HTMLButtonElement>("[data-files-save-btn]")!;
     const statusMsg = section.querySelector<HTMLElement>("[data-save-status] .status-msg")!;
     const pingDot = section.querySelector<HTMLElement>("[data-save-status] .ping-dot")!;
-    const modeBtns = section.querySelectorAll<HTMLButtonElement>("[data-mode]");
+    const modeBtns = Array.from(section.querySelectorAll<HTMLButtonElement>("[data-mode]"));
     const driveCard = section.querySelector<HTMLElement>('[data-dest-card="drive"]')!;
     const offlineOverlay = section.querySelector<HTMLElement>("[data-offline-overlay]")!;
     const treeFiles = section.querySelectorAll<HTMLElement>(".tree-file");
@@ -287,29 +293,56 @@ import SourceTile from "../SourceTile.astro";
     );
     observer.observe(section);
 
+    function setMode(mode: "signed-in" | "offline") {
+      if (mode === currentMode) return;
+      currentMode = mode;
+      modeBtns.forEach((b) => {
+        const active = b.dataset.mode === mode;
+        b.classList.toggle("is-active", active);
+        b.setAttribute("aria-selected", active ? "true" : "false");
+        b.tabIndex = active ? 0 : -1;
+      });
+
+      if (currentMode === "offline") {
+        driveCard.classList.add("is-offline");
+        offlineOverlay.classList.add("is-visible");
+        offlineOverlay.setAttribute("aria-hidden", "false");
+        statusMsg.textContent = "Offline (local SQLite & MD)";
+        saveBtn.querySelector(".save-label")!.textContent = "Save locally";
+      } else {
+        driveCard.classList.remove("is-offline");
+        offlineOverlay.classList.remove("is-visible");
+        offlineOverlay.setAttribute("aria-hidden", "true");
+        statusMsg.textContent = "Ready to sync";
+        saveBtn.querySelector(".save-label")!.textContent = "Save to Drive";
+      }
+    }
+
     // Mode Toggle (Signed in vs Offline)
-    modeBtns.forEach((btn) => {
+    modeBtns.forEach((btn, index) => {
       btn.addEventListener("click", () => {
         const mode = btn.dataset.mode as "signed-in" | "offline";
-        if (mode === currentMode) return;
+        setMode(mode);
+      });
 
-        currentMode = mode;
-        modeBtns.forEach((b) => {
-          const active = b === btn;
-          b.classList.toggle("is-active", active);
-          b.setAttribute("aria-selected", active ? "true" : "false");
-        });
+      btn.addEventListener("keydown", (e) => {
+        let targetIndex = -1;
+        if (e.key === "ArrowRight") {
+          targetIndex = (index + 1) % modeBtns.length;
+        } else if (e.key === "ArrowLeft") {
+          targetIndex = (index - 1 + modeBtns.length) % modeBtns.length;
+        } else if (e.key === "Home") {
+          targetIndex = 0;
+        } else if (e.key === "End") {
+          targetIndex = modeBtns.length - 1;
+        }
 
-        if (currentMode === "offline") {
-          driveCard.classList.add("is-offline");
-          offlineOverlay.classList.add("is-visible");
-          statusMsg.textContent = "Offline (local SQLite & MD)";
-          saveBtn.querySelector(".save-label")!.textContent = "Save locally";
-        } else {
-          driveCard.classList.remove("is-offline");
-          offlineOverlay.classList.remove("is-visible");
-          statusMsg.textContent = "Ready to sync";
-          saveBtn.querySelector(".save-label")!.textContent = "Save to Drive";
+        if (targetIndex >= 0) {
+          e.preventDefault();
+          const targetBtn = modeBtns[targetIndex];
+          targetBtn.focus();
+          const mode = targetBtn.dataset.mode as "signed-in" | "offline";
+          setMode(mode);
         }
       });
     });
@@ -421,6 +454,11 @@ import SourceTile from "../SourceTile.astro";
     border-color: var(--border-strong);
   }
 
+  [data-ui="diagram"] .toggle-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
   [data-ui="diagram"] .toggle-btn.is-active {
     background: var(--primary);
     color: var(--primary-foreground);
@@ -436,6 +474,11 @@ import SourceTile from "../SourceTile.astro";
   [data-ui="diagram"] .save-trigger-btn {
     gap: 8px;
     font-size: 13px;
+  }
+
+  [data-ui="diagram"] .save-trigger-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 
   [data-ui="diagram"] .save-trigger-btn.is-spinning :global(.save-icon) {

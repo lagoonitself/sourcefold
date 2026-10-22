@@ -12,7 +12,7 @@ import SourceTile from "../SourceTile.astro";
   <div class="container">
     <SectionHeader
       label="Save from anywhere"
-      title="Paste links, or save "
+      title="Paste links, click the extension, or save "
       marked="whole channels"
       after="."
       lede="Articles, transcripts, cited references, or entire publications. Every capture lands as clean Markdown in your project folder, ready to read or search."
@@ -169,7 +169,7 @@ import SourceTile from "../SourceTile.astro";
       </div>
 
       <!-- 3. Right-click a Grokipedia link -->
-      <div class="card card-context-menu" id="card-context-menu">
+      <div class="sheet card-context-menu" id="card-context-menu">
         <div class="card-inner">
           <div class="card-header-bar">
             <span class="chip">Grokipedia</span>
@@ -205,35 +205,35 @@ import SourceTile from "../SourceTile.astro";
                   <SourceTile kind="grokipedia" size={18} />
                   <span>Save to Sourcefold</span>
                 </div>
-                <span class="kbd kbd-tiny">Enter</span>
               </div>
               <div class="context-item muted-item">Inspect element</div>
             </div>
 
             <div class="context-feedback-badge" id="context-feedback-badge" hidden>
               <Check size={12} stroke-width={2.2} />
-              <span>Queued to Cars / Turbocharging</span>
+              <span>Saved to Cars / Engines / Turbocharging</span>
             </div>
           </div>
         </div>
       </div>
 
       <!-- 4. Whole YouTube playlist or channel -->
-      <div class="card card-youtube" id="card-youtube-playlist">
+      <div class="sheet card-youtube" id="card-youtube-playlist">
         <div class="card-inner">
           <div class="card-header-bar">
-            <span class="chip">YouTube channel &amp; playlist</span>
-            <button type="button" class="btn btn-ghost btn-sm" id="yt-refresh-btn" title="Simulate playlist sync">
+            <span class="chip">Desktop app</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="yt-refresh-btn" title="Replay demo">
               <RotateCcw size={12} stroke-width={2} />
-              <span>Re-check channel</span>
+              <span>Replay</span>
             </button>
           </div>
 
           <div class="card-headings">
             <h3 class="h3">A whole YouTube playlist or channel</h3>
             <p class="muted">
-              Save an 80-video series in one paste. Sourcefold pulls English, auto-generated, or
-              translated captions, cleans up timing timestamps, and stores them as readable chapters.
+              In the desktop app, save a whole YouTube playlist or channel. Each video becomes its
+              English transcript in timestamped paragraphs that open the video at that second, plus
+              the description.
             </p>
           </div>
 
@@ -312,7 +312,7 @@ import SourceTile from "../SourceTile.astro";
       </div>
 
       <!-- 5. Substack publication between two dates -->
-      <div class="card card-substack" id="card-substack">
+      <div class="sheet card-substack" id="card-substack">
         <div class="card-inner">
           <div class="card-header-bar">
             <span class="chip">Desktop app</span>
@@ -387,7 +387,7 @@ import SourceTile from "../SourceTile.astro";
       </div>
 
       <!-- 6. Cited sources on Grokipedia and Wikipedia -->
-      <div class="card card-cited" id="card-cited-sources">
+      <div class="sheet card-cited" id="card-cited-sources">
         <div class="card-inner">
           <div class="card-header-bar">
             <span class="chip">Grokipedia &amp; Wikipedia</span>
@@ -826,6 +826,11 @@ import SourceTile from "../SourceTile.astro";
 </script>
 
 <style>
+  #save :global(.section-header h2) {
+    text-wrap: balance;
+    max-width: 24ch;
+  }
+
   .bento-grid {
     display: grid;
     grid-template-columns: repeat(12, 1fr);
@@ -1814,5 +1819,3 @@ import SourceTile from "../SourceTile.astro";
     margin-top: 4px;
   }
 </style>
-
-

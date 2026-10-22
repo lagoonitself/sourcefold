@@ -4,8 +4,8 @@
  * Shows Claude Desktop interacting with the local Sourcefold MCP server:
  * streaming conversation, tool-call chips with spinners resolving to checkmarks,
  * and a live mini Sourcefold desktop window reacting in real time.
- * Plausible MCP tool names: add_links, list_sources, read_source, add_highlight,
- * find_sources (search inside sources), add_note, save_to_drive.
+ * Real MCP tool names: add_links, list_sources, read_source, add_highlight,
+ * find_sources (search inside sources), create_note, edit_note, save_to_drive.
  * Clean neutral styling without Anthropic logos or brand colours.
  */
 import {
@@ -25,7 +25,7 @@ import { links } from "../../lib/site";
       label="Work with Claude"
       title="Ask Claude to research, organize and "
       marked="save to your library"
-      lede="Add Sourcefold to Claude Desktop from the desktop app (Settings → Claude → Add to Claude Desktop) or download Sourcefold-Claude.mcpb. It uses the desktop app's sign-in with zero configuration. With the desktop app open, Claude can search inside your sources and open things for you."
+      lede="Add Sourcefold to Claude Desktop from the desktop app (Settings → Claude → Add to Claude Desktop) or download Sourcefold-Claude.mcpb. It uses the desktop app's sign-in, so there's nothing to set up. With the desktop app open, Claude can search inside your sources and open things for you."
     />
 
     <div class="sheet workbench" data-ui="workbench" data-claude-workbench data-reveal>
@@ -38,15 +38,15 @@ import { links } from "../../lib/site";
         </div>
         <div class="workbench-titles">
           <div class="pane-title active-pane">
-            <span class="status-indicator"></span>
+            <span class="status-indicator" aria-hidden="true"></span>
             <span>Claude Desktop</span>
             <code class="badge">Sourcefold MCP</code>
           </div>
           <div class="pane-title right-pane-label">
-            <Folder size={14} class="muted" />
+            <Folder size={14} class="muted" aria-hidden="true" />
             <span>Sourcefold Desktop</span>
             <span class="sync-status" data-claude-sync>
-              <span class="sync-dot"></span>
+              <span class="sync-dot" aria-hidden="true"></span>
               <span class="sync-text">Synced</span>
             </span>
           </div>
@@ -58,27 +58,35 @@ import { links } from "../../lib/site";
         <span class="selector-label">Try a prompt:</span>
         <button
           type="button"
+          id="scenario-tab-playlist"
           class="scenario-chip is-active"
           role="tab"
           aria-selected="true"
+          aria-controls="claude-chat-pane"
           data-scenario="playlist"
         >
           Add playlist &amp; highlight
         </button>
         <button
           type="button"
+          id="scenario-tab-search"
           class="scenario-chip"
           role="tab"
           aria-selected="false"
+          aria-controls="claude-chat-pane"
+          tabindex="-1"
           data-scenario="search"
         >
           Search inside sources
         </button>
         <button
           type="button"
+          id="scenario-tab-note"
           class="scenario-chip"
           role="tab"
           aria-selected="false"
+          aria-controls="claude-chat-pane"
+          tabindex="-1"
           data-scenario="note"
         >
           Summarize &amp; write note
@@ -88,7 +96,13 @@ import { links } from "../../lib/site";
       <!-- Two-pane Workspace Split -->
       <div class="workbench-body">
         <!-- Left Pane: Claude Chat -->
-        <div class="chat-pane" aria-label="Claude conversation mockup">
+        <div
+          id="claude-chat-pane"
+          class="chat-pane"
+          role="tabpanel"
+          aria-labelledby="scenario-tab-playlist"
+          aria-label="Claude conversation mockup"
+        >
           <div class="chat-scroll" data-claude-chat>
             <div class="chat-bubble user-bubble">
               <div class="bubble-header">
@@ -131,13 +145,13 @@ import { links } from "../../lib/site";
           <div class="mini-app-header">
             <div class="mini-breadcrumbs">
               <span class="crumb muted">Cars</span>
-              <span class="crumb-sep">/</span>
+              <span class="crumb-sep" aria-hidden="true">/</span>
               <span class="crumb muted">Engines</span>
-              <span class="crumb-sep">/</span>
+              <span class="crumb-sep" aria-hidden="true">/</span>
               <span class="crumb current" data-claude-folder>Lag and boost</span>
             </div>
             <div class="mini-search" data-claude-search-box>
-              <Search size={13} class="muted" />
+              <Search size={13} class="muted" aria-hidden="true" />
               <span class="mini-search-text" data-claude-search-query>Search project...</span>
             </div>
           </div>
@@ -158,15 +172,16 @@ import { links } from "../../lib/site";
       <div class="workbench-footer">
         <div class="footer-instruction">
           <code class="step-tag">Settings → Claude → Add to Claude Desktop</code>
-          <span class="muted text-sm">uses desktop app's sign-in · zero configuration</span>
+          <span class="muted text-sm">Uses the desktop app's sign-in, so there's nothing to set up</span>
         </div>
         <div class="footer-actions">
           <a
             href={links.claude}
             class="btn btn-outline btn-sm download-mcp-btn"
             title="Download Sourcefold-Claude.mcpb bundle"
+            aria-label="Download Sourcefold-Claude.mcpb bundle"
           >
-            <Download size={14} />
+            <Download size={14} aria-hidden="true" />
             <code>Sourcefold-Claude.mcpb</code>
           </a>
           <a
@@ -176,7 +191,7 @@ import { links } from "../../lib/site";
             rel="noopener noreferrer"
           >
             <span>Claude setup guide</span>
-            <ExternalLink size={13} />
+            <ExternalLink size={13} aria-hidden="true" />
           </a>
         </div>
       </div>
@@ -234,7 +249,7 @@ import { links } from "../../lib/site";
             </span>
             <div class="mini-row-content">
               <div class="mini-row-title">How turbo lag actually works</div>
-              <div class="mini-row-sub muted">Engineering Explained · 12:40</div>
+              <div class="mini-row-sub muted">Engineering Explained, 12:40</div>
               ${
                 isHighlighted
                   ? `<div class="mini-row-highlight marker is-highlighted">"Anti-lag ignites unburned fuel inside the exhaust manifold to keep the turbine spooled."</div>`
@@ -252,7 +267,7 @@ import { links } from "../../lib/site";
               </span>
               <div class="mini-row-content">
                 <div class="mini-row-title">Anti-lag vs 2-step rev limiters</div>
-                <div class="mini-row-sub muted">HPAcademy · 8:15</div>
+                <div class="mini-row-sub muted">HPAcademy, 8:15</div>
               </div>
               <span class="mini-row-tag">YouTube</span>
             </div>
@@ -268,7 +283,7 @@ import { links } from "../../lib/site";
               </span>
               <div class="mini-row-content">
                 <div class="mini-row-title">Transient response of variable-geometry turbines</div>
-                <div class="mini-row-sub muted">SAE Technical Paper · arXiv:2308.08708</div>
+                <div class="mini-row-sub muted">SAE Technical Paper, arXiv:2308.08708</div>
               </div>
               <span class="mini-row-tag">PDF</span>
             </div>
@@ -304,7 +319,7 @@ import { links } from "../../lib/site";
               <div class="mini-row-title">Transient response of variable-geometry turbines</div>
               <div class="mini-row-highlight marker is-highlighted">"...matched: <mark>variable-geometry</mark> vanes pivot to narrow exhaust throat at 1800 RPM..."</div>
             </div>
-            <span class="mini-row-tag">PDF · p. 14</span>
+            <span class="mini-row-tag">PDF, p. 14</span>
           </div>
           <div class="mini-row is-in">
             <span class="source-tile" style="--tile:var(--source-youtube);--size:28px" aria-hidden="true">
@@ -325,7 +340,7 @@ import { links } from "../../lib/site";
       heading: "Engines",
       tools: [
         { name: "read_source", params: "source_id: 'twin-scroll-vs-twin-turbo'" },
-        { name: "add_note", params: "group: 'Engines', title: 'Twin-scroll vs Twin-turbo'" },
+        { name: "create_note", params: "group: 'Engines', title: 'Twin-scroll vs Twin-turbo'" },
         { name: "save_to_drive", params: "project: 'Cars'" },
       ],
       replyWords: [
@@ -334,7 +349,7 @@ import { links } from "../../lib/site";
         "note", "in", "Engines", "highlighting", "exhaust", "pulse", "separation,",
         "packaging", "costs,", "and", "spool", "latencies.", "Pushed", "to", "Drive."
       ],
-      itemCountText: "1 new note · 5 sources",
+      itemCountText: "1 new note, 5 sources",
       renderPreview: (_stage: number) => {
         return `
           <div class="mini-row is-in highlight-row">
@@ -343,7 +358,7 @@ import { links } from "../../lib/site";
             </span>
             <div class="mini-row-content">
               <div class="mini-row-title">Twin-scroll vs Twin-turbo Summary</div>
-              <div class="mini-row-sub muted">Note written by Claude · Synced to Drive</div>
+              <div class="mini-row-sub muted">Note written by Claude, synced to Drive</div>
               <div class="mini-row-highlight marker is-highlighted">Twin-scroll pairs out-of-phase cylinders (1+4, 2+3) to keep exhaust pulses from colliding.</div>
             </div>
             <span class="mini-row-tag">Note</span>
@@ -354,7 +369,7 @@ import { links } from "../../lib/site";
             </span>
             <div class="mini-row-content">
               <div class="mini-row-title">Thread: why twin-scroll beats twin-turbo</div>
-              <div class="mini-row-sub muted">@boostlab · 14 replies</div>
+              <div class="mini-row-sub muted">@boostlab, 14 replies</div>
             </div>
             <span class="mini-row-tag">X</span>
           </div>
@@ -365,7 +380,8 @@ import { links } from "../../lib/site";
 
   const root = document.querySelector<HTMLElement>("[data-claude-workbench]");
   if (root) {
-    const chips = root.querySelectorAll<HTMLButtonElement>("[data-scenario]");
+    const chips = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-scenario]"));
+    const chatPane = root.querySelector<HTMLElement>("#claude-chat-pane")!;
     const promptEl = root.querySelector<HTMLElement>("[data-claude-prompt]")!;
     const toolsContainer = root.querySelector<HTMLElement>("[data-claude-tools]")!;
     const replyEl = root.querySelector<HTMLElement>("[data-claude-reply]")!;
@@ -380,6 +396,21 @@ import { links } from "../../lib/site";
 
     let activeKey = "playlist";
     let cancelToken = { cancelled: false };
+
+    function selectScenario(key: string) {
+      if (!key) return;
+      chips.forEach((c) => {
+        const isSelected = c.dataset.scenario === key;
+        c.classList.toggle("is-active", isSelected);
+        c.setAttribute("aria-selected", isSelected ? "true" : "false");
+        c.tabIndex = isSelected ? 0 : -1;
+        if (isSelected) {
+          chatPane.setAttribute("aria-labelledby", c.id);
+        }
+      });
+      activeKey = key;
+      playScenario(activeKey);
+    }
 
     async function playScenario(key: string) {
       cancelToken.cancelled = true;
@@ -438,7 +469,7 @@ import { links } from "../../lib/site";
         const chip = document.createElement("div");
         chip.className = "tool-chip is-running";
         chip.innerHTML = `
-          <span class="tool-spinner"><span class="spin-dot"></span></span>
+          <span class="tool-spinner" aria-hidden="true"><span class="spin-dot"></span></span>
           <code class="tool-name">${tool.name}</code>
           <code class="tool-param">${tool.params}</code>
         `;
@@ -471,16 +502,33 @@ import { links } from "../../lib/site";
       }
     }
 
-    chips.forEach((chip) => {
+    chips.forEach((chip, index) => {
       chip.addEventListener("click", () => {
         const key = chip.dataset.scenario;
         if (!key || key === activeKey) return;
-        chips.forEach((c) => {
-          c.classList.toggle("is-active", c === chip);
-          c.setAttribute("aria-selected", c === chip ? "true" : "false");
-        });
-        activeKey = key;
-        playScenario(activeKey);
+        selectScenario(key);
+      });
+
+      // Keyboard navigation for tablist
+      chip.addEventListener("keydown", (e) => {
+        let targetIndex = -1;
+        if (e.key === "ArrowRight") {
+          targetIndex = (index + 1) % chips.length;
+        } else if (e.key === "ArrowLeft") {
+          targetIndex = (index - 1 + chips.length) % chips.length;
+        } else if (e.key === "Home") {
+          targetIndex = 0;
+        } else if (e.key === "End") {
+          targetIndex = chips.length - 1;
+        }
+
+        if (targetIndex >= 0) {
+          e.preventDefault();
+          const targetChip = chips[targetIndex];
+          targetChip.focus();
+          const key = targetChip.dataset.scenario;
+          if (key) selectScenario(key);
+        }
       });
     });
 
@@ -618,6 +666,11 @@ import { links } from "../../lib/site";
   [data-ui="workbench"] .scenario-chip:hover {
     border-color: var(--border-strong);
     background: var(--muted);
+  }
+
+  [data-ui="workbench"] .scenario-chip:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 
   [data-ui="workbench"] .scenario-chip.is-active {

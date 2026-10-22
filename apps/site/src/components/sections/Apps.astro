@@ -106,7 +106,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     <!-- Three Apps Suite Cards -->
     <div class="apps-grid" data-reveal="stagger">
       <!-- 1. Desktop App -->
-      <div class="app-card card is-primary-app" data-app-key="desktop" tabindex="0">
+      <div class="app-card card is-primary-app" data-app-key="desktop">
         <div class="card-badge-row">
           <span class="chip app-chip">Windows &amp; macOS</span>
           <span class="chip rec-chip">Recommended</span>
@@ -126,7 +126,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
       </div>
 
       <!-- 2. Chrome Extension -->
-      <div class="app-card card" data-app-key="extension" tabindex="0">
+      <div class="app-card card" data-app-key="extension">
         <div class="card-badge-row">
           <span class="chip app-chip">Chrome, Edge, Brave, Arc</span>
         </div>
@@ -145,7 +145,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
       </div>
 
       <!-- 3. Website -->
-      <div class="app-card card" data-app-key="website" tabindex="0">
+      <div class="app-card card" data-app-key="website">
         <div class="card-badge-row">
           <span class="chip app-chip">Zero install</span>
         </div>
@@ -176,13 +176,13 @@ const COMPARISON_ROWS: ComparisonRow[] = [
               <th scope="col" class="th-feature">Capability</th>
               <th scope="col" class="th-app col-website" data-col="website">
                 <div class="th-content">
-                  <Globe size={16} />
+                  <Globe size={16} aria-hidden="true" />
                   <span>Website</span>
                 </div>
               </th>
               <th scope="col" class="th-app col-desktop is-recommended-col" data-col="desktop">
                 <div class="th-content">
-                  <Laptop size={16} />
+                  <Laptop size={16} aria-hidden="true" />
                   <span>Desktop app</span>
                   <span class="chip col-badge">Main</span>
                 </div>
@@ -204,61 +204,70 @@ const COMPARISON_ROWS: ComparisonRow[] = [
                   </th>
                   <td class="td-val col-website" data-col="website">
                     {row.website.check ? (
-                      <span class="cell-status cell-yes" aria-label="Supported">
+                      <span class="cell-status cell-yes">
                         <span class="check-wrap" aria-hidden="true">
-                          <svg class="draw-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <svg class="draw-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path class="check-path" d="M3.5 8.5L6.5 11.5L12.5 4.5" />
                           </svg>
                         </span>
-                        {row.website.note && <span class="cell-note">{row.website.note}</span>}
+                        <span class="sr-only">Supported{row.website.note ? `: ${row.website.note}` : ""}</span>
+                        {row.website.note && <span class="cell-note" aria-hidden="true">{row.website.note}</span>}
                       </span>
                     ) : row.website.note ? (
                       <span class="cell-status cell-partial">
+                        <span class="sr-only">{row.website.note}</span>
                         <span class="cell-note">{row.website.note}</span>
                       </span>
                     ) : (
-                      <span class="dash-val muted" aria-label="Not supported">
-                        &ndash;
+                      <span class="dash-val muted">
+                        <span class="sr-only">Not supported</span>
+                        <span aria-hidden="true">&ndash;</span>
                       </span>
                     )}
                   </td>
                   <td class="td-val col-desktop" data-col="desktop">
                     {row.desktop.check ? (
-                      <span class="cell-status cell-yes" aria-label="Supported">
+                      <span class="cell-status cell-yes">
                         <span class="check-wrap" aria-hidden="true">
-                          <svg class="draw-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <svg class="draw-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path class="check-path" d="M3.5 8.5L6.5 11.5L12.5 4.5" />
                           </svg>
                         </span>
-                        {row.desktop.note && <span class="cell-note">{row.desktop.note}</span>}
+                        <span class="sr-only">Supported{row.desktop.note ? `: ${row.desktop.note}` : ""}</span>
+                        {row.desktop.note && <span class="cell-note" aria-hidden="true">{row.desktop.note}</span>}
                       </span>
                     ) : row.desktop.note ? (
                       <span class="cell-status cell-partial">
+                        <span class="sr-only">{row.desktop.note}</span>
                         <span class="cell-note">{row.desktop.note}</span>
                       </span>
                     ) : (
-                      <span class="dash-val muted" aria-label="Not supported">
-                        &ndash;
+                      <span class="dash-val muted">
+                        <span class="sr-only">Not supported</span>
+                        <span aria-hidden="true">&ndash;</span>
                       </span>
                     )}
                   </td>
                   <td class="td-val col-extension" data-col="extension">
                     {row.extension.check ? (
-                      <span class="cell-status cell-yes" aria-label="Supported">
+                      <span class="cell-status cell-yes">
                         <span class="check-wrap" aria-hidden="true">
-                          <svg class="draw-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <svg class="draw-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path class="check-path" d="M3.5 8.5L6.5 11.5L12.5 4.5" />
                           </svg>
                         </span>
-                        {row.extension.note && <span class="cell-note">{row.extension.note}</span>}
+                        <span class="sr-only">Supported{row.extension.note ? `: ${row.extension.note}` : ""}</span>
+                        {row.extension.note && <span class="cell-note" aria-hidden="true">{row.extension.note}</span>}
                       </span>
                     ) : row.extension.note ? (
                       <span class="cell-status cell-partial">
+                        <span class="sr-only">{row.extension.note}</span>
                         <span class="cell-note">{row.extension.note}</span>
                       </span>
                     ) : (
-                      <span class="dash-val muted" aria-label="Not supported">
-                        &ndash;
+                      <span class="dash-val muted">
+                        <span class="sr-only">Not supported</span>
+                        <span aria-hidden="true">&ndash;</span>
                       </span>
                     )}
                   </td>
@@ -306,15 +315,15 @@ const COMPARISON_ROWS: ComparisonRow[] = [
       });
     }
 
-    // Hovering card -> highlight column in table
+    // Hovering / focusing card -> highlight column in table
     cards.forEach((card) => {
       const key = card.dataset.appKey;
       if (!key) return;
 
       card.addEventListener("mouseenter", () => setHighlight(key));
       card.addEventListener("mouseleave", () => setHighlight(null));
-      card.addEventListener("focus", () => setHighlight(key));
-      card.addEventListener("blur", () => setHighlight(null));
+      card.addEventListener("focusin", () => setHighlight(key));
+      card.addEventListener("focusout", () => setHighlight(null));
     });
 
     // Hovering table column -> highlight matching card
@@ -375,7 +384,6 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     transition:
       transform 180ms var(--ease-out),
       border-color 180ms var(--ease-out);
-    outline: none;
   }
 
   .app-card.is-primary-app {
@@ -386,6 +394,10 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   .app-card:hover,
   .app-card.is-col-active {
     transform: translateY(-2px);
+    border-color: var(--primary);
+  }
+
+  .app-card:focus-within {
     border-color: var(--primary);
   }
 

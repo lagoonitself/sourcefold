@@ -27,8 +27,6 @@ import {
   FileText,
   Film,
   GitMerge,
-  ArrowRight,
-  ArrowLeft,
   ShieldCheck,
   HardDrive,
   Cpu,
@@ -161,10 +159,9 @@ const TABS = [
         </div>
       </div>
 
-      <!-- Bottom Step Navigation Footer -->
+      <!-- Bottom Step Navigation Footer (No arrow icons on buttons) -->
       <div class="research-footer">
         <button type="button" class="btn btn-outline btn-sm" id="prev-tool-btn" disabled>
-          <ArrowLeft size={14} stroke-width={1.75} />
           <span>Previous tool</span>
         </button>
 
@@ -174,44 +171,25 @@ const TABS = [
 
         <button type="button" class="btn btn-ink btn-sm" id="next-tool-btn">
           <span>Next tool</span>
-          <ArrowRight size={14} stroke-width={1.75} />
         </button>
       </div>
     </div>
 
-    <!-- 3 Value Pillars below the sheet -->
-    <div class="research-pillars-grid" data-reveal="stagger">
-      <div class="card pillar-card">
-        <div class="pillar-header">
-          <HardDrive size={18} stroke-width={1.75} class="pillar-icon" />
-          <h3 class="pillar-title serif">Signed in and offline</h3>
-        </div>
-        <p class="muted">
-          Every tool works without an internet connection. Your quotes, cards, outlines, and summaries
-          are plain files stored locally and synced through your personal Google Drive or iCloud.
-        </p>
+    <!-- Quiet editorial facts line folded below sheet (Replaces generic 3-card grid) -->
+    <div class="research-facts-line muted" data-reveal>
+      <div class="fact-item">
+        <HardDrive size={14} stroke-width={1.75} class="fact-icon" />
+        <span>Works offline and signed in</span>
       </div>
-
-      <div class="card pillar-card">
-        <div class="pillar-header">
-          <Cpu size={18} stroke-width={1.75} class="pillar-icon" />
-          <h3 class="pillar-title serif">Claude without lock-in</h3>
-        </div>
-        <p class="muted">
-          Connect your Claude subscription through native Model Context Protocol. Summaries and tags
-          stay attached directly to your files—never trapped in an AI chat silo.
-        </p>
+      <span class="fact-separator" aria-hidden="true">/</span>
+      <div class="fact-item">
+        <Cpu size={14} stroke-width={1.75} class="fact-icon" />
+        <span>Claude can do it through the MCP</span>
       </div>
-
-      <div class="card pillar-card">
-        <div class="pillar-header">
-          <ShieldCheck size={18} stroke-width={1.75} class="pillar-icon" />
-          <h3 class="pillar-title serif">Full provenance tracking</h3>
-        </div>
-        <p class="muted">
-          From a raw YouTube transcript line or research PDF footnote straight into your teleprompter
-          script. You never lose the exact timestamp or author byline.
-        </p>
+      <span class="fact-separator" aria-hidden="true">/</span>
+      <div class="fact-item">
+        <ShieldCheck size={14} stroke-width={1.75} class="fact-icon" />
+        <span>Every card keeps its exact source</span>
       </div>
     </div>
   </div>
@@ -270,15 +248,15 @@ const TABS = [
       const activeBtn = tabButtons[index];
       if (activeBtn) updateIndicator(activeBtn);
 
-      // Update footer buttons
+      // Update footer buttons (No arrows, simple sentence case labels)
       if (prevBtn) {
         prevBtn.disabled = index === 0;
       }
       if (nextBtn) {
         if (index === tabButtons.length - 1) {
-          nextBtn.innerHTML = `<span>Back to start</span>`;
+          nextBtn.textContent = "Back to start";
         } else {
-          nextBtn.innerHTML = `<span>Next tool</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`;
+          nextBtn.textContent = "Next tool";
         }
       }
 
@@ -325,7 +303,6 @@ const TABS = [
     flex-direction: column;
     border: 1px solid var(--border);
     overflow: hidden;
-    margin-bottom: 36px;
   }
 
   /* Tab Bar */
@@ -431,39 +408,44 @@ const TABS = [
     font-size: 12.5px;
   }
 
-  /* Value Pillars Grid */
-  .research-pillars-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-  }
-
-  @media (max-width: 860px) {
-    .research-pillars-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .pillar-card {
-    padding: 22px;
-    border: 1px solid var(--border);
-  }
-
-  .pillar-header {
+  /* Quiet Editorial Facts Line (No generic cards) */
+  .research-facts-line {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
+    justify-content: center;
+    gap: 14px 20px;
+    margin-top: 24px;
+    font-size: 13px;
+    color: var(--muted-foreground);
   }
 
-  .pillar-icon {
+  .fact-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .fact-icon {
     color: var(--primary);
+    opacity: 0.7;
   }
 
-  .pillar-title {
-    font-size: 17px;
-    font-weight: 500;
-    color: var(--foreground);
-    margin: 0;
+  .fact-separator {
+    opacity: 0.3;
+    font-family: var(--font-mono);
+  }
+
+  @media (max-width: 680px) {
+    .research-facts-line {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      margin-top: 20px;
+      padding-inline: 8px;
+    }
+    .fact-separator {
+      display: none;
+    }
   }
 </style>

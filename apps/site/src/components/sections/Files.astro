@@ -1,11 +1,12 @@
 ---
 /**
- * Files.astro (id "files") — "Your files, your Drive"
+ * Files.astro (id "files"): "Your files, your Drive"
  * Interactive diagram showing how a source fans out into:
  * 1. Clean Markdown (.md) with front matter and footnotes
  * 2. Google Drive mirror with Google Docs for NotebookLM & Gemini
  * 3. Desktop local Documents/Sourcefold copy with Word (.docx) beside each file.
  * Interactive "Save to Drive" button + Ctrl/Cmd+S keyboard shortcut + Offline/Signed-in toggle.
+ * Accuracy: Supabase keeps links, titles, folders and notes; article text is pushed to Drive and cleared.
  */
 import {
   Cloud,
@@ -30,7 +31,7 @@ import SourceTile from "../SourceTile.astro";
     />
 
     <!-- Interactive Diagram Card -->
-    <div class="sheet diagram-wrapper" data-files-diagram data-reveal>
+    <div class="sheet diagram-wrapper" data-ui="diagram" data-files-diagram data-reveal>
       <!-- Top Toolbar: Toggle Mode & Save Trigger -->
       <div class="diagram-toolbar">
         <div class="mode-toggle-group" role="tablist" aria-label="Drive sync mode">
@@ -67,8 +68,8 @@ import SourceTile from "../SourceTile.astro";
             <RefreshCw size={14} class="save-icon" />
             <span class="save-label">Save to Drive</span>
             <span class="kbd-combo" aria-hidden="true">
-              <span class="kbd">Ctrl</span>
-              <span class="kbd">S</span>
+              <kbd class="kbd">Ctrl</kbd>
+              <kbd class="kbd">S</kbd>
             </span>
           </button>
           <div class="save-status-indicator" data-save-status>
@@ -101,7 +102,7 @@ import SourceTile from "../SourceTile.astro";
           <div class="origin-desc">
             <span class="label">One source, three formats</span>
             <p class="muted text-sm">
-              Press <kbd class="kbd">Ctrl</kbd> <kbd class="kbd">S</kbd> while here to run the sync animation.
+              Press <kbd class="kbd">Ctrl</kbd> <kbd class="kbd">S</kbd> while this section is visible to run the sync.
             </p>
           </div>
         </div>
@@ -112,27 +113,25 @@ import SourceTile from "../SourceTile.astro";
           <div class="dest-card card" data-dest-card="markdown">
             <div class="dest-card-header">
               <div class="dest-title-wrap">
-                <span class="dest-ext mono">.md</span>
-                <h4 class="h4 dest-title">Tidy Markdown with YAML front matter</h4>
+                <code class="dest-ext">.md</code>
+                <h3 class="h4 dest-title">Tidy Markdown with YAML front matter</h3>
               </div>
-              <span class="dest-chip chip">Geist Mono</span>
+              <span class="dest-chip chip">CommonMark</span>
             </div>
-            <div class="code-preview mono">
-              <div class="code-line muted">---</div>
-              <div class="code-line"><span class="k">source:</span> youtube</div>
-              <div class="code-line"><span class="k">title:</span> How turbo lag actually works</div>
-              <div class="code-line"><span class="k">channel:</span> Engineering Explained</div>
-              <div class="code-line"><span class="k">duration:</span> 12:40</div>
-              <div class="code-line"><span class="k">saved:</span> 2026-10-22</div>
-              <div class="code-line"><span class="k">folder:</span> Cars/Engines/Lag and boost</div>
-              <div class="code-line muted">---</div>
-              <div class="code-line heading-line"># How turbo lag actually works</div>
-              <div class="code-line quote-line muted">&gt; Saved from [YouTube](https://youtu.be/...) on 2026-10-22.</div>
-              <div class="code-line heading-line">## Transcript</div>
-              <div class="code-line">[0:47](https://youtu.be/...) Anti-lag keeps the turbine spooled...</div>
-              <div class="code-line heading-line">## References</div>
-              <div class="code-line footnote-line">[^1]: [sae.org](https://sae.org) - SAE Technical Paper 2308</div>
-            </div>
+            <pre class="code-preview mono"><code><span class="muted">---</span>
+<span class="k">source:</span> youtube
+<span class="k">title:</span> How turbo lag actually works
+<span class="k">channel:</span> Engineering Explained
+<span class="k">duration:</span> 12:40
+<span class="k">saved:</span> 2026-10-22
+<span class="k">folder:</span> Cars/Engines/Lag and boost
+<span class="muted">---</span>
+<span class="heading-line"># How turbo lag actually works</span>
+<span class="quote-line muted">&gt; Saved from [YouTube](https://youtu.be/...) on 2026-10-22.</span>
+<span class="heading-line">## Transcript</span>
+[0:47](https://youtu.be/...) Anti-lag keeps the turbine spooled...
+<span class="heading-line">## References</span>
+<span class="footnote-line">[^1]: [sae.org](https://sae.org) - SAE Technical Paper 2308</span></code></pre>
             <div class="dest-footer muted text-xs">
               Human-readable CommonMark with footnotes. Compatible with Obsidian and VS Code.
             </div>
@@ -143,7 +142,7 @@ import SourceTile from "../SourceTile.astro";
             <div class="dest-card-header">
               <div class="dest-title-wrap">
                 <Cloud size={16} class="dest-icon-cloud" />
-                <h4 class="h4 dest-title">Google Drive mirror</h4>
+                <h3 class="h4 dest-title">Google Drive mirror</h3>
               </div>
               <span class="dest-chip chip gdoc-chip">Google Docs copy</span>
             </div>
@@ -152,32 +151,32 @@ import SourceTile from "../SourceTile.astro";
             <div class="tree-preview" data-drive-tree>
               <div class="tree-node root-folder">
                 <Folder size={14} class="folder-icon" />
-                <span class="folder-name mono">Sourcefold/</span>
+                <code class="folder-name">Sourcefold/</code>
               </div>
               <div class="tree-children">
                 <div class="tree-node">
                   <Folder size={14} class="folder-icon" />
-                  <span class="folder-name mono">Cars/</span>
+                  <code class="folder-name">Cars/</code>
                 </div>
                 <div class="tree-children">
                   <div class="tree-node">
                     <Folder size={14} class="folder-icon" />
-                    <span class="folder-name mono">Engines/</span>
+                    <code class="folder-name">Engines/</code>
                   </div>
                   <div class="tree-children">
                     <div class="tree-node">
                       <Folder size={14} class="folder-icon" />
-                      <span class="folder-name mono">Lag and boost/</span>
+                      <code class="folder-name">Lag and boost/</code>
                     </div>
                     <div class="tree-children file-children">
                       <div class="tree-file file-md">
-                        <span class="file-badge mono">MD</span>
-                        <span class="file-name mono">How turbo lag actually works.md</span>
+                        <code class="file-badge">MD</code>
+                        <code class="file-name">How turbo lag actually works.md</code>
                       </div>
                       <div class="tree-file file-gdoc">
-                        <span class="file-badge gdoc-badge mono">DOC</span>
-                        <span class="file-name mono">How turbo lag actually works</span>
-                        <span class="ai-ready-badge">NotebookLM & Gemini ready</span>
+                        <code class="file-badge gdoc-badge">DOC</code>
+                        <span class="file-name">How turbo lag actually works</span>
+                        <span class="ai-ready-badge">NotebookLM &amp; Gemini ready</span>
                       </div>
                     </div>
                   </div>
@@ -188,14 +187,14 @@ import SourceTile from "../SourceTile.astro";
             <!-- Offline Dim Overlay -->
             <div class="offline-overlay" data-offline-overlay>
               <CloudOff size={24} />
-              <p class="offline-msg">
+              <div class="offline-msg">
                 <strong>Offline mode</strong>
                 <span>No Google account required. Local SQLite and Markdown on disk; Drive mirror is skipped.</span>
-              </p>
+              </div>
             </div>
 
             <div class="dest-footer muted text-xs">
-              Sourcefold can only see files it created in your Drive (<span class="mono">drive.file</span> scope).
+              Sourcefold can only see files it created in your Drive (<code>drive.file</code> scope).
             </div>
           </div>
 
@@ -204,29 +203,29 @@ import SourceTile from "../SourceTile.astro";
             <div class="dest-card-header">
               <div class="dest-title-wrap">
                 <HardDrive size={16} class="dest-icon-disk" />
-                <h4 class="h4 dest-title">Desktop Documents / Sourcefold</h4>
+                <h3 class="h4 dest-title">Desktop Documents / Sourcefold</h3>
               </div>
               <span class="dest-chip chip docx-chip">Word .docx beside each file</span>
             </div>
 
             <div class="local-files-preview">
-              <div class="local-path mono muted text-xs">
-                ~/Documents/Sourcefold/Cars/Engines/Lag and boost/
+              <div class="local-path muted text-xs">
+                <code>~/Documents/Sourcefold/Cars/Engines/Lag and boost/</code>
               </div>
               <div class="local-file-list">
                 <div class="local-file-item">
-                  <span class="file-pill pill-md mono">.md</span>
-                  <span class="local-fname mono">How turbo lag actually works.md</span>
+                  <code class="file-pill pill-md">.md</code>
+                  <code class="local-fname">How turbo lag actually works.md</code>
                   <span class="local-fmeta muted">Clean Markdown</span>
                 </div>
                 <div class="local-file-item">
-                  <span class="file-pill pill-docx mono">.docx</span>
-                  <span class="local-fname mono">How turbo lag actually works.docx</span>
+                  <code class="file-pill pill-docx">.docx</code>
+                  <code class="local-fname">How turbo lag actually works.docx</code>
                   <span class="local-fmeta muted">Word document copy</span>
                 </div>
                 <div class="local-file-item">
-                  <span class="file-pill pill-dir mono">_files</span>
-                  <span class="local-fname mono">How turbo lag actually works_files/</span>
+                  <code class="file-pill pill-dir">_files</code>
+                  <code class="local-fname">How turbo lag actually works_files/</code>
                   <span class="local-fmeta muted">Images saved locally</span>
                 </div>
               </div>
@@ -275,14 +274,16 @@ import SourceTile from "../SourceTile.astro";
     let isSaving = false;
     let currentMode: "signed-in" | "offline" = "signed-in";
 
-    // Track intersection for Ctrl+S keyboard shortcut
+    // Track intersection strictly so Ctrl+S does NOT trigger when scrolled away
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
-          isSectionVisible = e.isIntersecting;
+          if (e.target === section) {
+            isSectionVisible = e.isIntersecting && e.intersectionRatio >= 0.35;
+          }
         });
       },
-      { threshold: 0.2 },
+      { threshold: [0, 0.35, 0.7] },
     );
     observer.observe(section);
 
@@ -343,26 +344,39 @@ import SourceTile from "../SourceTile.astro";
 
     saveBtn.addEventListener("click", triggerSave);
 
-    // Ctrl+S / Cmd+S handler only when this section is visible
+    // Ctrl+S / Cmd+S handler ONLY when this section is actively in view
     window.addEventListener("keydown", (e: KeyboardEvent) => {
-      if (!isSectionVisible) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        triggerSave();
+        // Never swallow browser save if focus is in an input or textarea
+        const active = document.activeElement;
+        if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || (active as HTMLElement).isContentEditable)) {
+          return;
+        }
+
+        // Precision bounding check
+        const rect = section.getBoundingClientRect();
+        const vh = window.innerHeight || document.documentElement.clientHeight;
+        const visibleH = Math.max(0, Math.min(rect.bottom, vh) - Math.max(rect.top, 0));
+        const inViewNow = isSectionVisible && visibleH > Math.min(rect.height * 0.35, vh * 0.35);
+
+        if (inViewNow) {
+          e.preventDefault();
+          triggerSave();
+        }
       }
     });
   }
 </script>
 
 <style>
-  .diagram-wrapper {
+  [data-ui="diagram"] {
     margin-top: 12px;
     border: 1px solid var(--border);
     overflow: hidden;
   }
 
   /* Toolbar */
-  .diagram-toolbar {
+  [data-ui="diagram"] .diagram-toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -373,18 +387,18 @@ import SourceTile from "../SourceTile.astro";
     border-bottom: 1px solid var(--border);
   }
 
-  .mode-toggle-group {
+  [data-ui="diagram"] .mode-toggle-group {
     display: flex;
     align-items: center;
     gap: 6px;
   }
 
-  .toggle-caption {
+  [data-ui="diagram"] .toggle-caption {
     font-size: 12px;
     margin-right: 4px;
   }
 
-  .toggle-btn {
+  [data-ui="diagram"] .toggle-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -396,32 +410,35 @@ import SourceTile from "../SourceTile.astro";
     background: var(--card);
     color: var(--muted-foreground);
     cursor: pointer;
-    transition: all 140ms var(--ease-out);
+    transition:
+      color 140ms var(--ease-out),
+      background-color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out);
   }
 
-  .toggle-btn:hover {
+  [data-ui="diagram"] .toggle-btn:hover {
     color: var(--foreground);
     border-color: var(--border-strong);
   }
 
-  .toggle-btn.is-active {
+  [data-ui="diagram"] .toggle-btn.is-active {
     background: var(--primary);
     color: var(--primary-foreground);
     border-color: var(--primary);
   }
 
-  .save-action-group {
+  [data-ui="diagram"] .save-action-group {
     display: flex;
     align-items: center;
     gap: 12px;
   }
 
-  .save-trigger-btn {
+  [data-ui="diagram"] .save-trigger-btn {
     gap: 8px;
     font-size: 13px;
   }
 
-  .save-trigger-btn.is-spinning :global(.save-icon) {
+  [data-ui="diagram"] .save-trigger-btn.is-spinning :global(.save-icon) {
     animation: spin 700ms linear infinite;
   }
 
@@ -434,13 +451,13 @@ import SourceTile from "../SourceTile.astro";
     }
   }
 
-  .kbd-combo {
+  [data-ui="diagram"] .kbd-combo {
     display: inline-flex;
     gap: 3px;
     margin-left: 2px;
   }
 
-  .save-status-indicator {
+  [data-ui="diagram"] .save-status-indicator {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -448,7 +465,7 @@ import SourceTile from "../SourceTile.astro";
     color: var(--muted-foreground);
   }
 
-  .ping-dot {
+  [data-ui="diagram"] .ping-dot {
     position: relative;
     width: 8px;
     height: 8px;
@@ -456,7 +473,7 @@ import SourceTile from "../SourceTile.astro";
     background: var(--success);
   }
 
-  .ping-dot.pings::after {
+  [data-ui="diagram"] .ping-dot.pings::after {
     content: "";
     position: absolute;
     inset: -3px;
@@ -477,7 +494,7 @@ import SourceTile from "../SourceTile.astro";
   }
 
   /* Grid layout */
-  .diagram-grid {
+  [data-ui="diagram"] .diagram-grid {
     display: grid;
     grid-template-columns: 280px 1fr;
     gap: 24px;
@@ -486,25 +503,25 @@ import SourceTile from "../SourceTile.astro";
   }
 
   @media (max-width: 900px) {
-    .diagram-grid {
+    [data-ui="diagram"] .diagram-grid {
       grid-template-columns: 1fr;
     }
   }
 
   /* Origin card */
-  .origin-column {
+  [data-ui="diagram"] .origin-column {
     display: flex;
     flex-direction: column;
     gap: 16px;
   }
 
-  .origin-card {
+  [data-ui="diagram"] .origin-card {
     padding: 18px;
     border: 1px solid var(--border);
     position: relative;
   }
 
-  .origin-badge {
+  [data-ui="diagram"] .origin-badge {
     display: inline-block;
     font-size: 11px;
     font-weight: 600;
@@ -513,30 +530,30 @@ import SourceTile from "../SourceTile.astro";
     margin-bottom: 12px;
   }
 
-  .origin-item {
+  [data-ui="diagram"] .origin-item {
     display: flex;
     align-items: center;
     gap: 12px;
   }
 
-  .origin-meta {
+  [data-ui="diagram"] .origin-meta {
     display: flex;
     flex-direction: column;
   }
 
-  .origin-title {
+  [data-ui="diagram"] .origin-title {
     font-size: 14.5px;
     font-weight: 500;
     line-height: 1.3;
     color: var(--foreground);
   }
 
-  .origin-folder {
+  [data-ui="diagram"] .origin-folder {
     font-size: 11.5px;
     margin-top: 3px;
   }
 
-  .fan-arrows {
+  [data-ui="diagram"] .fan-arrows {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -545,14 +562,14 @@ import SourceTile from "../SourceTile.astro";
     border-top: 1px dashed var(--border);
   }
 
-  .fan-line {
+  [data-ui="diagram"] .fan-line {
     height: 2px;
     background: color-mix(in oklab, var(--primary) 20%, var(--border));
     border-radius: 1px;
     position: relative;
   }
 
-  .fan-line::after {
+  [data-ui="diagram"] .fan-line::after {
     content: "▶";
     position: absolute;
     right: -4px;
@@ -561,7 +578,7 @@ import SourceTile from "../SourceTile.astro";
     color: var(--muted-foreground);
   }
 
-  .origin-desc {
+  [data-ui="diagram"] .origin-desc {
     padding: 14px;
     border-radius: 10px;
     background: var(--card);
@@ -569,24 +586,24 @@ import SourceTile from "../SourceTile.astro";
   }
 
   /* Destinations */
-  .destinations-column {
+  [data-ui="diagram"] .destinations-column {
     display: flex;
     flex-direction: column;
     gap: 16px;
   }
 
-  .dest-card {
+  [data-ui="diagram"] .dest-card {
     padding: 18px 20px;
     border: 1px solid var(--border);
     position: relative;
     transition: opacity 240ms var(--ease-out);
   }
 
-  .dest-card.is-offline {
+  [data-ui="diagram"] .dest-card.is-offline {
     opacity: 0.45;
   }
 
-  .dest-card-header {
+  [data-ui="diagram"] .dest-card-header {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -595,18 +612,19 @@ import SourceTile from "../SourceTile.astro";
     margin-bottom: 12px;
   }
 
-  .dest-title-wrap {
+  [data-ui="diagram"] .dest-title-wrap {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .dest-title {
+  [data-ui="diagram"] .dest-title {
     font-size: 15px;
     font-weight: 600;
+    margin: 0;
   }
 
-  .dest-ext {
+  [data-ui="diagram"] .dest-ext {
     font-size: 12px;
     padding: 2px 6px;
     border-radius: 4px;
@@ -614,26 +632,26 @@ import SourceTile from "../SourceTile.astro";
     color: var(--foreground);
   }
 
-  .dest-icon-cloud {
+  [data-ui="diagram"] .dest-icon-cloud {
     color: var(--source-bluesky);
   }
 
-  .dest-icon-disk {
+  [data-ui="diagram"] .dest-icon-disk {
     color: var(--source-web);
   }
 
-  .gdoc-chip {
+  [data-ui="diagram"] .gdoc-chip {
     background: color-mix(in oklab, var(--source-bluesky) 14%, transparent);
     color: var(--source-bluesky);
   }
 
-  .docx-chip {
+  [data-ui="diagram"] .docx-chip {
     background: color-mix(in oklab, var(--source-web) 14%, transparent);
     color: var(--foreground);
   }
 
   /* Code preview */
-  .code-preview {
+  [data-ui="diagram"] .code-preview {
     font-size: 11.5px;
     line-height: 1.6;
     padding: 12px 14px;
@@ -641,29 +659,35 @@ import SourceTile from "../SourceTile.astro";
     background: var(--background);
     border: 1px solid var(--border);
     color: var(--foreground);
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
-  .code-line .k {
+  [data-ui="diagram"] .code-preview .k {
     color: var(--source-substack);
     font-weight: 500;
   }
 
-  .code-line.heading-line {
+  [data-ui="diagram"] .code-preview .heading-line {
     font-weight: 600;
     color: var(--foreground);
+    display: block;
     margin-top: 4px;
   }
 
-  .code-line.quote-line {
+  [data-ui="diagram"] .code-preview .quote-line {
     font-style: italic;
+    display: block;
   }
 
-  .code-line.footnote-line {
+  [data-ui="diagram"] .code-preview .footnote-line {
     color: var(--muted-foreground);
+    display: block;
   }
 
   /* Tree preview */
-  .tree-preview {
+  [data-ui="diagram"] .tree-preview {
     padding: 12px 14px;
     border-radius: 8px;
     background: var(--background);
@@ -672,27 +696,27 @@ import SourceTile from "../SourceTile.astro";
     line-height: 1.5;
   }
 
-  .tree-node {
+  [data-ui="diagram"] .tree-node {
     display: flex;
     align-items: center;
     gap: 6px;
     padding-block: 2px;
   }
 
-  .tree-children {
+  [data-ui="diagram"] .tree-children {
     padding-left: 16px;
     border-left: 1px solid var(--border);
     margin-left: 6px;
   }
 
-  .file-children {
+  [data-ui="diagram"] .file-children {
     display: flex;
     flex-direction: column;
     gap: 4px;
     padding-top: 2px;
   }
 
-  .tree-file {
+  [data-ui="diagram"] .tree-file {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -701,11 +725,11 @@ import SourceTile from "../SourceTile.astro";
     transition: background-color 200ms var(--ease-out);
   }
 
-  .tree-file.is-saving-pulse {
+  [data-ui="diagram"] .tree-file.is-saving-pulse {
     background: var(--marker-soft);
   }
 
-  .file-badge {
+  [data-ui="diagram"] .file-badge {
     font-size: 10px;
     padding: 1px 4px;
     border-radius: 3px;
@@ -713,12 +737,12 @@ import SourceTile from "../SourceTile.astro";
     color: var(--muted-foreground);
   }
 
-  .gdoc-badge {
+  [data-ui="diagram"] .gdoc-badge {
     background: var(--source-bluesky);
     color: white;
   }
 
-  .ai-ready-badge {
+  [data-ui="diagram"] .ai-ready-badge {
     font-size: 10.5px;
     padding: 1px 6px;
     border-radius: 999px;
@@ -727,14 +751,14 @@ import SourceTile from "../SourceTile.astro";
     margin-left: auto;
   }
 
-  /* Offline overlay */
-  .offline-overlay {
+  /* Offline overlay: opaque surface step instead of glassmorphism */
+  [data-ui="diagram"] .offline-overlay {
     display: none;
     position: absolute;
     inset: 0;
     border-radius: 12px;
-    background: color-mix(in oklab, var(--background) 86%, transparent);
-    backdrop-filter: blur(2px);
+    background: color-mix(in oklab, var(--card) 95%, var(--desk));
+    border: 1px solid var(--border);
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -743,11 +767,11 @@ import SourceTile from "../SourceTile.astro";
     text-align: center;
   }
 
-  .offline-overlay.is-visible {
+  [data-ui="diagram"] .offline-overlay.is-visible {
     display: flex;
   }
 
-  .offline-msg {
+  [data-ui="diagram"] .offline-msg {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -756,28 +780,31 @@ import SourceTile from "../SourceTile.astro";
   }
 
   /* Local files preview */
-  .local-files-preview {
+  [data-ui="diagram"] .local-files-preview {
     padding: 12px 14px;
     border-radius: 8px;
     background: var(--background);
     border: 1px solid var(--border);
   }
 
-  .local-file-list {
+  [data-ui="diagram"] .local-path {
+    margin-bottom: 8px;
+  }
+
+  [data-ui="diagram"] .local-file-list {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-top: 8px;
   }
 
-  .local-file-item {
+  [data-ui="diagram"] .local-file-item {
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 12px;
   }
 
-  .file-pill {
+  [data-ui="diagram"] .file-pill {
     font-size: 10px;
     padding: 1px 5px;
     border-radius: 4px;
@@ -785,28 +812,28 @@ import SourceTile from "../SourceTile.astro";
     font-weight: 600;
   }
 
-  .pill-md {
+  [data-ui="diagram"] .pill-md {
     color: var(--source-grokipedia);
   }
-  .pill-docx {
+  [data-ui="diagram"] .pill-docx {
     color: var(--source-bluesky);
   }
-  .pill-dir {
+  [data-ui="diagram"] .pill-dir {
     color: var(--source-web);
   }
 
-  .local-fmeta {
+  [data-ui="diagram"] .local-fmeta {
     margin-left: auto;
     font-size: 11px;
   }
 
-  .dest-footer {
+  [data-ui="diagram"] .dest-footer {
     margin-top: 10px;
     line-height: 1.4;
   }
 
   /* Privacy callouts */
-  .privacy-strip {
+  [data-ui="diagram"] .privacy-strip {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
@@ -816,12 +843,12 @@ import SourceTile from "../SourceTile.astro";
   }
 
   @media (max-width: 760px) {
-    .privacy-strip {
+    [data-ui="diagram"] .privacy-strip {
       grid-template-columns: 1fr;
     }
   }
 
-  .privacy-pill {
+  [data-ui="diagram"] .privacy-pill {
     display: flex;
     align-items: flex-start;
     gap: 10px;
@@ -829,7 +856,7 @@ import SourceTile from "../SourceTile.astro";
     line-height: 1.45;
   }
 
-  .privacy-icon {
+  [data-ui="diagram"] .privacy-icon {
     flex-shrink: 0;
     color: var(--success);
     margin-top: 2px;

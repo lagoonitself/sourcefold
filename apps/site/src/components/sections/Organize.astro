@@ -341,19 +341,19 @@ import {
                 </span>
               </h3>
               <p class="group-meta muted" id="group-meta-text">
-                2 subgroups, 6 sources · 14 highlights
+                2 subgroups, 6 sources (14 highlights)
               </p>
             </div>
 
             <div class="group-actions">
-              <button type="button" class="btn btn-outline btn-sm">
+              <button type="button" class="btn btn-outline btn-sm" id="btn-new-subgroup">
                 <span>New subgroup</span>
               </button>
-              <button type="button" class="btn btn-outline btn-sm">
+              <button type="button" class="btn btn-outline btn-sm" id="btn-add-image">
                 <ImageIcon size={14} stroke-width={1.75} />
                 <span>Add image</span>
               </button>
-              <button type="button" class="btn btn-outline btn-sm">
+              <button type="button" class="btn btn-outline btn-sm" id="btn-new-note">
                 <StickyNote size={14} stroke-width={1.75} />
                 <span>New note</span>
               </button>
@@ -407,7 +407,7 @@ import {
               <SourceTile kind="youtube" size={30} />
               <div class="row-text">
                 <span class="row-title serif">How turbo lag actually works</span>
-                <span class="row-subtext muted">Engineering Explained · YouTube · 12:04</span>
+                <span class="row-subtext muted">Engineering Explained / YouTube (12:04)</span>
               </div>
               <div class="row-type-badge muted">YouTube</div>
               <div class="row-date muted nums">Oct 17</div>
@@ -440,7 +440,7 @@ import {
               <SourceTile kind="grokipedia" size={30} />
               <div class="row-text">
                 <span class="row-title serif">Turbocharger</span>
-                <span class="row-subtext muted">Grokipedia · 8 footnotes · Complete article</span>
+                <span class="row-subtext muted">Grokipedia / 8 footnotes / Complete article</span>
               </div>
               <div class="row-type-badge muted">Grokipedia</div>
               <div class="row-date muted nums">Oct 16</div>
@@ -473,7 +473,7 @@ import {
               <SourceTile kind="substack" size={30} />
               <div class="row-text">
                 <span class="row-title serif">The last rotary</span>
-                <span class="row-subtext muted">Engine Bay · Substack · 3 images</span>
+                <span class="row-subtext muted">Engine Bay / Substack (3 images)</span>
               </div>
               <div class="row-type-badge muted">Substack</div>
               <div class="row-date muted nums">Oct 14</div>
@@ -501,10 +501,10 @@ import {
               <SourceTile kind="note" size={30} />
               <div class="row-text">
                 <span class="row-title serif">Script ideas for the intro</span>
-                <span class="row-subtext muted">Markdown note · "Hook: 930 turbo lag vs EV instant torque"</span>
+                <span class="row-subtext muted">Markdown note / "Hook: 930 turbo lag vs EV instant torque"</span>
               </div>
               <div class="row-type-badge muted">Note</div>
-              <div class="row-date muted nums">Oct 18</div>
+              <div class="row-date muted nums">Oct 17</div>
               <button
                 type="button"
                 class="btn-icon-subtle row-more-btn"
@@ -524,15 +524,15 @@ import {
                 <span class="checkbox-visual" aria-hidden="true">
                   <Check size={11} stroke-width={2.5} class="check-icon" />
                 </span>
-                <span class="sr-only">Select Dyno chart</span>
+                <span class="sr-only">Select Dyno chart, 2JZ stock vs single turbo</span>
               </label>
               <SourceTile kind="image" size={30} />
               <div class="row-text">
                 <span class="row-title serif">Dyno chart, 2JZ stock vs single turbo</span>
-                <span class="row-subtext muted">Image · PNG · 1.4 MB · Kept in Drive</span>
+                <span class="row-subtext muted">Image / PNG (1.4 MB) / Kept in Drive</span>
               </div>
               <div class="row-type-badge muted">Image</div>
-              <div class="row-date muted nums">Oct 17</div>
+              <div class="row-date muted nums">Oct 16</div>
               <button
                 type="button"
                 class="btn-icon-subtle row-more-btn"
@@ -562,7 +562,7 @@ import {
               <SourceTile kind="reddit" size={30} />
               <div class="row-text">
                 <span class="row-title serif">Is the 2JZ overrated?</span>
-                <span class="row-subtext muted">r/cars · Reddit · 342 comments</span>
+                <span class="row-subtext muted">r/cars / Reddit (342 comments)</span>
               </div>
               <div class="row-type-badge muted">Reddit</div>
               <div class="row-date muted nums">Oct 15</div>
@@ -643,6 +643,11 @@ import {
     const selectionCount = section.querySelector("#selected-items-count") as HTMLElement | null;
     const copyLinksBtn = section.querySelector("#batch-copy-links-btn") as HTMLButtonElement | null;
     const deselectBtn = section.querySelector("#batch-deselect-btn") as HTMLButtonElement | null;
+    const batchMoveBtn = section.querySelector("#batch-move-btn") as HTMLButtonElement | null;
+
+    const newSubgroupBtn = section.querySelector("#btn-new-subgroup") as HTMLButtonElement | null;
+    const addImgBtn = section.querySelector("#btn-add-image") as HTMLButtonElement | null;
+    const newNoteBtn = section.querySelector("#btn-new-note") as HTMLButtonElement | null;
 
     const rowsList = section.querySelector("#group-rows-list") as HTMLElement | null;
     const itemRows = Array.from(section.querySelectorAll(".item-row")) as HTMLElement[];
@@ -674,7 +679,7 @@ import {
       }, 2400);
     }
 
-    // Project Switcher Dropdown
+    // Project Switcher Dropdown & Selection
     projectBtn?.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!projectMenu) return;
@@ -690,9 +695,68 @@ import {
       }
     });
 
+    const projectItems = Array.from(
+      projectMenu?.querySelectorAll(".menu-item:not(.menu-item-archive)") || []
+    ) as HTMLButtonElement[];
+
+    projectItems.forEach((item) => {
+      item.addEventListener("click", () => {
+        projectItems.forEach((pi) => {
+          pi.classList.remove("is-active");
+          const chk = pi.querySelector(".item-check");
+          if (chk) chk.remove();
+          if (!pi.querySelector(".item-check-placeholder")) {
+            const span = document.createElement("span");
+            span.className = "item-check-placeholder";
+            pi.prepend(span);
+          }
+        });
+        item.classList.add("is-active");
+        item.querySelector(".item-check-placeholder")?.remove();
+        const checkIcon = document.createElement("span");
+        checkIcon.className = "item-check";
+        checkIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+        item.prepend(checkIcon);
+
+        const newName = item.querySelector("span:last-child")?.textContent || "Cars";
+        const nameSpan = projectBtn?.querySelector(".project-name");
+        if (nameSpan) nameSpan.textContent = newName;
+        const trailSpan = section.querySelector(".breadcrumb-trail > span:first-child");
+        if (trailSpan) trailSpan.textContent = newName;
+
+        if (projectMenu) projectMenu.style.display = "none";
+        projectBtn?.setAttribute("aria-expanded", "false");
+        showToast(`Switched project to '${newName}'`);
+      });
+    });
+
+    // Archive project action
     archiveBtn?.addEventListener("click", () => {
+      const curName = projectBtn?.querySelector(".project-name")?.textContent || "Cars";
       if (projectMenu) projectMenu.style.display = "none";
-      showToast("Archived project 'Cars'");
+      projectBtn?.setAttribute("aria-expanded", "false");
+      showToast(`Archived project '${curName}'`);
+
+      // Switch to next active project
+      const nextProj = projectItems.find((pi) => !pi.classList.contains("is-active"));
+      if (nextProj) nextProj.click();
+    });
+
+    // Header buttons (New subgroup, Add image, New note)
+    newSubgroupBtn?.addEventListener("click", () => {
+      showToast("Created subgroup in Turbocharging");
+    });
+
+    addImgBtn?.addEventListener("click", () => {
+      showToast("Added image dyno-comparison.png to Turbocharging");
+    });
+
+    newNoteBtn?.addEventListener("click", () => {
+      showToast("Created note in Turbocharging");
+    });
+
+    batchMoveBtn?.addEventListener("click", () => {
+      showToast("Moved selected items to Lag and boost");
     });
 
     // Expand / Collapse Chevron Toggles
@@ -747,7 +811,6 @@ import {
         // Update group header with re-sweeping marker
         if (groupHeading) {
           groupHeading.innerHTML = `<span class="marker marker-sweep">${groupName}</span>`;
-          // Force layout reflow to re-trigger marker-sweep transition
           void groupHeading.offsetWidth;
           groupHeading.classList.add("is-in");
         }
@@ -801,7 +864,7 @@ import {
         updateSelectionState();
       });
 
-      // Clicking row toggles selection if clicking outside buttons
+      // Clicking row toggles selection if clicking outside buttons/drag-handle
       row.addEventListener("click", (e) => {
         const target = e.target as HTMLElement;
         if (
@@ -836,7 +899,8 @@ import {
       showToast(`Copied ${count} links`);
     });
 
-    // Reorder Rows via Pointer Events (Touch & Mouse with Pointer Capture)
+    // Reorder Rows via Pointer Events (Touch & Mouse with Pointer Capture on handle only)
+    // touch-action: none is on .row-drag-handle, allowing normal page scrolling elsewhere
     let draggedRow: HTMLElement | null = null;
     let placeholder: HTMLElement | null = null;
     let startY = 0;
@@ -904,7 +968,7 @@ import {
       });
     });
 
-    // Group Nesting Drag and Drop in Sidebar Tree
+    // Group Nesting Drag and Drop in Sidebar Tree (HTML5 & Pointer support)
     let draggedGroup: HTMLElement | null = null;
     treeRows.forEach((row) => {
       row.addEventListener("dragstart", (e) => {
@@ -939,6 +1003,28 @@ import {
 
         const sourceName = draggedGroup.dataset.group;
         const targetName = row.dataset.group;
+
+        // Move the branch physically in DOM
+        const draggedBranch = draggedGroup.closest(".tree-branch") || draggedGroup;
+        const targetBranch = row.closest(".tree-branch") || row;
+
+        if (
+          draggedBranch &&
+          targetBranch &&
+          draggedBranch !== targetBranch &&
+          !draggedBranch.contains(targetBranch)
+        ) {
+          let childrenContainer = targetBranch.querySelector(":scope > .tree-children") as HTMLElement | null;
+          if (!childrenContainer) {
+            childrenContainer = document.createElement("div");
+            childrenContainer.className = "tree-children";
+            targetBranch.appendChild(childrenContainer);
+          }
+          childrenContainer.appendChild(draggedBranch);
+          childrenContainer.style.display = "block";
+          targetBranch.classList.remove("is-collapsed");
+        }
+
         showToast(`Nested '${sourceName}' inside '${targetName}'`);
       });
     });

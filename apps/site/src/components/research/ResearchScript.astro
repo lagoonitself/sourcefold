@@ -18,7 +18,7 @@ const REFERENCES: CitationRef[] = [
     author: "Jason Fenske (Engineering Explained)",
     source: "How turbo lag actually works",
     kindName: "YouTube",
-    detail: "Timestamp 12:04 · Spool inertia vs intake plenum volume",
+    detail: "Timestamp 12:04 / Spool inertia vs intake plenum volume",
   },
   {
     num: 2,
@@ -71,7 +71,7 @@ const REFERENCES: CitationRef[] = [
           Ask anyone in the car world why they dislike turbochargers, and they will tell you the same thing:
           turbos are sluggish. But that delay isn't a single mysterious pause. It's actually two separate
           mechanical events happening back-to-back
-          <button type="button" class="cite-ref" data-ref="1" title="Engineering Explained · 12:04">[1]</button>.
+          <button type="button" class="cite-ref" data-ref="1" title="Engineering Explained (12:04)">[1]</button>.
         </p>
       </div>
 
@@ -82,7 +82,7 @@ const REFERENCES: CitationRef[] = [
           First, intake plenum lag occurs when air rushes past the throttle plate. Second, spool time begins as
           exhaust flow slowly overcomes the rotational inertia of the turbine wheel. Splitting the exhaust ports
           into a divided turbine housing preserves kinetic pulses without mutual cylinder interference
-          <button type="button" class="cite-ref" data-ref="2" title="@boostlab · X Thread">[2]</button>.
+          <button type="button" class="cite-ref" data-ref="2" title="@boostlab (X Thread)">[2]</button>.
         </p>
       </div>
 
@@ -92,7 +92,7 @@ const REFERENCES: CitationRef[] = [
         <p class="script-paragraph">
           Mazda tried tackling this in the 1990s with sequential twin turbos, but the rats' nest of vacuum
           lines proved notoriously fragile under sustained track heat
-          <button type="button" class="cite-ref" data-ref="3" title="Engine Bay · Substack">[3]</button>.
+          <button type="button" class="cite-ref" data-ref="3" title="Engine Bay (Substack)">[3]</button>.
           Today, 48-volt motor assists spin the compressor in under 200 milliseconds, effectively closing the chapter
           on mechanical turbo lag once and for all
           <button type="button" class="cite-ref" data-ref="4" title="Hacker News discussion">[4]</button>.
@@ -173,7 +173,7 @@ const REFERENCES: CitationRef[] = [
     copyBtn?.addEventListener("click", () => {
       if (!copyLabel) return;
       const oldText = copyLabel.textContent;
-      copyLabel.textContent = "Copied to clipboard!";
+      copyLabel.textContent = "Copied to clipboard";
       setTimeout(() => {
         copyLabel.textContent = oldText;
       }, 2000);

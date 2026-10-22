@@ -14,8 +14,9 @@
  * - Beside it: .sheet file preview that cross-fades
  *   - "Save it with" (savedWith)
  *   - "What you get" (youGet)
- *   - Realistic Markdown preview in Geist Mono with syntax-tinted front matter & body
+ *   - Realistic Markdown preview with syntax-tinted front matter & body
  * - Auto-cycle every ~3.5s while visible until user interacts, with thin progress line
+ * - Hover pauses cycle; mouseleave resumes unless explicitly clicked/navigated
  * - Roving tabindex + arrow key navigation (role="tablist" / "tab" + "tabpanel")
  *
  * Below:
@@ -158,73 +159,80 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   reddit: {
     kind: "reddit",
     authorLabel: "author",
-    authorValue: "u/boosted_daily",
+    authorValue: "u/apex_enthusiast",
     savedDate: "2026-10-18",
     bodyLines: [
       {
+        type: "p",
+        text: "Is the 2JZ overrated? From a motorsport engineering perspective: the cast-iron closed deck block handles 1,000+ hp reliably, but the sequential twin setup was notoriously laggy compared to modern twin-scroll singles.",
+      },
+      {
         type: "comment",
-        text: "**u/boosted_daily** (1,248 points): People talk about the 2JZ-GTE like it makes 1,000hp out of the box. In reality, the stock sequential twins tap out around 420whp, and you need a huge single turbo, fuel system, and standalone ECU to reach four figures.",
+        text: "▲ 412 points · 84 comments",
       },
       {
         type: "quote",
-        text: "- **u/inline6_fan** (482 points): The iron closed-deck block and forged crank are why it's legendary. You don't have to sleeve it or touch the bottom end even when pushing 800hp.",
-      },
-      {
-        type: "subquote",
-        text: "  - **u/rotorhead** (115 points): True, but it weighs nearly 600 lbs iron cast. Modern aluminum blocks like the B58 hold similar power with 150 lbs less nose weight.",
+        text: "> u/boosted_boxer (Top comment): The cast iron block is bulletproof, but modern alloy blocks with plasma-transferred wire arc coatings get the same rigidity at 45kg less weight over the front axle.",
       },
     ],
   },
   hackernews: {
     kind: "hackernews",
     authorLabel: "author",
-    authorValue: "t_vance",
+    authorValue: "dang (submission by vitor)",
     savedDate: "2026-10-18",
     bodyLines: [
       {
+        type: "p",
+        text: "Show HN: OpenTurbine – Open-source 1D fluid dynamics solver for turbocharger turbine maps (github.com/openturbine)",
+      },
+      {
         type: "comment",
-        text: "**t_vance** (412 points, 189 comments): Garrett and BorgWarner are now shipping 48V electric exhaust gas turbochargers in production road cars. A 6kW motor on the shaft spools the wheel to 100,000 RPM in 200 milliseconds.",
+        text: "284 points by vitor 14 hours ago | 62 comments",
       },
       {
         type: "quote",
-        text: "- **j_miller** (84 points): The interesting part isn't just eliminating lag; it's regeneration. When lift-off happens at high exhaust flow, the motor acts as a generator feeding 48V back into the pack.",
+        text: "> jimbob: How do you handle transient choking at the nozzle ring under pulsing exhaust conditions? Most 1D solvers assume quasi-steady state.",
       },
       {
         type: "subquote",
-        text: "  - **d_wright** (32 points): F1 has run MGU-H for a decade, but thermal management at commercial warranty scale was the real engineering bottleneck.",
+        text: "> > vitor (author): We solve the full 1D Euler equations with method of characteristics, including non-linear acoustic pulse reflection at the scroll tongue.",
       },
     ],
   },
   bluesky: {
     kind: "bluesky",
     authorLabel: "author",
-    authorValue: "torque.dev",
+    authorValue: "@fluidmechanics.bsky.social",
     savedDate: "2026-10-18",
     bodyLines: [
       {
         type: "p",
-        text: "Dyno session finished with the new BorgWarner EFR 7163. Full boost (24 psi) reached by 3,200 RPM with the titanium-aluminide turbine wheel. Transient recovery after gear changes feels instantaneous on the log traces.",
+        text: "A quick note on wastegate creep: when upgrading to a high-flow exhaust turbine, the stock internal wastegate port area is often insufficient to bypass the exhaust mass flow at high engine speeds, causing boost to creep uncontrollably beyond target manifold pressure.",
       },
       {
-        type: "p",
-        text: "Clean 482 wheel hp on pump 93 octane. Next step: testing ethanol blends on Saturday.",
+        type: "image",
+        text: "![Pressure-enthalpy curve of choked wastegate orifice](https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:boost/wastegate-creep.webp)",
       },
     ],
   },
   pdf: {
     kind: "pdf",
     authorLabel: "author",
-    authorValue: "K. Lindgren, S. Eriksson",
+    authorValue: "K. R. V. Murthy, D. R. Jones (SAE International)",
     savedDate: "2026-10-18",
     bodyLines: [
-      { type: "heading", text: "### Abstract" },
+      {
+        type: "heading",
+        text: "Transient Response Modeling of Variable-Geometry Turbines",
+      },
       {
         type: "p",
-        text: "Variable-geometry turbochargers (VGT) regulate turbine inlet area via movable guide vanes to match fluctuating exhaust mass flows:",
+        text: "Variable-nozzle turbine geometry modulates exhaust velocity at low mass flow rates, improving compressor acceleration time by up to 40% over fixed geometry units.",
       },
       {
         type: "math",
-        text: "$$\\dot{m}_t = A_{\\text{eff}}(\\alpha) \\frac{p_{01}}{\\sqrt{R T_{01}}} \\Psi(\\Pi_t)$$",
+        text: "$$\\dot{m}_{\\text{corrected}} = \\frac{\\dot{m}\\sqrt{T_{01}}}{P_{01}} = A_{\\text{eff}}(\\alpha) \\cdot \\Phi(P_{01}/P_{2})$$",
       },
       {
         type: "p",
@@ -240,7 +248,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     bodyLines: [
       {
         type: "p",
-        text: "For over a century, internal combustion engines threw away more than a third of fuel energy right out the exhaust tailpipe as pressurized heat.",
+        text: "For over a century, internal combustion engines lost nearly a third of fuel energy right out the exhaust tailpipe as pressurized heat.",
       },
       {
         type: "p",
@@ -260,10 +268,10 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   image: {
     kind: "image",
     authorLabel: "author",
-    authorValue: "You",
+    authorValue: "Local file",
     savedDate: "2026-10-18",
     bodyLines: [
-      { type: "p", text: "The original image, saved directly in your Google Drive." },
+      { type: "image", text: "![Annotated diagram saved to folder](assets/boost-diagram.png)" },
     ],
   },
 };
@@ -275,87 +283,95 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
       label="Supported sources"
       title="Save from the ten places research "
       marked="comes from"
-      lede="Every source becomes a clean Markdown file. Paste 30–40 links of any mix, or save the page you're on."
+      lede="Every source becomes a clean Markdown file. Paste 30–40 links of any mix."
     />
 
-    <!-- Interactive source picker and preview container -->
+    <!-- Interactive Picker -->
     <div class="sources-interactive" data-sources-picker>
-      <!-- Left side: Source tablist -->
-      <div
-        class="sources-list"
-        role="tablist"
-        aria-label="Supported source types"
-        data-reveal="stagger"
-      >
-        {
-          SOURCES.map((source, index) => {
-            const isSelected = index === 0;
-            return (
-              <button
-                type="button"
-                role="tab"
-                id={`source-tab-${source.kind}`}
-                class:list={["source-tab", { "is-selected": isSelected }]}
-                aria-selected={isSelected ? "true" : "false"}
-                aria-controls={`source-panel-${source.kind}`}
-                tabindex={isSelected ? 0 : -1}
-                data-source-kind={source.kind}
-                style={`--source-brand:${source.color}`}
-              >
-                <div class="tab-accent-bar" aria-hidden="true" />
-                <SourceTile kind={source.kind} size={28} />
-                <span class="source-tab-name">{source.name}</span>
-                <div class="tab-progress-line" aria-hidden="true" />
-              </button>
-            );
-          })
-        }
-      </div>
-
-      <!-- Right side: File preview sheet -->
-      <div class="preview-column">
-        <div class="sheet preview-sheet" aria-live="polite">
+      <!-- Left: Sources tablist -->
+      <div class="sources-list-column">
+        <div
+          class="sources-list"
+          role="tablist"
+          aria-label="Supported source types"
+          data-sources-tablist
+        >
           {
             SOURCES.map((source, index) => {
+              const isFirst = index === 0;
+              return (
+                <button
+                  type="button"
+                  role="tab"
+                  id={`source-tab-${source.kind}`}
+                  aria-selected={isFirst ? "true" : "false"}
+                  aria-controls={`source-panel-${source.kind}`}
+                  tabindex={isFirst ? 0 : -1}
+                  class={`source-tab ${isFirst ? "is-selected is-cycling" : ""}`}
+                  data-source-kind={source.kind}
+                  data-tab-index={index}
+                >
+                  <span class="tab-accent-bar" aria-hidden="true" style={`--source-brand: var(--source-${source.kind})`} />
+                  <SourceTile kind={source.kind} size={28} />
+                  <span class="source-tab-name">{source.name}</span>
+                  <span class="tab-progress-line" aria-hidden="true" style={`--source-brand: var(--source-${source.kind})`} />
+                </button>
+              );
+            })
+          }
+        </div>
+      </div>
+
+      <!-- Right: Preview Sheet -->
+      <div class="preview-column">
+        <div class="sheet preview-sheet" data-ui="markdown-preview">
+          {
+            SOURCES.map((source, index) => {
+              const isFirst = index === 0;
               const detail = SOURCE_DETAILS[source.kind];
-              const isSelected = index === 0;
               return (
                 <div
                   id={`source-panel-${source.kind}`}
                   role="tabpanel"
                   aria-labelledby={`source-tab-${source.kind}`}
-                  class:list={["preview-panel", { "is-active": isSelected }]}
+                  class={`preview-panel ${isFirst ? "is-active" : ""}`}
+                  hidden={!isFirst}
                   data-panel-kind={source.kind}
-                  hidden={!isSelected}
                 >
-                  <!-- Preview header metadata -->
+                  <!-- Header: Save it with & What you get -->
                   <div class="preview-meta-header">
                     <div class="meta-row">
-                      <span class="meta-label">Save it with:</span>
+                      <span class="meta-label">Save it with</span>
                       <span class="meta-value">{source.savedWith}</span>
                     </div>
                     <div class="meta-row">
-                      <span class="meta-label">What you get:</span>
+                      <span class="meta-label">What you get</span>
                       <span class="meta-value">{source.youGet}</span>
                     </div>
                   </div>
 
-                  <!-- Markdown file surface -->
-                  <div class="markdown-preview mono">
+                  <!-- Markdown Preview inside sheet -->
+                  <div class="markdown-preview">
                     <div class="markdown-file-tab">
-                      <span class="file-name">{source.exampleTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md</span>
-                      <span class="file-kind-badge" style={`color:${source.color}`}>
-                        {source.kind}
+                      <span class="file-name">{source.exampleUrl.split("/").pop() || source.kind}.md</span>
+                      <span class="file-kind-badge" style={`color: var(--source-${source.kind})`}>
+                        {source.name}
                       </span>
                     </div>
 
                     <div class="markdown-content">
-                      <!-- Front matter -->
+                      <!-- Realistic Front matter syntax tinting -->
                       <div class="md-frontmatter">
                         <span class="md-fence">---</span>
                         <div class="md-line">
                           <span class="md-key">title:</span>
                           <span class="md-val">"{source.exampleTitle}"</span>
+                        </div>
+                        <div class="md-line">
+                          <span class="md-key">source:</span>
+                          <span class="md-val md-kind" style={`color: var(--source-${source.kind})`}>
+                            {source.kind}
+                          </span>
                         </div>
                         <div class="md-line">
                           <span class="md-key">url:</span>
@@ -367,13 +383,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
                         </div>
                         <div class="md-line">
                           <span class="md-key">saved:</span>
-                          <span class="md-val">"{detail.savedDate}"</span>
-                        </div>
-                        <div class="md-line">
-                          <span class="md-key">kind:</span>
-                          <span class="md-kind" style={`color:${source.color}`}>
-                            {source.kind}
-                          </span>
+                          <span class="md-val">{detail.savedDate}</span>
                         </div>
                         <span class="md-fence">---</span>
                       </div>
@@ -454,13 +464,15 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   if (root) {
     const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
     const panels = Array.from(root.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+    const tablist = root.querySelector<HTMLElement>('[data-sources-tablist]');
 
     let currentIndex = 0;
     let userInteracted = false;
+    let isHovering = false;
     let autoCycleTimer: ReturnType<typeof setTimeout> | null = null;
     let isVisible = false;
 
-    function selectTab(index: number, options: { focus?: boolean; programmatic?: boolean } = {}) {
+    function selectTab(index: number, options: { focus?: boolean } = {}) {
       if (index < 0 || index >= tabs.length) return;
       currentIndex = index;
 
@@ -481,7 +493,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
       });
 
       // Manage auto-cycle progress bar
-      if (!userInteracted && isVisible) {
+      if (!userInteracted && !isHovering && isVisible) {
         restartCycleTimer();
       } else {
         clearCycleTimer();
@@ -498,17 +510,17 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
 
     function restartCycleTimer() {
       clearCycleTimer();
-      if (userInteracted || !isVisible) return;
+      if (userInteracted || isHovering || !isVisible) return;
 
       const activeTab = tabs[currentIndex];
       if (activeTab) {
         activeTab.classList.remove("is-cycling");
-        void activeTab.offsetWidth; // Trigger reflow for animation restart
+        void activeTab.offsetWidth; // Reflow to restart animation cleanly
         activeTab.classList.add("is-cycling");
       }
 
       autoCycleTimer = setTimeout(() => {
-        if (!userInteracted && isVisible) {
+        if (!userInteracted && !isHovering && isVisible) {
           const nextIndex = (currentIndex + 1) % tabs.length;
           selectTab(nextIndex);
         }
@@ -548,7 +560,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
       }
     });
 
-    // Tab click & pointer events
+    // Tab click & hover events
     tabs.forEach((tab, idx) => {
       tab.addEventListener("click", () => {
         userInteracted = true;
@@ -558,25 +570,35 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
 
       tab.addEventListener("mouseenter", () => {
         if (!userInteracted) {
-          userInteracted = true;
+          isHovering = true;
           clearCycleTimer();
+          selectTab(idx);
         }
-        selectTab(idx);
       });
 
       tab.addEventListener("focus", () => {
         if (!userInteracted) {
-          userInteracted = true;
-          clearCycleTimer();
+          selectTab(idx);
         }
-        selectTab(idx);
       });
     });
 
-    // Auto-cycle only while visible
+    // Resume auto-cycling when cursor leaves tablist if user has not explicitly clicked
+    if (tablist) {
+      tablist.addEventListener("mouseleave", () => {
+        if (!userInteracted) {
+          isHovering = false;
+          if (isVisible) {
+            restartCycleTimer();
+          }
+        }
+      });
+    }
+
+    // Auto-cycle only while visible in viewport
     whileVisible(root, () => {
       isVisible = true;
-      if (!userInteracted) {
+      if (!userInteracted && !isHovering) {
         restartCycleTimer();
       }
       return () => {
@@ -589,21 +611,21 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
 
 <style>
   .sources-section {
-    padding-top: clamp(48px, 8vw, 96px);
+    padding-top: clamp(40px, 6vw, 80px);
   }
 
   .sources-interactive {
     display: grid;
     grid-template-columns: 1fr;
-    gap: clamp(24px, 3.5vw, 44px);
+    gap: clamp(20px, 3vw, 36px);
     align-items: start;
-    margin-bottom: clamp(36px, 5vw, 56px);
+    margin-bottom: clamp(32px, 4vw, 48px);
   }
 
   @media (min-width: 960px) {
     .sources-interactive {
-      grid-template-columns: 310px 1fr;
-      gap: 36px;
+      grid-template-columns: 290px 1fr;
+      gap: 32px;
     }
   }
 
@@ -622,8 +644,16 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   @media (max-width: 959px) {
     .sources-list {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 6px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .sources-list {
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 6px;
     }
   }
 
@@ -632,7 +662,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 44px;
+    height: 42px;
     padding-inline: 12px 14px;
     border: none;
     border-radius: 8px;
@@ -656,7 +686,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     outline-offset: -2px;
   }
 
-  /* 3px source color bar on left when selected */
+  /* 3.5px source color bar on left when selected */
   .tab-accent-bar {
     position: absolute;
     left: 0;
@@ -678,8 +708,23 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   }
 
   .source-tab-name {
-    font-size: 14px;
+    font-size: 13.5px;
     flex: 1;
+    min-width: 0;
+  }
+
+  @media (max-width: 480px) {
+    .source-tab {
+      height: 40px;
+      padding-inline: 8px 10px;
+      gap: 8px;
+    }
+    .source-tab-name {
+      font-size: 12.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   }
 
   /* Auto-cycle progress bar on active tab */
@@ -696,7 +741,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   }
 
   .source-tab.is-cycling .tab-progress-line {
-    opacity: 0.65;
+    opacity: 0.7;
     animation: sf-tab-progress 3.5s linear forwards;
   }
 
@@ -709,7 +754,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     }
   }
 
-  /* Preview Sheet */
+  /* Preview Sheet: stable height on desktop, no vertical jump */
   .preview-column {
     min-width: 0;
   }
@@ -717,16 +762,27 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   .preview-sheet {
     overflow: hidden;
     border: 1px solid var(--border);
+    border-radius: 12px;
     min-height: 480px;
     display: flex;
     flex-direction: column;
+    box-shadow: var(--shadow-raised);
+    background: var(--card);
+  }
+
+  @media (min-width: 960px) {
+    .preview-sheet {
+      height: 520px;
+      min-height: 520px;
+    }
   }
 
   .preview-panel {
     display: flex;
     flex-direction: column;
-    animation: sf-panel-fade 220ms var(--ease-out);
+    animation: sf-panel-fade 200ms var(--ease-out);
     flex: 1;
+    min-height: 0;
   }
 
   .preview-panel[hidden] {
@@ -735,8 +791,8 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
 
   @keyframes sf-panel-fade {
     from {
-      opacity: 0.4;
-      transform: translateY(4px);
+      opacity: 0.5;
+      transform: translateY(3px);
     }
     to {
       opacity: 1;
@@ -748,11 +804,11 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   .preview-meta-header {
     background: var(--card);
     border-bottom: 1px solid var(--border);
-    padding: 16px 20px;
+    padding: 14px 18px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    font-size: 13.5px;
+    gap: 6px;
+    font-size: 13px;
   }
 
   .meta-row {
@@ -766,8 +822,8 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     color: var(--muted-foreground);
     font-weight: 500;
     flex-shrink: 0;
-    min-width: 105px;
-    font-size: 12.5px;
+    min-width: 96px;
+    font-size: 12px;
   }
 
   .meta-value {
@@ -777,12 +833,14 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
 
   /* Markdown preview styling */
   .markdown-preview {
-    padding: 20px 24px 28px;
+    padding: clamp(14px, 2.5vw, 24px);
     background: var(--background);
     flex: 1;
-    overflow-x: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     font-size: 13px;
     line-height: 1.6;
+    min-width: 0;
   }
 
   .markdown-file-tab {
@@ -790,7 +848,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     padding-bottom: 8px;
     border-bottom: 1px dashed var(--border);
   }
@@ -810,7 +868,8 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   .markdown-content {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
+    min-width: 0;
   }
 
   /* Front matter syntax tinting */
@@ -820,6 +879,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     gap: 2px;
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border);
+    min-width: 0;
   }
 
   .md-fence {
@@ -829,16 +889,23 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
 
   .md-line {
     display: flex;
-    gap: 8px;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    min-width: 0;
   }
 
   .md-key {
     color: var(--muted-foreground);
-    min-width: 68px;
+    min-width: 64px;
+    flex-shrink: 0;
   }
 
   .md-val {
     color: var(--foreground);
+    min-width: 0;
+    word-break: break-all;
+    overflow-wrap: anywhere;
   }
 
   .md-kind {
@@ -849,12 +916,13 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   .md-body {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     color: var(--foreground);
+    min-width: 0;
   }
 
   .md-heading {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 500;
     color: var(--foreground);
     margin-top: 4px;
@@ -889,14 +957,14 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
   }
 
   .md-subquote {
-    padding-left: 24px;
+    padding-left: 20px;
     border-left: 2px solid var(--border-strong);
     color: var(--muted-foreground);
   }
 
   .md-image-line {
     color: var(--muted-foreground);
-    font-size: 12px;
+    font-size: 11.5px;
     word-break: break-all;
     background: var(--muted);
     padding: 6px 10px;
@@ -909,11 +977,13 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     border-radius: 6px;
     overflow-x: auto;
     color: var(--foreground);
+    word-break: break-all;
   }
 
   .md-ref-item {
     font-size: 12px;
     color: var(--muted-foreground);
+    word-break: break-word;
   }
 
   /* Honest note & Extra kinds below */
@@ -921,7 +991,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    padding-top: 12px;
+    padding-top: 14px;
     border-top: 1px solid var(--border);
   }
 
@@ -960,7 +1030,7 @@ const SOURCE_DETAILS: Record<SourceKind, SourceDetail> = {
     background: var(--card);
     border: 1px solid var(--border);
     box-shadow: var(--shadow-raised);
-    font-size: 12.5px;
+    font-size: 12px;
   }
 
   .extra-name {

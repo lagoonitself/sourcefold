@@ -1,12 +1,11 @@
 ---
 /**
- * Apps.astro (id "apps") — "Which one should I use?"
- * Four app cards with tiny looping-on-hover CSS illustrations.
- * Interactive README comparison table with synchronized column/card hovering,
- * stroke-dashoffset animated checkmarks, and responsive mobile layout.
+ * Apps.astro (id "apps"): "Which one should I use?"
+ * Three apps that work together: Desktop, Extension, Website.
+ * Exact comparison table matching README.md.
+ * Accessible <table> with synchronized column/card hovering and responsive mobile layout.
  */
 import {
-  Bot,
   Globe,
   Laptop,
   Sparkles,
@@ -14,67 +13,72 @@ import {
 import SectionHeader from "../SectionHeader.astro";
 import { links } from "../../lib/site";
 
+interface CellValue {
+  check: boolean;
+  note?: string;
+}
+
 interface ComparisonRow {
   feature: string;
-  website: string | boolean;
-  desktop: string | boolean;
-  extension: string | boolean;
+  website: CellValue;
+  desktop: CellValue;
+  extension: CellValue;
 }
 
 const COMPARISON_ROWS: ComparisonRow[] = [
   {
     feature: "Paste links in bulk",
-    website: true,
-    desktop: true,
-    extension: false,
+    website: { check: true },
+    desktop: { check: true },
+    extension: { check: false },
   },
   {
     feature: "Save the page you're on",
-    website: false,
-    desktop: false,
-    extension: true,
+    website: { check: false },
+    desktop: { check: false },
+    extension: { check: true },
   },
   {
     feature: "YouTube transcripts",
-    website: false,
-    desktop: "✓ plus playlists, channels",
-    extension: true,
+    website: { check: false },
+    desktop: { check: true, note: "plus playlists, channels" },
+    extension: { check: true },
   },
   {
     feature: "Substack",
-    website: false,
-    desktop: "✓ plus whole publications",
-    extension: true,
+    website: { check: false },
+    desktop: { check: true, note: "plus whole publications" },
+    extension: { check: true },
   },
   {
     feature: "X posts and threads",
-    website: false,
-    desktop: false,
-    extension: true,
+    website: { check: false },
+    desktop: { check: false },
+    extension: { check: true },
   },
   {
     feature: "Read, highlight and take notes",
-    website: "notes only",
-    desktop: true,
-    extension: false,
+    website: { check: false, note: "notes only" },
+    desktop: { check: true },
+    extension: { check: false },
   },
   {
     feature: "Search",
-    website: "titles",
-    desktop: "✓ inside sources",
-    extension: false,
+    website: { check: false, note: "titles" },
+    desktop: { check: true, note: "inside sources" },
+    extension: { check: false },
   },
   {
     feature: "Copy to Google Drive",
-    website: true,
-    desktop: "✓ when signed in",
-    extension: "✓ when signed in",
+    website: { check: true },
+    desktop: { check: true, note: "when signed in" },
+    extension: { check: true, note: "when signed in" },
   },
   {
     feature: "Works offline, without an account",
-    website: false,
-    desktop: true,
-    extension: "✓ with the desktop app",
+    website: { check: false },
+    desktop: { check: true },
+    extension: { check: true, note: "with the desktop app" },
   },
 ];
 ---
@@ -88,132 +92,6 @@ const COMPARISON_ROWS: ComparisonRow[] = [
       lede="All of them work together. Signed in, whatever you save from one shows up in the others."
     />
 
-    <!-- Four App Cards -->
-    <div class="apps-grid" data-reveal="stagger">
-      <!-- 1. Desktop App -->
-      <div class="app-card card" data-app-key="desktop" tabindex="0">
-        <div class="card-illo-wrap" aria-hidden="true">
-          <div class="illo-desktop">
-            <div class="illo-window">
-              <div class="illo-win-bar">
-                <span class="illo-win-dot"></span>
-                <span class="illo-win-dot"></span>
-                <span class="illo-win-dot"></span>
-              </div>
-              <div class="illo-win-body">
-                <div class="illo-sidebar">
-                  <span class="illo-side-line"></span>
-                  <span class="illo-side-line active"></span>
-                  <span class="illo-side-line"></span>
-                </div>
-                <div class="illo-content">
-                  <span class="illo-text-line"></span>
-                  <span class="illo-marker-sweep"></span>
-                  <span class="illo-text-line short"></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="card-content">
-          <div class="card-tag-row">
-            <span class="chip app-chip">Windows & macOS</span>
-          </div>
-          <h3 class="h3 card-title">Desktop app</h3>
-          <p class="muted card-desc">
-            The full workspace. Built-in distraction-free reader, inside-source search, and a local Markdown archive with Word <span class="mono">.docx</span> copies. Works offline without an account.
-          </p>
-          <div class="card-cta">
-            <a href="#download" class="btn btn-outline btn-sm">Download desktop app</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- 2. Chrome Extension -->
-      <div class="app-card card" data-app-key="extension" tabindex="0">
-        <div class="card-illo-wrap" aria-hidden="true">
-          <div class="illo-extension">
-            <div class="illo-browser-tab">
-              <span class="illo-tab-favicon"></span>
-              <span class="illo-tab-title"></span>
-            </div>
-            <div class="illo-browser-bar">
-              <div class="illo-address">source.org/paper</div>
-              <div class="illo-ext-icon">
-                <span class="illo-badge-plus">+1</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="card-content">
-          <div class="card-tag-row">
-            <span class="chip app-chip">Chrome, Edge, Brave, Arc</span>
-          </div>
-          <h3 class="h3 card-title">Browser extension</h3>
-          <p class="muted card-desc">
-            Save with <kbd class="kbd">Alt+Shift+S</kbd> as you browse. Right-click links to save without opening them, and grab Reddit threads, paywalled news, or X posts exactly as rendered.
-          </p>
-          <div class="card-cta">
-            <a href={links.extension} class="btn btn-outline btn-sm">Get extension</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- 3. Website -->
-      <div class="app-card card" data-app-key="website" tabindex="0">
-        <div class="card-illo-wrap" aria-hidden="true">
-          <div class="illo-web">
-            <div class="illo-cloud-base">
-              <Globe size={26} class="illo-globe" />
-              <div class="illo-sync-arrows">
-                <span class="arrow-up"></span>
-                <span class="arrow-down"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="card-content">
-          <div class="card-tag-row">
-            <span class="chip app-chip">Nothing to install</span>
-          </div>
-          <h3 class="h3 card-title">Website</h3>
-          <p class="muted card-desc">
-            Accessible from any browser or phone. Paste 30–40 links in bulk to import at once, browse projects, and push clean docs straight into your Google Drive.
-          </p>
-          <div class="card-cta">
-            <a href={links.selfHosting} class="btn btn-ghost btn-sm">Self-hosting guide</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- 4. Claude Desktop Extension -->
-      <div class="app-card card" data-app-key="claude" tabindex="0">
-        <div class="card-illo-wrap" aria-hidden="true">
-          <div class="illo-mcp">
-            <div class="illo-socket">
-              <Bot size={22} class="illo-bot" />
-              <div class="illo-mcp-sparks">
-                <span class="spark s1"></span>
-                <span class="spark s2"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="card-content">
-          <div class="card-tag-row">
-            <span class="chip app-chip">MCP Extension</span>
-          </div>
-          <h3 class="h3 card-title">Claude Desktop</h3>
-          <p class="muted card-desc">
-            Connect Claude Desktop to your local library. Claude can read, search, group sources, write summaries, and highlight key passages for you.
-          </p>
-          <div class="card-cta">
-            <a href="#claude" class="btn btn-ghost btn-sm">See Claude in action</a>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Recommendation Banner -->
     <div class="recommendation-banner sheet" data-reveal>
       <div class="rec-icon-wrap" aria-hidden="true">
@@ -225,8 +103,72 @@ const COMPARISON_ROWS: ComparisonRow[] = [
       </div>
     </div>
 
-    <!-- Interactive Comparison Table -->
-    <div class="table-container sheet" data-table-wrapper data-reveal>
+    <!-- Three Apps Suite Cards -->
+    <div class="apps-grid" data-reveal="stagger">
+      <!-- 1. Desktop App -->
+      <div class="app-card card is-primary-app" data-app-key="desktop" tabindex="0">
+        <div class="card-badge-row">
+          <span class="chip app-chip">Windows &amp; macOS</span>
+          <span class="chip rec-chip">Recommended</span>
+        </div>
+        <div class="card-header-row">
+          <div class="app-icon-wrap" aria-hidden="true">
+            <Laptop size={20} />
+          </div>
+          <h3 class="h3 card-title">Desktop app</h3>
+        </div>
+        <p class="muted card-desc">
+          The full workspace. Built-in distraction-free reader, inside-source search, and a local Markdown archive with Word <code>.docx</code> copies. Works offline without an account.
+        </p>
+        <div class="card-cta">
+          <a href="#download" class="btn btn-ink btn-sm">Download desktop app</a>
+        </div>
+      </div>
+
+      <!-- 2. Chrome Extension -->
+      <div class="app-card card" data-app-key="extension" tabindex="0">
+        <div class="card-badge-row">
+          <span class="chip app-chip">Chrome, Edge, Brave, Arc</span>
+        </div>
+        <div class="card-header-row">
+          <div class="app-icon-wrap" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><line x1="21.17" x2="12" y1="8" y2="8"></line><line x1="3.95" x2="8.54" y1="6.06" y2="14"></line><line x1="10.88" x2="15.46" y1="21.94" y2="14"></line></svg>
+          </div>
+          <h3 class="h3 card-title">Browser extension</h3>
+        </div>
+        <p class="muted card-desc">
+          Save with <kbd class="kbd">Alt+Shift+S</kbd> as you browse. Right-click links to save without opening them, and grab Reddit threads, paywalled news, or X posts exactly as rendered.
+        </p>
+        <div class="card-cta">
+          <a href={links.extension} class="btn btn-outline btn-sm">Get extension</a>
+        </div>
+      </div>
+
+      <!-- 3. Website -->
+      <div class="app-card card" data-app-key="website" tabindex="0">
+        <div class="card-badge-row">
+          <span class="chip app-chip">Zero install</span>
+        </div>
+        <div class="card-header-row">
+          <div class="app-icon-wrap" aria-hidden="true">
+            <Globe size={20} />
+          </div>
+          <h3 class="h3 card-title">Website</h3>
+        </div>
+        <p class="muted card-desc">
+          Accessible from any browser or phone. Paste 30–40 links in bulk to import at once, browse projects, and push clean docs straight into your Google Drive.
+        </p>
+        <div class="card-cta">
+          <a href={links.selfHosting} class="btn btn-ghost btn-sm">Self-hosting guide</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison Table Sheet -->
+    <div class="table-container sheet" data-ui="table" data-table-wrapper data-reveal>
+      <div class="table-scroll-hint muted text-xs" aria-hidden="true">
+        <span>Scroll table horizontally to compare all features</span>
+      </div>
       <div class="table-scroll-wrapper">
         <table class="comparison-table" aria-label="Feature comparison across Sourcefold apps">
           <thead>
@@ -238,10 +180,11 @@ const COMPARISON_ROWS: ComparisonRow[] = [
                   <span>Website</span>
                 </div>
               </th>
-              <th scope="col" class="th-app col-desktop" data-col="desktop">
+              <th scope="col" class="th-app col-desktop is-recommended-col" data-col="desktop">
                 <div class="th-content">
                   <Laptop size={16} />
                   <span>Desktop app</span>
+                  <span class="chip col-badge">Main</span>
                 </div>
               </th>
               <th scope="col" class="th-app col-extension" data-col="extension">
@@ -260,78 +203,63 @@ const COMPARISON_ROWS: ComparisonRow[] = [
                     {row.feature}
                   </th>
                   <td class="td-val col-website" data-col="website">
-                    {typeof row.website === "boolean" ? (
-                      row.website ? (
-                        <span class="check-wrap" aria-label="Supported">
-                          <svg class="draw-check" viewBox="0 0 16 16" aria-hidden="true">
-                            <path
-                              class="check-path"
-                              d="M3.5 8.5L6.5 11.5L12.5 4.5"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            />
+                    {row.website.check ? (
+                      <span class="cell-status cell-yes" aria-label="Supported">
+                        <span class="check-wrap" aria-hidden="true">
+                          <svg class="draw-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path class="check-path" d="M3.5 8.5L6.5 11.5L12.5 4.5" />
                           </svg>
                         </span>
-                      ) : (
-                        <span class="dash-val muted" aria-label="Not supported">
-                          —
-                        </span>
-                      )
+                        {row.website.note && <span class="cell-note">{row.website.note}</span>}
+                      </span>
+                    ) : row.website.note ? (
+                      <span class="cell-status cell-partial">
+                        <span class="cell-note">{row.website.note}</span>
+                      </span>
                     ) : (
-                      <span class="custom-val">{row.website}</span>
+                      <span class="dash-val muted" aria-label="Not supported">
+                        &ndash;
+                      </span>
                     )}
                   </td>
                   <td class="td-val col-desktop" data-col="desktop">
-                    {typeof row.desktop === "boolean" ? (
-                      row.desktop ? (
-                        <span class="check-wrap" aria-label="Supported">
-                          <svg class="draw-check" viewBox="0 0 16 16" aria-hidden="true">
-                            <path
-                              class="check-path"
-                              d="M3.5 8.5L6.5 11.5L12.5 4.5"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            />
+                    {row.desktop.check ? (
+                      <span class="cell-status cell-yes" aria-label="Supported">
+                        <span class="check-wrap" aria-hidden="true">
+                          <svg class="draw-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path class="check-path" d="M3.5 8.5L6.5 11.5L12.5 4.5" />
                           </svg>
                         </span>
-                      ) : (
-                        <span class="dash-val muted" aria-label="Not supported">
-                          —
-                        </span>
-                      )
+                        {row.desktop.note && <span class="cell-note">{row.desktop.note}</span>}
+                      </span>
+                    ) : row.desktop.note ? (
+                      <span class="cell-status cell-partial">
+                        <span class="cell-note">{row.desktop.note}</span>
+                      </span>
                     ) : (
-                      <span class="custom-val">{row.desktop}</span>
+                      <span class="dash-val muted" aria-label="Not supported">
+                        &ndash;
+                      </span>
                     )}
                   </td>
                   <td class="td-val col-extension" data-col="extension">
-                    {typeof row.extension === "boolean" ? (
-                      row.extension ? (
-                        <span class="check-wrap" aria-label="Supported">
-                          <svg class="draw-check" viewBox="0 0 16 16" aria-hidden="true">
-                            <path
-                              class="check-path"
-                              d="M3.5 8.5L6.5 11.5L12.5 4.5"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            />
+                    {row.extension.check ? (
+                      <span class="cell-status cell-yes" aria-label="Supported">
+                        <span class="check-wrap" aria-hidden="true">
+                          <svg class="draw-check" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path class="check-path" d="M3.5 8.5L6.5 11.5L12.5 4.5" />
                           </svg>
                         </span>
-                      ) : (
-                        <span class="dash-val muted" aria-label="Not supported">
-                          —
-                        </span>
-                      )
+                        {row.extension.note && <span class="cell-note">{row.extension.note}</span>}
+                      </span>
+                    ) : row.extension.note ? (
+                      <span class="cell-status cell-partial">
+                        <span class="cell-note">{row.extension.note}</span>
+                      </span>
                     ) : (
-                      <span class="custom-val">{row.extension}</span>
+                      <span class="dash-val muted" aria-label="Not supported">
+                        &ndash;
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -401,313 +329,6 @@ const COMPARISON_ROWS: ComparisonRow[] = [
 </script>
 
 <style>
-  /* 4 App Cards Grid */
-  .apps-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-
-  @media (max-width: 1060px) {
-    .apps-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  @media (max-width: 580px) {
-    .apps-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .app-card {
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    border: 1px solid var(--border);
-    transition:
-      transform 180ms var(--ease-out),
-      border-color 180ms var(--ease-out),
-      box-shadow 180ms var(--ease-out);
-    outline: none;
-  }
-
-  .app-card:hover,
-  .app-card.is-col-active {
-    transform: translateY(-2px);
-    border-color: var(--primary);
-    box-shadow: var(--shadow-float);
-  }
-
-  .card-illo-wrap {
-    height: 90px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in oklab, var(--desk) 50%, var(--card));
-    border-radius: 9px;
-    border: 1px solid var(--border);
-    margin-bottom: 16px;
-    overflow: hidden;
-  }
-
-  /* CSS Illustrations with hover loops */
-  /* 1. Desktop illustration */
-  .illo-desktop {
-    width: 130px;
-  }
-
-  .illo-window {
-    background: var(--card);
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-
-  .illo-win-bar {
-    display: flex;
-    gap: 4px;
-    padding: 4px 6px;
-    background: var(--muted);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .illo-win-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--border-strong);
-  }
-
-  .illo-win-body {
-    display: flex;
-    height: 48px;
-  }
-
-  .illo-sidebar {
-    width: 32px;
-    background: color-mix(in oklab, var(--desk) 50%, var(--background));
-    border-right: 1px solid var(--border);
-    padding: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .illo-side-line {
-    height: 3px;
-    background: var(--border);
-    border-radius: 2px;
-  }
-
-  .illo-side-line.active {
-    background: var(--marker);
-  }
-
-  .illo-content {
-    flex: 1;
-    padding: 6px 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .illo-text-line {
-    height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-  }
-
-  .illo-text-line.short {
-    width: 60%;
-  }
-
-  .illo-marker-sweep {
-    height: 5px;
-    background: var(--marker);
-    border-radius: 2px;
-    width: 0%;
-    transition: width 600ms var(--ease-out);
-  }
-
-  .app-card:hover .illo-marker-sweep,
-  .app-card.is-col-active .illo-marker-sweep {
-    width: 90%;
-  }
-
-  /* 2. Extension illustration */
-  .illo-extension {
-    width: 140px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .illo-browser-tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    width: 70px;
-    padding: 3px 6px;
-    background: var(--card);
-    border-radius: 4px 4px 0 0;
-    border: 1px solid var(--border);
-    border-bottom: 0;
-  }
-
-  .illo-tab-favicon {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--source-bluesky);
-  }
-
-  .illo-tab-title {
-    width: 36px;
-    height: 3px;
-    background: var(--border);
-    border-radius: 2px;
-  }
-
-  .illo-browser-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 8px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 5px;
-  }
-
-  .illo-address {
-    font-size: 9px;
-    font-family: var(--font-mono);
-    color: var(--muted-foreground);
-  }
-
-  .illo-ext-icon {
-    position: relative;
-    width: 14px;
-    height: 14px;
-    background: var(--primary);
-    border-radius: 3px;
-  }
-
-  .illo-badge-plus {
-    position: absolute;
-    right: -6px;
-    top: -6px;
-    font-size: 8px;
-    font-weight: 700;
-    color: var(--primary-foreground);
-    background: var(--success);
-    border-radius: 999px;
-    padding-inline: 3px;
-    transform: scale(0);
-    transition: transform 200ms var(--ease-spring);
-  }
-
-  .app-card:hover .illo-badge-plus,
-  .app-card.is-col-active .illo-badge-plus {
-    transform: scale(1);
-  }
-
-  /* 3. Web illustration */
-  .illo-web {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .illo-cloud-base {
-    position: relative;
-    color: var(--foreground);
-  }
-
-  .illo-sync-arrows {
-    position: absolute;
-    inset: -6px;
-    border: 1px dashed var(--border-strong);
-    border-radius: 50%;
-    transition: transform 800ms linear;
-  }
-
-  .app-card:hover .illo-sync-arrows,
-  .app-card.is-col-active .illo-sync-arrows {
-    transform: rotate(180deg);
-  }
-
-  /* 4. MCP illustration */
-  .illo-mcp {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .illo-socket {
-    position: relative;
-    color: var(--foreground);
-  }
-
-  .illo-mcp-sparks .spark {
-    position: absolute;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--marker);
-    opacity: 0;
-    transition: all 300ms var(--ease-out);
-  }
-
-  .spark.s1 {
-    top: -4px;
-    right: -4px;
-  }
-  .spark.s2 {
-    bottom: -4px;
-    left: -4px;
-  }
-
-  .app-card:hover .illo-mcp-sparks .spark,
-  .app-card.is-col-active .illo-mcp-sparks .spark {
-    opacity: 1;
-    transform: scale(1.3);
-  }
-
-  /* Card content */
-  .card-content {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-  }
-
-  .card-tag-row {
-    margin-bottom: 8px;
-  }
-
-  .app-chip {
-    font-size: 11px;
-    padding-inline: 8px;
-    height: 22px;
-  }
-
-  .card-title {
-    font-size: 18px;
-    margin-bottom: 8px;
-  }
-
-  .card-desc {
-    font-size: 13px;
-    line-height: 1.5;
-    margin-bottom: 16px;
-    flex: 1;
-  }
-
-  .card-cta {
-    margin-top: auto;
-  }
-
   /* Recommendation Banner */
   .recommendation-banner {
     display: flex;
@@ -732,10 +353,116 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     flex-shrink: 0;
   }
 
+  /* 3 Apps Grid */
+  .apps-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 860px) {
+    .apps-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .app-card {
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    border: 1px solid var(--border);
+    transition:
+      transform 180ms var(--ease-out),
+      border-color 180ms var(--ease-out);
+    outline: none;
+  }
+
+  .app-card.is-primary-app {
+    border-color: var(--border-strong);
+    background: color-mix(in oklab, var(--card) 96%, var(--marker-soft));
+  }
+
+  .app-card:hover,
+  .app-card.is-col-active {
+    transform: translateY(-2px);
+    border-color: var(--primary);
+  }
+
+  .card-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .app-chip {
+    font-size: 11px;
+    padding-inline: 8px;
+    height: 22px;
+  }
+
+  .rec-chip {
+    font-size: 11px;
+    padding-inline: 8px;
+    height: 22px;
+    background: var(--marker-soft);
+    color: var(--foreground);
+    font-weight: 600;
+  }
+
+  .card-header-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .app-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: var(--muted);
+    color: var(--foreground);
+    flex-shrink: 0;
+  }
+
+  .card-title {
+    font-size: 19px;
+    margin: 0;
+  }
+
+  .card-desc {
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin-bottom: 20px;
+    flex: 1;
+  }
+
+  .card-cta {
+    margin-top: auto;
+  }
+
   /* Table styling */
-  .table-container {
+  [data-ui="table"] {
     border: 1px solid var(--border);
     overflow: hidden;
+  }
+
+  .table-scroll-hint {
+    display: none;
+    padding: 10px 18px 4px;
+    font-size: 11.5px;
+    text-align: right;
+  }
+
+  @media (max-width: 680px) {
+    .table-scroll-hint {
+      display: block;
+    }
   }
 
   .table-scroll-wrapper {
@@ -745,6 +472,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
 
   .comparison-table {
     width: 100%;
+    min-width: 580px;
     border-collapse: collapse;
     text-align: left;
     font-size: 13.5px;
@@ -763,15 +491,22 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     gap: 8px;
   }
 
+  .col-badge {
+    font-size: 10.5px;
+    height: 18px;
+    padding-inline: 6px;
+    background: var(--marker-soft);
+  }
+
   .th-feature {
-    width: 36%;
+    width: 38%;
     font-family: var(--font-sans);
     color: var(--muted-foreground);
     font-size: 12.5px;
   }
 
   .th-app {
-    width: 21%;
+    width: 20.6%;
     cursor: pointer;
     transition: background-color 140ms var(--ease-out);
   }
@@ -786,7 +521,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   }
 
   .comparison-table tbody tr:hover {
-    background: color-mix(in oklab, var(--muted) 40%, transparent);
+    background: color-mix(in oklab, var(--muted) 45%, transparent);
   }
 
   .td-feature {
@@ -806,23 +541,31 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   .col-website.is-col-active,
   .col-desktop.is-col-active,
   .col-extension.is-col-active {
-    background: color-mix(in oklab, var(--accent) 75%, transparent);
+    background: color-mix(in oklab, var(--accent) 70%, transparent);
+  }
+
+  .cell-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
   }
 
   .check-wrap {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     background: color-mix(in oklab, var(--success) 14%, transparent);
     color: var(--success);
+    flex-shrink: 0;
   }
 
   .draw-check {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
   }
 
   .check-path {
@@ -831,60 +574,19 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     transition: stroke-dashoffset 500ms var(--ease-out);
   }
 
-  :global(.table-container.is-in) .check-path {
+  :global([data-ui="table"].is-in) .check-path {
     stroke-dashoffset: 0;
+  }
+
+  .cell-note {
+    font-size: 12.5px;
+    color: var(--foreground);
+    line-height: 1.35;
   }
 
   .dash-val {
     font-size: 16px;
-    padding-left: 6px;
-  }
-
-  .custom-val {
-    font-size: 13px;
-    color: var(--foreground);
-  }
-
-  /* Mobile transformation */
-  @media (max-width: 640px) {
-    .comparison-table,
-    .comparison-table thead,
-    .comparison-table tbody,
-    .comparison-table th,
-    .comparison-table td,
-    .comparison-table tr {
-      display: block;
-    }
-
-    .comparison-table thead {
-      display: none;
-    }
-
-    .comparison-table tbody tr {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .td-feature {
-      padding: 0 0 10px 0;
-      font-size: 15px;
-      font-family: var(--font-serif);
-      font-weight: 600;
-    }
-
-    .td-val {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 6px 0;
-    }
-
-    .td-val::before {
-      content: attr(data-col);
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: capitalize;
-      color: var(--muted-foreground);
-    }
+    padding-left: 4px;
+    color: var(--muted-foreground);
   }
 </style>

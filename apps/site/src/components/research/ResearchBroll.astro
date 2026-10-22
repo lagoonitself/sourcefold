@@ -11,7 +11,6 @@ interface BrollClip {
   timeRange: string;
   duration: string;
   note: string;
-  gradient: string;
 }
 
 const CLIPS: BrollClip[] = [
@@ -22,7 +21,6 @@ const CLIPS: BrollClip[] = [
     timeRange: "0:42–0:58",
     duration: "16s",
     note: "Overlay during discussion of turbine wheel rotational inertia.",
-    gradient: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
   },
   {
     id: "b2",
@@ -31,7 +29,6 @@ const CLIPS: BrollClip[] = [
     timeRange: "03:15–03:40",
     duration: "25s",
     note: "Cut here when comparing stock sequential to big single turbo below 4,500 rpm.",
-    gradient: "linear-gradient(135deg, #27272a 0%, #18181b 100%)",
   },
   {
     id: "b3",
@@ -40,7 +37,6 @@ const CLIPS: BrollClip[] = [
     timeRange: "12:04–12:35",
     duration: "31s",
     note: "Zoom in on cylinder 1 & 4 paired runners entering divided scroll.",
-    gradient: "linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)",
   },
   {
     id: "b4",
@@ -49,12 +45,11 @@ const CLIPS: BrollClip[] = [
     timeRange: "08:12–08:45",
     duration: "33s",
     note: "Highlight sequential valve transition point.",
-    gradient: "linear-gradient(135deg, #1c1917 0%, #0c0a09 100%)",
   },
 ];
 ---
 
-<div class="broll-tool">
+<div class="broll-tool" data-ui>
   <div class="tool-intro">
     <div class="tool-intro-text">
       <h3 class="tool-heading serif">B-roll list for video editors</h3>
@@ -65,7 +60,7 @@ const CLIPS: BrollClip[] = [
     </div>
     <div class="broll-count muted">
       <Film size={14} stroke-width={1.75} />
-      <span>4 clips marked · 1m 45s total B-roll</span>
+      <span>4 clips marked (1m 45s total B-roll)</span>
     </div>
   </div>
 
@@ -73,9 +68,8 @@ const CLIPS: BrollClip[] = [
     {
       CLIPS.map((clip) => (
         <div class="broll-card card" data-id={clip.id}>
-          <!-- CSS-only Thumbnail Placeholder -->
-          <div class="css-thumbnail" style={`background: ${clip.gradient};`}>
-            <div class="thumbnail-backdrop-pattern"></div>
+          <!-- CSS-only Thumbnail Placeholder built with tokens and source tint -->
+          <div class="css-thumbnail">
             <div class="thumbnail-play-center" aria-hidden="true">
               <Play size={18} stroke-width={2} class="play-icon" />
             </div>
@@ -119,7 +113,7 @@ const CLIPS: BrollClip[] = [
         const span = btn.querySelector("span");
         if (span) {
           const old = span.textContent;
-          span.textContent = "Copied!";
+          span.textContent = "Copied";
           setTimeout(() => {
             span.textContent = old;
           }, 1800);
@@ -178,7 +172,7 @@ const CLIPS: BrollClip[] = [
     border: 1px solid var(--border);
   }
 
-  /* CSS Thumbnail Placeholder */
+  /* CSS Thumbnail Placeholder using tokens and YouTube source tint */
   .css-thumbnail {
     position: relative;
     width: 100%;
@@ -187,14 +181,21 @@ const CLIPS: BrollClip[] = [
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    background: color-mix(
+      in oklab,
+      color-mix(in oklab, var(--foreground) 85%, var(--background)) 92%,
+      var(--source-youtube)
+    );
+    color: var(--background);
   }
 
-  .thumbnail-backdrop-pattern {
-    position: absolute;
-    inset: 0;
-    background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-    background-size: 12px 12px;
-    opacity: 0.6;
+  :global(html.dark) .css-thumbnail {
+    background: color-mix(
+      in oklab,
+      color-mix(in oklab, var(--card) 90%, var(--desk)) 92%,
+      var(--source-youtube)
+    );
+    color: var(--foreground);
   }
 
   .thumbnail-play-center {
@@ -206,15 +207,20 @@ const CLIPS: BrollClip[] = [
     width: 38px;
     height: 38px;
     border-radius: 999px;
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: #ffffff;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    background: color-mix(in oklab, var(--background) 18%, transparent);
+    border: 1px solid color-mix(in oklab, var(--background) 32%, transparent);
+    color: var(--background);
     transition: transform 140ms var(--ease-spring);
   }
 
+  :global(html.dark) .thumbnail-play-center {
+    background: color-mix(in oklab, var(--foreground) 18%, transparent);
+    border-color: color-mix(in oklab, var(--foreground) 32%, transparent);
+    color: var(--foreground);
+  }
+
   .broll-card:hover .thumbnail-play-center {
-    transform: scale(1.1);
+    transform: scale(1.08);
   }
 
   .timecode-badge {
@@ -227,11 +233,17 @@ const CLIPS: BrollClip[] = [
     gap: 4px;
     padding: 3px 7px;
     border-radius: 5px;
-    background: rgba(0, 0, 0, 0.75);
-    color: #ffffff;
+    background: color-mix(in oklab, var(--foreground) 88%, transparent);
+    color: var(--background);
+    border: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
     font-size: 11px;
     letter-spacing: 0.02em;
-    backdrop-filter: blur(4px);
+  }
+
+  :global(html.dark) .timecode-badge {
+    background: color-mix(in oklab, var(--desk) 92%, transparent);
+    color: var(--foreground);
+    border-color: var(--border);
   }
 
   .clip-duration {

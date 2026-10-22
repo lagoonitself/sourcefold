@@ -5,11 +5,12 @@
  * - Top bar with breadcrumb "Cars / Engines / Turbocharging", search hint, Drive status chip
  * - Group heading "Turbocharging" in Newsreader with marker sweep
  * - "Add links" box pre-filled with mixed links
- * - Auto-plays once in view: pastes links, clicks Add links, rows shimmer skeleton -> resolve
+ * - Auto-plays once in view: pastes links, clicks Add links, rows shimmer skeleton -> settle with spring easing
  * - Duplicate detection warning ("Already saved in Engines / Lag and boost")
  * - Drive sync ping
  * - Interactive: user can type/paste their own URLs and add them, with hostname detection
- * - Replay button
+ * - Replay button with race-condition cancellation
+ * - Keyboard shortcut: Ctrl/Cmd + Enter to add links
  * - Parallax background paper sheets (pointer only, disabled on touch & reduced motion)
  */
 import { Check, Plus, RotateCcw, Search } from "@lucide/astro";
@@ -68,8 +69,8 @@ const PRESET_ROWS = [
   <div class="ambient-sheet sheet-back" data-ambient-back aria-hidden="true"></div>
   <div class="ambient-sheet sheet-mid" data-ambient-mid aria-hidden="true"></div>
 
-  <!-- Main desktop app sheet -->
-  <div class="sheet app-mock">
+  <!-- Main desktop app sheet marked data-ui as an authentic product interface fragment -->
+  <div class="sheet app-mock" data-ui="desktop-app">
     <!-- Desktop app top bar -->
     <div class="top-bar">
       <div class="breadcrumb" aria-label="Breadcrumb">
@@ -99,9 +100,9 @@ const PRESET_ROWS = [
       <!-- Group heading and metadata -->
       <div class="group-header">
         <div class="group-title-row">
-          <h3 class="group-heading">
+          <div class="group-heading">
             <span class="marker marker-sweep demo-marker">Turbocharging</span>
-          </h3>
+          </div>
           <span class="group-meta">2 subgroups, <span data-source-count>6</span> sources</span>
         </div>
 
@@ -140,11 +141,11 @@ const PRESET_ROWS = [
         <div class="textarea-wrap">
           <textarea
             id="hero-demo-textarea"
-            class="links-textarea mono"
+            class="links-textarea"
             data-links-input
             rows={3}
             spellcheck="false"
-            placeholder="Paste YouTube, Grokipedia, Substack, Reddit, arXiv or web links..."
+            placeholder="Paste YouTube, Grokipedia, Substack, Reddit, arXiv or web links... (Ctrl+Enter to add)"
           ></textarea>
         </div>
 
@@ -277,8 +278,8 @@ const PRESET_ROWS = [
     ];
 
     let userInteracted = false;
-    let isPlaying = false;
     let hasPlayedOnce = false;
+    let currentAnimationId = 0;
 
     // Detect kind from URL hostname
     function detectKind(rawUrl: string): SourceKind {
@@ -341,13 +342,13 @@ const PRESET_ROWS = [
       }
     }
 
-    // Create a row element
+    // Create a row element with exact matching dimensions to prevent layout jumps
     function createSkeletonRow(): HTMLElement {
       const row = document.createElement("div");
       row.className = "source-row is-skeleton";
       row.innerHTML = `
         <div class="row-left">
-          <div class="skeleton-tile">
+          <div class="skeleton-tile" aria-hidden="true">
             <svg class="skeleton-spinner" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
             </svg>
@@ -375,6 +376,7 @@ const PRESET_ROWS = [
       }
     ) {
       row.classList.remove("is-skeleton");
+      row.classList.add("is-settling");
       row.setAttribute("data-row-kind", data.kind);
 
       const tileHtml = getTileHtml(data.kind);
@@ -418,10 +420,9 @@ const PRESET_ROWS = [
       if (tabCountEl) tabCountEl.textContent = String(n);
     }
 
-    // Animate demo sequence
+    // Animate demo sequence with spring settle and cancellation guard
     async function runDemoAnimation() {
-      if (isPlaying) return;
-      isPlaying = true;
+      const animId = ++currentAnimationId;
 
       // 1. Clear rows & clear textarea
       rowsList.innerHTML = "";
@@ -435,62 +436,63 @@ const PRESET_ROWS = [
         demoMarker.classList.add("is-in");
       }
 
-      await sleep(260);
+      await sleep(240);
+      if (animId !== currentAnimationId) return;
 
       // 2. Type/paste initial links into textarea
       const lines = INITIAL_LINKS_TEXT.split("\n");
       for (let i = 0; i < lines.length; i++) {
-        if (!isPlaying) return;
+        if (animId !== currentAnimationId) return;
         textarea.value += (i > 0 ? "\n" : "") + lines[i];
         textarea.scrollTop = textarea.scrollHeight;
         if (!prefersReducedMotion()) {
-          await sleep(65);
+          await sleep(55);
         }
       }
 
-      await sleep(340);
-      if (!isPlaying) return;
+      await sleep(300);
+      if (animId !== currentAnimationId) return;
 
-      // 3. User-style "Add links" button press
+      // 3. Button micro-interaction press
       addBtn.classList.add("is-pressed");
-      await sleep(180);
+      await sleep(160);
       addBtn.classList.remove("is-pressed");
 
       // 4. Create skeleton rows one after another
       const skeletonRows: HTMLElement[] = [];
       for (let i = 0; i < PRESET_DATA.length; i++) {
-        if (!isPlaying) return;
+        if (animId !== currentAnimationId) return;
         const row = createSkeletonRow();
         rowsList.appendChild(row);
         skeletonRows.push(row);
         updateCounts(i + 1);
         if (!prefersReducedMotion()) {
-          await sleep(50);
+          await sleep(45);
         }
       }
 
-      // 5. Resolve skeletons into final rows with stagger
+      // 5. Resolve skeletons into final rows with spring settle
       for (let i = 0; i < PRESET_DATA.length; i++) {
-        if (!isPlaying) return;
-        await sleep(prefersReducedMotion() ? 10 : 160);
+        if (animId !== currentAnimationId) return;
+        await sleep(prefersReducedMotion() ? 10 : 150);
+        if (animId !== currentAnimationId) return;
         populateRowContent(skeletonRows[i], PRESET_DATA[i]);
       }
 
       // 6. Ping "Saved to Drive" dot
-      await sleep(250);
-      if (!isPlaying) return;
+      await sleep(220);
+      if (animId !== currentAnimationId) return;
       triggerDrivePing();
 
-      isPlaying = false;
       hasPlayedOnce = true;
     }
 
     // Process user-submitted links
     async function processUserLinks(text: string) {
-      isPlaying = false;
+      const animId = ++currentAnimationId;
       const lines = text
         .split(/[\n\r]+/)
-        .map((l) => l.trim())
+        .map((l) => l.replace(/^[<"']|[>"']$/g, "").trim())
         .filter((l) => l.length > 0);
 
       if (lines.length === 0) return;
@@ -518,6 +520,7 @@ const PRESET_ROWS = [
       });
 
       for (let i = 0; i < rowData.length; i++) {
+        if (animId !== currentAnimationId) return;
         const row = createSkeletonRow();
         rowsList.appendChild(row);
         skeletonRows.push(row);
@@ -528,15 +531,25 @@ const PRESET_ROWS = [
       }
 
       for (let i = 0; i < rowData.length; i++) {
-        await sleep(prefersReducedMotion() ? 10 : 140);
+        if (animId !== currentAnimationId) return;
+        await sleep(prefersReducedMotion() ? 10 : 130);
+        if (animId !== currentAnimationId) return;
         populateRowContent(skeletonRows[i], rowData[i]);
       }
 
       await sleep(200);
+      if (animId !== currentAnimationId) return;
       triggerDrivePing();
     }
 
-    // Event listeners
+    // Keyboard shortcut: Ctrl/Cmd + Enter to add links
+    textarea.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        addBtn.click();
+      }
+    });
+
     textarea.addEventListener("focus", () => {
       userInteracted = true;
     });
@@ -547,7 +560,7 @@ const PRESET_ROWS = [
 
     clearBtn.addEventListener("click", () => {
       userInteracted = true;
-      isPlaying = false;
+      currentAnimationId++;
       textarea.value = "";
       textarea.focus();
     });
@@ -574,7 +587,7 @@ const PRESET_ROWS = [
         runDemoAnimation();
       }
       return () => {
-        isPlaying = false;
+        currentAnimationId++;
       };
     });
 
@@ -628,14 +641,14 @@ const PRESET_ROWS = [
   .demo-viewport {
     position: relative;
     width: 100%;
-    max-width: 620px;
+    max-width: 600px;
     margin-inline: auto;
   }
 
   /* Parallax ambient paper sheets */
   .ambient-sheet {
     position: absolute;
-    inset: 12px 14px -14px -14px;
+    inset: 10px 12px -12px -12px;
     border-radius: 14px;
     background: var(--card);
     opacity: 0.55;
@@ -652,7 +665,7 @@ const PRESET_ROWS = [
   }
 
   .sheet-mid {
-    inset: 6px -10px -10px 10px;
+    inset: 6px -8px -8px 8px;
     transform: rotate(1deg);
     opacity: 0.5;
   }
@@ -673,7 +686,7 @@ const PRESET_ROWS = [
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    height: 48px;
+    height: 46px;
     padding-inline: 16px;
     border-bottom: 1px solid var(--border);
     background: var(--card);
@@ -726,6 +739,20 @@ const PRESET_ROWS = [
 
   .search-icon {
     color: var(--muted-foreground);
+  }
+
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding-inline: 4px;
+    border-radius: 4px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--foreground);
   }
 
   .drive-status {
@@ -781,17 +808,17 @@ const PRESET_ROWS = [
 
   /* Mock Body */
   .mock-body {
-    padding: 18px 20px 20px;
+    padding: 16px 18px 18px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
   }
 
   /* Group header */
   .group-header {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 
   .group-title-row {
@@ -803,14 +830,14 @@ const PRESET_ROWS = [
 
   .group-heading {
     font-family: var(--font-serif);
-    font-size: 26px;
+    font-size: 24px;
     line-height: 1.15;
     font-weight: 500;
     letter-spacing: -0.015em;
   }
 
   .group-meta {
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--muted-foreground);
     font-variant-numeric: tabular-nums;
   }
@@ -820,7 +847,7 @@ const PRESET_ROWS = [
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--border);
-    padding-bottom: 8px;
+    padding-bottom: 6px;
   }
 
   .group-tabs {
@@ -845,7 +872,7 @@ const PRESET_ROWS = [
   }
 
   .tab-count {
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--muted-foreground);
     font-variant-numeric: tabular-nums;
   }
@@ -861,11 +888,11 @@ const PRESET_ROWS = [
   .add-links-panel {
     background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 14px;
+    border-radius: 9px;
+    padding: 10px 12px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     box-shadow: var(--shadow-raised);
   }
 
@@ -879,12 +906,12 @@ const PRESET_ROWS = [
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 500;
   }
 
   .panel-hint {
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 400;
   }
 
@@ -892,7 +919,7 @@ const PRESET_ROWS = [
     background: none;
     border: none;
     padding: 0;
-    font-size: 12px;
+    font-size: 11.5px;
     cursor: pointer;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -908,14 +935,14 @@ const PRESET_ROWS = [
 
   .links-textarea {
     width: 100%;
-    min-height: 64px;
-    max-height: 96px;
-    padding: 8px 10px;
+    min-height: 58px;
+    max-height: 88px;
+    padding: 7px 9px;
     border: 1px solid var(--input);
-    border-radius: 7px;
+    border-radius: 6px;
     background: var(--background);
     color: var(--foreground);
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.45;
     resize: none;
     outline: none;
@@ -934,15 +961,15 @@ const PRESET_ROWS = [
   }
 
   .muted-note {
-    font-size: 11.5px;
+    font-size: 11px;
   }
 
   .add-btn {
-    height: 30px;
-    padding-inline: 12px;
-    font-size: 12.5px;
+    height: 28px;
+    padding-inline: 11px;
+    font-size: 12px;
     gap: 5px;
-    border-radius: 7px;
+    border-radius: 6px;
     transition: transform 100ms var(--ease-out), background-color 140ms var(--ease-out);
   }
 
@@ -950,10 +977,10 @@ const PRESET_ROWS = [
     transform: scale(0.95);
   }
 
-  /* Rows container & list with stable reserved height */
+  /* Rows container & list with stable reserved height to prevent layout jumps */
   .rows-container {
     min-height: 290px;
-    max-height: 340px;
+    max-height: 330px;
     overflow-y: auto;
     padding-right: 2px;
   }
@@ -964,14 +991,14 @@ const PRESET_ROWS = [
     gap: 4px;
   }
 
-  /* Source row */
+  /* Source row: strictly calibrated min-height matching both skeleton and populated */
   .source-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    min-height: 44px;
-    padding: 6px 10px;
+    min-height: 46px;
+    padding: 5px 10px;
     border-radius: 8px;
     transition:
       background-color 140ms var(--ease-out),
@@ -982,6 +1009,10 @@ const PRESET_ROWS = [
 
   .source-row:hover {
     background: var(--muted);
+  }
+
+  .source-row.is-settling {
+    animation: sf-row-settle 260ms var(--ease-spring) forwards;
   }
 
   .row-left {
@@ -999,7 +1030,7 @@ const PRESET_ROWS = [
   }
 
   .row-title {
-    font-size: 14px;
+    font-size: 13.5px;
     font-weight: 500;
     color: var(--foreground);
     white-space: nowrap;
@@ -1039,7 +1070,7 @@ const PRESET_ROWS = [
   }
 
   .status-saving {
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
   /* Skeleton animation */
@@ -1097,6 +1128,17 @@ const PRESET_ROWS = [
     }
   }
 
+  @keyframes sf-row-settle {
+    0% {
+      opacity: 0.7;
+      transform: scale(0.98) translateY(2px);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
   @keyframes sf-shimmer {
     0% {
       background-position: 200% 0;
@@ -1117,7 +1159,7 @@ const PRESET_ROWS = [
 
   @media (max-width: 520px) {
     .mock-body {
-      padding: 14px 14px 16px;
+      padding: 12px 12px 14px;
     }
     .status-duplicate {
       max-width: 110px;

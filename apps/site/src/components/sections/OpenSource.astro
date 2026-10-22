@@ -1,205 +1,257 @@
 ---
 /**
- * OpenSource.astro (id "open-source")
- * Free and open source (MIT), self-hosted on free tiers (Vercel, Supabase, Google Cloud).
- * Interactive terminal card with copy button and setup command simulation.
- * Links: GitHub repo, SELF-HOSTING.md, PRIVACY.md, CHANGELOG.md, CONTRIBUTING.md, issues.
+ * OpenSource.astro (id "open-source"): "Open source & self-hosted"
+ * Self-hosting commands matching docs/SELF-HOSTING.md verbatim.
+ * Real stack: Supabase (Auth + Postgres RLS), Google Cloud (drive.file scope), Next.js on Vercel, Tauri v2.
+ * Interactive copy-to-clipboard terminal with real step tabs, plus clean doc links.
  */
 import {
-  Code,
+  Check,
   Copy,
   ExternalLink,
-  GitBranch,
+  FileCode,
+  FileText,
+  KeyRound,
   Layers,
   Lock,
-  Server,
+  MessageSquare,
+  Package,
+  ScrollText,
   ShieldCheck,
-  Terminal as TerminalIcon,
-  Users,
+  Terminal,
 } from "@lucide/astro";
-import GithubIcon from "../GithubIcon.astro";
 import SectionHeader from "../SectionHeader.astro";
 import { links } from "../../lib/site";
 
-const CLONE_CMD = "git clone https://github.com/lagoonitself/sourcefold.git";
+interface TerminalStep {
+  id: string;
+  tabTitle: string;
+  command: string;
+  annotation: string;
+  lines: { type: "cmd" | "comment" | "out"; text: string }[];
+}
+
+const TERMINAL_STEPS: TerminalStep[] = [
+  {
+    id: "run-local",
+    tabTitle: "1. Run locally",
+    command: `git clone https://github.com/lagoonitself/sourcefold.git\ncd sourcefold\nnpm install\ncp apps/web/.env.example apps/web/.env.local\nnpm run dev`,
+    annotation: "Clones the monorepo, installs dependencies, copies environment template, and starts local Next.js dev server on :3000.",
+    lines: [
+      { type: "cmd", text: "git clone https://github.com/lagoonitself/sourcefold.git" },
+      { type: "cmd", text: "cd sourcefold && npm install" },
+      { type: "comment", text: "# Copy environment template and fill in your Supabase & Google Cloud credentials:" },
+      { type: "cmd", text: "cp apps/web/.env.example apps/web/.env.local" },
+      { type: "cmd", text: "npm run dev" },
+      { type: "out", text: "Ready in 1.4s at http://localhost:3000" },
+    ],
+  },
+  {
+    id: "desktop-ext",
+    tabTitle: "2. Build desktop & extension",
+    command: `npm run tauri dev -w @sourcefold/desktop\nnpm run build -w @sourcefold/extension`,
+    annotation: "Runs the Tauri v2 desktop app locally and builds the Chrome MV3 unpacked extension bundle.",
+    lines: [
+      { type: "comment", text: "# Run desktop app with hot reload (needs Rust toolchain):" },
+      { type: "cmd", text: "npm run tauri dev -w @sourcefold/desktop" },
+      { type: "out", text: "Running Tauri application on local window..." },
+      { type: "comment", text: "# Build Chrome extension (load unpacked from apps/extension/.output/chrome-mv3):" },
+      { type: "cmd", text: "npm run build -w @sourcefold/extension" },
+      { type: "out", text: "Built extension into apps/extension/.output/chrome-mv3" },
+    ],
+  },
+  {
+    id: "deploy-vercel",
+    tabTitle: "3. Deploy to Vercel",
+    command: `ALLOWED_EMAIL="you@example.com"\nNEXT_PUBLIC_SUPABASE_URL="https://your-ref.supabase.co"`,
+    annotation: "Set environment variables in your Vercel project settings. ALLOWED_EMAIL restricts sign-in to authorized users.",
+    lines: [
+      { type: "comment", text: "# Deploy repo to Vercel (preset: Next.js), set env variables in project dashboard:" },
+      { type: "cmd", text: "NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co" },
+      { type: "cmd", text: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sbp_..." },
+      { type: "cmd", text: "ALLOWED_EMAIL=your-email@gmail.com" },
+      { type: "cmd", text: "GOOGLE_CLIENT_ID=... && GOOGLE_CLIENT_SECRET=..." },
+      { type: "out", text: "Deployment complete. Production URL: https://sourcefold.yourdomain.com" },
+    ],
+  },
+];
 ---
 
-<section id="open-source" class="section" data-opensource-section>
+<section id="open-source" class="section">
   <div class="container">
     <SectionHeader
-      label="Free and open source"
-      title="Self-hosted, MIT licensed and "
-      marked="runs on free tiers"
-      lede="Sourcefold runs entirely on free tiers: Vercel, Supabase, and Google Cloud. Whoever runs the deployment chooses who can sign in with ALLOWED_EMAIL, and each person's library is kept strictly separate."
+      label="Open source & self-hosted"
+      title="Run your own instance in "
+      marked="ten minutes"
+      lede="Sourcefold is MIT-licensed. Host the web app on Vercel's free tier, back it with Supabase free tier for Auth and Postgres, and push docs straight into your Google Drive. Everything is visible, audited and under your control."
     />
 
-    <div class="opensource-grid" data-reveal="stagger">
-      <!-- Interactive Terminal Card -->
-      <div class="terminal-card sheet" data-terminal-card>
-        <div class="terminal-header">
+    <!-- Main Architecture + Terminal Grid -->
+    <div class="opensource-layout" data-reveal>
+      <!-- Left Column: Terminal Card -->
+      <div class="sheet terminal-card" data-ui="terminal" data-terminal-card>
+        <!-- Terminal Header -->
+        <div class="terminal-bar">
           <div class="terminal-dots" aria-hidden="true">
             <span class="dot dot-close"></span>
             <span class="dot dot-min"></span>
             <span class="dot dot-max"></span>
           </div>
-          <div class="terminal-title mono text-xs muted">
-            <TerminalIcon size={13} />
-            <span>bash — sourcefold setup</span>
+          <div class="terminal-title">
+            <Terminal size={14} class="muted" />
+            <code>bash: sourcefold setup</code>
           </div>
           <button
             type="button"
-            class="btn btn-outline btn-sm copy-btn"
-            data-copy-clone-btn
-            data-clipboard-text={CLONE_CMD}
-            aria-label="Copy git clone command to clipboard"
+            class="copy-btn btn btn-ghost btn-xs"
+            data-copy-trigger
+            aria-label="Copy shell commands to clipboard"
           >
-            <Copy size={13} class="copy-icon" />
+            <Copy size={13} class="copy-icon-ready" />
+            <Check size={13} class="copy-icon-done" />
             <span class="copy-text">Copy</span>
           </button>
         </div>
 
-        <div class="terminal-body mono">
-          <div class="term-line">
-            <span class="prompt-sym muted">$</span>
-            <span class="term-cmd">{CLONE_CMD}</span>
-          </div>
-          <div class="term-line term-output muted">
-            <span>Cloning into 'sourcefold'...</span>
-          </div>
-          <div class="term-line">
-            <span class="prompt-sym muted">$</span>
-            <span class="term-cmd">cd sourcefold &amp;&amp; npm install</span>
-          </div>
-          <div class="term-line term-output muted">
-            <span>added 420 packages in 3.1s</span>
-          </div>
-          <div class="term-line">
-            <span class="prompt-sym muted">$</span>
-            <span class="term-cmd">npm run dev</span>
-          </div>
-          <div class="term-line term-output term-success">
-            <span>✓ ready on http://localhost:3000</span>
-          </div>
+        <!-- Terminal Step Switcher Tabs -->
+        <div class="terminal-tabs" role="tablist" aria-label="Self-hosting steps from docs/SELF-HOSTING.md">
+          {
+            TERMINAL_STEPS.map((step, idx) => (
+              <button
+                type="button"
+                class:list={["term-tab-btn", idx === 0 && "is-active"]}
+                role="tab"
+                aria-selected={idx === 0 ? "true" : "false"}
+                data-step-id={step.id}
+              >
+                {step.tabTitle}
+              </button>
+            ))
+          }
         </div>
 
+        <!-- Terminal Output Screen -->
+        <div class="terminal-screen" data-terminal-screen>
+          {
+            TERMINAL_STEPS.map((step, idx) => (
+              <div
+                class:list={["step-pane", idx === 0 && "is-active"]}
+                data-pane-id={step.id}
+                role="tabpanel"
+              >
+                <div class="code-lines">
+                  {step.lines.map((line) => (
+                    <div class:list={["code-row", `row-${line.type}`]}>
+                      {line.type === "cmd" && <span class="prompt-symbol">$</span>}
+                      {line.type === "comment" && <span class="comment-symbol"></span>}
+                      {line.type === "out" && <span class="out-symbol">→</span>}
+                      <code class="line-text">{line.text}</code>
+                    </div>
+                  ))}
+                </div>
+                <div class="step-annotation muted text-xs">
+                  {step.annotation}
+                </div>
+              </div>
+            ))
+          }
+        </div>
+
+        <!-- Terminal Footer info -->
         <div class="terminal-footer">
-          <span class="mono text-xs muted">Node 24 · TypeScript · Next.js · Tauri</span>
+          <div class="env-chip-list">
+            <span class="env-pill"><code>ALLOWED_EMAIL</code> gate</span>
+            <span class="env-pill"><code>drive.file</code> scope</span>
+            <span class="env-pill">RLS Postgres</span>
+          </div>
           <a
-            href={links.repo}
-            class="btn btn-ghost btn-sm github-view-btn"
+            href={links.selfHosting}
+            class="btn btn-outline btn-xs"
             target="_blank"
             rel="noopener noreferrer"
           >
-            <GithubIcon size={14} />
-            <span>Star on GitHub</span>
+            <span>docs/SELF-HOSTING.md</span>
+            <ExternalLink size={12} />
           </a>
         </div>
       </div>
 
-      <!-- Free Tier & Privacy Architecture -->
-      <div class="features-column">
-        <div class="arch-card card">
-          <div class="arch-icon-wrap" aria-hidden="true">
-            <Layers size={18} />
+      <!-- Right Column: Authentic Stack & Security Architecture -->
+      <div class="arch-column">
+        <div class="card arch-feature-card">
+          <div class="arch-card-header">
+            <div class="arch-icon-wrap" aria-hidden="true">
+              <Layers size={18} />
+            </div>
+            <h3 class="h4 arch-title">Zero-cost free tier stack</h3>
           </div>
-          <div class="arch-content">
-            <h4 class="h4 arch-title">Zero hosting cost</h4>
-            <p class="muted arch-desc">
-              Designed to fit inside the generous free tiers of Vercel (frontend), Supabase (500 MB database + auth), and Google Cloud (Drive API). No credit card required to self-host.
-            </p>
-          </div>
+          <p class="muted text-sm arch-desc">
+            Vercel hosts the Next.js web application. Supabase provides Auth and Postgres for links, folders and notes. Google Drive stores full Markdown and Google Doc files. All fit well within free tiers for personal research libraries.
+          </p>
         </div>
 
-        <div class="arch-card card">
-          <div class="arch-icon-wrap" aria-hidden="true">
-            <Users size={18} />
+        <div class="card arch-feature-card">
+          <div class="arch-card-header">
+            <div class="arch-icon-wrap" aria-hidden="true">
+              <KeyRound size={18} />
+            </div>
+            <h3 class="h4 arch-title">Private access with ALLOWED_EMAIL</h3>
           </div>
-          <div class="arch-content">
-            <h4 class="h4 arch-title">You choose who can sign in</h4>
-            <p class="muted arch-desc">
-              Control access with <span class="mono text-xs">ALLOWED_EMAIL</span>: restrict to your own email address, specify an allowed team list, or open to any Google account with <span class="mono text-xs">*</span>.
-            </p>
-          </div>
+          <p class="muted text-sm arch-desc">
+            Set <code>ALLOWED_EMAIL=you@example.com</code> in your environment variables. Sign-in requests from any other email addresses are rejected at the OAuth callback, keeping your self-hosted web app private.
+          </p>
         </div>
 
-        <div class="arch-card card">
-          <div class="arch-icon-wrap" aria-hidden="true">
-            <Lock size={18} />
+        <div class="card arch-feature-card">
+          <div class="arch-card-header">
+            <div class="arch-icon-wrap" aria-hidden="true">
+              <ShieldCheck size={18} />
+            </div>
+            <h3 class="h4 arch-title">Row-Level Security (RLS) data isolation</h3>
           </div>
-          <div class="arch-content">
-            <h4 class="h4 arch-title">Each person's library is separate</h4>
-            <p class="muted arch-desc">
-              Database Row-Level Security (RLS) strictly isolates every user's sources, notes, and folders. No user can see or query another person's library.
-            </p>
-          </div>
+          <p class="muted text-sm arch-desc">
+            Postgres tables enforce Supabase Row-Level Security policies. Even if multiple users share an instance, each account can only read and write their own library sources, notes, and highlights.
+          </p>
         </div>
       </div>
     </div>
 
-    <!-- Repository & Documentation Links Grid -->
-    <div class="links-strip sheet" data-reveal>
-      <div class="links-intro">
-        <span class="label">Documentation &amp; code</span>
-        <span class="h4">Everything in the open</span>
+    <!-- Clean Documentation Index -->
+    <div class="docs-index-sheet sheet" data-reveal>
+      <div class="docs-header">
+        <FileText size={16} class="muted" />
+        <span class="docs-title">Project documentation &amp; sources</span>
       </div>
-      <div class="links-group">
-        <a href={links.repo} class="link-item card" target="_blank" rel="noopener noreferrer">
-          <div class="link-item-header">
-            <GithubIcon size={18} />
-            <span class="link-title">GitHub repository</span>
-            <ExternalLink size={13} class="ext-icon muted" />
-          </div>
-          <p class="muted link-desc">Source code for desktop, web, extension and MCP server</p>
+      <div class="docs-grid">
+        <a href={links.repo} class="doc-link-item" target="_blank" rel="noopener noreferrer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>
+          <span class="doc-name">lagoonitself/sourcefold</span>
+          <span class="doc-badge chip">MIT License</span>
         </a>
-
-        <a href={links.selfHosting} class="link-item card" target="_blank" rel="noopener noreferrer">
-          <div class="link-item-header">
-            <Server size={18} class="doc-icon" />
-            <span class="link-title">SELF-HOSTING.md</span>
-            <ExternalLink size={13} class="ext-icon muted" />
-          </div>
-          <p class="muted link-desc">Step-by-step deploy guide for Vercel and Supabase</p>
+        <a href={links.selfHosting} class="doc-link-item" target="_blank" rel="noopener noreferrer">
+          <FileCode size={14} class="doc-icon muted" />
+          <span class="doc-name">docs/SELF-HOSTING.md</span>
+          <span class="doc-desc muted">Setup &amp; deploy</span>
         </a>
-
-        <a href={links.privacy} class="link-item card" target="_blank" rel="noopener noreferrer">
-          <div class="link-item-header">
-            <ShieldCheck size={18} class="doc-icon" />
-            <span class="link-title">PRIVACY.md</span>
-            <ExternalLink size={13} class="ext-icon muted" />
-          </div>
-          <p class="muted link-desc">What is stored, Google Drive permissions, and zero tracking</p>
+        <a href={links.privacy} class="doc-link-item" target="_blank" rel="noopener noreferrer">
+          <Lock size={14} class="doc-icon muted" />
+          <span class="doc-name">PRIVACY.md</span>
+          <span class="doc-desc muted">Scopes &amp; retention</span>
         </a>
-
-        <a href={links.changelog} class="link-item card" target="_blank" rel="noopener noreferrer">
-          <div class="link-item-header">
-            <GitBranch size={18} class="doc-icon" />
-            <span class="link-title">CHANGELOG.md</span>
-            <ExternalLink size={13} class="ext-icon muted" />
-          </div>
-          <p class="muted link-desc">Release history and newly added source converters</p>
+        <a href={links.install} class="doc-link-item" target="_blank" rel="noopener noreferrer">
+          <Package size={14} class="doc-icon muted" />
+          <span class="doc-name">docs/INSTALL.md</span>
+          <span class="doc-desc muted">Unsigned app steps</span>
         </a>
-
-        <a
-          href={`${links.repo}/blob/main/CONTRIBUTING.md`}
-          class="link-item card"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <div class="link-item-header">
-            <Code size={18} class="doc-icon" />
-            <span class="link-title">CONTRIBUTING.md</span>
-            <ExternalLink size={13} class="ext-icon muted" />
-          </div>
-          <p class="muted link-desc">How to add new scrapers and submit pull requests</p>
+        <a href={links.changelog} class="doc-link-item" target="_blank" rel="noopener noreferrer">
+          <ScrollText size={14} class="doc-icon muted" />
+          <span class="doc-name">CHANGELOG.md</span>
+          <span class="doc-desc muted">Release history</span>
         </a>
-
-        <a href={links.issues} class="link-item card" target="_blank" rel="noopener noreferrer">
-          <div class="link-item-header">
-            <ExternalLink size={18} class="doc-icon" />
-            <span class="link-title">Issue tracker</span>
-            <ExternalLink size={13} class="ext-icon muted" />
-          </div>
-          <p class="muted link-desc">Report broken URLs, suggest converters, or request features</p>
+        <a href={links.issues} class="doc-link-item" target="_blank" rel="noopener noreferrer">
+          <MessageSquare size={14} class="doc-icon muted" />
+          <span class="doc-name">GitHub Issues</span>
+          <span class="doc-desc muted">Feedback &amp; bugs</span>
         </a>
       </div>
     </div>
@@ -207,58 +259,82 @@ const CLONE_CMD = "git clone https://github.com/lagoonitself/sourcefold.git";
 </section>
 
 <script>
-  const root = document.querySelector<HTMLElement>("[data-opensource-section]");
+  const root = document.querySelector<HTMLElement>("[data-terminal-card]");
   if (root) {
-    const copyBtn = root.querySelector<HTMLButtonElement>("[data-copy-clone-btn]")!;
-    const textToCopy = copyBtn.dataset.clipboardText || "git clone https://github.com/lagoonitself/sourcefold.git";
+    const tabs = root.querySelectorAll<HTMLButtonElement>("[data-step-id]");
+    const panes = root.querySelectorAll<HTMLElement>("[data-pane-id]");
+    const copyBtn = root.querySelector<HTMLButtonElement>("[data-copy-trigger]")!;
+    const copyText = copyBtn.querySelector<HTMLElement>(".copy-text")!;
 
+    let currentStep = "run-local";
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const id = tab.dataset.stepId;
+        if (!id || id === currentStep) return;
+
+        currentStep = id;
+        tabs.forEach((t) => {
+          const active = t === tab;
+          t.classList.toggle("is-active", active);
+          t.setAttribute("aria-selected", active ? "true" : "false");
+        });
+
+        panes.forEach((p) => {
+          p.classList.toggle("is-active", p.dataset.paneId === id);
+        });
+      });
+    });
+
+    // Copy commands for current step
     copyBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(textToCopy);
-        const copyText = copyBtn.querySelector<HTMLElement>(".copy-text")!;
-        const original = copyText.textContent;
-        copyText.textContent = "Copied!";
-        copyBtn.classList.add("is-copied");
+      const activePane = root.querySelector<HTMLElement>(`[data-pane-id="${currentStep}"]`);
+      if (!activePane) return;
 
-        setTimeout(() => {
-          copyText.textContent = original;
-          copyBtn.classList.remove("is-copied");
-        }, 1600);
-      } catch {
-        // Fallback
-        const copyText = copyBtn.querySelector<HTMLElement>(".copy-text")!;
+      const cmds = Array.from(activePane.querySelectorAll<HTMLElement>(".row-cmd .line-text"))
+        .map((el) => el.textContent?.trim())
+        .filter(Boolean)
+        .join("\n");
+
+      try {
+        await navigator.clipboard.writeText(cmds);
+        copyBtn.classList.add("is-copied");
         copyText.textContent = "Copied!";
         setTimeout(() => {
+          copyBtn.classList.remove("is-copied");
           copyText.textContent = "Copy";
-        }, 1600);
+        }, 1800);
+      } catch {
+        copyText.textContent = "Error";
       }
     });
   }
 </script>
 
 <style>
-  .opensource-grid {
+  .opensource-layout {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1.15fr 0.85fr;
     gap: 20px;
-    margin-bottom: 24px;
+    margin-top: 12px;
+    margin-bottom: 20px;
   }
 
-  @media (max-width: 880px) {
-    .opensource-grid {
+  @media (max-width: 900px) {
+    .opensource-layout {
       grid-template-columns: 1fr;
     }
   }
 
   /* Terminal Card */
-  .terminal-card {
+  [data-ui="terminal"] {
     border: 1px solid var(--border);
     overflow: hidden;
     display: flex;
     flex-direction: column;
   }
 
-  .terminal-header {
+  [data-ui="terminal"] .terminal-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -268,102 +344,201 @@ const CLONE_CMD = "git clone https://github.com/lagoonitself/sourcefold.git";
     border-bottom: 1px solid var(--border);
   }
 
-  .terminal-dots {
+  [data-ui="terminal"] .terminal-dots {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
   }
 
-  .dot {
+  [data-ui="terminal"] .dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
   }
 
-  .dot-close {
+  [data-ui="terminal"] .dot-close {
     background: color-mix(in oklab, var(--destructive) 80%, transparent);
   }
-  .dot-min {
+  [data-ui="terminal"] .dot-min {
     background: color-mix(in oklab, var(--warning) 80%, transparent);
   }
-  .dot-max {
+  [data-ui="terminal"] .dot-max {
     background: color-mix(in oklab, var(--success) 80%, transparent);
   }
 
-  .terminal-title {
+  [data-ui="terminal"] .terminal-title {
     display: flex;
     align-items: center;
-    gap: 6px;
-  }
-
-  .copy-btn {
+    gap: 8px;
     font-size: 12px;
-    height: 28px;
-    padding-inline: 10px;
+  }
+
+  [data-ui="terminal"] .copy-btn {
     gap: 6px;
-    transition: all 140ms var(--ease-out);
+    height: 26px;
+    padding-inline: 8px;
   }
 
-  :global(.copy-btn.is-copied) {
-    background: var(--success);
-    color: var(--primary-foreground);
-    border-color: var(--success);
+  [data-ui="terminal"] .copy-icon-done {
+    display: none;
+    color: var(--success);
   }
 
-  .terminal-body {
+  [data-ui="terminal"] .copy-btn.is-copied .copy-icon-ready {
+    display: none;
+  }
+
+  [data-ui="terminal"] .copy-btn.is-copied .copy-icon-done {
+    display: inline-block;
+  }
+
+  /* Terminal Tabs */
+  [data-ui="terminal"] .terminal-tabs {
+    display: flex;
+    background: color-mix(in oklab, var(--desk) 30%, var(--background));
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+
+  [data-ui="terminal"] .term-tab-btn {
+    padding: 8px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    color: var(--muted-foreground);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out);
+  }
+
+  [data-ui="terminal"] .term-tab-btn:hover {
+    color: var(--foreground);
+  }
+
+  [data-ui="terminal"] .term-tab-btn.is-active {
+    color: var(--foreground);
+    border-bottom-color: var(--primary);
+    background: var(--card);
+  }
+
+  /* Terminal Screen */
+  [data-ui="terminal"] .terminal-screen {
     padding: 20px;
-    font-size: 13px;
-    line-height: 1.7;
-    background: color-mix(in oklab, var(--desk) 60%, var(--background));
+    background: var(--background);
     flex: 1;
   }
 
-  .term-line {
+  [data-ui="terminal"] .step-pane {
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  [data-ui="terminal"] .step-pane.is-active {
     display: flex;
-    gap: 8px;
-    align-items: baseline;
   }
 
-  .term-output {
-    padding-left: 16px;
+  [data-ui="terminal"] .code-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
     font-size: 12px;
+    line-height: 1.6;
   }
 
-  .term-success {
-    color: var(--success);
+  [data-ui="terminal"] .code-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  [data-ui="terminal"] .prompt-symbol {
+    color: var(--muted-foreground);
+    user-select: none;
+  }
+
+  [data-ui="terminal"] .row-comment .line-text {
+    color: var(--muted-foreground);
+    font-style: italic;
+  }
+
+  [data-ui="terminal"] .row-cmd .line-text {
+    color: var(--foreground);
     font-weight: 500;
   }
 
-  .terminal-footer {
+  [data-ui="terminal"] .row-out {
+    color: var(--muted-foreground);
+  }
+
+  [data-ui="terminal"] .out-symbol {
+    color: var(--success);
+    user-select: none;
+  }
+
+  [data-ui="terminal"] .step-annotation {
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--muted);
+    border: 1px solid var(--border);
+    line-height: 1.45;
+  }
+
+  [data-ui="terminal"] .terminal-footer {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 16px;
+    gap: 12px;
+    padding: 12px 16px;
     background: var(--muted);
     border-top: 1px solid var(--border);
   }
 
-  /* Features column */
-  .features-column {
+  [data-ui="terminal"] .env-chip-list {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
-  .arch-card {
+  [data-ui="terminal"] .env-pill {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--muted-foreground);
+  }
+
+  /* Right Arch Column */
+  .arch-column {
     display: flex;
-    align-items: flex-start;
+    flex-direction: column;
     gap: 14px;
+  }
+
+  .arch-feature-card {
     padding: 18px 20px;
     border: 1px solid var(--border);
+  }
+
+  .arch-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
   }
 
   .arch-icon-wrap {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     border-radius: 8px;
     background: var(--muted);
     color: var(--foreground);
@@ -371,88 +546,72 @@ const CLONE_CMD = "git clone https://github.com/lagoonitself/sourcefold.git";
   }
 
   .arch-title {
-    font-size: 16px;
-    margin-bottom: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
   }
 
   .arch-desc {
-    font-size: 13px;
     line-height: 1.5;
   }
 
-  /* Links strip */
-  .links-strip {
-    padding: 24px;
+  /* Docs Index Sheet */
+  .docs-index-sheet {
+    padding: 18px 20px;
     border: 1px solid var(--border);
   }
 
-  .links-intro {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-bottom: 18px;
-  }
-
-  .links-group {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-  }
-
-  @media (max-width: 960px) {
-    .links-group {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  @media (max-width: 580px) {
-    .links-group {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .link-item {
-    display: flex;
-    flex-direction: column;
-    padding: 14px 16px;
-    border: 1px solid var(--border);
-    text-decoration: none;
-    transition:
-      transform 140ms var(--ease-out),
-      border-color 140ms var(--ease-out),
-      box-shadow 140ms var(--ease-out);
-  }
-
-  .link-item:hover {
-    transform: translateY(-2px);
-    border-color: var(--primary);
-    box-shadow: var(--shadow-raised);
-  }
-
-  .link-item-header {
+  .docs-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 14px;
   }
 
-  .link-title {
-    font-size: 13.5px;
-    font-weight: 600;
+  .docs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+
+  .doc-link-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
     color: var(--foreground);
-    flex: 1;
+    text-decoration: none;
+    transition:
+      border-color 140ms var(--ease-out),
+      background-color 140ms var(--ease-out);
+  }
+
+  .doc-link-item:hover {
+    border-color: var(--primary);
+    background: var(--muted);
   }
 
   .doc-icon {
-    color: var(--muted-foreground);
+    flex-shrink: 0;
   }
 
-  .ext-icon {
-    opacity: 0.7;
+  .doc-name {
+    font-weight: 500;
   }
 
-  .link-desc {
-    font-size: 12px;
-    line-height: 1.45;
+  .doc-badge {
+    font-size: 10.5px;
+    margin-left: auto;
+  }
+
+  .doc-desc {
+    font-size: 11px;
+    margin-left: auto;
   }
 </style>

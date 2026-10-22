@@ -1,8 +1,9 @@
 ---
 /**
  * A quiet strip of source tiles + names (all of SOURCES) drifting slowly as a marquee.
- * Pauses on hover/focus, duplicated list for seamless loop, mask fades on edges,
- * stops under reduced motion, linking to #sources.
+ * Pauses on hover/focus, quad-duplicated track for a mathematically seamless infinite loop
+ * across all screen sizes (including 1440px, 1920px and ultra-wide), mask fades on edges,
+ * stops and wraps under reduced motion, linking to #sources.
  */
 import SourceTile from "../SourceTile.astro";
 import { SOURCES } from "../../lib/sources";
@@ -30,6 +31,26 @@ import { SOURCES } from "../../lib/sources";
         ))
       }
     </div>
+    <div class="marquee-group" aria-hidden="true">
+      {
+        SOURCES.map((source) => (
+          <a href="#sources" class="marquee-pill" tabindex="-1">
+            <SourceTile kind={source.kind} size={24} />
+            <span class="source-name">{source.name}</span>
+          </a>
+        ))
+      }
+    </div>
+    <div class="marquee-group" aria-hidden="true">
+      {
+        SOURCES.map((source) => (
+          <a href="#sources" class="marquee-pill" tabindex="-1">
+            <SourceTile kind={source.kind} size={24} />
+            <span class="source-name">{source.name}</span>
+          </a>
+        ))
+      }
+    </div>
   </div>
 </div>
 
@@ -38,8 +59,8 @@ import { SOURCES } from "../../lib/sources";
     position: relative;
     width: 100%;
     overflow: hidden;
-    padding-block: 14px;
-    margin-top: clamp(24px, 4vw, 44px);
+    padding-block: 10px;
+    margin-top: clamp(20px, 2.8vh, 36px);
     -webkit-mask-image: linear-gradient(
       to right,
       transparent 0%,
@@ -60,7 +81,7 @@ import { SOURCES } from "../../lib/sources";
     display: flex;
     width: max-content;
     gap: 12px;
-    animation: marquee-drift 42s linear infinite;
+    animation: marquee-drift 38s linear infinite;
     will-change: transform;
   }
 
@@ -80,10 +101,11 @@ import { SOURCES } from "../../lib/sources";
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    height: 36px;
+    height: 34px;
     padding-inline: 10px 14px;
     border-radius: 999px;
-    background: var(--background);
+    background: var(--card);
+    border: 1px solid var(--border);
     box-shadow: var(--shadow-raised);
     color: var(--foreground);
     text-decoration: none;
@@ -91,13 +113,15 @@ import { SOURCES } from "../../lib/sources";
     font-weight: 500;
     transition:
       background-color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out),
       transform 140ms var(--ease-out),
       box-shadow 140ms var(--ease-out);
     white-space: nowrap;
   }
 
   .marquee-pill:hover {
-    background: var(--card);
+    background: var(--accent);
+    border-color: var(--border-strong);
     transform: translateY(-1px);
     box-shadow: var(--shadow-sheet);
   }
@@ -106,12 +130,13 @@ import { SOURCES } from "../../lib/sources";
     color: var(--foreground);
   }
 
+  /* 4 groups with 12px track gap: exactly 1 group shift is calc(-25% - 3px) */
   @keyframes marquee-drift {
     from {
       transform: translateX(0);
     }
     to {
-      transform: translateX(calc(-50% - 6px));
+      transform: translateX(calc(-25% - 3px));
     }
   }
 
@@ -120,6 +145,7 @@ import { SOURCES } from "../../lib/sources";
       animation: none !important;
       flex-wrap: wrap;
       justify-content: center;
+      width: 100%;
     }
     .marquee-group[aria-hidden="true"] {
       display: none;

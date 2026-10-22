@@ -1,63 +1,92 @@
 ---
 /**
- * Reader.astro (section id "read") — "Read and highlight"
- * A big, genuinely interactive desktop app reader mock inside a .sheet.
- * Body in Newsreader ~18px, narrow column, no ads, in-place diagram, jumping footnotes.
- * Real text selection, floating toolbar (Highlight, Add note, Copy quote, Remove text),
- * live highlights count, live Markdown file update, guided hint, and undo toast.
+ * Agent B: Section 2 - The Reader & Highlighter (Interactive Product Mock)
+ *
+ * Demonstrates:
+ * - A clean desk for reading, with highlights that stay
+ * - Desktop reader window mock with sheet styling, Newsreader body, narrow column
+ * - Interactive text selection toolbar: Highlight, Add Note, Copy Quote with Source, Remove Passage
+ * - Live synchronized highlights side panel and synced Markdown file preview
+ * - Inline figure (turbo response curve), removable sponsor block, jumping footnotes
+ * - Robust selection spanning footnotes and paragraphs without DOM corruption
+ * - Safe clipboard copy with fallback feedback
+ * - Non-repetitive guided hint that aborts permanently on any user interaction
  */
-import { RotateCcw } from "@lucide/astro";
-import SectionHeader from "../SectionHeader.astro";
-import SourceTile from "../SourceTile.astro";
 import ArticleContent from "../reader/ArticleContent.astro";
 import HighlightsPanel from "../reader/HighlightsPanel.astro";
 import ReaderToolbar from "../reader/ReaderToolbar.astro";
+import {
+  Copy,
+  FileText,
+  FolderSync,
+  Highlighter,
+  RotateCcw,
+} from "@lucide/astro";
 ---
 
-<section id="read" class="section">
-  <div class="container">
-    <SectionHeader
-      label="Read and highlight"
-      title="A clean desk for reading, with "
-      marked="highlights that stay"
-      after="."
-      lede="Every source opens in the desktop app's distraction-free reader: no ads, images in place, and footnotes that jump straight to their references. Highlights and notes write directly into your source's Markdown file."
-    />
+<section
+  id="read"
+  class="section-pad relative overflow-hidden"
+  aria-labelledby="reader-heading"
+>
+  <div class="container-tight">
+    <!-- Section Header -->
+    <div class="mb-10 text-left">
+      <span class="eyebrow block mb-3 text-muted-foreground">Read and highlight</span>
+      <h2
+        id="reader-heading"
+        class="heading-display text-balance mb-4 max-w-[24ch]"
+      >
+        A clean desk for reading, with highlights that stay.
+      </h2>
+      <p class="text-body text-muted-foreground text-balance max-w-[62ch]">
+        Open any captured source in an undisturbed view. Mark key passages with a single click,
+        attach marginal notes, and watch them write directly into your project's local Markdown
+        files.
+      </p>
+    </div>
 
-    <!-- Short feature callouts beside/above the reader -->
-    <div class="reader-features-row" data-reveal="stagger">
-      <div class="feature-pill">
-        <span class="pill-dot"></span>
-        <span>No ads or cookie banners</span>
+    <!-- Feature Highlights Pills -->
+    <div class="reader-features-row" role="list">
+      <div class="feature-pill" role="listitem">
+        <Highlighter size={13} stroke-width={2} class="pill-icon marker-accent" />
+        <span>One-click highlighter</span>
       </div>
-      <div class="feature-pill">
-        <span class="pill-dot"></span>
-        <span>Images kept in place</span>
+      <div class="feature-pill" role="listitem">
+        <FileText size={13} stroke-width={2} class="pill-icon" />
+        <span>Notes written into Markdown</span>
       </div>
-      <div class="feature-pill">
-        <span class="pill-dot"></span>
-        <span>Footnotes jump to references</span>
+      <div class="feature-pill" role="listitem">
+        <Copy size={13} stroke-width={2} class="pill-icon" />
+        <span>Copy quote with source URL</span>
       </div>
-      <div class="feature-pill">
-        <span class="pill-dot"></span>
-        <span>Writes to local Markdown</span>
+      <div class="feature-pill" role="listitem">
+        <FolderSync size={13} stroke-width={2} class="pill-icon" />
+        <span>Footnote and sponsor cleanup</span>
       </div>
     </div>
 
-    <!-- The main desktop app reader mock in a .sheet -->
-    <div class="sheet reader-window-frame" id="reader-window" data-reveal>
-      <!-- Desktop window top titlebar -->
-      <div class="reader-titlebar">
+    <!-- Main Desktop App Mock -->
+    <div
+      class="reader-window-frame sheet"
+      id="reader-frame"
+      data-ui
+    >
+      <!-- Titlebar / Header -->
+      <div class="reader-window-titlebar">
         <div class="titlebar-left">
-          <div class="window-controls">
-            <span class="control-dot close"></span>
-            <span class="control-dot minimize"></span>
-            <span class="control-dot zoom"></span>
+          <!-- Neutral Window Controls (matching desk-and-sheet design system) -->
+          <div class="window-controls" aria-hidden="true">
+            <span class="control-dot"></span>
+            <span class="control-dot"></span>
+            <span class="control-dot"></span>
           </div>
+
+          <!-- Document Breadcrumb Path -->
           <div class="titlebar-breadcrumb">
-            <span class="muted">Cars</span>
+            <span class="crumb-muted">Cars</span>
             <span class="sep">/</span>
-            <span class="muted">Engines</span>
+            <span class="crumb-muted">Engines</span>
             <span class="sep">/</span>
             <span class="crumb-current">Turbocharging</span>
           </div>
@@ -65,8 +94,7 @@ import ReaderToolbar from "../reader/ReaderToolbar.astro";
 
         <div class="titlebar-center">
           <div class="doc-status-chip">
-            <SourceTile kind="grokipedia" size={18} />
-            <span class="doc-status-title">grokipedia.com/page/Turbocharger</span>
+            <span class="doc-status-title">turbo-lag-explained.md</span>
             <span class="status-dot-green" title="Synced to folder"></span>
           </div>
         </div>
@@ -116,7 +144,7 @@ import ReaderToolbar from "../reader/ReaderToolbar.astro";
           </div>
         </div>
 
-        <!-- Right: Side panel with Highlights and live Markdown file -->
+        <!-- Right: Highlights & Live Markdown Panel -->
         <div class="reader-panel-col" id="reader-panel-column">
           <HighlightsPanel />
         </div>
@@ -127,24 +155,25 @@ import ReaderToolbar from "../reader/ReaderToolbar.astro";
 
 <script>
   import { inView } from "motion";
-  import { prefersReducedMotion } from "../../lib/reveal";
 
-  const root = document.querySelector("#read");
+  const root = document.querySelector("#read") as HTMLElement | null;
+
   if (root) {
     const scrollContainer = root.querySelector("#reader-scroll-container") as HTMLElement | null;
     const article = root.querySelector("#reader-article") as HTMLElement | null;
     const floatingToolbar = root.querySelector("#reader-floating-toolbar") as HTMLElement | null;
-    const notePopover = root.querySelector("#reader-note-popover") as HTMLElement | null;
-    const noteInput = root.querySelector("#reader-note-input") as HTMLInputElement | null;
-    const noteSaveBtn = root.querySelector("#reader-note-save") as HTMLButtonElement | null;
-    const toast = root.querySelector("#reader-toast") as HTMLElement | null;
-    const toastMsg = root.querySelector("#reader-toast-msg") as HTMLElement | null;
-    const toastUndoBtn = root.querySelector("#reader-toast-undo") as HTMLButtonElement | null;
-
     const toolHighlight = root.querySelector("#tool-btn-highlight") as HTMLButtonElement | null;
     const toolNote = root.querySelector("#tool-btn-note") as HTMLButtonElement | null;
     const toolCopy = root.querySelector("#tool-btn-copy") as HTMLButtonElement | null;
     const toolRemove = root.querySelector("#tool-btn-remove") as HTMLButtonElement | null;
+
+    const notePopover = root.querySelector("#reader-note-popover") as HTMLElement | null;
+    const noteInput = root.querySelector("#reader-note-input") as HTMLInputElement | null;
+    const noteSaveBtn = root.querySelector("#reader-note-save") as HTMLButtonElement | null;
+
+    const toast = root.querySelector("#reader-toast") as HTMLElement | null;
+    const toastMsg = root.querySelector("#reader-toast-msg") as HTMLElement | null;
+    const toastUndoBtn = root.querySelector("#reader-toast-undo") as HTMLButtonElement | null;
 
     const sponsorBlock = root.querySelector("#sponsor-block") as HTMLElement | null;
     const removeSponsorAction = root.querySelector("#remove-sponsor-action") as HTMLButtonElement | null;
@@ -189,6 +218,38 @@ import ReaderToolbar from "../reader/ReaderToolbar.astro";
     let lastActiveHighlightId = "hl-1";
     let toastTimeout: number | null = null;
 
+    // Interaction & hint tracking
+    let userHasInteracted = false;
+    let hintAborted = false;
+    let hintPlayed = false;
+    let hintTimerIds: number[] = [];
+
+    function dismissGuidedHint() {
+      userHasInteracted = true;
+      hintAborted = true;
+      hintTimerIds.forEach((id) => clearTimeout(id));
+      hintTimerIds = [];
+
+      if (fakeCursor) {
+        fakeCursor.style.opacity = "0";
+        fakeCursor.style.display = "none";
+      }
+
+      // If toolbar was simulated by the hint without an actual user selection, hide it
+      if (!currentSelectedRange && floatingToolbar && !floatingToolbar.hidden) {
+        hideToolbar();
+      }
+    }
+
+    // Dismiss hint on ANY user interaction
+    root.addEventListener("pointerdown", dismissGuidedHint, { passive: true });
+    root.addEventListener("keydown", dismissGuidedHint, { passive: true });
+    if (scrollContainer) {
+      scrollContainer.addEventListener("scroll", dismissGuidedHint, { passive: true });
+      scrollContainer.addEventListener("wheel", dismissGuidedHint, { passive: true });
+      scrollContainer.addEventListener("touchstart", dismissGuidedHint, { passive: true });
+    }
+
     function showToast(message: string, showUndo = false) {
       if (!toast || !toastMsg) return;
       if (toastTimeout) clearTimeout(toastTimeout);
@@ -210,14 +271,7 @@ import ReaderToolbar from "../reader/ReaderToolbar.astro";
 
     function syncMarkdownCode() {
       if (!markdownOutput) return;
-      let md = `---
-title: "How turbo lag actually works"
-url: "https://grokipedia.com/page/Turbocharger"
-saved: 2026-10-22
----
-
-## My highlights
-`;
+      let md = `---\ntitle: "How turbo lag actually works"\nurl: "https://grokipedia.com/page/Turbocharger"\nsaved: 2026-10-22\n---\n\n## My highlights\n`;
 
       highlights.forEach((hl) => {
         md += `\n> "${hl.quote}"`;
@@ -266,15 +320,19 @@ saved: 2026-10-22
       // Attach jump listeners
       highlightsList.querySelectorAll(".hl-jump-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
+          dismissGuidedHint();
           const jumpId = (btn as HTMLElement).dataset.jump;
           if (!jumpId) return;
-          const mark = root?.querySelector(`[data-hl-id="${jumpId}"]`) as HTMLElement | null;
-          if (mark && scrollContainer) {
-            mark.scrollIntoView({ behavior: "smooth", block: "center" });
-            mark.classList.remove("pulse-flash");
-            // trigger reflow
-            void mark.offsetWidth;
-            mark.classList.add("pulse-flash");
+          const marks = root?.querySelectorAll(`[data-hl-id="${jumpId}"]`);
+          if (marks && marks.length > 0 && scrollContainer) {
+            const firstMark = marks[0] as HTMLElement;
+            firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
+            marks.forEach((m) => {
+              const el = m as HTMLElement;
+              el.classList.remove("pulse-flash");
+              void el.offsetWidth;
+              el.classList.add("pulse-flash");
+            });
           }
         });
       });
@@ -326,12 +384,14 @@ saved: 2026-10-22
       // Check if selection starts and ends inside article body
       const anchorNode = sel.anchorNode;
       const focusNode = sel.focusNode;
+      if (!anchorNode || !focusNode) return;
+
       if (!article.contains(anchorNode) || !article.contains(focusNode)) {
         hideToolbar();
         return;
       }
 
-      // Check not inside toolbar or footnotes
+      // Check not inside footnotes
       const footnotes = root?.querySelector("#footnotes");
       if (footnotes?.contains(anchorNode) || footnotes?.contains(focusNode)) {
         hideToolbar();
@@ -344,29 +404,124 @@ saved: 2026-10-22
     }
 
     document.addEventListener("selectionchange", () => {
-      // Debounce slightly to allow smooth dragging/selection
       window.requestAnimationFrame(handleSelection);
     });
+
+    /**
+     * Robust selection highlighter:
+     * Walks all intersecting text nodes without mutating or breaking block structures (<p>, <sup>, <a>).
+     * Prevents DOMException from surroundContents when ranges cross inline/block boundaries.
+     */
+    function highlightSelectedRange(range: Range, hlId: string): HTMLElement[] {
+      const createdMarks: HTMLElement[] = [];
+      const rootContainer = range.commonAncestorContainer;
+      const startNode = range.startContainer;
+      const startOffset = range.startOffset;
+      const endNode = range.endContainer;
+      const endOffset = range.endOffset;
+
+      // 1. Single text node case (simple fast path)
+      if (startNode === endNode && startNode.nodeType === Node.TEXT_NODE) {
+        const textNode = startNode as Text;
+        if (startOffset < endOffset) {
+          let target = textNode;
+          if (endOffset < textNode.length) {
+            target.splitText(endOffset);
+          }
+          if (startOffset > 0) {
+            target = target.splitText(startOffset);
+          }
+          const mark = document.createElement("mark");
+          mark.className = "reader-mark";
+          mark.dataset.hlId = hlId;
+          target.parentNode?.insertBefore(mark, target);
+          mark.appendChild(target);
+          createdMarks.push(mark);
+        }
+        return createdMarks;
+      }
+
+      // 2. Multi-node selection (e.g. across paragraphs, inline elements, footnotes)
+      const rootEl =
+        rootContainer.nodeType === Node.TEXT_NODE ? rootContainer.parentNode! : rootContainer;
+      const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+          if (!node.textContent || node.textContent.trim().length === 0) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          // Do not highlight inside footnotes section
+          if (node.parentElement?.closest("#footnotes")) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          try {
+            const nodeRange = document.createRange();
+            nodeRange.selectNodeContents(node);
+            const intersects =
+              range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 0 &&
+              range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0;
+            return intersects ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+          } catch {
+            return NodeFilter.FILTER_REJECT;
+          }
+        },
+      });
+
+      const textNodes: Text[] = [];
+      let curr = walker.nextNode();
+      while (curr) {
+        textNodes.push(curr as Text);
+        curr = walker.nextNode();
+      }
+
+      for (const textNode of textNodes) {
+        // Skip footnote references to keep footnote superscripts intact
+        if (textNode.parentElement?.closest(".fn-ref")) {
+          continue;
+        }
+
+        let start = 0;
+        let end = textNode.length;
+
+        if (textNode === startNode) {
+          start = startOffset;
+        }
+        if (textNode === endNode) {
+          end = endOffset;
+        }
+
+        if (start >= end) continue;
+
+        let target = textNode;
+        if (end < textNode.length) {
+          target.splitText(end);
+        }
+        if (start > 0) {
+          target = target.splitText(start);
+        }
+
+        const mark = document.createElement("mark");
+        mark.className = "reader-mark";
+        mark.dataset.hlId = hlId;
+        target.parentNode?.insertBefore(mark, target);
+        mark.appendChild(target);
+        createdMarks.push(mark);
+      }
+
+      return createdMarks;
+    }
 
     // 1. Highlight button
     function applyHighlight(noteText?: string): string {
       if (!currentSelectedRange || !currentSelectedText) return "";
 
       const hlId = `hl-${Date.now().toString(36)}`;
-      const mark = document.createElement("mark");
-      mark.className = "reader-mark";
-      mark.dataset.hlId = hlId;
-
-      try {
-        currentSelectedRange.surroundContents(mark);
-      } catch {
-        const contents = currentSelectedRange.extractContents();
-        mark.appendChild(contents);
-        currentSelectedRange.insertNode(mark);
-      }
+      const marks = highlightSelectedRange(currentSelectedRange, hlId);
+      if (marks.length === 0) return "";
 
       const now = new Date();
-      const timeStr = `Oct 22, ${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+      const hours = now.getHours().toString().padStart(2, "0");
+      const minutes = now.getMinutes().toString().padStart(2, "0");
+      const timeStr = `Oct 22, ${hours}:${minutes}`;
 
       highlights.push({
         id: hlId,
@@ -380,6 +535,14 @@ saved: 2026-10-22
       renderHighlightsList();
       syncMarkdownCode();
 
+      // Trigger animation on created marks
+      marks.forEach((mark) => {
+        mark.classList.add("pulse-flash");
+        setTimeout(() => {
+          mark.classList.remove("pulse-flash");
+        }, 1200);
+      });
+
       window.getSelection()?.removeAllRanges();
       currentSelectedRange = null;
       currentSelectedText = "";
@@ -390,6 +553,7 @@ saved: 2026-10-22
 
     if (toolHighlight) {
       toolHighlight.addEventListener("click", () => {
+        dismissGuidedHint();
         applyHighlight();
         showToast("Highlighted and saved to Markdown");
       });
@@ -398,6 +562,7 @@ saved: 2026-10-22
     // 2. Add note
     if (toolNote && notePopover && noteInput) {
       toolNote.addEventListener("click", () => {
+        dismissGuidedHint();
         notePopover.hidden = false;
         noteInput.value = "";
         noteInput.focus();
@@ -406,6 +571,7 @@ saved: 2026-10-22
 
     if (noteSaveBtn && noteInput) {
       noteSaveBtn.addEventListener("click", () => {
+        dismissGuidedHint();
         const noteVal = noteInput.value.trim();
         if (currentSelectedRange) {
           applyHighlight(noteVal);
@@ -430,18 +596,54 @@ saved: 2026-10-22
       });
     }
 
-    // 3. Copy quote
-    if (toolCopy) {
-      toolCopy.addEventListener("click", () => {
-        if (!currentSelectedText) return;
-        const quoteString = `"${currentSelectedText}" — How turbo lag actually works, https://grokipedia.com/page/Turbocharger`;
+    // 3. Copy quote with clipboard fallback
+    async function copyQuoteToClipboard(text: string): Promise<boolean> {
+      const quoteString = `"${text}" — How turbo lag actually works, https://grokipedia.com/page/Turbocharger`;
 
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(quoteString).catch(() => {});
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        try {
+          await navigator.clipboard.writeText(quoteString);
+          return true;
+        } catch {
+          // Fall back to execCommand
         }
-        showToast("Copied with its source");
+      }
+
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = quoteString;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.top = "-9999px";
+        textarea.style.left = "-9999px";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const docWithExec = document as unknown as { execCommand?: (c: string) => boolean };
+        const success = docWithExec.execCommand ? docWithExec.execCommand("copy") : false;
+        document.body.removeChild(textarea);
+        if (success) return true;
+      } catch {
+        // Fallback failed
+      }
+
+      return false;
+    }
+
+    if (toolCopy) {
+      toolCopy.addEventListener("click", async () => {
+        dismissGuidedHint();
+        if (!currentSelectedText) return;
+        const textToCopy = currentSelectedText;
         window.getSelection()?.removeAllRanges();
         hideToolbar();
+
+        const ok = await copyQuoteToClipboard(textToCopy);
+        if (ok) {
+          showToast("Copied with its source");
+        } else {
+          showToast("Clipboard unavailable — copy manually");
+        }
       });
     }
 
@@ -455,12 +657,14 @@ saved: 2026-10-22
 
     if (toolRemove) {
       toolRemove.addEventListener("click", () => {
+        dismissGuidedHint();
         collapseSponsor();
       });
     }
 
     if (removeSponsorAction) {
       removeSponsorAction.addEventListener("click", () => {
+        dismissGuidedHint();
         collapseSponsor();
       });
     }
@@ -478,6 +682,7 @@ saved: 2026-10-22
     footnoteLinks.forEach((link) => {
       link.addEventListener("click", (e) => {
         e.preventDefault();
+        dismissGuidedHint();
         const href = link.getAttribute("href");
         if (!href) return;
         const target = root.querySelector(href) as HTMLElement | null;
@@ -497,6 +702,7 @@ saved: 2026-10-22
     footnoteBackLinks.forEach((link) => {
       link.addEventListener("click", (e) => {
         e.preventDefault();
+        dismissGuidedHint();
         const href = link.getAttribute("href");
         if (!href) return;
         const target = root.querySelector(href) as HTMLElement | null;
@@ -509,6 +715,7 @@ saved: 2026-10-22
     // 6. Tabs inside side panel (Highlights vs Markdown)
     if (tabHighlightsBtn && tabMarkdownBtn && panelHighlightsView && panelMarkdownView) {
       tabHighlightsBtn.addEventListener("click", () => {
+        dismissGuidedHint();
         tabHighlightsBtn.classList.add("is-active");
         tabHighlightsBtn.setAttribute("aria-selected", "true");
         tabMarkdownBtn.classList.remove("is-active");
@@ -518,6 +725,7 @@ saved: 2026-10-22
       });
 
       tabMarkdownBtn.addEventListener("click", () => {
+        dismissGuidedHint();
         tabMarkdownBtn.classList.add("is-active");
         tabMarkdownBtn.setAttribute("aria-selected", "true");
         tabHighlightsBtn.classList.remove("is-active");
@@ -530,6 +738,7 @@ saved: 2026-10-22
     // 7. Mobile toggle (Article vs Highlights panel)
     if (mobileTabArticle && mobileTabPanel && scrollContainer && panelColumn) {
       mobileTabArticle.addEventListener("click", () => {
+        dismissGuidedHint();
         mobileTabArticle.classList.add("is-active");
         mobileTabPanel.classList.remove("is-active");
         scrollContainer.style.display = "block";
@@ -537,6 +746,7 @@ saved: 2026-10-22
       });
 
       mobileTabPanel.addEventListener("click", () => {
+        dismissGuidedHint();
         mobileTabPanel.classList.add("is-active");
         mobileTabArticle.classList.remove("is-active");
         scrollContainer.style.display = "none";
@@ -547,6 +757,7 @@ saved: 2026-10-22
     // Reset demo
     if (resetDemoBtn) {
       resetDemoBtn.addEventListener("click", () => {
+        dismissGuidedHint();
         if (sponsorBlock) sponsorBlock.classList.remove("is-removed");
         highlights.length = 0;
         highlights.push({
@@ -556,6 +767,17 @@ saved: 2026-10-22
           note: "Core distinction from boost threshold.",
           time: "Oct 22, 10:48",
         });
+
+        // Remove dynamic marks and restore pristine text nodes
+        root.querySelectorAll(".reader-mark:not(.pre-marked)").forEach((mark) => {
+          const parent = mark.parentNode;
+          while (mark.firstChild) {
+            parent?.insertBefore(mark.firstChild, mark);
+          }
+          parent?.removeChild(mark);
+        });
+        article?.normalize();
+
         updateCounts();
         renderHighlightsList();
         syncMarkdownCode();
@@ -564,22 +786,21 @@ saved: 2026-10-22
     }
 
     // 8. One-time Guided Hint Animation
-    let hintAborted = false;
-    let hintPlayed = false;
-
-    function abortHint() {
-      hintAborted = true;
-      if (fakeCursor) {
-        fakeCursor.style.display = "none";
-      }
+    function addHintTimeout(fn: () => void, ms: number) {
+      if (userHasInteracted || hintAborted) return;
+      const id = window.setTimeout(() => {
+        if (!userHasInteracted && !hintAborted) {
+          fn();
+        }
+      }, ms);
+      hintTimerIds.push(id);
     }
 
-    // If user touches, moves mouse, or keys in the reader, stop the hint
-    scrollContainer?.addEventListener("pointerdown", abortHint, { once: true });
-    scrollContainer?.addEventListener("keydown", abortHint, { once: true });
-
     function runGuidedHint() {
-      if (hintPlayed || hintAborted || prefersReducedMotion()) {
+      if (userHasInteracted || hintPlayed || hintAborted) {
+        return;
+      }
+      if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         return;
       }
       hintPlayed = true;
@@ -598,19 +819,16 @@ saved: 2026-10-22
       fakeCursor.style.opacity = "0";
 
       // Fade in cursor
-      setTimeout(() => {
-        if (hintAborted) return;
+      addHintTimeout(() => {
         fakeCursor.style.opacity = "1";
         fakeCursor.style.transition = "transform 1.1s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease";
 
         // Drag across
-        setTimeout(() => {
-          if (hintAborted) return;
+        addHintTimeout(() => {
           fakeCursor.style.transform = `translate(${startX + 180}px, ${startY + 2}px)`;
 
           // Show floating toolbar simulated
-          setTimeout(() => {
-            if (hintAborted) return;
+          addHintTimeout(() => {
             if (floatingToolbar) {
               floatingToolbar.style.top = `${startY - 40}px`;
               floatingToolbar.style.left = `${startX + 90}px`;
@@ -618,16 +836,16 @@ saved: 2026-10-22
             }
 
             // Click Highlight button
-            setTimeout(() => {
-              if (hintAborted) return;
+            addHintTimeout(() => {
               fakeCursor.style.transform = `translate(${startX + 40}px, ${startY - 35}px)`;
 
-              setTimeout(() => {
-                if (hintAborted) return;
+              addHintTimeout(() => {
                 fakeCursor.style.opacity = "0";
-                setTimeout(() => {
+                addHintTimeout(() => {
                   fakeCursor.style.display = "none";
-                  hideToolbar();
+                  if (!currentSelectedRange) {
+                    hideToolbar();
+                  }
                 }, 400);
               }, 600);
             }, 700);
@@ -636,11 +854,14 @@ saved: 2026-10-22
       }, 400);
     }
 
-    // Trigger guided hint once when reader becomes visible
-    inView(
+    // Trigger guided hint ONCE when reader becomes visible, then disconnect permanently
+    const stopInView = inView(
       root,
       () => {
-        runGuidedHint();
+        if (!userHasInteracted && !hintPlayed && !hintAborted) {
+          runGuidedHint();
+        }
+        stopInView();
       },
       { margin: "0px 0px -15% 0px" },
     );
@@ -660,43 +881,51 @@ saved: 2026-10-22
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 13.5px;
-    font-weight: 500;
+    font-size: 13px;
     color: var(--muted-foreground);
-    background: var(--card);
-    padding: 6px 14px;
-    border-radius: 999px;
-    box-shadow: var(--shadow-raised);
+    background: color-mix(in oklab, var(--card) 75%, var(--background));
     border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 999px;
+    transition:
+      border-color 160ms var(--ease-out),
+      color 160ms var(--ease-out);
   }
 
-  .pill-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--marker-strong);
+  .feature-pill:hover {
+    color: var(--foreground);
+    border-color: var(--border-strong);
   }
 
-  /* The outer Sheet */
+  .pill-icon {
+    color: var(--muted-foreground);
+  }
+
+  .pill-icon.marker-accent {
+    color: var(--marker-strong);
+  }
+
+  /* Desktop App Window Frame */
   .reader-window-frame {
+    width: 100%;
+    height: clamp(620px, 80vh, 880px);
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--border);
-    height: clamp(600px, 78vh, 860px);
     position: relative;
+    box-shadow: var(--shadow-sheet);
   }
 
-  /* Window Titlebar */
-  .reader-titlebar {
+  /* Titlebar */
+  .reader-window-titlebar {
+    height: 48px;
+    padding-inline: 18px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 10px 16px;
-    background: color-mix(in oklab, var(--card) 90%, var(--desk));
+    background: var(--muted);
     border-bottom: 1px solid var(--border);
-    font-family: var(--font-sans);
     flex-shrink: 0;
   }
 
@@ -704,30 +933,27 @@ saved: 2026-10-22
     display: flex;
     align-items: center;
     gap: 16px;
+    min-width: 0;
   }
 
   .window-controls {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-shrink: 0;
   }
 
   .control-dot {
-    width: 10px;
-    height: 10px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
+    background: var(--border-strong);
+    opacity: 0.65;
+    transition: opacity 140ms var(--ease-out);
   }
 
-  .control-dot.close {
-    background: #ff5f56;
-  }
-
-  .control-dot.minimize {
-    background: #ffbd2e;
-  }
-
-  .control-dot.zoom {
-    background: #27c93f;
+  .control-dot:hover {
+    opacity: 1;
   }
 
   .titlebar-breadcrumb {
@@ -735,6 +961,9 @@ saved: 2026-10-22
     align-items: center;
     gap: 6px;
     font-size: 12.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .sep {
@@ -757,7 +986,7 @@ saved: 2026-10-22
     gap: 8px;
     padding: 4px 10px;
     border-radius: 8px;
-    background: var(--muted);
+    background: var(--card);
     border: 1px solid var(--border);
     font-size: 12px;
     color: var(--foreground);
@@ -782,6 +1011,7 @@ saved: 2026-10-22
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
   }
 
   .mobile-view-toggle {
@@ -859,7 +1089,7 @@ saved: 2026-10-22
   }
 
   .cursor-svg {
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    display: block;
   }
 
   .cursor-hint-label {
@@ -894,6 +1124,21 @@ saved: 2026-10-22
 
     .titlebar-center {
       display: none;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .reader-window-frame {
+      height: 720px;
+    }
+
+    .titlebar-breadcrumb .crumb-muted,
+    .titlebar-breadcrumb .sep {
+      display: none;
+    }
+
+    .reader-window-titlebar {
+      padding-inline: 12px;
     }
   }
 </style>

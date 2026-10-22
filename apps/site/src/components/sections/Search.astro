@@ -22,7 +22,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s1",
     kind: "youtube",
     title: "How turbo lag actually works",
-    meta: "Engineering Explained · 12:04",
+    meta: "Engineering Explained (12:04)",
     snippet:
       "The delay before boost hits is throttle lag plus spool time. At low rpm exhaust gas volume is small, so the turbine wheel accelerates slowly.",
   },
@@ -30,7 +30,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s2",
     kind: "grokipedia",
     title: "Turbocharger",
-    meta: "Grokipedia · Section 2.4",
+    meta: "Grokipedia (Section 2.4)",
     snippet:
       "A turbocharger is an exhaust-driven compressor designed to increase volumetric efficiency and engine boost without parasitic crankshaft drag.",
   },
@@ -38,7 +38,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s3",
     kind: "substack",
     title: "The last rotary",
-    meta: "Engine Bay · Issue 42",
+    meta: "Engine Bay (Issue 42)",
     snippet:
       "Twin-turbo setups on rotaries suffered notorious turbo lag until sequential bypass valves cut low-rpm hesitation and improved spool.",
   },
@@ -46,7 +46,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s4",
     kind: "x",
     title: "Thread: why twin-scroll beats twin-turbo",
-    meta: "@boostlab · 6 posts",
+    meta: "@boostlab (6 posts)",
     snippet:
       "Separating exhaust pulses avoids cylinder backpressure interference, eliminating boost delay without the heavy clatter of a diesel block.",
   },
@@ -54,7 +54,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s5",
     kind: "wikipedia",
     title: "Wankel engine",
-    meta: "Wikipedia · Rotary mechanics",
+    meta: "Wikipedia (Rotary mechanics)",
     snippet:
       "Rotary engines generate smooth high-rpm output, but low exhaust velocity at idle creates noticeable spool delay for larger turbo assemblies.",
   },
@@ -62,7 +62,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s6",
     kind: "reddit",
     title: "Is the 2JZ overrated?",
-    meta: "r/cars · 342 comments",
+    meta: "r/cars (342 comments)",
     snippet:
       "The stock sequential turbos keep lag minimal, but big single turbo conversions have atrocious turbo lag below 4,500 rpm until the wastegate closes.",
   },
@@ -70,7 +70,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s7",
     kind: "hackernews",
     title: "Electric turbos are finally here",
-    meta: "news.ycombinator.com · 89 points",
+    meta: "news.ycombinator.com (89 points)",
     snippet:
       "A 48-volt electric motor spins the compressor wheel in 200 milliseconds, completely erasing turbo lag before exhaust pressure builds.",
   },
@@ -78,7 +78,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s8",
     kind: "pdf",
     title: "Transient response of variable-geometry turbines",
-    meta: "arXiv:2308.08708 · Page 4",
+    meta: "arXiv:2308.08708 (Page 4)",
     snippet:
       "Variable nozzle vanes adjust the effective flow area, drastically improving transient boost rise times and mitigating turbo lag across operating points.",
   },
@@ -86,7 +86,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s9",
     kind: "web",
     title: "Turbochargers, explained",
-    meta: "Car and Driver · Technical",
+    meta: "Car and Driver (Technical)",
     snippet:
       "Understanding boost pressure, wastegates, blow-off valves, and why modern twin-scroll systems feel almost lag-free compared to 1980s sports cars.",
   },
@@ -94,7 +94,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s10",
     kind: "bluesky",
     title: "Dyno day notes",
-    meta: "@torque.dev · Oct 18",
+    meta: "@torque.dev (Oct 18)",
     snippet:
       "Testing wastegate preload and electronic boost control solenoids. Throttle hesitation resolved with quicker ignition advance.",
   },
@@ -102,7 +102,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s11",
     kind: "note",
     title: "Script ideas for the intro",
-    meta: "Personal note · Draft",
+    meta: "Personal note (Draft)",
     snippet:
       "Hook the audience by contrasting the instantaneous torque of an EV motor against the dramatic pause and explosive boost of old 930 turbo lag.",
   },
@@ -110,7 +110,7 @@ const CORPUS: SearchCorpusItem[] = [
     id: "s12",
     kind: "image",
     title: "Dyno chart, 2JZ stock vs single turbo",
-    meta: "Dyno scan · PNG",
+    meta: "Dyno scan (PNG)",
     snippet:
       "Torque curve comparison showing boost threshold: stock sequential spools at 2,200 rpm; T04Z single turbo hits boost at 4,400 rpm.",
   },
@@ -152,7 +152,7 @@ const CORPUS: SearchCorpusItem[] = [
             >
               <X size={15} stroke-width={1.75} />
             </button>
-            <span class="kbd search-shortcut" title="Focus search">/</span >
+            <span class="kbd search-shortcut" title="Focus search">/</span>
           </div>
 
           <div class="search-toolbar">
@@ -341,7 +341,7 @@ const CORPUS: SearchCorpusItem[] = [
 
       let str = raw;
       // Extract "exact phrases"
-      const phraseRegex = /"([^"]+)"/g;
+      const phraseRegex = /"([^\"]+)"/g;
       let match: RegExpExecArray | null;
       while ((match = phraseRegex.exec(raw)) !== null) {
         if (match[1].trim()) phrases.push(match[1].trim().toLowerCase());

@@ -1,16 +1,19 @@
 ---
 /**
- * Claude.astro (id "claude") — "Work with Claude"
+ * Claude.astro (id "claude"): "Work with Claude"
  * Shows Claude Desktop interacting with the local Sourcefold MCP server:
  * streaming conversation, tool-call chips with spinners resolving to checkmarks,
  * and a live mini Sourcefold desktop window reacting in real time.
+ * Plausible MCP tool names: add_links, list_sources, read_source, add_highlight,
+ * find_sources (search inside sources), add_note, save_to_drive.
+ * Clean neutral styling without Anthropic logos or brand colours.
  */
 import {
+  Bot,
   Download,
   ExternalLink,
   Folder,
   Search,
-  Sparkles,
 } from "@lucide/astro";
 import SectionHeader from "../SectionHeader.astro";
 import { links } from "../../lib/site";
@@ -22,10 +25,10 @@ import { links } from "../../lib/site";
       label="Work with Claude"
       title="Ask Claude to research, organize and "
       marked="save to your library"
-      lede="Add Sourcefold to Claude Desktop from the desktop app (Settings → Claude → Add to Claude Desktop) or download Sourcefold-Claude.mcpb. It uses the desktop app's sign-in with nothing to set up. With the desktop app open, Claude can also search inside your sources and open things in the app for you."
+      lede="Add Sourcefold to Claude Desktop from the desktop app (Settings → Claude → Add to Claude Desktop) or download Sourcefold-Claude.mcpb. It uses the desktop app's sign-in with zero configuration. With the desktop app open, Claude can search inside your sources and open things for you."
     />
 
-    <div class="sheet workbench" data-claude-workbench data-reveal>
+    <div class="sheet workbench" data-ui="workbench" data-claude-workbench data-reveal>
       <!-- Workbench Top Bar -->
       <div class="workbench-bar">
         <div class="workbench-window-dots" aria-hidden="true">
@@ -37,7 +40,7 @@ import { links } from "../../lib/site";
           <div class="pane-title active-pane">
             <span class="status-indicator"></span>
             <span>Claude Desktop</span>
-            <span class="badge">Sourcefold MCP</span>
+            <code class="badge">Sourcefold MCP</code>
           </div>
           <div class="pane-title right-pane-label">
             <Folder size={14} class="muted" />
@@ -60,7 +63,7 @@ import { links } from "../../lib/site";
           aria-selected="true"
           data-scenario="playlist"
         >
-          Add playlist & highlight
+          Add playlist &amp; highlight
         </button>
         <button
           type="button"
@@ -78,7 +81,7 @@ import { links } from "../../lib/site";
           aria-selected="false"
           data-scenario="note"
         >
-          Summarize & write note
+          Summarize &amp; write note
         </button>
       </div>
 
@@ -99,7 +102,7 @@ import { links } from "../../lib/site";
             <div class="chat-bubble assistant-bubble">
               <div class="bubble-header">
                 <div class="claude-avatar" aria-hidden="true">
-                  <Sparkles size={13} />
+                  <Bot size={13} />
                 </div>
                 <span class="bubble-author">Claude</span>
                 <span class="bubble-time">via desktop MCP</span>
@@ -119,7 +122,7 @@ import { links } from "../../lib/site";
 
           <div class="chat-input-bar" aria-hidden="true">
             <span class="chat-placeholder">Reply to Claude or select another prompt above…</span>
-            <span class="chat-kbd kbd">Return</span>
+            <kbd class="chat-kbd kbd">Return</kbd>
           </div>
         </div>
 
@@ -154,7 +157,7 @@ import { links } from "../../lib/site";
       <!-- Workbench Footer / MCP Info Bar -->
       <div class="workbench-footer">
         <div class="footer-instruction">
-          <span class="mono step-tag">Settings → Claude → Add to Claude Desktop</span>
+          <code class="step-tag">Settings → Claude → Add to Claude Desktop</code>
           <span class="muted text-sm">uses desktop app's sign-in · zero configuration</span>
         </div>
         <div class="footer-actions">
@@ -164,7 +167,7 @@ import { links } from "../../lib/site";
             title="Download Sourcefold-Claude.mcpb bundle"
           >
             <Download size={14} />
-            <span>Sourcefold-Claude.mcpb</span>
+            <code>Sourcefold-Claude.mcpb</code>
           </a>
           <a
             href={`${links.install}#claude-desktop`}
@@ -195,15 +198,17 @@ import { links } from "../../lib/site";
     itemCountText: string;
   }
 
+  const CHECK_SVG = `<svg class="check-icon" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5L6.5 11.5L12.5 4.5"/></svg>`;
+
   const SCENARIOS: Record<string, Scenario> = {
     playlist: {
       prompt: "Add this playlist to Engines / Lag and boost and highlight anything about anti-lag.",
       folder: "Lag and boost",
       heading: "Lag and boost",
       tools: [
-        { name: "add_links", params: "3 videos -> Engines/Lag and boost" },
-        { name: "list_sources", params: "folder: 'Engines/Lag and boost'" },
-        { name: "highlight", params: "source_id: 'turbo-lag', term: 'anti-lag'" },
+        { name: "add_links", params: "3 URLs to Cars/Engines/Lag and boost" },
+        { name: "list_sources", params: "group: 'Lag and boost'" },
+        { name: "add_highlight", params: "source_id: 'turbo-lag', quote: 'Anti-lag ignites unburned fuel...'" },
         { name: "save_to_drive", params: "project: 'Cars'" },
       ],
       replyWords: [
@@ -216,9 +221,7 @@ import { links } from "../../lib/site";
       itemCountText: "3 sources",
       renderPreview: (stage: number) => {
         if (stage === 0) {
-          return `
-            <div class="mini-empty muted">Adding sources to group...</div>
-          `;
+          return `<div class="mini-empty muted">Adding sources to group...</div>`;
         }
         const showSecond = stage >= 1;
         const showThird = stage >= 2;
@@ -281,8 +284,8 @@ import { links } from "../../lib/site";
       heading: "Search inside sources",
       searchQuery: "variable-geometry",
       tools: [
-        { name: "search_sources", params: "query: 'variable-geometry', scope: 'Cars'" },
-        { name: "list_sources", params: "matched: 4 passages" },
+        { name: "find_sources", params: "query: 'variable-geometry', scope: 'Cars'" },
+        { name: "read_source", params: "source_id: 'transient-response', section: 3" },
       ],
       replyWords: [
         "Found", "4", "matching", "passages", "inside", "your", "papers", "and",
@@ -321,13 +324,13 @@ import { links } from "../../lib/site";
       folder: "Engines",
       heading: "Engines",
       tools: [
-        { name: "read_source", params: "slug: 'twin-scroll-vs-twin-turbo'" },
-        { name: "write_note", params: "title: 'Twin-scroll vs Twin-turbo Summary'" },
-        { name: "save_to_drive", params: "folder: 'Cars/Engines'" },
+        { name: "read_source", params: "source_id: 'twin-scroll-vs-twin-turbo'" },
+        { name: "add_note", params: "group: 'Engines', title: 'Twin-scroll vs Twin-turbo'" },
+        { name: "save_to_drive", params: "project: 'Cars'" },
       ],
       replyWords: [
         "Compared", "both", "approaches", "from", "your", "saved", "X", "threads",
-        "and", "Car", "and", "Driver", "article.", "Created", "a", "structured",
+        "and", "engineering", "papers.", "Created", "a", "structured",
         "note", "in", "Engines", "highlighting", "exhaust", "pulse", "separation,",
         "packaging", "costs,", "and", "spool", "latencies.", "Pushed", "to", "Drive."
       ],
@@ -412,9 +415,9 @@ import { links } from "../../lib/site";
           .map(
             (t) => `
           <div class="tool-chip is-done">
-            <span class="tool-icon check-icon">✓</span>
-            <span class="tool-name mono">${t.name}</span>
-            <span class="tool-param mono">${t.params}</span>
+            <span class="tool-icon check-icon">${CHECK_SVG}</span>
+            <code class="tool-name">${t.name}</code>
+            <code class="tool-param">${t.params}</code>
           </div>
         `,
           )
@@ -436,8 +439,8 @@ import { links } from "../../lib/site";
         chip.className = "tool-chip is-running";
         chip.innerHTML = `
           <span class="tool-spinner"><span class="spin-dot"></span></span>
-          <span class="tool-name mono">${tool.name}</span>
-          <span class="tool-param mono">${tool.params}</span>
+          <code class="tool-name">${tool.name}</code>
+          <code class="tool-param">${tool.params}</code>
         `;
         toolsContainer.appendChild(chip);
 
@@ -446,7 +449,7 @@ import { links } from "../../lib/site";
 
         // Tool finishes -> green check
         chip.className = "tool-chip is-done";
-        chip.querySelector(".tool-spinner")!.innerHTML = `<span class="check-icon">✓</span>`;
+        chip.querySelector(".tool-spinner")!.innerHTML = CHECK_SVG;
 
         // Update preview pane alongside tool finish
         rowsEl.innerHTML = sc.renderPreview(i + 1);
@@ -492,13 +495,13 @@ import { links } from "../../lib/site";
 </script>
 
 <style>
-  .workbench {
+  [data-ui="workbench"] {
     margin-top: 12px;
     border: 1px solid var(--border);
     overflow: hidden;
   }
 
-  .workbench-bar {
+  [data-ui="workbench"] .workbench-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -508,29 +511,29 @@ import { links } from "../../lib/site";
     border-bottom: 1px solid var(--border);
   }
 
-  .workbench-window-dots {
+  [data-ui="workbench"] .workbench-window-dots {
     display: flex;
     align-items: center;
     gap: 7px;
   }
 
-  .dot {
+  [data-ui="workbench"] .dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
   }
 
-  .dot-close {
+  [data-ui="workbench"] .dot-close {
     background: color-mix(in oklab, var(--destructive) 80%, transparent);
   }
-  .dot-min {
+  [data-ui="workbench"] .dot-min {
     background: color-mix(in oklab, var(--warning) 80%, transparent);
   }
-  .dot-max {
+  [data-ui="workbench"] .dot-max {
     background: color-mix(in oklab, var(--success) 80%, transparent);
   }
 
-  .workbench-titles {
+  [data-ui="workbench"] .workbench-titles {
     display: flex;
     align-items: center;
     gap: 24px;
@@ -538,23 +541,21 @@ import { links } from "../../lib/site";
     font-weight: 500;
   }
 
-  .pane-title {
+  [data-ui="workbench"] .pane-title {
     display: flex;
     align-items: center;
     gap: 8px;
   }
 
-  .status-indicator {
+  [data-ui="workbench"] .status-indicator {
     width: 7px;
     height: 7px;
     border-radius: 50%;
     background: var(--success);
-    box-shadow: 0 0 0 2px color-mix(in oklab, var(--success) 24%, transparent);
   }
 
-  .badge {
+  [data-ui="workbench"] .badge {
     font-size: 11px;
-    font-family: var(--font-mono);
     padding: 2px 7px;
     border-radius: 4px;
     background: var(--card);
@@ -562,7 +563,7 @@ import { links } from "../../lib/site";
     color: var(--muted-foreground);
   }
 
-  .sync-status {
+  [data-ui="workbench"] .sync-status {
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -570,7 +571,7 @@ import { links } from "../../lib/site";
     color: var(--muted-foreground);
   }
 
-  .sync-dot {
+  [data-ui="workbench"] .sync-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
@@ -578,13 +579,12 @@ import { links } from "../../lib/site";
     transition: background-color 200ms var(--ease-out);
   }
 
-  :global(.sync-dot.is-saved) {
+  :global([data-ui="workbench"] .sync-dot.is-saved) {
     background: var(--success);
-    box-shadow: 0 0 0 2px color-mix(in oklab, var(--success) 30%, transparent);
   }
 
   /* Scenario chips */
-  .scenario-selector {
+  [data-ui="workbench"] .scenario-selector {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -594,13 +594,13 @@ import { links } from "../../lib/site";
     border-bottom: 1px solid var(--border);
   }
 
-  .selector-label {
+  [data-ui="workbench"] .selector-label {
     font-size: 12.5px;
     color: var(--muted-foreground);
     margin-right: 4px;
   }
 
-  .scenario-chip {
+  [data-ui="workbench"] .scenario-chip {
     padding: 5px 12px;
     border-radius: 999px;
     font-size: 12.5px;
@@ -615,19 +615,19 @@ import { links } from "../../lib/site";
       transform 140ms var(--ease-out);
   }
 
-  .scenario-chip:hover {
+  [data-ui="workbench"] .scenario-chip:hover {
     border-color: var(--border-strong);
     background: var(--muted);
   }
 
-  .scenario-chip.is-active {
+  [data-ui="workbench"] .scenario-chip.is-active {
     background: var(--primary);
     color: var(--primary-foreground);
     border-color: var(--primary);
   }
 
   /* Workbench body split */
-  .workbench-body {
+  [data-ui="workbench"] .workbench-body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     min-height: 480px;
@@ -635,13 +635,13 @@ import { links } from "../../lib/site";
   }
 
   @media (max-width: 860px) {
-    .workbench-body {
+    [data-ui="workbench"] .workbench-body {
       grid-template-columns: 1fr;
     }
   }
 
   /* Left chat pane */
-  .chat-pane {
+  [data-ui="workbench"] .chat-pane {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -651,55 +651,54 @@ import { links } from "../../lib/site";
   }
 
   @media (max-width: 860px) {
-    .chat-pane {
+    [data-ui="workbench"] .chat-pane {
       border-right: none;
       border-bottom: 1px solid var(--border);
     }
   }
 
-  .chat-scroll {
+  [data-ui="workbench"] .chat-scroll {
     display: flex;
     flex-direction: column;
     gap: 16px;
   }
 
-  .chat-bubble {
+  [data-ui="workbench"] .chat-bubble {
     padding: 14px 16px;
     border-radius: 12px;
     background: var(--card);
-    box-shadow: var(--shadow-raised);
     border: 1px solid var(--border);
   }
 
-  .user-bubble {
+  [data-ui="workbench"] .user-bubble {
     background: var(--card);
   }
 
-  .bubble-header {
+  [data-ui="workbench"] .bubble-header {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 8px;
   }
 
-  .bubble-author {
+  [data-ui="workbench"] .bubble-author {
     font-size: 12px;
     font-weight: 600;
     color: var(--foreground);
   }
 
-  .bubble-time {
+  [data-ui="workbench"] .bubble-time {
     font-size: 11px;
     color: var(--muted-foreground);
   }
 
-  .bubble-prompt {
+  [data-ui="workbench"] .bubble-prompt {
     font-size: 14px;
     line-height: 1.5;
     color: var(--foreground);
   }
 
-  .claude-avatar {
+  [data-ui="workbench"] .claude-avatar {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -710,14 +709,14 @@ import { links } from "../../lib/site";
     color: var(--primary-foreground);
   }
 
-  .tool-calls {
+  [data-ui="workbench"] .tool-calls {
     display: flex;
     flex-direction: column;
     gap: 6px;
     margin-block: 10px;
   }
 
-  :global(.tool-chip) {
+  :global([data-ui="workbench"] .tool-chip) {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -740,16 +739,16 @@ import { links } from "../../lib/site";
     }
   }
 
-  :global(.tool-chip.is-running) {
+  :global([data-ui="workbench"] .tool-chip.is-running) {
     border-color: color-mix(in oklab, var(--warning) 40%, var(--border));
   }
 
-  :global(.tool-chip.is-done) {
+  :global([data-ui="workbench"] .tool-chip.is-done) {
     border-color: color-mix(in oklab, var(--success) 35%, var(--border));
     background: color-mix(in oklab, var(--card) 90%, var(--success));
   }
 
-  :global(.tool-spinner) {
+  :global([data-ui="workbench"] .tool-spinner) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -757,7 +756,7 @@ import { links } from "../../lib/site";
     height: 14px;
   }
 
-  :global(.spin-dot) {
+  :global([data-ui="workbench"] .spin-dot) {
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -776,18 +775,18 @@ import { links } from "../../lib/site";
     }
   }
 
-  :global(.check-icon) {
+  :global([data-ui="workbench"] .check-icon) {
     color: var(--success);
-    font-weight: 700;
-    font-size: 13px;
+    flex-shrink: 0;
   }
 
-  :global(.tool-name) {
+  :global([data-ui="workbench"] .tool-name) {
     font-weight: 600;
     color: var(--foreground);
+    font-size: 12px;
   }
 
-  :global(.tool-param) {
+  :global([data-ui="workbench"] .tool-param) {
     color: var(--muted-foreground);
     font-size: 11px;
     overflow: hidden;
@@ -795,14 +794,14 @@ import { links } from "../../lib/site";
     white-space: nowrap;
   }
 
-  .bubble-text {
+  [data-ui="workbench"] .bubble-text {
     font-size: 14px;
     line-height: 1.6;
     color: var(--foreground);
     min-height: 48px;
   }
 
-  .chat-input-bar {
+  [data-ui="workbench"] .chat-input-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -817,14 +816,14 @@ import { links } from "../../lib/site";
   }
 
   /* Right preview pane */
-  .preview-pane {
+  [data-ui="workbench"] .preview-pane {
     display: flex;
     flex-direction: column;
     background: var(--background);
     padding: 22px;
   }
 
-  .mini-app-header {
+  [data-ui="workbench"] .mini-app-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -834,19 +833,19 @@ import { links } from "../../lib/site";
     margin-bottom: 16px;
   }
 
-  .mini-breadcrumbs {
+  [data-ui="workbench"] .mini-breadcrumbs {
     display: flex;
     align-items: center;
     gap: 6px;
     font-size: 12px;
   }
 
-  .crumb.current {
+  [data-ui="workbench"] .crumb.current {
     font-weight: 600;
     color: var(--foreground);
   }
 
-  .mini-search {
+  [data-ui="workbench"] .mini-search {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -858,42 +857,42 @@ import { links } from "../../lib/site";
     color: var(--muted-foreground);
   }
 
-  .mini-search.is-active-search {
+  [data-ui="workbench"] .mini-search.is-active-search {
     border-color: var(--primary);
     background: var(--card);
     color: var(--foreground);
   }
 
-  .mini-view-heading {
+  [data-ui="workbench"] .mini-view-heading {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     margin-bottom: 14px;
   }
 
-  .mini-folder-title {
+  [data-ui="workbench"] .mini-folder-title {
     font-size: 20px;
   }
 
-  .mini-meta {
+  [data-ui="workbench"] .mini-meta {
     font-size: 12px;
     color: var(--muted-foreground);
     font-variant-numeric: tabular-nums;
   }
 
-  .mini-rows {
+  [data-ui="workbench"] .mini-rows {
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
 
-  :global(.mini-empty) {
+  :global([data-ui="workbench"] .mini-empty) {
     padding: 24px 12px;
     text-align: center;
     font-size: 13px;
   }
 
-  :global(.mini-row) {
+  :global([data-ui="workbench"] .mini-row) {
     display: flex;
     align-items: flex-start;
     gap: 12px;
@@ -901,13 +900,12 @@ import { links } from "../../lib/site";
     border-radius: 9px;
     background: var(--card);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow-raised);
     transition:
       background-color 200ms var(--ease-out),
       transform 200ms var(--ease-out);
   }
 
-  :global(.mini-row.is-in) {
+  :global([data-ui="workbench"] .mini-row.is-in) {
     animation: rowSlideIn 240ms var(--ease-spring);
   }
 
@@ -922,12 +920,12 @@ import { links } from "../../lib/site";
     }
   }
 
-  :global(.mini-row-content) {
+  :global([data-ui="workbench"] .mini-row-content) {
     flex: 1;
     min-width: 0;
   }
 
-  :global(.mini-row-title) {
+  :global([data-ui="workbench"] .mini-row-title) {
     font-family: var(--font-serif);
     font-size: 14.5px;
     font-weight: 500;
@@ -935,19 +933,19 @@ import { links } from "../../lib/site";
     color: var(--foreground);
   }
 
-  :global(.mini-row-sub) {
+  :global([data-ui="workbench"] .mini-row-sub) {
     font-size: 12px;
     margin-top: 2px;
   }
 
-  :global(.mini-row-highlight) {
+  :global([data-ui="workbench"] .mini-row-highlight) {
     display: block;
     margin-top: 6px;
     font-size: 12px;
     line-height: 1.45;
   }
 
-  :global(.mini-row-tag) {
+  :global([data-ui="workbench"] .mini-row-tag) {
     font-size: 11px;
     padding: 2px 7px;
     border-radius: 4px;
@@ -957,7 +955,7 @@ import { links } from "../../lib/site";
   }
 
   /* Workbench footer */
-  .workbench-footer {
+  [data-ui="workbench"] .workbench-footer {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -968,14 +966,14 @@ import { links } from "../../lib/site";
     border-top: 1px solid var(--border);
   }
 
-  .footer-instruction {
+  [data-ui="workbench"] .footer-instruction {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
   }
 
-  .step-tag {
+  [data-ui="workbench"] .step-tag {
     font-size: 12px;
     padding: 3px 8px;
     border-radius: 6px;
@@ -984,26 +982,25 @@ import { links } from "../../lib/site";
     color: var(--foreground);
   }
 
-  .text-sm {
+  [data-ui="workbench"] .text-sm {
     font-size: 12.5px;
   }
 
-  .footer-actions {
+  [data-ui="workbench"] .footer-actions {
     display: flex;
     align-items: center;
     gap: 10px;
   }
 
-  .download-mcp-btn {
-    font-family: var(--font-mono);
+  [data-ui="workbench"] .download-mcp-btn code {
     font-size: 12px;
   }
 
   @media (max-width: 640px) {
-    .right-pane-label {
+    [data-ui="workbench"] .right-pane-label {
       display: none;
     }
-    .workbench-footer {
+    [data-ui="workbench"] .workbench-footer {
       flex-direction: column;
       align-items: flex-start;
     }

@@ -6,7 +6,8 @@
     ".": "./src/index.ts",
     "./capture": "./src/capture.ts",
     "./server": "./src/server.ts",
-    "./reader": "./src/reader/index.ts"
+    "./reader": "./src/reader/index.ts",
+    "./project-file": "./src/project-file/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,9 +21,11 @@
     "@joplin/turndown-plugin-gfm": "^1.0.68",
     "@mozilla/readability": "^0.6.0",
     "defuddle": "^0.19.5",
+    "fflate": "^0.8.3",
     "linkedom": "^0.18.13",
     "marked": "^15.0.7",
     "pdfjs-dist": "^6.4.299",
-    "turndown": "^7.2.4"
+    "turndown": "^7.2.4",
+    "zod": "^4.6.7"
   }
 }

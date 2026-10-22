@@ -1,0 +1,178 @@
+{
+  "format": "sourcefold-project",
+  "version": 1,
+  "exported_at": "2026-10-22T12:00:00.000Z",
+  "app": "Sourcefold web",
+  "project": {
+    "id": "p-cars",
+    "name": "Cars",
+    "created_at": "2026-10-01T09:00:00.000Z"
+  },
+  "groups": [
+    {
+      "id": "g-engines",
+      "parent_id": null,
+      "name": "Engines",
+      "position": 0,
+      "created_at": "2026-10-01T09:01:00.000Z"
+    },
+    {
+      "id": "g-diesel",
+      "parent_id": "g-engines",
+      "name": "Diesel",
+      "position": 0,
+      "created_at": "2026-10-01T09:02:00.000Z"
+    }
+  ],
+  "sources": [
+    {
+      "id": "s-turbo",
+      "group_id": "g-engines",
+      "kind": "grokipedia",
+      "title": "Turbocharger",
+      "source_url": "https://grokipedia.com/page/Turbocharger",
+      "canonical_url": "https://grokipedia.com/page/Turbocharger",
+      "meta": { "summary": "A turbocharger is a turbine-driven forced induction device." },
+      "note": "Use in the intro.",
+      "position": 0,
+      "created_at": "2026-10-02T10:00:00.000Z",
+      "updated_at": "2026-10-02T10:00:00.000Z",
+      "triage": "keep",
+      "tags": ["History"],
+      "summary": "How turbos work.",
+      "author": null,
+      "author_type": "encyclopedia",
+      "file": "Cars/Engines/Turbocharger.md",
+      "media_folder": null
+    },
+    {
+      "id": "s-thread",
+      "group_id": "g-diesel",
+      "kind": "x",
+      "title": "Thread by Jack (@jack)",
+      "source_url": "https://x.com/jack/status/20",
+      "canonical_url": "https://x.com/jack/status/20",
+      "meta": {},
+      "note": null,
+      "position": 1,
+      "created_at": "2026-10-03T10:00:00.000Z",
+      "updated_at": "2026-10-03T10:00:00.000Z",
+      "triage": null,
+      "tags": [],
+      "summary": null,
+      "author": null,
+      "author_type": null,
+      "file": "Cars/Engines/Diesel/Thread by Jack (@jack).md",
+      "media_folder": "Cars/Engines/Diesel/Thread by Jack (@jack)_files"
+    },
+    {
+      "id": "s-diagram",
+      "group_id": "g-diesel",
+      "kind": "image",
+      "title": "Diagram",
+      "source_url": null,
+      "canonical_url": null,
+      "meta": { "mime_type": "image/png" },
+      "note": null,
+      "position": 2,
+      "created_at": "2026-10-03T11:00:00.000Z",
+      "updated_at": "2026-10-03T11:00:00.000Z",
+      "triage": null,
+      "tags": [],
+      "summary": null,
+      "author": null,
+      "author_type": null,
+      "file": "Cars/Engines/Diesel/Diagram.png",
+      "media_folder": null
+    }
+  ],
+  "x_posts": [
+    {
+      "id": "x-1",
+      "source_id": "s-thread",
+      "parent_id": null,
+      "post_url": "https://x.com/jack/status/20",
+      "canonical_url": "https://x.com/jack/status/20",
+      "author_name": "Jack",
+      "handle": "jack",
+      "author_url": "https://x.com/jack",
+      "posted_at": "2026-03-21T20:50:00.000Z",
+      "text": "just setting up my turbo",
+      "media": [{ "type": "photo", "url": "https://pbs.twimg.com/media/abc.jpg", "alt": "" }],
+      "position": 0,
+      "created_at": "2026-10-03T10:00:00.000Z"
+    },
+    {
+      "id": "x-2",
+      "source_id": "s-thread",
+      "parent_id": "x-1",
+      "post_url": "https://x.com/jack/status/21",
+      "canonical_url": "https://x.com/jack/status/21",
+      "author_name": "Jack",
+      "handle": "jack",
+      "author_url": "https://x.com/jack",
+      "posted_at": null,
+      "text": "and a second post",
+      "media": [],
+      "position": 1,
+      "created_at": "2026-10-03T10:00:00.000Z"
+    }
+  ],
+  "highlights": [
+    {
+      "id": "h-1",
+      "source_id": "s-turbo",
+      "kind": "text",
+      "quote": "turbine drives a compressor",
+      "prefix": "The exhaust spins a turbine, and the ",
+      "suffix": ".",
+      "start_offset": 37,
+      "end_offset": 64,
+      "image_src": null,
+      "note": "Intro line",
+      "seconds": null,
+      "cited": [],
+      "created_at": "2026-10-04T10:00:00.000Z"
+    }
+  ],
+  "outline_sections": [
+    {
+      "id": "o-1",
+      "title": "History",
+      "position": 1,
+      "created_at": "2026-10-05T10:00:00.000Z"
+    }
+  ],
+  "cards": [
+    {
+      "id": "c-1",
+      "kind": "quote",
+      "source_id": "s-turbo",
+      "highlight_id": "h-1",
+      "quote": "turbine drives a compressor",
+      "seconds": null,
+      "end_seconds": null,
+      "url": null,
+      "note": null,
+      "script_line": "The exhaust drives a compressor.",
+      "section_id": "o-1",
+      "position": 1,
+      "created_at": "2026-10-05T10:01:00.000Z"
+    },
+    {
+      "id": "c-2",
+      "kind": "line",
+      "source_id": null,
+      "highlight_id": null,
+      "quote": "",
+      "seconds": null,
+      "end_seconds": null,
+      "url": null,
+      "note": null,
+      "script_line": "Now, the diesel side.",
+      "section_id": null,
+      "position": 2,
+      "created_at": "2026-10-05T10:02:00.000Z"
+    }
+  ]
+}

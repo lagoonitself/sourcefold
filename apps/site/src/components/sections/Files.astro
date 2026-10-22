@@ -15,7 +15,7 @@ import {
   HardDrive,
   Lock,
   RefreshCw,
-  Sparkles,
+  Database,
 } from "@lucide/astro";
 import SectionHeader from "../SectionHeader.astro";
 import SourceTile from "../SourceTile.astro";
@@ -253,9 +253,9 @@ import SourceTile from "../SourceTile.astro";
           </div>
         </div>
         <div class="privacy-pill">
-          <Sparkles size={15} class="privacy-icon" aria-hidden="true" />
+          <Database size={15} class="privacy-icon" aria-hidden="true" />
           <div class="privacy-text">
-            <strong>Ephemeral Supabase cache</strong>: Full article text and images live in Supabase only for the few seconds until they are mirrored into your Drive.
+            <strong>What Sourcefold's database keeps</strong>: Supabase keeps only links, titles, metadata, folders and notes; article text and images are pushed to your Drive right after saving and then cleared from Supabase.
           </div>
         </div>
       </div>

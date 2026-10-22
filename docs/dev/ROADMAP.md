@@ -146,6 +146,11 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [ ] Search by meaning for Claude (the query vector comes from the app's GPU worker).
   - [ ] Optional: a remote MCP server on Vercel for Claude on the phone and claude.ai (no YouTube adding, no search inside sources).
 
+- **Landing page (2026-10-22, branch `landing-page`, contract `docs/dev/handoff-landing.md`):**
+  - [x] `apps/site`: static Astro site in the ink-and-highlighter look, light and dark, every feature in the README covered with an interactive, animated section (`motion`), copy checked against README, PRIVACY and SELF-HOSTING.
+  - [ ] Owner tests and approves the look.
+  - [ ] Deploy (separate Vercel project or GitHub Pages), domain, OG image; link it from the README.
+
 - **Tidy repository and v0.3.0 release (2026-10-18):**
   - [x] README rewritten for users first (downloads, features, which part does what, supported sources); setup moved to `docs/SELF-HOSTING.md`, install steps to `docs/INSTALL.md`, developer docs to `docs/dev/`.
   - [x] `CHANGELOG.md`; the release workflow puts the tagged version's section in the notes and refuses to release without one.

@@ -117,4 +117,11 @@ Not shared (each person keeps their own): which group is open, filters, reader s
 3. **Roles:** "Can edit" or "Can view", chosen per person and changeable.
 4. **Only emails on `SHARING_ALLOWED_EMAIL` can make a project shared.** People they invite can join.
 
+## Phase 2 design notes (2026-10-22, while building phase 1)
+
+- **R2 is set up:** bucket `sourcefold-shared` exists on the owner's Cloudflare account with a CORS rule for the website, `localhost:3000` and the desktop webview (`http://tauri.localhost`, `tauri://localhost`). R2 was turned on without a card. Still to do by the owner: a bucket-scoped R2 API token (dashboard → R2 → Manage API tokens → Object Read & Write, bucket `sourcefold-shared`); the `cf` CLI login can't create tokens.
+- **`user_id` keeps meaning "whose data this is".** In a shared project every row keeps the project owner's `user_id`, whoever made it; the person who made or changed a row goes in `created_by` / `changed_by`. So every existing `user_id` filter, Drive function and personal query keeps working for the owner, and only members who aren't the owner need the new membership path. A trigger sets `user_id` to the project owner on insert into a shared project.
+- **Try running token requests under RLS first.** If the website can mint a short-lived Supabase JWT for the token's user (needs the project's JWT signing setup; check whether it uses the legacy secret or asymmetric keys), `requireApiUser` can hand token routes an RLS client instead of the admin client. Then the database rules are the one place membership is checked, and most of the 116 hand-written filters can go. Fall back to `requireProjectAccess` everywhere only if that isn't possible.
+- **Project files already give every imported row a new id** (`remapProjectIds`); the same helper can make a "duplicate project" later.
+
 When phase 2 lands, take "Accounts shared between people" out of the non-goals in `docs/dev/SPEC.md` and describe sharing there.

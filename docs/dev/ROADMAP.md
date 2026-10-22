@@ -152,6 +152,16 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [x] Releases carry three fixed-name files (`Sourcefold-Windows-Setup.exe`, `Sourcefold-Mac.dmg`, `Sourcefold-Chrome-Extension.zip`), so `releases/latest/download/…` links always work.
   - [ ] Owner checks the release downloads on Windows and a friend's Mac.
 
+## Next: project files and shared projects
+
+Plan: `docs/dev/PLAN-sharing.md` (2026-10-22).
+
+- [ ] Phase 1: project file. Download and import a `.sourcefold` file on the website and the desktop app (signed in and offline); manifest builder in `packages/core` with golden files.
+- [ ] Phase 2: sharing foundation. Members and invites, `project_id` on rows, new database rules, every token route and database function checked for membership, R2 storage for shared projects with a 9.5 GB stop, Share dialog, "Shared" in the website, desktop, extension and Claude.
+- [ ] Phase 3: live updates (Supabase Realtime on the website, the desktop's choice after a test), "changed while you were editing" checks, who added each source.
+- [ ] Phase 4: history panel, Undo per change, source versions in the reader.
+- [ ] Phase 5: shared projects in each member's own Drive.
+
 ## Later
 
 - [ ] Chrome Web Store listing for the extension ($5 one-time fee; the store build must drop the manifest `key`, and the desktop native host must also allow the store's extension ID).

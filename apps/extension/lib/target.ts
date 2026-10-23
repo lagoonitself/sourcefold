@@ -4,11 +4,18 @@ import { getSettings, onSettingsChanged, type ExtensionSettings } from "./settin
 
 export { DEFAULT_DESKTOP_HTTP };
 export const TARGET_CACHE_TTL_MS = 30_000;
+/** A borrowed token this close to expiry isn't used; the desktop app refreshes it first. */
+export const BORROWED_TOKEN_MARGIN_MS = 60_000;
 
+/** What the desktop app's `/api/session` and native host's `get_session` answer when signed in. */
 export interface DesktopSessionSignedIn {
   signedIn: true;
-  webUrl: string;
-  token: string;
+  supabaseUrl: string;
+  supabasePublishableKey: string;
+  accessToken: string;
+  /** Unix seconds. */
+  expiresAt: number;
+  userId: string;
   email?: string;
 }
 
@@ -18,12 +25,19 @@ export interface DesktopSessionSignedOut {
 
 export type DesktopSession = DesktopSessionSignedIn | DesktopSessionSignedOut;
 
+/** The extension's own Google sign-in, when it has one. */
+export interface OwnAccount {
+  userId: string;
+  email?: string;
+}
+
+// Targets cross from the background to the popup, so none of them holds a token.
 export type ResolvedTarget =
   | {
-      type: "desktop-web";
+      /** Saves go to the account in Supabase, through the local API in the background. */
+      type: "account";
+      via: "extension" | "desktop";
       displayLabel: string;
-      webUrl: string;
-      token: string;
       email?: string;
     }
   | {
@@ -32,69 +46,66 @@ export type ResolvedTarget =
       transport: "native" | "http";
     }
   | {
-      type: "web";
-      displayLabel: string;
-      webUrl: string;
-      token: string;
-    }
-  | {
       type: "error";
       displayLabel: string;
       error: string;
     }
   | {
-      type: "unconfigured";
+      /** Nothing to save to yet: sign in with Google, or open the desktop app. */
+      type: "signed-out";
       displayLabel: string;
-      reason: "desktop_not_reachable" | "web_not_configured" | "no_target";
+      reason: "signed_out" | "desktop_not_reachable";
     };
+
+function nonEmpty(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
 
 /**
  * Parses the response from get_session (HTTP or Native).
  * Tolerates both { data: { ... } } envelopes and bare { ... } objects.
+ * Desktop apps before 0.4 answered `{ webUrl, token }`; that reads as unreadable (null).
  */
 export function parseSessionResponse(raw: unknown): DesktopSession | null {
   if (!raw || typeof raw !== "object") {
     return null;
   }
 
-  let obj = raw as Record<string, any>;
+  let obj = raw as Record<string, unknown>;
   if ("data" in obj && obj.data && typeof obj.data === "object") {
-    obj = obj.data;
+    obj = obj.data as Record<string, unknown>;
   }
 
   if (typeof obj.signedIn !== "boolean") {
     return null;
   }
 
-  if (obj.signedIn) {
-    if (
-      typeof obj.webUrl !== "string" ||
-      !obj.webUrl.trim() ||
-      typeof obj.token !== "string" ||
-      !obj.token.trim()
-    ) {
-      return null;
-    }
-    return {
-      signedIn: true,
-      webUrl: obj.webUrl.trim().replace(/\/+$/, ""),
-      token: obj.token.trim(),
-      email: typeof obj.email === "string" && obj.email.trim() ? obj.email.trim() : undefined,
-    };
+  if (!obj.signedIn) {
+    return { signedIn: false };
   }
 
+  const supabaseUrl = nonEmpty(obj.supabaseUrl);
+  const supabasePublishableKey = nonEmpty(obj.supabasePublishableKey);
+  const accessToken = nonEmpty(obj.accessToken);
+  const userId = nonEmpty(obj.userId);
+  const expiresAt = typeof obj.expiresAt === "number" ? obj.expiresAt : NaN;
+  if (!supabaseUrl || !supabasePublishableKey || !accessToken || !userId || !isFinite(expiresAt)) {
+    return null;
+  }
   return {
-    signedIn: false,
+    signedIn: true,
+    supabaseUrl: supabaseUrl.replace(/\/+$/, ""),
+    supabasePublishableKey,
+    accessToken,
+    expiresAt,
+    userId,
+    email: nonEmpty(obj.email) ?? undefined,
   };
 }
 
-export function formatWebHostLabel(urlStr: string): string {
-  try {
-    const parsed = new URL(urlStr);
-    return `Saving to ${parsed.host}`;
-  } catch {
-    return `Saving to ${urlStr}`;
-  }
+/** Whether a borrowed token still has time left. */
+export function isBorrowable(session: DesktopSessionSignedIn, now: number = Date.now()): boolean {
+  return session.expiresAt * 1000 - now > BORROWED_TOKEN_MARGIN_MS;
 }
 
 // In-memory cache for resolved target
@@ -125,6 +136,10 @@ export interface TargetResolverDeps {
   queryDesktopHttp?: () => Promise<DesktopSession | unknown>;
   pingDesktopNative?: () => Promise<boolean>;
   pingDesktopHttp?: () => Promise<boolean>;
+  /** The extension's own sign-in (background only). */
+  getOwnAccount?: () => Promise<OwnAccount | null>;
+  /** Hands a usable desktop sign-in to whoever saves with it (background only). */
+  onDesktopSession?: (session: DesktopSessionSignedIn) => void;
 }
 
 /**
@@ -169,7 +184,10 @@ async function queryDesktopHttpSession(timeoutMs = 1500): Promise<DesktopSession
  */
 async function pingDesktopNative(timeoutMs = 1500): Promise<boolean> {
   try {
-    const res = await sendNativeMessage<any>({ type: "ping" }, timeoutMs);
+    const res = await sendNativeMessage<{ status?: string; app?: string }>(
+      { type: "ping" },
+      timeoutMs,
+    );
     return Boolean(res && (res.status === "ok" || res.app === "sourcefold"));
   } catch {
     return false;
@@ -195,19 +213,34 @@ async function pingDesktopHttp(timeoutMs = 1500): Promise<boolean> {
   }
 }
 
-/** The first channel that returns a readable session, or null once every channel has failed. */
-function firstSession(
-  channels: { via: "native" | "http"; query: () => Promise<unknown> }[],
+type Channel = { via: "native" | "http"; query: () => Promise<unknown> };
+
+/**
+ * Asks both channels at once. A usable sign-in wins at once; otherwise the best answer once both
+ * have replied (signed out beats an expired sign-in, which beats nothing). The native host reads
+ * the desktop's session file even while the app is closed, so its token can be stale while the
+ * local server (app running) has a fresh one.
+ */
+function bestSession(
+  channels: Channel[],
+  now: number,
 ): Promise<{ session: DesktopSession; via: "native" | "http" } | null> {
   return new Promise((resolve) => {
     let pending = channels.length;
+    let signedOut: { session: DesktopSession; via: "native" | "http" } | null = null;
+    let stale: { session: DesktopSession; via: "native" | "http" } | null = null;
     for (const { via, query } of channels) {
       Promise.resolve()
         .then(query)
         .then(parseSessionResponse, () => null)
         .then((session) => {
-          if (session) resolve({ session, via });
-          else if (--pending === 0) resolve(null);
+          if (session?.signedIn && isBorrowable(session, now)) {
+            resolve({ session, via });
+            return;
+          }
+          if (session && !session.signedIn) signedOut ??= { session, via };
+          else if (session) stale ??= { session, via };
+          if (--pending === 0) resolve(signedOut ?? stale);
         });
     }
   });
@@ -219,22 +252,25 @@ export interface ResolveTargetOptions {
   deps?: TargetResolverDeps;
 }
 
+const SIGNED_OUT_LABEL = "Sign in with Google to save to your account, or open the desktop app.";
+const DESKTOP_ONLY_LABEL = "Open the Sourcefold desktop app to save from here.";
+const OLD_DESKTOP_LABEL =
+  "This desktop app is too old to share its sign-in. Update it, or sign in with Google here.";
+const STALE_DESKTOP_LABEL = "The desktop app's sign-in has expired. Open the app, or sign in here.";
+
 /**
- * Resolves the active saving target according to the configured mode.
+ * Resolves where saves go. Runs in the background, which owns the sign-ins.
  *
- * In auto mode:
- * 1. Ask desktop app for session over native messaging and HTTP GET /api/session at once.
- * 2. If desktop signed in -> save to web API at session.webUrl with session.token.
- * 3. If desktop reachable but explicitly not signed in -> save to desktop offline library (native messaging else local HTTP).
- * 4. If desktop is reachable (health OK) but session couldn't be read -> resolve to an error target (do NOT cache).
- * 5. If desktop not reachable -> use configured web app (appUrl + token).
- *    If not configured -> return unconfigured state.
+ * Auto mode:
+ * 1. The extension is signed in itself → the account (it refreshes its own session).
+ * 2. Otherwise ask the desktop app (native messaging and GET /api/session at once):
+ *    signed out → its offline library; signed in → the account, with the desktop's token.
+ * 3. The desktop app answers but its sign-in can't be used (an old version, an expired token)
+ *    → an error target (not cached).
+ * 4. Nothing → signed out: sign in with Google, or open the desktop app.
  *
- * In desktop mode:
- * Only save to desktop (session or offline). Desktop unreachable -> unconfigured.
- *
- * In web mode:
- * Only save to configured web app. Not configured -> unconfigured.
+ * Desktop mode: only the desktop app (offline library or its sign-in); the extension's own
+ * sign-in isn't used.
  */
 export async function resolveTarget(options: ResolveTargetOptions = {}): Promise<ResolvedTarget> {
   if (!options.forceRefresh) {
@@ -246,118 +282,87 @@ export async function resolveTarget(options: ResolveTargetOptions = {}): Promise
 
   const settings = options.settings || (await getSettings());
   const mode = settings.connectionMode || "auto";
+  const deps = options.deps ?? {};
 
-  const nativeQuery = options.deps?.queryDesktopNative || queryDesktopNativeSession;
-  const httpQuery = options.deps?.queryDesktopHttp || queryDesktopHttpSession;
-  const nativePing = options.deps?.pingDesktopNative || pingDesktopNative;
-  const httpPing = options.deps?.pingDesktopHttp || pingDesktopHttp;
-
-  // Web app only mode: never query desktop
-  if (mode === "web") {
-    const webUrl = settings.appUrl ? settings.appUrl.trim().replace(/\/+$/, "") : "";
-    const token = settings.token ? settings.token.trim() : "";
-    if (webUrl && token) {
-      const target: ResolvedTarget = {
-        type: "web",
-        displayLabel: formatWebHostLabel(webUrl),
-        webUrl,
-        token,
-      };
-      setCachedTarget(target);
-      return target;
-    }
-    const target: ResolvedTarget = {
-      type: "unconfigured",
-      displayLabel: "Open the Sourcefold desktop app or set up the web app in Options",
-      reason: "web_not_configured",
-    };
-    setCachedTarget(target);
+  const done = (target: ResolvedTarget, cache = true): ResolvedTarget => {
+    if (cache) setCachedTarget(target);
     return target;
+  };
+
+  if (mode === "auto") {
+    const own = await (deps.getOwnAccount?.() ?? Promise.resolve(null)).catch(() => null);
+    if (own) {
+      return done({
+        type: "account",
+        via: "extension",
+        displayLabel: own.email
+          ? `Saving to your account (${own.email})`
+          : "Saving to your account",
+        email: own.email,
+      });
+    }
   }
 
-  // Desktop or Auto mode: ask the desktop app over both channels at once. Native messaging
-  // starts a new host process for every message, so the local server (when the app is running)
-  // usually answers first and is the faster channel for later offline calls too.
-  const answer = await firstSession([
-    { via: "native", query: nativeQuery },
-    { via: "http", query: httpQuery },
-  ]);
-  const desktopSession: DesktopSession | null = answer?.session ?? null;
-  let transport: "native" | "http" = answer?.via ?? "native";
+  const nativeQuery = deps.queryDesktopNative || queryDesktopNativeSession;
+  const httpQuery = deps.queryDesktopHttp || queryDesktopHttpSession;
+  const now = Date.now();
 
-  // If a valid session response was returned by desktop
-  if (desktopSession !== null) {
-    if (desktopSession.signedIn) {
-      // Step 2: Desktop signed in -> save to web API
-      const target: ResolvedTarget = {
-        type: "desktop-web",
-        displayLabel: "Saving to your account (via desktop app)",
-        webUrl: desktopSession.webUrl,
-        token: desktopSession.token,
-        email: desktopSession.email,
-      };
-      setCachedTarget(target);
-      return target;
-    } else {
-      // Step 3: Desktop reachable and explicitly signedIn: false -> offline library
-      const target: ResolvedTarget = {
+  // Native messaging starts a new host process for every message, so the local server (when the
+  // app is running) usually answers first and is the faster channel for later offline calls too.
+  const answer = await bestSession(
+    [
+      { via: "native", query: nativeQuery },
+      { via: "http", query: httpQuery },
+    ],
+    now,
+  );
+
+  if (answer) {
+    const { session, via } = answer;
+    if (!session.signedIn) {
+      return done({
         type: "desktop-offline",
         displayLabel: "Saving to this computer (desktop app, offline)",
-        transport,
-      };
-      setCachedTarget(target);
-      return target;
+        transport: via,
+      });
     }
+    if (isBorrowable(session, now)) {
+      deps.onDesktopSession?.(session);
+      return done({
+        type: "account",
+        via: "desktop",
+        displayLabel: session.email
+          ? `Saving to your account (${session.email}, desktop app's sign-in)`
+          : "Saving to your account (desktop app's sign-in)",
+        email: session.email,
+      });
+    }
+    return done(
+      { type: "error", displayLabel: STALE_DESKTOP_LABEL, error: STALE_DESKTOP_LABEL },
+      false,
+    );
   }
 
-  // If session couldn't be read (403, network error, timeout, bad JSON), check if desktop is reachable via ping/health
+  // The session couldn't be read (an old app, 403, timeout, bad JSON): is the app there at all?
+  const nativePing = deps.pingDesktopNative || pingDesktopNative;
+  const httpPing = deps.pingDesktopHttp || pingDesktopHttp;
   const [nativeUp, httpUp] = await Promise.all([
     nativePing().catch(() => false),
     httpPing().catch(() => false),
   ]);
-  const desktopReachable = nativeUp || httpUp;
-  transport = nativeUp ? "native" : "http";
-
-  // If desktop is reachable but session couldn't be read -> resolve to error target and DO NOT cache
-  if (desktopReachable) {
-    const errorMsg = "Can't read the desktop app's sign-in. Open Options to fix it.";
-    return {
-      type: "error",
-      displayLabel: errorMsg,
-      error: errorMsg,
-    };
+  if (nativeUp || httpUp) {
+    return done(
+      { type: "error", displayLabel: OLD_DESKTOP_LABEL, error: OLD_DESKTOP_LABEL },
+      false,
+    );
   }
 
-  // Desktop is NOT reachable
   if (mode === "desktop") {
-    const target: ResolvedTarget = {
-      type: "unconfigured",
-      displayLabel: "Open the Sourcefold desktop app or set up the web app in Options",
+    return done({
+      type: "signed-out",
+      displayLabel: DESKTOP_ONLY_LABEL,
       reason: "desktop_not_reachable",
-    };
-    setCachedTarget(target);
-    return target;
+    });
   }
-
-  // In auto mode, fallback to configured web app
-  const webUrl = settings.appUrl ? settings.appUrl.trim().replace(/\/+$/, "") : "";
-  const token = settings.token ? settings.token.trim() : "";
-  if (webUrl && token) {
-    const target: ResolvedTarget = {
-      type: "web",
-      displayLabel: formatWebHostLabel(webUrl),
-      webUrl,
-      token,
-    };
-    setCachedTarget(target);
-    return target;
-  }
-
-  const target: ResolvedTarget = {
-    type: "unconfigured",
-    displayLabel: "Open the Sourcefold desktop app or set up the web app in Options",
-    reason: "no_target",
-  };
-  setCachedTarget(target);
-  return target;
+  return done({ type: "signed-out", displayLabel: SIGNED_OUT_LABEL, reason: "signed_out" });
 }

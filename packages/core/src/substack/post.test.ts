@@ -190,6 +190,19 @@ describe("extractSubstack with preloads", () => {
     expect(result.capture.markdown).toContain("The paid part of the article");
   });
 
+  it("saves an unlocked paid post even when the page shows a paywall block elsewhere", () => {
+    const body =
+      '<p>Free preview text.</p><div class="paywall-jump" data-component-name="PaywallToDOM"></div><p>The paid part of the article, long enough to count as real text.</p>';
+    const result = extract(postPage({ audience: "only_paid", bodyHtml: body, pagePaywall: true }));
+    expect(result.status).toBe("ok");
+  });
+
+  it("still reports a paid post without the marker as paywalled when the page shows a paywall", () => {
+    const body = "<p>Some preview text that goes on for a while before it stops.</p>";
+    const result = extract(postPage({ audience: "only_paid", bodyHtml: body, pagePaywall: true }));
+    expect(result.status).toBe("paywalled");
+  });
+
   it("gives a free post with no text a short body instead of failing", () => {
     const result = extract(postPage({ bodyHtml: "" }));
     if (result.status !== "ok") throw new Error(result.status);

@@ -62,8 +62,8 @@ Works in Chrome, Edge, Brave and Arc.
 4. Click **Load unpacked** and pick the unzipped folder (the one that contains `manifest.json`).
 5. Click the puzzle-piece icon in the toolbar and pin **Sourcefold**.
 6. Connect it:
-   - **With the desktop app:** keep the app open. That's all; the extension saves through it, signed in or offline.
-   - **With the website only:** on the website open **Settings**, click **Create token** under Extension and copy the token. Then right-click the Sourcefold icon, choose **Options**, set **Connection mode** to **Web app only**, check the website address, paste the token into **Access token**, click **Save**, then **Test connection**. Allow access to the site if the browser asks.
+   - **Sign in:** click the Sourcefold icon and **Sign in with Google**, with the same Google account as the desktop app. A Google window opens; when it closes, open the popup again. Saves go to your account and Google Drive, with or without the desktop app.
+   - **Or just use the desktop app:** with the app open and signed in, the extension uses its sign-in, so you don't have to sign in twice. With the app in offline mode, saves go to the library on this computer.
 7. Open any article or video and click the Sourcefold icon (or press `Alt+Shift+S`), pick a group and press **Save**. The popup remembers your project for next time.
 
 ## Claude Desktop
@@ -88,6 +88,7 @@ Download the new installer from the [latest release](https://github.com/lagoonit
 - **Reddit, DeepMind, Meta AI or some news sites fail when pasted:** they block servers or build the page with JavaScript. Save them with the extension while the page is open.
 - **YouTube on the website:** YouTube blocks servers. Use the desktop app or the extension.
 - **A saved page seems to be missing:** a group lists only its own sources, not its subgroups'. The extension shows the full path when it saves (for example `Cars / Engines`).
-- **Extension says the token is invalid:** create a new token in the website's **Settings** and paste it into the extension's options.
+- **Extension asks you to sign in again:** click **Sign in with Google** in the popup or in the extension's **Options**.
+- **Extension says the desktop app is too old:** update the desktop app, or sign in with Google in the extension.
 
 Still stuck? [Open an issue](https://github.com/lagoonitself/sourcefold/issues).

@@ -2,6 +2,17 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
+## Unreleased
+
+### New
+
+- **The extension signs in by itself.** Click **Sign in with Google** in the popup (or in Options) and the extension saves to your account and Google Drive without the website or the desktop app. With the desktop app open and signed in, it uses the app's sign-in instead, so signing in is optional. The website address and access token are gone from Options.
+
+### Fixed
+
+- The extension works with the 0.4.0 desktop app again. It said "Can't read the desktop app's sign-in" because the app now shares its sign-in in a new form.
+- Paid Substack posts you subscribe to are saved in full, not as "Paid post, not saved", on pages that show a subscribe or paywall box outside the post (such as the substack.com reader).
+
 ## 0.4.0 (2026-10-23)
 
 ### New

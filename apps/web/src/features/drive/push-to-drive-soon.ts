@@ -1,7 +1,7 @@
 import "server-only";
 import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getGoogleAccessToken } from "@/lib/google/oauth";
+import { webDriveAccess, webFetchUrl } from "@/lib/web-drive";
 import { runSaveBatch } from "./run-save-batch";
 
 // Article text and images stay in Supabase only until they reach Drive. After a new source
@@ -20,8 +20,14 @@ export function pushToDriveSoon(userId: string): void {
     if (!locked) return;
 
     try {
-      const accessToken = await getGoogleAccessToken(userId);
-      await runSaveBatch(admin, userId, accessToken, 10);
+      const accessToken = await webDriveAccess.getAccessToken(userId);
+      await runSaveBatch(
+        admin,
+        userId,
+        accessToken,
+        { drive: webDriveAccess, fetchUrl: webFetchUrl },
+        10,
+      );
     } catch (err) {
       console.error("Automatic Drive save failed:", err);
     } finally {

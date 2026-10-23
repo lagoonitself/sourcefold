@@ -1,22 +1,9 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getGoogleClientEnv } from "@/lib/server-env";
+import { DriveAuthError, DriveClientMismatchError } from "@sourcefold/client/google/errors";
 
-export class DriveAuthError extends Error {
-  constructor(message = "Google Drive authorization failed.") {
-    super(message);
-    this.name = "DriveAuthError";
-  }
-}
-
-// The refresh token belongs to a different OAuth client than GOOGLE_CLIENT_ID.
-// Reconnecting can't fix this; the server settings must match Supabase's Google provider.
-export class DriveClientMismatchError extends Error {
-  constructor() {
-    super("GOOGLE_CLIENT_ID doesn't match the Google client Supabase signs in with.");
-    this.name = "DriveClientMismatchError";
-  }
-}
+export { DriveAuthError, DriveClientMismatchError };
 
 interface CachedToken {
   token: string;

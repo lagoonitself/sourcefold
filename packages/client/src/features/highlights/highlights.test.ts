@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { HighlightInput } from "@sourcefold/core";
-import type { Database } from "@/lib/database.types";
-import { callsOf, createFakeDb } from "@/test/fake-db";
+import type { Database } from "../../database.types";
+import { callsOf, createFakeDb } from "../../test/fake-db";
 import { highlightInputSchema, highlightNotePatchSchema } from "./schema";
 import { inputToRow, rowToHighlight, type HighlightRow } from "./mapping";
 import { loadHighlightsForItems } from "./load";

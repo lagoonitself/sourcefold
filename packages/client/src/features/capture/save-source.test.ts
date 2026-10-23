@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/database.types";
-import { callsOf, createFakeDb } from "@/test/fake-db";
+import type { Database } from "../../database.types";
+import { callsOf, createFakeDb } from "../../test/fake-db";
 
 const findDuplicate = vi.fn();
 const nextPosition = vi.fn();

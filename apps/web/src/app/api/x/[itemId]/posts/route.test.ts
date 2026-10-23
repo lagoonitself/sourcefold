@@ -8,7 +8,7 @@ vi.mock("@/lib/api", () => ({
   jsonData: (data: unknown, status = 200) => Response.json({ data }, { status }),
   jsonError: (status: number, message: string) => Response.json({ error: { message } }, { status }),
 }));
-vi.mock("@/features/capture/save-x", () => ({ rerenderXItem: vi.fn() }));
+vi.mock("@sourcefold/client/features/capture/save-x", () => ({ rerenderXItem: vi.fn() }));
 vi.mock("@/features/drive/push-to-drive-soon", () => ({ pushToDriveSoon: vi.fn() }));
 
 import { POST } from "./route";

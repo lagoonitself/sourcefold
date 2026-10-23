@@ -6,7 +6,7 @@ const pushToDriveSoon = vi.fn();
 const findDuplicate = vi.fn();
 const findDuplicateElsewhere = vi.fn();
 const nextPosition = vi.fn();
-const fetchWikipediaCaptureOnServer = vi.fn();
+const fetchWikipediaCapture = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   requireApiUser: (request: Request) => requireApiUser(request),
@@ -14,14 +14,15 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/features/drive/push-to-drive-soon", () => ({
   pushToDriveSoon: (userId: string) => pushToDriveSoon(userId),
 }));
-vi.mock("@/features/capture/find-duplicate", async (importOriginal) => ({
+vi.mock("@sourcefold/client/features/capture/find-duplicate", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/capture/find-duplicate")>()),
   findDuplicate: (...args: unknown[]) => findDuplicate(...args),
   findDuplicateElsewhere: (...args: unknown[]) => findDuplicateElsewhere(...args),
   nextPosition: (...args: unknown[]) => nextPosition(...args),
 }));
-vi.mock("@sourcefold/core/server", () => ({
-  fetchWikipediaCaptureOnServer: (...args: unknown[]) => fetchWikipediaCaptureOnServer(...args),
+vi.mock("@sourcefold/core/capture", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@sourcefold/core/capture")>()),
+  fetchWikipediaCapture: (...args: unknown[]) => fetchWikipediaCapture(...args),
 }));
 
 import { WikipediaError } from "@sourcefold/core/capture";
@@ -67,14 +68,14 @@ describe("POST /api/wikipedia", () => {
     findDuplicate.mockResolvedValue(null);
     findDuplicateElsewhere.mockResolvedValue(null);
     nextPosition.mockResolvedValue(4);
-    fetchWikipediaCaptureOnServer.mockResolvedValue(CAPTURE);
+    fetchWikipediaCapture.mockResolvedValue(CAPTURE);
   });
 
   it("returns the auth response when the caller isn't signed in", async () => {
     requireApiUser.mockResolvedValue({ response: Response.json({}, { status: 401 }) });
     const response = await post({ url: CAPTURE.url, folder_id: FOLDER_ID });
     expect(response.status).toBe(401);
-    expect(fetchWikipediaCaptureOnServer).not.toHaveBeenCalled();
+    expect(fetchWikipediaCapture).not.toHaveBeenCalled();
   });
 
   it("rejects a body that isn't JSON, a bad group and a missing link", async () => {
@@ -99,7 +100,7 @@ describe("POST /api/wikipedia", () => {
       expect(response.status).toBe(422);
       expect((await response.json()).error.code).toBe("invalid_url");
     }
-    expect(fetchWikipediaCaptureOnServer).not.toHaveBeenCalled();
+    expect(fetchWikipediaCapture).not.toHaveBeenCalled();
   });
 
   it("answers 409 for a link already in the group, before fetching anything", async () => {
@@ -124,7 +125,7 @@ describe("POST /api/wikipedia", () => {
       "https://en.wikipedia.org/wiki/Turbocharger",
       FOLDER_ID,
     );
-    expect(fetchWikipediaCaptureOnServer).not.toHaveBeenCalled();
+    expect(fetchWikipediaCapture).not.toHaveBeenCalled();
     expect(fake.queries).toHaveLength(0);
   });
 
@@ -136,7 +137,7 @@ describe("POST /api/wikipedia", () => {
 
     expect(response.status).toBe(201);
     expect((await response.json()).data.item).toMatchObject({ id: "item-1", kind: "wikipedia" });
-    expect(fetchWikipediaCaptureOnServer).toHaveBeenCalledWith(
+    expect(fetchWikipediaCapture).toHaveBeenCalledWith(
       "https://en.wikipedia.org/wiki/Turbocharger",
       expect.anything(),
     );
@@ -164,7 +165,7 @@ describe("POST /api/wikipedia", () => {
   });
 
   it("saves under the title the link redirected to, and checks that one for duplicates too", async () => {
-    fetchWikipediaCaptureOnServer.mockResolvedValue({
+    fetchWikipediaCapture.mockResolvedValue({
       ...CAPTURE,
       url: "https://en.wikipedia.org/wiki/Turbocharger",
     });
@@ -184,12 +185,12 @@ describe("POST /api/wikipedia", () => {
       ["not_article", 422],
     ] as const;
     for (const [code, status] of cases) {
-      fetchWikipediaCaptureOnServer.mockRejectedValueOnce(new WikipediaError(code));
+      fetchWikipediaCapture.mockRejectedValueOnce(new WikipediaError(code));
       const response = await post({ url: CAPTURE.url, folder_id: FOLDER_ID });
       expect(response.status).toBe(status);
       expect((await response.json()).error.code).toBe(code);
     }
-    fetchWikipediaCaptureOnServer.mockRejectedValueOnce(new Error("boom"));
+    fetchWikipediaCapture.mockRejectedValueOnce(new Error("boom"));
     expect((await post({ url: CAPTURE.url, folder_id: FOLDER_ID })).status).toBe(502);
 
     expect(fake.queries).toHaveLength(0);

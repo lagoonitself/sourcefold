@@ -1,12 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { SourceFetch } from "@sourcefold/core";
 import type { Database } from "./database.types";
+import type { FetchUrl } from "./host";
 
 export type { Database } from "./database.types";
 
 export interface ClientConfig {
   supabaseUrl: string;
-  supabaseAnonKey: string;
+  /** The project's publishable key (`sb_publishable_…`); public by design. */
+  supabasePublishableKey: string;
 }
 
 export type SourcefoldSupabase = SupabaseClient<Database>;
@@ -14,18 +15,16 @@ export type SourcefoldSupabase = SupabaseClient<Database>;
 export interface LocalApiDeps {
   /** Signed in; RLS applies. */
   supabase: SourcefoldSupabase;
-  /** A Google access token with `drive.file`, from the `google-access-token` Edge Function. */
-  getDriveAccessToken(): Promise<string>;
-  /** Fetches source pages (desktop: Rust `web_fetch`; extension: background fetch). */
-  sourceFetch: SourceFetch;
-  /** Fetches images to copy into Drive (browser CORS would block a plain fetch). */
-  binaryFetch(url: string): Promise<{ bytes: Uint8Array; contentType: string | null }>;
+  /** Fetches links people give us (desktop: Rust `web_fetch`; extension: background fetch). */
+  fetchUrl: FetchUrl;
+  /** Parses an HTML page; `DOMParser` in a webview or an extension. */
+  parseHtml(html: string): Document;
   /** Called after anything that changes items or folders. */
   onItemsChanged?(): void;
 }
 
 export interface LocalApi {
-  /** Answers exactly what the website's `/api/...` route answers today. */
+  /** Answers exactly what the website's `/api/...` route answers. */
   fetch(path: string, init?: RequestInit): Promise<Response>;
 }
 

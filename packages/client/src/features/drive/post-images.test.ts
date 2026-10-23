@@ -1,18 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("server-only", () => ({}));
-// Every host in these tests is a public one; `publicFetch` has its own tests.
-vi.mock("node:dns/promises", () => ({
-  lookup: async () => [{ address: "93.184.216.34", family: 4 }],
-}));
-
 // A tiny in-memory Drive: id → { name, parent, mimeType, trashed }.
 type Node = { name: string; parent: string; mimeType: string; trashed: boolean };
 const FOLDER = "application/vnd.google-apps.folder";
 let drive: Map<string, Node>;
 let nextId: number;
 
-vi.mock("@/lib/google/drive", () => ({
+vi.mock("../../google/drive", () => ({
   listChildren: async (
     _token: string,
     parentId: string,
@@ -63,6 +57,12 @@ const live = () =>
 
 describe("syncPostImages", () => {
   const fetchMock = vi.fn();
+  // Stands in for the website's publicFetch (which has its own tests): private addresses never
+  // reach the network.
+  const fetchUrl = (url: string, init?: RequestInit): Promise<Response> =>
+    /^https:\/\/(169\.254\.|127\.|10\.|localhost)/.test(url)
+      ? Promise.reject(new Error("blocked"))
+      : fetchMock(url, init);
 
   beforeEach(() => {
     drive = new Map();
@@ -78,7 +78,14 @@ describe("syncPostImages", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("creates the folder next to the post and uploads each image", async () => {
-    await syncPostImages("t", { parentId: "g", fileName: "Post.md" }, null, md(A, B), new Set());
+    await syncPostImages(
+      "t",
+      { parentId: "g", fileName: "Post.md" },
+      null,
+      md(A, B),
+      new Set(),
+      fetchUrl,
+    );
     expect(live()).toEqual(["f1/a.png", "f1/b.jpeg", "g/Post_files"]);
   });
 
@@ -93,6 +100,7 @@ describe("syncPostImages", () => {
       { parentId: "g", fileName: "Old.md" },
       md(A, B),
       new Set(),
+      fetchUrl,
     );
 
     expect(live()).toEqual(["g2/New_files", "old/a.png", "old/b.jpeg"]);
@@ -112,6 +120,7 @@ describe("syncPostImages", () => {
       null,
       md(A, B),
       new Set(),
+      fetchUrl,
       staged,
     );
     expect(live()).toEqual(["f1/a.png", "f1/b.jpeg", "g/Post_files"]);
@@ -129,6 +138,7 @@ describe("syncPostImages", () => {
       null,
       md(A),
       new Set(),
+      fetchUrl,
       staged,
     );
     expect(staged.clear).not.toHaveBeenCalled();
@@ -136,7 +146,14 @@ describe("syncPostImages", () => {
 
   it("trashes the folder when the post has no images left", async () => {
     drive.set("old", { name: "Post_files", parent: "g", mimeType: FOLDER, trashed: false });
-    await syncPostImages("t", { parentId: "g", fileName: "Post.md" }, null, "Text.", new Set());
+    await syncPostImages(
+      "t",
+      { parentId: "g", fileName: "Post.md" },
+      null,
+      "Text.",
+      new Set(),
+      fetchUrl,
+    );
     expect(live()).toEqual([]);
   });
 
@@ -155,6 +172,7 @@ describe("syncPostImages", () => {
       null,
       md(A),
       new Set(["sub"]),
+      fetchUrl,
     );
     // Its own folder was made beside the subgroup, and that's the one a delete trashes.
     expect(drive.get("f1")).toMatchObject({ name: "Post_files", parent: "g" });
@@ -172,6 +190,7 @@ describe("syncPostImages", () => {
       null,
       md("https://cdn.example/missing.png", "https://169.254.169.254/latest.png", A),
       new Set(),
+      fetchUrl,
     );
     expect(live()).toEqual(["f1/a.png", "g/Post_files"]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -207,6 +226,7 @@ describe("syncPostImages", () => {
       null,
       md(GIF_MP4, WRONG_EXT_VIDEO, HTML_MP4),
       new Set(),
+      fetchUrl,
     );
 
     // Only GIF_MP4 should be downloaded and uploaded

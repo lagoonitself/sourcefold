@@ -18,7 +18,7 @@ vi.mock("@/lib/google/oauth", () => ({
   DriveAuthError: class extends Error {},
   DriveClientMismatchError: class extends Error {},
 }));
-vi.mock("@/lib/google/drive", () => ({
+vi.mock("@sourcefold/client/google/drive", () => ({
   downloadFileText: (...args: unknown[]) => downloadFileText(...args),
   downloadFileBytes: async () => null,
   getFile: (...args: unknown[]) => getFile(...args),

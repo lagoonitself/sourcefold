@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -11,7 +12,9 @@
   },
   "dependencies": {
     "@sourcefold/core": "*",
-    "@supabase/supabase-js": "^2.117.3"
+    "@supabase/supabase-js": "^2.117.3",
+    "marked": "^15.0.12",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "vitest": "^3.0.7"

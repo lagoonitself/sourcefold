@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/database.types";
-import { callsOf, createFakeDb } from "@/test/fake-db";
+import type { Database } from "../../database.types";
+import { callsOf, createFakeDb } from "../../test/fake-db";
 import { rerenderXItem, saveXThread } from "./save-x";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";

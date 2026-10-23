@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@sourcefold/core"],
+  transpilePackages: ["@sourcefold/core", "@sourcefold/client"],
   serverExternalPackages: ["linkedom"],
   turbopack: {
     rules: {

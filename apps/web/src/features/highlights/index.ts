@@ -1,3 +1,2 @@
-export { loadHighlightsForItems } from "./load";
-export { HIGHLIGHT_COLUMNS, inputToRow, rowToHighlight, type HighlightRow } from "./mapping";
-export { highlightIdSchema, highlightInputSchema, highlightNotePatchSchema } from "./schema";
+// Moved to packages/client (docs/dev/handoff-no-website.md).
+export * from "@sourcefold/client/features/highlights/index";

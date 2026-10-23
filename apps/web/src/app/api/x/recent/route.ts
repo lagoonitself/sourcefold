@@ -1,45 +1,6 @@
-import { jsonData, jsonError, requireApiUser } from "@/lib/api";
-import { findProjectId, projectFolderIds } from "@/features/projects/project";
+import * as route from "@sourcefold/client/routes/x/recent";
+import { webRoute } from "@/lib/web-route";
 
 export const dynamic = "force-dynamic";
 
-/** Recent X threads in the project of `?folder=<group id>`, so threads never cross projects. */
-export async function GET(request: Request) {
-  const auth = await requireApiUser(request);
-  if ("response" in auth) return auth.response;
-
-  const folderId = new URL(request.url).searchParams.get("folder");
-  if (!folderId) {
-    return jsonError(400, "Query parameter 'folder' is required.");
-  }
-
-  const { data: folders, error: foldersError } = await auth.db
-    .from("folders")
-    .select("id, parent_id")
-    .eq("user_id", auth.userId)
-    .is("deleted_at", null);
-  if (foldersError) {
-    return jsonError(500, foldersError.message);
-  }
-
-  const projectId = findProjectId(folders ?? [], folderId);
-  if (!projectId) {
-    return jsonData([]);
-  }
-
-  const { data: items, error } = await auth.db
-    .from("items")
-    .select("id, title, folder_id, created_at")
-    .eq("user_id", auth.userId)
-    .eq("kind", "x")
-    .in("folder_id", projectFolderIds(folders ?? [], projectId))
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  if (error) {
-    return jsonError(500, error.message);
-  }
-
-  return jsonData(items ?? []);
-}
+export const GET = webRoute(route.GET);

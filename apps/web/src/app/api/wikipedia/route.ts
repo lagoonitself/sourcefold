@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/api";
 import { saveWikipediaLink } from "@/features/capture/save-wikipedia";
+import { webHost } from "@/lib/web-host";
 import { pushToDriveSoon } from "@/features/drive/push-to-drive-soon";
 
 export const dynamic = "force-dynamic";
@@ -45,11 +46,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await saveWikipediaLink(auth.db, auth.userId, {
-    url: parsed.data.url,
-    folderId: parsed.data.folder_id,
-    allowDuplicate: parsed.data.allow_duplicate,
-  });
+  const result = await saveWikipediaLink(
+    auth.db,
+    auth.userId,
+    {
+      url: parsed.data.url,
+      folderId: parsed.data.folder_id,
+      allowDuplicate: parsed.data.allow_duplicate,
+    },
+    webHost,
+  );
 
   if (result.success) {
     pushToDriveSoon(auth.userId);

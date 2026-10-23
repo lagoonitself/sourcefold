@@ -8,7 +8,7 @@ const DOC = "application/vnd.google-apps.document";
 let drive: Map<string, Node>;
 let nextId: number;
 
-vi.mock("@/lib/google/drive", () => ({
+vi.mock("../../google/drive", () => ({
   listChildren: async (
     _token: string,
     parentId: string,

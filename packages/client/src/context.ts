@@ -1,14 +1,18 @@
-// Shared between the route modules (src/routes/**, owned by the routes agent) and the Drive
-// modules (src/drive/**, owned by the Drive agent). Contract: docs/dev/handoff-no-website.md.
-import type { LocalApiDeps, SourcefoldSupabase } from "./types";
+// What every route handler gets. The website builds it from its session or `sf_` token
+// (apps/web/src/lib/web-route.ts); the apps build it from their Supabase sign-in (router.ts).
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "./database.types";
+import type { Host } from "./host";
 
 export interface RouteContext {
-  deps: LocalApiDeps;
-  supabase: SourcefoldSupabase;
-  /** The signed-in user's id (from `supabase.auth.getUser()`, cached per session). */
+  /**
+   * RLS client for a signed-in session; on the website, the admin client (RLS bypassed) for an
+   * `sf_` token. Always filter by `userId` and set `user_id` on inserts so both behave the same.
+   */
+  db: SupabaseClient<Database>;
   userId: string;
-  /** Debounced Drive push a few seconds after a change; never two at once. */
-  scheduleDrivePush(): void;
+  via: "session" | "token";
+  host: Host;
 }
 
 /** Path parameters, e.g. `{ id: "…" }` for `/api/items/[id]`. */
@@ -19,3 +23,8 @@ export type RouteHandler = (
   request: Request,
   params: RouteParams,
 ) => Promise<Response>;
+
+/** One route file: its handlers by HTTP method. */
+export type RouteModule = Partial<
+  Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", RouteHandler>
+>;

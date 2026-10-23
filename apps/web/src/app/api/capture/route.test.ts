@@ -13,7 +13,7 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/features/drive/push-to-drive-soon", () => ({
   pushToDriveSoon: (userId: string) => pushToDriveSoon(userId),
 }));
-vi.mock("@/features/capture/find-duplicate", async (importOriginal) => ({
+vi.mock("@sourcefold/client/features/capture/find-duplicate", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/capture/find-duplicate")>()),
   findDuplicate: (...args: unknown[]) => findDuplicate(...args),
   findDuplicateElsewhere: (...args: unknown[]) => findDuplicateElsewhere(...args),

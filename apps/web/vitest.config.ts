@@ -10,6 +10,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // The guard throws outside a Next.js server build; route tests load server modules.
+      "server-only": path.resolve(__dirname, "./src/test/server-only.ts"),
     },
   },
 });

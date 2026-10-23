@@ -1,0 +1,247 @@
+---
+/**
+ * Floating toolbar for the reader selection, plus toast notification with undo.
+ * Styled with shadow-float, radius 12, crisp buttons.
+ */
+import { Check, Copy, CornerDownLeft, Highlighter, MessageSquare, Trash, Undo2 } from "@lucide/astro";
+---
+
+<div
+  id="reader-floating-toolbar"
+  class="floating-toolbar"
+  role="toolbar"
+  aria-label="Selection actions"
+  hidden
+>
+  <div class="toolbar-actions">
+    <button type="button" class="tool-btn" id="tool-btn-highlight" title="Highlight text">
+      <Highlighter size={14} stroke-width={1.75} />
+      <span>Highlight</span>
+    </button>
+    <button type="button" class="tool-btn" id="tool-btn-note" title="Add note to highlight">
+      <MessageSquare size={14} stroke-width={1.75} />
+      <span>Add note</span>
+    </button>
+    <button type="button" class="tool-btn" id="tool-btn-copy" title="Copy quote with source">
+      <Copy size={14} stroke-width={1.75} />
+      <span>Copy quote</span>
+    </button>
+    <button type="button" class="tool-btn tool-btn-danger" id="tool-btn-remove" title="Remove selected passage">
+      <Trash size={14} stroke-width={1.75} />
+      <span>Remove text</span>
+    </button>
+  </div>
+
+  <!-- Anchored note popover -->
+  <div class="note-popover" id="reader-note-popover" hidden>
+    <input
+      type="text"
+      id="reader-note-input"
+      class="note-field"
+      placeholder="Type a note (e.g. key quote for script)..."
+      maxlength="140"
+      autocomplete="off"
+    />
+    <button type="button" class="note-save-btn" id="reader-note-save" title="Save note">
+      <CornerDownLeft size={13} stroke-width={2} />
+    </button>
+  </div>
+</div>
+
+<!-- Reader feedback toast -->
+<div id="reader-toast" class="reader-toast" role="status" aria-live="polite" hidden>
+  <div class="toast-content">
+    <span class="toast-icon-wrap" id="toast-icon-check">
+      <Check size={14} stroke-width={2.2} />
+    </span>
+    <span id="reader-toast-msg" class="toast-message">Copied with its source</span>
+  </div>
+  <button type="button" id="reader-toast-undo" class="toast-undo-btn" hidden>
+    <Undo2 size={12} stroke-width={2} />
+    <span>Undo</span>
+  </button>
+</div>
+
+<style>
+  .floating-toolbar {
+    position: absolute;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    background: var(--card);
+    border-radius: 12px;
+    box-shadow: var(--shadow-float);
+    border: 1px solid var(--border);
+    padding: 4px;
+    gap: 4px;
+    transform: translate(-50%, -100%) translateY(-10px);
+    transition:
+      opacity 160ms var(--ease-out),
+      transform 160ms var(--ease-out);
+    pointer-events: auto;
+  }
+
+  .floating-toolbar[hidden] {
+    display: none !important;
+  }
+
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .tool-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding-inline: 8px;
+    border: 0;
+    background: transparent;
+    border-radius: 8px;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--foreground);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      background-color 120ms var(--ease-out),
+      color 120ms var(--ease-out);
+  }
+
+  .tool-btn:hover {
+    background: var(--muted);
+  }
+
+  .tool-btn-danger:hover {
+    color: var(--destructive);
+    background: color-mix(in oklab, var(--destructive) 10%, transparent);
+  }
+
+  /* Note popover inside toolbar */
+  .note-popover {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    border-top: 1px solid var(--border);
+  }
+
+  .note-popover[hidden] {
+    display: none;
+  }
+
+  .note-field {
+    flex: 1;
+    height: 28px;
+    padding-inline: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--input);
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    outline: none;
+  }
+
+  .note-field:focus-visible {
+    border-color: var(--ring);
+    outline: 1px solid var(--ring);
+  }
+
+  .note-save-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 0;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    cursor: pointer;
+    transition: opacity 120ms var(--ease-out);
+  }
+
+  .note-save-btn:hover {
+    opacity: 0.9;
+  }
+
+  /* Toast */
+  .reader-toast {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-radius: 10px;
+    box-shadow: var(--shadow-float);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    pointer-events: auto;
+    animation: toastIn 180ms var(--ease-spring);
+  }
+
+  .reader-toast[hidden] {
+    display: none !important;
+  }
+
+  @keyframes toastIn {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  .toast-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toast-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--marker-strong);
+  }
+
+  .toast-message {
+    font-weight: 450;
+  }
+
+  .toast-undo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: color-mix(in oklab, var(--primary-foreground) 16%, transparent);
+    color: var(--primary-foreground);
+    border: 0;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 120ms var(--ease-out);
+  }
+
+  .toast-undo-btn:hover {
+    background: color-mix(in oklab, var(--primary-foreground) 26%, transparent);
+  }
+
+  .toast-undo-btn[hidden] {
+    display: none;
+  }
+</style>

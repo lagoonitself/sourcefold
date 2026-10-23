@@ -1,0 +1,256 @@
+---
+/**
+ * Hero section (section id "top").
+ * Contract: docs/dev/handoff-landing.md
+ *
+ * Requirements:
+ * - Headline uses .display scale (clamp(44px, 5.6vw, 68px)), text-wrap: balance, 2–3 lines on desktop
+ * - Demo starts within the first 900px at 1440 wide (side-by-side grid)
+ * - Lede: from README's first paragraph (2 short sentences, accurate offline and sources)
+ * - Two download buttons: "Download for Windows" and "Download for Mac" (detect platform; visitor's is .btn-ink & first, other .btn-outline)
+ * - Linking to links.windows / links.mac from src/lib/site.ts
+ * - Supported sources ghost button
+ * - GitHub ghost button with GithubIcon
+ * - Small muted line: "Free and open source. Also a Chrome extension, a website and a Claude Desktop extension."
+ * - No "·"-joined strings (trust strip dropped)
+ * - Interactive AddLinksDemo desktop mock
+ * - Floating/ticker SourceMarquee beneath
+ */
+import { Download as DownloadIcon, FileText } from "@lucide/astro";
+import GithubIcon from "../GithubIcon.astro";
+import AddLinksDemo from "../hero/AddLinksDemo.astro";
+import SourceMarquee from "../hero/SourceMarquee.astro";
+import { links } from "../../lib/site";
+---
+
+<section id="top" class="hero-section" data-hero-section>
+  <div class="container hero-container">
+    <div class="hero-grid">
+      <!-- Left Column: Copy, CTAs, Ecosystem info -->
+      <div class="hero-copy-column">
+        <h1 class="display hero-headline">
+          Everything you read for a project, in <span class="marker marker-sweep">one folder</span>
+        </h1>
+
+        <p class="lede hero-lede">
+          Save everything you read for a project (articles, YouTube transcripts, Wikipedia and
+          Grokipedia, Substack, Reddit, X, PDFs) as clean Markdown in folders. Read it, highlight
+          it, search inside it, and send it to your Google Drive ready for NotebookLM, Gemini or
+          any AI tool.
+        </p>
+
+        <div class="hero-actions" data-hero-actions>
+          <a href={links.windows} class="btn btn-ink hero-dl-btn" data-download-btn="windows">
+            <DownloadIcon size={16} stroke-width={2} />
+            <span>Download for Windows</span>
+          </a>
+
+          <a href={links.mac} class="btn btn-outline hero-dl-btn" data-download-btn="mac">
+            <DownloadIcon size={16} stroke-width={2} />
+            <span>Download for Mac</span>
+          </a>
+
+          <a href="#sources" class="btn btn-ghost hero-cta-secondary">
+            <FileText size={16} stroke-width={1.8} />
+            <span>Supported sources</span>
+          </a>
+
+          <a
+            href={links.repo}
+            class="btn btn-ghost hero-gh-btn"
+            title="View Sourcefold on GitHub"
+            aria-label="View Sourcefold on GitHub"
+          >
+            <GithubIcon size={16} />
+            <span>GitHub</span>
+          </a>
+        </div>
+
+        <p class="hero-ecosystem muted">
+          Free and open source. Also a Chrome extension, a website and a Claude Desktop extension.
+        </p>
+      </div>
+
+      <!-- Right Column: Interactive Desktop App Mock -->
+      <div class="hero-demo-column">
+        <AddLinksDemo />
+      </div>
+    </div>
+
+    <!-- Supported sources strip underneath hero grid -->
+    <SourceMarquee />
+  </div>
+</section>
+
+<script>
+  // Detect OS for hero download buttons: visitor's platform gets .btn-ink and appears first
+  const winBtn = document.querySelector<HTMLAnchorElement>('[data-download-btn="windows"]');
+  const macBtn = document.querySelector<HTMLAnchorElement>('[data-download-btn="mac"]');
+
+  if (winBtn && macBtn) {
+    const nav = navigator as unknown as { userAgentData?: { platform?: string }; platform?: string };
+    const platform = (
+      nav.userAgentData?.platform ||
+      nav.platform ||
+      navigator.userAgent ||
+      ""
+    ).toLowerCase();
+
+    const ua = navigator.userAgent.toLowerCase();
+    const isMac =
+      /macintosh|mac os x/.test(ua) ||
+      platform.includes("mac") ||
+      platform.includes("darwin") ||
+      platform.includes("iphone") ||
+      platform.includes("ipad");
+
+    if (isMac) {
+      macBtn.classList.remove("btn-outline");
+      macBtn.classList.add("btn-ink");
+      winBtn.classList.remove("btn-ink");
+      winBtn.classList.add("btn-outline");
+      if (macBtn.parentElement) {
+        macBtn.parentElement.insertBefore(macBtn, winBtn);
+      }
+    }
+  }
+
+  // Trigger marker sweep on load
+  const heroMarker = document.querySelector<HTMLElement>(".hero-headline .marker-sweep");
+  if (heroMarker) {
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        heroMarker.classList.add("is-in");
+      }, 120);
+    });
+  }
+</script>
+
+<style>
+  .hero-section {
+    position: relative;
+    padding-top: clamp(16px, 2.5vh, 32px);
+    padding-bottom: clamp(16px, 2.5vh, 28px);
+    overflow: hidden;
+  }
+
+  .hero-container {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: clamp(24px, 3.5vw, 40px);
+    align-items: center;
+  }
+
+  @media (min-width: 960px) {
+    .hero-grid {
+      grid-template-columns: 0.95fr 1.05fr;
+      gap: 36px;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    .hero-grid {
+      grid-template-columns: 0.92fr 1.08fr;
+      gap: 40px;
+    }
+  }
+
+  /* Left copy column */
+  .hero-copy-column {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(14px, 2vh, 20px);
+    max-width: 540px;
+  }
+
+  /*
+   * Display scale headline:
+   * Uses display scale tokens, text-wrap: balance, and accepts 2–3 lines on desktop.
+   */
+  .hero-headline {
+    font-family: var(--font-serif);
+    font-size: clamp(44px, 5.6vw, 68px);
+    line-height: 1.02;
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    color: var(--foreground);
+    text-wrap: balance;
+    max-width: 18ch;
+    margin: 0;
+  }
+
+  .hero-lede {
+    font-size: clamp(15px, 1.2vw, 17px);
+    line-height: 1.5;
+    color: var(--muted-foreground);
+    max-width: 52ch;
+    text-wrap: pretty;
+    margin: 0;
+  }
+
+  /* CTA cluster */
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding-top: 4px;
+  }
+
+  .hero-dl-btn {
+    height: 42px;
+    padding-inline: 18px;
+    font-size: 14px;
+    font-weight: 500;
+    gap: 8px;
+  }
+
+  .hero-cta-secondary {
+    height: 42px;
+    padding-inline: 14px;
+    font-size: 14px;
+    gap: 7px;
+  }
+
+  .hero-gh-btn {
+    height: 42px;
+    padding-inline: 14px;
+    font-size: 14px;
+    gap: 7px;
+    color: var(--muted-foreground);
+  }
+
+  .hero-gh-btn:hover {
+    color: var(--foreground);
+  }
+
+  .hero-ecosystem {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--muted-foreground);
+    max-width: 52ch;
+    margin: 0;
+  }
+
+  .hero-demo-column {
+    min-width: 0;
+  }
+
+  @media (max-width: 640px) {
+    .hero-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .hero-dl-btn,
+    .hero-cta-secondary,
+    .hero-gh-btn {
+      justify-content: center;
+      width: 100%;
+    }
+  }
+</style>

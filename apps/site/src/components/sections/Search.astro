@@ -1,0 +1,912 @@
+---
+/**
+ * Search section: "Find things again".
+ * Demonstrates full-text search inside every source in a project with real exact phrase,
+ * word exclusion (-word), and client-side "Search by meaning" synonym matching.
+ */
+import SectionHeader from "../SectionHeader.astro";
+import SourceTile from "../SourceTile.astro";
+import { Search as SearchIcon, X, Sparkles, SlidersHorizontal } from "@lucide/astro";
+import type { SourceKind } from "../../lib/sources";
+
+interface SearchCorpusItem {
+  id: string;
+  kind: SourceKind;
+  title: string;
+  meta: string;
+  snippet: string;
+}
+
+const CORPUS: SearchCorpusItem[] = [
+  {
+    id: "s1",
+    kind: "youtube",
+    title: "How turbo lag actually works",
+    meta: "Engineering Explained (12:04)",
+    snippet:
+      "The delay before boost hits is throttle lag plus spool time. At low rpm exhaust gas volume is small, so the turbine wheel accelerates slowly.",
+  },
+  {
+    id: "s2",
+    kind: "grokipedia",
+    title: "Turbocharger",
+    meta: "Grokipedia (Section 2.4)",
+    snippet:
+      "A turbocharger is an exhaust-driven compressor designed to increase volumetric efficiency and engine boost without parasitic crankshaft drag.",
+  },
+  {
+    id: "s3",
+    kind: "substack",
+    title: "The last rotary",
+    meta: "Engine Bay (Issue 42)",
+    snippet:
+      "Twin-turbo setups on rotaries suffered notorious turbo lag until sequential bypass valves cut low-rpm hesitation and improved spool.",
+  },
+  {
+    id: "s4",
+    kind: "x",
+    title: "Thread: why twin-scroll beats twin-turbo",
+    meta: "@boostlab (6 posts)",
+    snippet:
+      "Separating exhaust pulses avoids cylinder backpressure interference, eliminating boost delay without the heavy clatter of a diesel block.",
+  },
+  {
+    id: "s5",
+    kind: "wikipedia",
+    title: "Wankel engine",
+    meta: "Wikipedia (Rotary mechanics)",
+    snippet:
+      "Rotary engines generate smooth high-rpm output, but low exhaust velocity at idle creates noticeable spool delay for larger turbo assemblies.",
+  },
+  {
+    id: "s6",
+    kind: "reddit",
+    title: "Is the 2JZ overrated?",
+    meta: "r/cars (342 comments)",
+    snippet:
+      "The stock sequential turbos keep lag minimal, but big single turbo conversions have atrocious turbo lag below 4,500 rpm until the wastegate closes.",
+  },
+  {
+    id: "s7",
+    kind: "hackernews",
+    title: "Electric turbos are finally here",
+    meta: "news.ycombinator.com (89 points)",
+    snippet:
+      "A 48-volt electric motor spins the compressor wheel in 200 milliseconds, completely erasing turbo lag before exhaust pressure builds.",
+  },
+  {
+    id: "s8",
+    kind: "pdf",
+    title: "Transient response of variable-geometry turbines",
+    meta: "arXiv:2308.08708 (Page 4)",
+    snippet:
+      "Variable nozzle vanes adjust the effective flow area, drastically improving transient boost rise times and mitigating turbo lag across operating points.",
+  },
+  {
+    id: "s9",
+    kind: "web",
+    title: "Turbochargers, explained",
+    meta: "Car and Driver (Technical)",
+    snippet:
+      "Understanding boost pressure, wastegates, blow-off valves, and why modern twin-scroll systems feel almost lag-free compared to 1980s sports cars.",
+  },
+  {
+    id: "s10",
+    kind: "bluesky",
+    title: "Dyno day notes",
+    meta: "@torque.dev (Oct 18)",
+    snippet:
+      "Testing wastegate preload and electronic boost control solenoids. Throttle hesitation resolved with quicker ignition advance.",
+  },
+  {
+    id: "s11",
+    kind: "note",
+    title: "Script ideas for the intro",
+    meta: "Personal note (Draft)",
+    snippet:
+      "Hook the audience by contrasting the instantaneous torque of an EV motor against the dramatic pause and explosive boost of old 930 turbo lag.",
+  },
+  {
+    id: "s12",
+    kind: "image",
+    title: "Dyno chart, 2JZ stock vs single turbo",
+    meta: "Dyno scan (PNG)",
+    snippet:
+      "Torque curve comparison showing boost threshold: stock sequential spools at 2,200 rpm; T04Z single turbo hits boost at 4,400 rpm.",
+  },
+];
+---
+
+<section id="search" class="section">
+  <div class="container">
+    <SectionHeader
+      label="Search"
+      title="Search inside every source,"
+      marked="not just titles"
+      lede="The website searches titles. The desktop app searches inside every saved source in a project: full article text, YouTube transcripts, PDFs, and footnotes."
+    />
+
+    <div class="search-layout">
+      <!-- Search Sheet Mock -->
+      <div class="sheet search-sheet" data-reveal>
+        <div class="search-bar-wrap">
+          <div class="search-input-shell">
+            <span class="search-icon" aria-hidden="true">
+              <SearchIcon size={18} stroke-width={1.75} />
+            </span>
+            <input
+              type="text"
+              id="search-input"
+              class="search-input"
+              placeholder='Search sources... (e.g. boost "turbo lag" -diesel)'
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search inside all sources"
+            />
+            <button
+              type="button"
+              id="search-clear-btn"
+              class="search-clear-btn"
+              aria-label="Clear search"
+              style="display: none;"
+            >
+              <X size={15} stroke-width={1.75} />
+            </button>
+            <span class="kbd search-shortcut" title="Focus search">/</span>
+          </div>
+
+          <div class="search-toolbar">
+            <div class="syntax-chips">
+              <span class="chips-label muted">Try:</span>
+              <button
+                type="button"
+                class="chip syntax-chip"
+                data-query='boost "turbo lag" -diesel'
+                title="Run demo query"
+              >
+                <code>boost "turbo lag" -diesel</code>
+              </button>
+              <button
+                type="button"
+                class="chip syntax-chip"
+                data-append='"turbo lag"'
+                title="Search exact phrase"
+              >
+                <span>"exact phrases"</span>
+              </button>
+              <button
+                type="button"
+                class="chip syntax-chip"
+                data-append="-diesel"
+                title="Exclude words"
+              >
+                <span>-word exclusion</span>
+              </button>
+            </div>
+
+            <div class="semantic-toggle-wrap">
+              <label class="semantic-toggle" for="semantic-checkbox">
+                <input type="checkbox" id="semantic-checkbox" class="sr-only" />
+                <span class="toggle-track" aria-hidden="true">
+                  <span class="toggle-thumb"></span>
+                </span>
+                <span class="toggle-text">Search by meaning</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Note shown when semantic search is toggled ON -->
+          <div id="semantic-notice" class="semantic-notice" style="display: none;">
+            <Sparkles size={14} stroke-width={1.75} />
+            <span>Runs on your computer. Nothing is sent anywhere.</span>
+          </div>
+        </div>
+
+        <div class="search-meta-bar">
+          <span class="result-count-label muted">
+            <span id="results-count" class="nums">12</span> sources found
+          </span>
+          <span class="search-scope-badge muted">Inside project: Cars</span>
+        </div>
+
+        <!-- Results list -->
+        <div id="search-results-list" class="search-results-list" role="feed" aria-busy="false">
+          {
+            CORPUS.map((item) => (
+              <article
+                class="search-row"
+                data-id={item.id}
+                data-title={item.title}
+                data-snippet={item.snippet}
+              >
+                <div class="row-tile-col">
+                  <SourceTile kind={item.kind} size={30} />
+                </div>
+                <div class="row-main-col">
+                  <div class="row-header-line">
+                    <h3 class="row-title serif">{item.title}</h3>
+                    <span class="row-meta muted">{item.meta}</span>
+                    <span
+                      class="chip semantic-pill"
+                      style="display: none;"
+                      title="Matched through local synonym map"
+                    >
+                      <Sparkles size={12} stroke-width={1.75} />
+                      <span>Similar meaning</span>
+                    </span>
+                  </div>
+                  <p class="row-snippet">{item.snippet}</p>
+                </div>
+              </article>
+            ))
+          }
+          <div id="search-empty-state" class="search-empty-state" style="display: none;">
+            <p class="empty-title serif">No sources found</p>
+            <p class="muted">
+              Try adjusting your query or turning on <span class="mono">Search by meaning</span>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Explanatory side panel -->
+      <aside class="search-explanation" data-reveal>
+        <div class="feature-card card">
+          <h3 class="card-title serif">Full text, transcripts, and footnotes</h3>
+          <p class="muted">
+            The website searches titles so it stays instant over the network. The desktop app
+            indexes every saved source locally: full article paragraphs, timestamped YouTube lines,
+            and PDF footnotes.
+          </p>
+        </div>
+
+        <div class="feature-card card">
+          <div class="card-header-with-icon">
+            <SlidersHorizontal size={18} stroke-width={1.75} class="muted" />
+            <h3 class="card-title serif">Exact words or fuzzy ideas</h3>
+          </div>
+          <p class="muted">
+            Wrap phrases in <span class="mono">"quotes"</span> for verbatim matches, or prefix with{" "}
+            <span class="mono">-</span> to cut out noise. Turn on <strong>Search by meaning</strong>{" "}
+            to match related terms without sending your research to an external AI API.
+          </p>
+        </div>
+
+        <div class="feature-card card">
+          <div class="card-header-with-icon">
+            <Sparkles size={18} stroke-width={1.75} class="muted" />
+            <h3 class="card-title serif">Private by design</h3>
+          </div>
+          <p class="muted">
+            Everything runs in memory on your own computer. Your searches, notes, and reading
+            history never touch a telemetry pipe or search index server.
+          </p>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { whileVisible, sleep, prefersReducedMotion } from "../../lib/reveal";
+
+  // Client-side search engine with exact phrases, exclusion, and semantic synonym expansion
+  const SYNONYMS: Record<string, string[]> = {
+    lag: ["delay", "slow response", "spool time", "hesitation", "pause"],
+    delay: ["lag", "slow response", "spool time", "hesitation"],
+    boost: ["pressure", "forced induction", "turbo", "compressor"],
+    turbo: ["boost", "forced induction", "compressor"],
+    cheap: ["low cost", "affordable", "budget", "inexpensive"],
+    fast: ["quick", "instant", "high speed", "rapid"],
+    slow: ["hesitation", "delay", "lag"],
+    rotary: ["wankel", "apex", "rotor"],
+    wankel: ["rotary", "rotor"],
+    efficient: ["thermal efficiency", "fuel economy", "economy"],
+  };
+
+  const section = document.querySelector("#search");
+  if (section) {
+    const input = section.querySelector("#search-input") as HTMLInputElement | null;
+    const clearBtn = section.querySelector("#search-clear-btn") as HTMLButtonElement | null;
+    const semanticCheckbox = section.querySelector("#semantic-checkbox") as HTMLInputElement | null;
+    const semanticNotice = section.querySelector("#semantic-notice") as HTMLElement | null;
+    const countDisplay = section.querySelector("#results-count") as HTMLElement | null;
+    const emptyState = section.querySelector("#search-empty-state") as HTMLElement | null;
+    const rows = Array.from(section.querySelectorAll(".search-row")) as HTMLElement[];
+    const syntaxChips = section.querySelectorAll(".syntax-chip");
+
+    // Store raw text for clean highlighting
+    const rawData = rows.map((row) => ({
+      el: row,
+      id: row.dataset.id || "",
+      title: row.dataset.title || "",
+      snippet: row.dataset.snippet || "",
+      titleEl: row.querySelector(".row-title") as HTMLElement,
+      snippetEl: row.querySelector(".row-snippet") as HTMLElement,
+      badgeEl: row.querySelector(".semantic-pill") as HTMLElement,
+    }));
+
+    let autoTypeCancelled = false;
+
+    interface ParsedQuery {
+      phrases: string[];
+      negatives: string[];
+      terms: string[];
+    }
+
+    function parseQuery(raw: string): ParsedQuery {
+      const phrases: string[] = [];
+      const negatives: string[] = [];
+      const terms: string[] = [];
+
+      let str = raw;
+      // Extract "exact phrases"
+      const phraseRegex = /"([^\"]+)"/g;
+      let match: RegExpExecArray | null;
+      while ((match = phraseRegex.exec(raw)) !== null) {
+        if (match[1].trim()) phrases.push(match[1].trim().toLowerCase());
+      }
+      str = str.replace(phraseRegex, " ");
+
+      // Tokenize remaining words
+      const words = str.split(/\s+/).filter(Boolean);
+      for (const w of words) {
+        if (w.startsWith("-") && w.length > 1) {
+          negatives.push(w.slice(1).toLowerCase());
+        } else {
+          terms.push(w.toLowerCase());
+        }
+      }
+
+      return { phrases, negatives, terms };
+    }
+
+    function escapeHtml(text: string): string {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function highlightText(text: string, wordsToHighlight: Set<string>): string {
+      if (wordsToHighlight.size === 0) return escapeHtml(text);
+
+      const escapedWords = Array.from(wordsToHighlight)
+        .sort((a, b) => b.length - a.length)
+        .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+      if (escapedWords.length === 0) return escapeHtml(text);
+
+      const regex = new RegExp(`(${escapedWords.join("|")})`, "gi");
+      return escapeHtml(text).replace(regex, '<mark class="marker-match">$1</mark>');
+    }
+
+    function filterCorpus() {
+      if (!input) return;
+      const query = input.value.trim();
+      const isSemantic = semanticCheckbox?.checked ?? false;
+
+      if (clearBtn) {
+        clearBtn.style.display = query ? "inline-flex" : "none";
+      }
+
+      if (!query) {
+        // Show everything, clean up highlights
+        let count = 0;
+        rawData.forEach((item) => {
+          item.el.style.display = "flex";
+          item.titleEl.innerHTML = escapeHtml(item.title);
+          item.snippetEl.innerHTML = escapeHtml(item.snippet);
+          if (item.badgeEl) item.badgeEl.style.display = "none";
+          count++;
+        });
+        if (countDisplay) countDisplay.textContent = String(count);
+        if (emptyState) emptyState.style.display = "none";
+        return;
+      }
+
+      const { phrases, negatives, terms } = parseQuery(query);
+
+      // Expand terms if semantic search is active
+      const expandedTerms = new Map<string, boolean>(); // term -> isSemanticSynonym
+      terms.forEach((t) => expandedTerms.set(t, false));
+
+      if (isSemantic) {
+        terms.forEach((t) => {
+          const syns = SYNONYMS[t] || [];
+          syns.forEach((s) => {
+            if (!expandedTerms.has(s)) expandedTerms.set(s, true);
+          });
+        });
+      }
+
+      const wordsToHighlight = new Set<string>();
+      phrases.forEach((p) => wordsToHighlight.add(p));
+      terms.forEach((t) => wordsToHighlight.add(t));
+      if (isSemantic) {
+        expandedTerms.forEach((isSyn, term) => {
+          if (isSyn) wordsToHighlight.add(term);
+        });
+      }
+
+      let visibleCount = 0;
+
+      rawData.forEach((item) => {
+        const fullText = (item.title + " " + item.snippet).toLowerCase();
+
+        // 1. Check exclusions (-word)
+        for (const neg of negatives) {
+          if (fullText.includes(neg)) {
+            item.el.style.display = "none";
+            return;
+          }
+        }
+
+        // 2. Check exact phrases
+        for (const phr of phrases) {
+          if (!fullText.includes(phr)) {
+            item.el.style.display = "none";
+            return;
+          }
+        }
+
+        // 3. Check terms
+        let matchedDirectTerms = true;
+        let matchedSemantic = false;
+
+        if (terms.length > 0) {
+          if (!isSemantic) {
+            // Must match all terms literally
+            for (const t of terms) {
+              if (!fullText.includes(t)) {
+                matchedDirectTerms = false;
+                break;
+              }
+            }
+          } else {
+            // In semantic mode, for each base term, either it or one of its synonyms must match
+            for (const t of terms) {
+              const syns = SYNONYMS[t] || [];
+              const group = [t, ...syns];
+              const groupMatch = group.some((word) => fullText.includes(word));
+              if (!groupMatch) {
+                matchedDirectTerms = false;
+                break;
+              }
+              // If matched only via synonym, flag as semantic match
+              if (!fullText.includes(t) && groupMatch) {
+                matchedSemantic = true;
+              }
+            }
+          }
+        }
+
+        if (!matchedDirectTerms) {
+          item.el.style.display = "none";
+          return;
+        }
+
+        // It's a match!
+        item.el.style.display = "flex";
+        visibleCount++;
+
+        // Highlight matched words
+        item.titleEl.innerHTML = highlightText(item.title, wordsToHighlight);
+        item.snippetEl.innerHTML = highlightText(item.snippet, wordsToHighlight);
+
+        if (item.badgeEl) {
+          item.badgeEl.style.display = isSemantic && matchedSemantic ? "inline-flex" : "none";
+        }
+      });
+
+      if (countDisplay) countDisplay.textContent = String(visibleCount);
+      if (emptyState) {
+        emptyState.style.display = visibleCount === 0 ? "block" : "none";
+      }
+    }
+
+    // Input event listeners
+    input?.addEventListener("input", () => {
+      autoTypeCancelled = true;
+      filterCorpus();
+    });
+
+    input?.addEventListener("focus", () => {
+      autoTypeCancelled = true;
+    });
+
+    clearBtn?.addEventListener("click", () => {
+      if (input) {
+        input.value = "";
+        input.focus();
+        filterCorpus();
+      }
+    });
+
+    semanticCheckbox?.addEventListener("change", () => {
+      if (semanticNotice) {
+        semanticNotice.style.display = semanticCheckbox.checked ? "inline-flex" : "none";
+      }
+      filterCorpus();
+    });
+
+    // Keyboard shortcut "/" to focus search
+    window.addEventListener("keydown", (e) => {
+      if (
+        e.key === "/" &&
+        document.activeElement?.tagName !== "INPUT" &&
+        document.activeElement?.tagName !== "TEXTAREA"
+      ) {
+        e.preventDefault();
+        input?.focus();
+        input?.select();
+      }
+    });
+
+    // Syntax chips interaction
+    syntaxChips.forEach((chip) => {
+      chip.addEventListener("click", () => {
+        autoTypeCancelled = true;
+        const target = chip as HTMLElement;
+        const fullQuery = target.dataset.query;
+        const appendQuery = target.dataset.append;
+
+        if (input) {
+          if (fullQuery) {
+            input.value = fullQuery;
+          } else if (appendQuery) {
+            const current = input.value.trim();
+            input.value = current ? `${current} ${appendQuery}` : appendQuery;
+          }
+          input.focus();
+          filterCorpus();
+        }
+      });
+    });
+
+    // Auto-typing demo when visible
+    const demoQuery = 'boost "turbo lag" -diesel';
+    whileVisible(section, () => {
+      if (autoTypeCancelled || prefersReducedMotion()) return;
+
+      let isRunning = true;
+      const runDemo = async () => {
+        await sleep(900);
+        if (autoTypeCancelled || !input || input.value.length > 0) return;
+
+        for (let i = 0; i <= demoQuery.length; i++) {
+          if (autoTypeCancelled || !isRunning) break;
+          input.value = demoQuery.slice(0, i);
+          filterCorpus();
+          await sleep(55);
+        }
+      };
+
+      runDemo();
+
+      return () => {
+        isRunning = false;
+      };
+    });
+  }
+</script>
+
+<style>
+  .search-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 32px;
+    align-items: start;
+  }
+
+  @media (max-width: 960px) {
+    .search-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .search-sheet {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .search-bar-wrap {
+    padding: 24px 24px 18px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--background);
+  }
+
+  .search-input-shell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 48px;
+    background: var(--card);
+    border: 1px solid var(--input);
+    border-radius: 10px;
+    box-shadow: var(--shadow-raised);
+    transition:
+      border-color 150ms var(--ease-out),
+      box-shadow 150ms var(--ease-out);
+  }
+
+  .search-input-shell:focus-within {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 1px var(--ring);
+  }
+
+  .search-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    color: var(--muted-foreground);
+    pointer-events: none;
+  }
+
+  .search-input {
+    flex: 1;
+    height: 100%;
+    padding: 0 8px 0 0;
+    border: 0;
+    background: transparent;
+    font-size: 15px;
+    color: var(--foreground);
+    outline: none;
+  }
+
+  .search-input::placeholder {
+    color: var(--muted-foreground);
+    opacity: 0.7;
+  }
+
+  .search-clear-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-right: 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+
+  .search-clear-btn:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  .search-shortcut {
+    margin-right: 12px;
+  }
+
+  .search-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+  }
+
+  .syntax-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chips-label {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .syntax-chip {
+    cursor: pointer;
+    border: 0;
+    transition:
+      background-color 140ms var(--ease-out),
+      transform 140ms var(--ease-out);
+  }
+
+  .syntax-chip:hover {
+    background: var(--accent);
+  }
+
+  .syntax-chip:active {
+    transform: scale(0.96);
+  }
+
+  .syntax-chip code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--foreground);
+  }
+
+  .semantic-toggle-wrap {
+    display: flex;
+    align-items: center;
+  }
+
+  .semantic-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13.5px;
+    color: var(--foreground);
+  }
+
+  .toggle-track {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--muted);
+    border: 1px solid var(--border-strong);
+    transition: background-color 160ms var(--ease-out);
+  }
+
+  .toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--foreground);
+    transition: transform 160ms var(--ease-spring);
+  }
+
+  .semantic-toggle input:checked + .toggle-track {
+    background: var(--primary);
+  }
+
+  .semantic-toggle input:checked + .toggle-track .toggle-thumb {
+    transform: translateX(16px);
+    background: var(--primary-foreground);
+  }
+
+  .semantic-notice {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: 12.5px;
+  }
+
+  .search-meta-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 24px;
+    background: var(--desk);
+    font-size: 12.5px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .search-results-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 480px;
+    overflow-y: auto;
+    padding: 12px;
+    gap: 4px;
+  }
+
+  .search-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    transition: background-color 140ms var(--ease-out);
+  }
+
+  .search-row:hover {
+    background: var(--muted);
+  }
+
+  .row-tile-col {
+    padding-top: 2px;
+  }
+
+  .row-main-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .row-header-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px 12px;
+    margin-bottom: 4px;
+  }
+
+  .row-title {
+    font-size: 15.5px;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .row-meta {
+    font-size: 12.5px;
+  }
+
+  .semantic-pill {
+    background: color-mix(in oklab, var(--marker) 20%, transparent);
+    color: var(--foreground);
+    font-size: 11.5px;
+    height: 22px;
+    padding-inline: 8px;
+    gap: 4px;
+  }
+
+  .row-snippet {
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--muted-foreground);
+  }
+
+  :global(.marker-match) {
+    background: var(--marker-soft);
+    color: var(--foreground);
+    border-radius: 3px;
+    padding: 0 3px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+
+  .search-empty-state {
+    padding: 48px 24px;
+    text-align: center;
+  }
+
+  .empty-title {
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  .search-explanation {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .feature-card {
+    padding: 20px;
+    border: 1px solid var(--border);
+  }
+
+  .card-header-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .card-title {
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--foreground);
+    margin-bottom: 6px;
+  }
+
+  .card-header-with-icon .card-title {
+    margin-bottom: 0;
+  }
+</style>

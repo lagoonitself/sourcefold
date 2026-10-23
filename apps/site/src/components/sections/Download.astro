@@ -1,0 +1,501 @@
+---
+/**
+ * Download.astro (id "download"): Closing download sheet & quiet footer.
+ * Accurate downloads matching README.md:
+ * - Windows: Sourcefold-Windows-Setup.exe (Windows 10 or 11)
+ * - Mac: Sourcefold-Mac.dmg (macOS 11+, Apple Silicon or Intel)
+ * - Chrome extension: Sourcefold-Chrome-Extension.zip (Chrome, Edge, Brave, Arc)
+ * - Claude Desktop MCP: Sourcefold-Claude.mcpb
+ * Unsigned app note matching README verbatim, linking to INSTALL.md.
+ * Detects visitor's OS on client and moves matching OS first with primary btn-ink styling.
+ */
+import {
+  Download as DownloadIcon,
+  ExternalLink,
+  Info,
+  Laptop,
+} from "@lucide/astro";
+import { links } from "../../lib/site";
+---
+
+<section id="download" class="section download-section" data-download-section>
+  <div class="container">
+    <!-- Closing Sheet -->
+    <div class="sheet closing-sheet" data-reveal>
+      <div class="closing-header">
+        <span class="label">Get Sourcefold</span>
+        <h2 class="h2 closing-title">
+          Save everything you read for your <span class="marker marker-sweep">next project</span>
+        </h2>
+        <p class="lede closing-lede">
+          Download the desktop app for Windows or Mac. Add the extension to save from your browser with a single shortcut, or connect Claude Desktop.
+        </p>
+      </div>
+
+      <!-- OS Detect Notification / Primary Download Spotlight -->
+      <div class="downloads-grid" data-download-grid>
+        <!-- Windows Card -->
+        <div class="download-card card" data-platform="windows">
+          <div class="card-head">
+            <div class="platform-icon-wrap" aria-hidden="true">
+              <Laptop size={20} />
+            </div>
+            <div class="platform-meta">
+              <div class="platform-title-row">
+                <h3 class="h4 platform-name">Windows</h3>
+                <span class="chip os-chip" data-os-chip="windows">Windows 10 or 11</span>
+              </div>
+              <span class="platform-sub muted text-xs">Windows 10 or 11</span>
+            </div>
+          </div>
+
+          <div class="file-info-row">
+            <code class="binary-name">Sourcefold-Windows-Setup.exe</code>
+          </div>
+
+          <div class="card-action">
+            <a
+              href={links.windows}
+              class="btn btn-ink btn-download"
+              data-download-btn="windows"
+            >
+              <DownloadIcon size={16} aria-hidden="true" />
+              <span>Download for Windows</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Mac Card -->
+        <div class="download-card card" data-platform="mac">
+          <div class="card-head">
+            <div class="platform-icon-wrap" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z"></path><path d="M10 2c1 .5 2 2 2 5"></path></svg>
+            </div>
+            <div class="platform-meta">
+              <div class="platform-title-row">
+                <h3 class="h4 platform-name">macOS</h3>
+                <span class="chip os-chip" data-os-chip="mac">macOS 11+</span>
+              </div>
+              <span class="platform-sub muted text-xs">macOS 11+, Apple Silicon or Intel</span>
+            </div>
+          </div>
+
+          <div class="file-info-row">
+            <code class="binary-name">Sourcefold-Mac.dmg</code>
+          </div>
+
+          <div class="card-action">
+            <a
+              href={links.mac}
+              class="btn btn-outline btn-download"
+              data-download-btn="mac"
+            >
+              <DownloadIcon size={16} aria-hidden="true" />
+              <span>Download for Mac</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Extension Card -->
+        <div class="download-card card" data-platform="extension">
+          <div class="card-head">
+            <div class="platform-icon-wrap" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle><line x1="21.17" x2="12" y1="8" y2="8"></line><line x1="3.95" x2="8.54" y1="6.06" y2="14"></line><line x1="10.88" x2="15.46" y1="21.94" y2="14"></line></svg>
+            </div>
+            <div class="platform-meta">
+              <div class="platform-title-row">
+                <h3 class="h4 platform-name">Browser extension</h3>
+                <span class="chip os-chip">Chrome MV3</span>
+              </div>
+              <span class="platform-sub muted text-xs">Chrome, Edge, Brave, Arc</span>
+            </div>
+          </div>
+
+          <div class="file-info-row">
+            <code class="binary-name">Sourcefold-Chrome-Extension.zip</code>
+          </div>
+
+          <div class="card-action">
+            <a
+              href={links.extension}
+              class="btn btn-outline btn-download"
+            >
+              <DownloadIcon size={16} aria-hidden="true" />
+              <span>Download extension</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Claude MCP Card -->
+        <div class="download-card card" data-platform="claude">
+          <div class="card-head">
+            <div class="platform-icon-wrap" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm1-5.5a2 2 0 0 1-2 2h-1v-2a3 3 0 1 1 3-3z"/></svg>
+            </div>
+            <div class="platform-meta">
+              <div class="platform-title-row">
+                <h3 class="h4 platform-name">Claude Desktop</h3>
+                <span class="chip os-chip">MCP bundle</span>
+              </div>
+              <span class="platform-sub muted text-xs">or Settings → Claude in desktop app</span>
+            </div>
+          </div>
+
+          <div class="file-info-row">
+            <code class="binary-name">Sourcefold-Claude.mcpb</code>
+          </div>
+
+          <div class="card-action">
+            <a
+              href={links.claude}
+              class="btn btn-outline btn-download"
+            >
+              <DownloadIcon size={16} aria-hidden="true" />
+              <span>Download MCP bundle</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Unsigned Publisher Advisory Box -->
+      <div class="advisory-box card">
+        <div class="advisory-icon" aria-hidden="true">
+          <Info size={18} />
+        </div>
+        <div class="advisory-content">
+          <h3 class="h4 advisory-title">First-run security note</h3>
+          <p class="advisory-text">
+            The apps aren't from a paid publisher, so Windows and macOS warn you the first time you open them. <a href={links.install} class="underline-link" target="_blank" rel="noopener noreferrer">INSTALL.md</a> shows the two clicks that get past it, how to load the extension, and how to sign in.
+          </p>
+        </div>
+        <a
+          href={links.install}
+          class="btn btn-outline btn-sm advisory-action"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span>Read INSTALL.md</span>
+          <ExternalLink size={13} aria-hidden="true" />
+        </a>
+      </div>
+
+      <!-- Web app note -->
+      <div class="web-alt-note muted text-xs">
+        <span>Prefer the browser? Ask whoever runs your Sourcefold for the address, or </span>
+        <a href={links.selfHosting} class="underline-link">run your own instance</a>.
+      </div>
+    </div>
+
+    <!-- Quiet Site Footer -->
+    <footer class="site-footer">
+      <div class="footer-primary">
+        <div class="footer-brand">
+          <span class="brand-text serif">Sourcefold</span>
+          <span class="footer-tagline muted text-xs">
+            Built for people who gather a lot of reading before they write or make a video.
+          </span>
+        </div>
+        <div class="footer-meta muted text-xs">
+          <span>MIT License</span>
+          <span>Zero telemetry</span>
+          <span>Google Drive OAuth</span>
+        </div>
+      </div>
+
+      <div class="footer-links">
+        <a href={links.repo} target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href={links.install} target="_blank" rel="noopener noreferrer">Install guide</a>
+        <a href={links.selfHosting} target="_blank" rel="noopener noreferrer">Self-hosting</a>
+        <a href={links.privacy} target="_blank" rel="noopener noreferrer">Privacy policy</a>
+        <a href={links.changelog} target="_blank" rel="noopener noreferrer">Changelog</a>
+        <a href={links.issues} target="_blank" rel="noopener noreferrer">Issues</a>
+      </div>
+    </footer>
+  </div>
+</section>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-download-section]");
+  if (root) {
+    const grid = root.querySelector<HTMLElement>("[data-download-grid]");
+    const winCard = root.querySelector<HTMLElement>('[data-platform="windows"]');
+    const macCard = root.querySelector<HTMLElement>('[data-platform="mac"]');
+    const winBtn = root.querySelector<HTMLAnchorElement>('[data-download-btn="windows"]');
+    const macBtn = root.querySelector<HTMLAnchorElement>('[data-download-btn="mac"]');
+    const winChip = root.querySelector<HTMLElement>('[data-os-chip="windows"]');
+    const macChip = root.querySelector<HTMLElement>('[data-os-chip="mac"]');
+
+    if (grid && winCard && macCard && winBtn && macBtn) {
+      const ua = navigator.userAgent.toLowerCase();
+      const isMac = /macintosh|mac os x/.test(ua);
+      const isWin = /windows|win32|win64/.test(ua);
+
+      if (isMac) {
+        // Move Mac card first
+        grid.prepend(macCard);
+        macBtn.classList.remove("btn-outline");
+        macBtn.classList.add("btn-ink");
+        winBtn.classList.remove("btn-ink");
+        winBtn.classList.add("btn-outline");
+        if (macChip) {
+          macChip.textContent = "For your Mac";
+          macChip.classList.add("is-detected-chip");
+        }
+      } else if (isWin) {
+        if (winChip) {
+          winChip.textContent = "For your Windows PC";
+          winChip.classList.add("is-detected-chip");
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  .download-section {
+    padding-bottom: 48px;
+  }
+
+  .closing-sheet {
+    padding: clamp(28px, 5vw, 56px);
+    border: 1px solid var(--border);
+    margin-bottom: 32px;
+  }
+
+  .closing-header {
+    max-width: 680px;
+    margin-bottom: 36px;
+  }
+
+  .closing-title {
+    margin-block: 12px 14px;
+    font-size: clamp(28px, 4vw, 42px);
+    line-height: 1.15;
+  }
+
+  .closing-lede {
+    font-size: 16px;
+    line-height: 1.55;
+  }
+
+  /* 4-card Downloads Grid */
+  .downloads-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .download-card {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    border: 1px solid var(--border);
+    transition:
+      transform 180ms var(--ease-out),
+      border-color 180ms var(--ease-out);
+  }
+
+  .download-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary);
+  }
+
+  .download-card:focus-within {
+    border-color: var(--primary);
+  }
+
+  .card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .platform-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    background: var(--muted);
+    color: var(--foreground);
+    flex-shrink: 0;
+  }
+
+  .platform-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .platform-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .platform-name {
+    font-size: 16px;
+    margin: 0;
+  }
+
+  .os-chip {
+    font-size: 10.5px;
+    padding-inline: 6px;
+    height: 18px;
+  }
+
+  .os-chip.is-detected-chip {
+    background: var(--marker-soft);
+    color: var(--foreground);
+    font-weight: 600;
+  }
+
+  .file-info-row {
+    margin-bottom: 16px;
+  }
+
+  .binary-name {
+    font-size: 11.5px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .card-action {
+    margin-top: auto;
+  }
+
+  .btn-download {
+    width: 100%;
+    justify-content: center;
+    font-size: 13px;
+    gap: 8px;
+  }
+
+  /* Advisory box */
+  .advisory-box {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: color-mix(in oklab, var(--desk) 35%, var(--background));
+    border: 1px solid var(--border);
+    margin-bottom: 18px;
+  }
+
+  @media (max-width: 760px) {
+    .advisory-box {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  .advisory-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--muted);
+    color: var(--warning);
+    flex-shrink: 0;
+  }
+
+  .advisory-content {
+    flex: 1;
+  }
+
+  .advisory-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin: 0 0 2px 0;
+  }
+
+  .advisory-text {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--muted-foreground);
+    margin: 0;
+  }
+
+  .underline-link {
+    color: var(--foreground);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .advisory-action {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+
+  .web-alt-note {
+    font-size: 12px;
+  }
+
+  /* Quiet Site Footer */
+  .site-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 28px 24px;
+    border-radius: 12px;
+    background: var(--muted);
+  }
+
+  .footer-primary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .footer-brand {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 14px;
+  }
+
+  .brand-text {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .footer-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 18px;
+    font-size: 12.5px;
+  }
+
+  .footer-links a {
+    color: var(--muted-foreground);
+    text-decoration: none;
+    transition: color 140ms var(--ease-out);
+  }
+
+  .footer-links a:hover {
+    color: var(--foreground);
+  }
+</style>

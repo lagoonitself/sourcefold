@@ -40,3 +40,6 @@ apps/desktop/releases/
 apps/desktop/dist/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/schemas/
+
+# design-taste-frontend inspector output
+.taste-skill/

@@ -1,0 +1,258 @@
+---
+/**
+ * Research Tool 3: Who wrote it (author plus author type, with (guess) for inferred types).
+ */
+import SourceTile from "../SourceTile.astro";
+import { UserCheck, Sparkles, ChevronDown } from "@lucide/astro";
+
+interface AuthorItem {
+  id: string;
+  kind: "youtube" | "grokipedia" | "substack" | "x" | "pdf";
+  title: string;
+  author: string;
+  authorType: "creator" | "journalist" | "researcher" | "lab" | "forum";
+  isGuess: boolean;
+}
+
+const ITEMS: AuthorItem[] = [
+  {
+    id: "a1",
+    kind: "youtube",
+    title: "How turbo lag actually works",
+    author: "Jason Fenske",
+    authorType: "creator",
+    isGuess: false,
+  },
+  {
+    id: "a2",
+    kind: "pdf",
+    title: "Transient response of variable-geometry turbines",
+    author: "Dr. Kenji Tanaka (Tokyo Inst. of Tech)",
+    authorType: "researcher",
+    isGuess: true,
+  },
+  {
+    id: "a3",
+    kind: "substack",
+    title: "The last rotary",
+    author: "Matt Farah",
+    authorType: "journalist",
+    isGuess: true,
+  },
+  {
+    id: "a4",
+    kind: "x",
+    title: "Thread: why twin-scroll beats twin-turbo",
+    author: "@boostlab",
+    authorType: "lab",
+    isGuess: true,
+  },
+  {
+    id: "a5",
+    kind: "grokipedia",
+    title: "Turbocharger",
+    author: "Community editors",
+    authorType: "forum",
+    isGuess: false,
+  },
+];
+---
+
+<div class="author-tool">
+  <div class="tool-intro">
+    <div class="tool-intro-text">
+      <h3 class="tool-heading serif">Who wrote it: author & credibility type</h3>
+      <p class="muted">
+        Sourcefold automatically parses author bylines and categorizes their background (lab,
+        researcher, journalist, creator). Guessed types show a discreet badge until confirmed.
+      </p>
+    </div>
+    <div class="author-tip muted">
+      <Sparkles size={14} stroke-width={1.75} />
+      <span>Parsed locally from schema.org metadata</span>
+    </div>
+  </div>
+
+  <div class="author-list" role="list">
+    {
+      ITEMS.map((item) => (
+        <div class="author-row" data-id={item.id}>
+          <div class="author-source-tile">
+            <SourceTile kind={item.kind} size={28} />
+          </div>
+
+          <div class="author-title-wrap">
+            <span class="source-title-text serif">{item.title}</span>
+            <div class="author-byline">
+              <span class="byline-label muted">By:</span>
+              <strong class="byline-author">{item.author}</strong>
+            </div>
+          </div>
+
+          <!-- Author Type Tag & Guessed Pill -->
+          <div class="author-type-wrap">
+            <button
+              type="button"
+              class="author-type-badge"
+              data-type={item.authorType}
+              title="Click to change author type"
+            >
+              <UserCheck size={12} stroke-width={1.75} class="type-icon" />
+              <span class="type-name">{item.authorType}</span>
+              {item.isGuess && <span class="guess-marker muted">(guess)</span>}
+              <ChevronDown size={11} stroke-width={1.75} class="type-chevron muted" />
+            </button>
+          </div>
+        </div>
+      ))
+    }
+  </div>
+</div>
+
+<script>
+  const tool = document.querySelector(".author-tool");
+  if (tool) {
+    const badges = Array.from(tool.querySelectorAll(".author-type-badge")) as HTMLButtonElement[];
+    const types = ["researcher", "journalist", "lab", "creator", "company", "government", "forum"];
+
+    badges.forEach((badge) => {
+      badge.addEventListener("click", () => {
+        const currentType = badge.dataset.type || "creator";
+        const currentIndex = types.indexOf(currentType);
+        const nextType = types[(currentIndex + 1) % types.length];
+
+        badge.dataset.type = nextType;
+        const nameEl = badge.querySelector(".type-name");
+        if (nameEl) nameEl.textContent = nextType;
+
+        // Once clicked/confirmed, remove (guess)
+        const guessEl = badge.querySelector(".guess-marker");
+        if (guessEl) guessEl.remove();
+      });
+    });
+  }
+</script>
+
+<style>
+  .author-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tool-intro {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-heading {
+    font-size: 20px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .author-tip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+  }
+
+  .author-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .author-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 9px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    transition: background-color 140ms var(--ease-out);
+  }
+
+  .author-row:hover {
+    background: var(--muted);
+  }
+
+  .author-source-tile {
+    display: flex;
+    align-items: center;
+  }
+
+  .author-title-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .source-title-text {
+    font-size: 14.5px;
+    font-weight: 500;
+    color: var(--foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .author-byline {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 12.5px;
+  }
+
+  .byline-author {
+    color: var(--foreground);
+  }
+
+  .author-type-wrap {
+    display: flex;
+    align-items: center;
+  }
+
+  .author-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--desk);
+    border: 1px solid var(--border-strong);
+    color: var(--foreground);
+    font-size: 12px;
+    cursor: pointer;
+    transition:
+      background-color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out);
+  }
+
+  .author-type-badge:hover {
+    background: var(--card);
+    border-color: var(--foreground);
+  }
+
+  .type-icon {
+    color: var(--primary);
+  }
+
+  .type-name {
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+
+  .guess-marker {
+    font-size: 11px;
+    font-style: italic;
+  }
+</style>

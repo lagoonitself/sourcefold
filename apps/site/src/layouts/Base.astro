@@ -1,0 +1,67 @@
+---
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
+import "@fontsource-variable/newsreader";
+import "../styles/global.css";
+import Nav from "../components/Nav.astro";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+const {
+  title = "Sourcefold: save everything you read for a project",
+  description = "Save articles, YouTube transcripts, Wikipedia, Grokipedia, Substack, Reddit, X and PDFs as clean Markdown in folders. Read, highlight, search, and send it to Google Drive for NotebookLM, Gemini or Claude. Free and open source.",
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script is:inline>
+      // Theme before first paint: saved choice, else the system's.
+      (function () {
+        var d = document.documentElement;
+        d.classList.add("js");
+        var saved = localStorage.getItem("sf-theme");
+        var dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        if (dark) d.classList.add("dark");
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <Nav />
+    <main id="main">
+      <slot />
+    </main>
+    <script>
+      import { initReveals } from "../lib/reveal";
+      initReveals();
+    </script>
+    <style>
+      .skip {
+        position: absolute;
+        left: 12px;
+        top: -48px;
+        z-index: 100;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: var(--primary);
+        color: var(--primary-foreground);
+        text-decoration: none;
+      }
+      .skip:focus {
+        top: 12px;
+      }
+    </style>
+  </body>
+</html>

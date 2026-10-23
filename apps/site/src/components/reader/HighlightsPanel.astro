@@ -1,0 +1,314 @@
+---
+/**
+ * Highlights side panel / tab for the reader mock.
+ * Lists active highlights with their notes and live count.
+ * Displays the live synced Markdown representation:
+ * "Highlights are written into the source's Markdown file too" with mono snippet.
+ */
+import { FileText, Highlighter, MessageSquare } from "@lucide/astro";
+---
+
+<aside class="reader-sidebar" id="reader-sidebar" aria-label="Article highlights and notes">
+  <div class="sidebar-header">
+    <div class="panel-tabs" role="tablist">
+      <button
+        type="button"
+        class="panel-tab is-active"
+        id="tab-highlights-btn"
+        role="tab"
+        aria-selected="true"
+        data-panel="highlights"
+      >
+        <Highlighter size={13} stroke-width={1.75} />
+        <span>Highlights</span>
+        <span class="count-pill nums" id="sidebar-highlights-badge">1</span>
+      </button>
+      <button
+        type="button"
+        class="panel-tab"
+        id="tab-markdown-btn"
+        role="tab"
+        aria-selected="false"
+        data-panel="markdown"
+      >
+        <FileText size={13} stroke-width={1.75} />
+        <span>Markdown file</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="sidebar-content">
+    <!-- Panel 1: Highlights card list -->
+    <div class="panel-view" id="panel-highlights-view">
+      <div class="panel-caption">
+        <p class="panel-caption-text">
+          Highlights are written into the source's Markdown file too.
+        </p>
+      </div>
+
+      <div class="highlights-list" id="sidebar-highlights-list">
+        <!-- Default item corresponding to pre-marked quote -->
+        <div class="highlight-card" data-card-id="hl-1">
+          <div class="hl-stripe"></div>
+          <div class="hl-body">
+            <blockquote class="hl-quote serif">
+              “Turbo lag, by contrast, is the transient delay between opening the throttle when operating above the boost threshold and the turbocharger reaching full boost”
+            </blockquote>
+            <div class="hl-note-row" id="note-row-hl-1">
+              <MessageSquare size={11} stroke-width={1.75} class="hl-note-icon" />
+              <span class="hl-note-text">Core distinction from boost threshold.</span>
+            </div>
+            <div class="hl-footer">
+              <span class="hl-time nums">Oct 22, 10:48</span>
+              <button type="button" class="hl-jump-btn" data-jump="hl-1" title="Scroll to highlight">
+                View in text
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel 2: Live Markdown file preview -->
+    <div class="panel-view" id="panel-markdown-view" hidden>
+      <div class="markdown-preview-header">
+        <span class="file-name mono">turbo-lag-explained.md</span>
+        <span class="chip chip-sm nums">Synced</span>
+      </div>
+      <div class="markdown-box">
+        <pre class="mono markdown-code" id="markdown-live-output"><code>---
+title: "How turbo lag actually works"
+url: "https://grokipedia.com/page/Turbocharger"
+saved: 2026-10-22
+---
+
+## My highlights
+
+> "Turbo lag, by contrast, is the transient delay between opening the throttle when operating above the boost threshold and the turbocharger reaching full boost"
+_Note: Core distinction from boost threshold._
+</code></pre>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<style>
+  .reader-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border-left: 1px solid var(--border);
+    background: color-mix(in oklab, var(--card) 60%, var(--background));
+    font-family: var(--font-sans);
+  }
+
+  .sidebar-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-tabs {
+    display: flex;
+    background: var(--muted);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .panel-tab {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 28px;
+    padding-inline: 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition:
+      background-color 140ms var(--ease-out),
+      color 140ms var(--ease-out);
+  }
+
+  .panel-tab:hover {
+    color: var(--foreground);
+  }
+
+  .panel-tab.is-active {
+    background: var(--card);
+    color: var(--foreground);
+    box-shadow: var(--shadow-raised);
+  }
+
+  .count-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 17px;
+    height: 17px;
+    padding-inline: 4px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--marker-soft);
+    color: var(--foreground);
+  }
+
+  .sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+  }
+
+  .panel-view[hidden] {
+    display: none !important;
+  }
+
+  .panel-caption {
+    margin-bottom: 12px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    background: var(--muted);
+  }
+
+  .panel-caption-text {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--muted-foreground);
+  }
+
+  .highlights-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  :global(.highlight-card) {
+    position: relative;
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 9px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    transition:
+      border-color 140ms var(--ease-out),
+      box-shadow 140ms var(--ease-out);
+  }
+
+  :global(.highlight-card:hover) {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-raised);
+  }
+
+  :global(.hl-stripe) {
+    width: 3px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--marker-strong);
+  }
+
+  :global(.hl-body) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  :global(.hl-quote) {
+    margin: 0 0 6px 0;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--foreground);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  :global(.hl-note-row) {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: var(--muted-foreground);
+    background: color-mix(in oklab, var(--muted) 70%, transparent);
+    padding: 3px 6px;
+    border-radius: 4px;
+  }
+
+  :global(.hl-note-icon) {
+    color: var(--source-note);
+    flex-shrink: 0;
+  }
+
+  :global(.hl-footer) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+
+  :global(.hl-time) {
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+
+  :global(.hl-jump-btn) {
+    background: transparent;
+    border: 0;
+    padding: 2px 4px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: color 120ms var(--ease-out);
+  }
+
+  :global(.hl-jump-btn:hover) {
+    color: var(--foreground);
+  }
+
+  /* Markdown file preview */
+  .markdown-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .file-name {
+    font-size: 11.5px;
+    color: var(--muted-foreground);
+  }
+
+  .chip-sm {
+    height: 20px;
+    font-size: 11px;
+    padding-inline: 7px;
+  }
+
+  .markdown-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    overflow-x: auto;
+  }
+
+  .markdown-code {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--foreground);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+</style>

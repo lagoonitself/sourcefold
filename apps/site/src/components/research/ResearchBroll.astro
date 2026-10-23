@@ -1,0 +1,299 @@
+---
+/**
+ * Research Tool 6: B-roll list with video timestamps & CSS-only thumbnail placeholders ("0:42–0:58").
+ */
+import { Play, Film, Clock, Copy } from "@lucide/astro";
+
+interface BrollClip {
+  id: string;
+  title: string;
+  source: string;
+  timeRange: string;
+  duration: string;
+  note: string;
+}
+
+const CLIPS: BrollClip[] = [
+  {
+    id: "b1",
+    title: "Turbo cross-section cutaway spooling under boost",
+    source: "Engineering Explained",
+    timeRange: "0:42–0:58",
+    duration: "16s",
+    note: "Overlay during discussion of turbine wheel rotational inertia.",
+  },
+  {
+    id: "b2",
+    title: "Dyno pull showing boost gauge needle hesitation",
+    source: "Tuned by Shawn",
+    timeRange: "03:15–03:40",
+    duration: "25s",
+    note: "Cut here when comparing stock sequential to big single turbo below 4,500 rpm.",
+  },
+  {
+    id: "b3",
+    title: "Twin-scroll pulse separation CAD animation",
+    source: "Garrett Motion",
+    timeRange: "12:04–12:35",
+    duration: "31s",
+    note: "Zoom in on cylinder 1 & 4 paired runners entering divided scroll.",
+  },
+  {
+    id: "b4",
+    title: "Mazda RX-7 vacuum solenoid manifold cutaway",
+    source: "Rotary Lab",
+    timeRange: "08:12–08:45",
+    duration: "33s",
+    note: "Highlight sequential valve transition point.",
+  },
+];
+---
+
+<div class="broll-tool" data-ui>
+  <div class="tool-intro">
+    <div class="tool-intro-text">
+      <h3 class="tool-heading serif">B-roll list for video editors</h3>
+      <p class="muted">
+        Every video highlight can be bookmarked as a visual B-roll clip with exact in/out
+        timecodes (<span class="mono">0:42–0:58</span>). Hand your video editor an instant shot list.
+      </p>
+    </div>
+    <div class="broll-count muted">
+      <Film size={14} stroke-width={1.75} />
+      <span>4 clips marked (1m 45s total B-roll)</span>
+    </div>
+  </div>
+
+  <div class="broll-grid">
+    {
+      CLIPS.map((clip) => (
+        <div class="broll-card card" data-id={clip.id}>
+          <!-- CSS-only Thumbnail Placeholder built with tokens and source tint -->
+          <div class="css-thumbnail">
+            <div class="thumbnail-play-center" aria-hidden="true">
+              <Play size={18} stroke-width={2} class="play-icon" />
+            </div>
+            <div class="timecode-badge font-mono nums">
+              <Clock size={11} stroke-width={1.75} />
+              <span>{clip.timeRange}</span>
+              <span class="clip-duration">({clip.duration})</span>
+            </div>
+          </div>
+
+          <div class="broll-card-body">
+            <h4 class="broll-title serif">{clip.title}</h4>
+            <div class="broll-source-line muted">
+              <span>{clip.source}</span>
+            </div>
+            <p class="broll-note muted">"{clip.note}"</p>
+            <div class="broll-actions">
+              <button
+                type="button"
+                class="btn-copy-timecode chip"
+                data-code={`${clip.source} ${clip.timeRange}`}
+                title="Copy timecode to clipboard"
+              >
+                <Copy size={11} stroke-width={1.75} />
+                <span>Copy timecode</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ))
+    }
+  </div>
+</div>
+
+<script>
+  const tool = document.querySelector(".broll-tool");
+  if (tool) {
+    const copyBtns = Array.from(tool.querySelectorAll(".btn-copy-timecode")) as HTMLButtonElement[];
+    copyBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const span = btn.querySelector("span");
+        if (span) {
+          const old = span.textContent;
+          span.textContent = "Copied";
+          setTimeout(() => {
+            span.textContent = old;
+          }, 1800);
+        }
+      });
+    });
+  }
+</script>
+
+<style>
+  .broll-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tool-intro {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-heading {
+    font-size: 20px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .broll-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+  }
+
+  .broll-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  @media (max-width: 720px) {
+    .broll-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .broll-card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  /* CSS Thumbnail Placeholder using tokens and YouTube source tint */
+  .css-thumbnail {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: color-mix(
+      in oklab,
+      color-mix(in oklab, var(--foreground) 85%, var(--background)) 92%,
+      var(--source-youtube)
+    );
+    color: var(--background);
+  }
+
+  :global(html.dark) .css-thumbnail {
+    background: color-mix(
+      in oklab,
+      color-mix(in oklab, var(--card) 90%, var(--desk)) 92%,
+      var(--source-youtube)
+    );
+    color: var(--foreground);
+  }
+
+  .thumbnail-play-center {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--background) 18%, transparent);
+    border: 1px solid color-mix(in oklab, var(--background) 32%, transparent);
+    color: var(--background);
+    transition: transform 140ms var(--ease-spring);
+  }
+
+  :global(html.dark) .thumbnail-play-center {
+    background: color-mix(in oklab, var(--foreground) 18%, transparent);
+    border-color: color-mix(in oklab, var(--foreground) 32%, transparent);
+    color: var(--foreground);
+  }
+
+  .broll-card:hover .thumbnail-play-center {
+    transform: scale(1.08);
+  }
+
+  .timecode-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: color-mix(in oklab, var(--foreground) 88%, transparent);
+    color: var(--background);
+    border: 1px solid color-mix(in oklab, var(--border) 40%, transparent);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+
+  :global(html.dark) .timecode-badge {
+    background: color-mix(in oklab, var(--desk) 92%, transparent);
+    color: var(--foreground);
+    border-color: var(--border);
+  }
+
+  .clip-duration {
+    opacity: 0.75;
+  }
+
+  .broll-card-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+  }
+
+  .broll-title {
+    font-size: 14.5px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--foreground);
+    margin: 0;
+  }
+
+  .broll-source-line {
+    font-size: 12px;
+  }
+
+  .broll-note {
+    font-size: 12.5px;
+    font-style: italic;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  .broll-actions {
+    margin-top: 6px;
+  }
+
+  .btn-copy-timecode {
+    border: 1px solid var(--border);
+    background: var(--desk);
+    cursor: pointer;
+    font-size: 11px;
+    gap: 4px;
+    transition:
+      background-color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out);
+  }
+
+  .btn-copy-timecode:hover {
+    background: var(--card);
+    border-color: var(--foreground);
+  }
+</style>

@@ -1,0 +1,349 @@
+---
+/**
+ * Research Tool 1: Keep / Maybe / Cut on each source, plus outline section tags.
+ */
+import SourceTile from "../SourceTile.astro";
+import { Check, X, Tag } from "@lucide/astro";
+
+interface TriageItem {
+  id: string;
+  kind: "youtube" | "grokipedia" | "substack" | "x" | "pdf";
+  title: string;
+  meta: string;
+  triage: "keep" | "maybe" | "cut";
+  tags: string[];
+}
+
+const ITEMS: TriageItem[] = [
+  {
+    id: "t1",
+    kind: "youtube",
+    title: "How turbo lag actually works",
+    meta: "Engineering Explained (12:04)",
+    triage: "keep",
+    tags: ["How turbos work", "Lag"],
+  },
+  {
+    id: "t2",
+    kind: "grokipedia",
+    title: "Turbocharger",
+    meta: "Grokipedia (Section 2.4)",
+    triage: "keep",
+    tags: ["How turbos work"],
+  },
+  {
+    id: "t3",
+    kind: "substack",
+    title: "The last rotary",
+    meta: "Engine Bay (Issue 42)",
+    triage: "maybe",
+    tags: ["Lag"],
+  },
+  {
+    id: "t4",
+    kind: "x",
+    title: "Thread: why twin-scroll beats twin-turbo",
+    meta: "@boostlab (6 posts)",
+    triage: "keep",
+    tags: ["Lag", "Verdict"],
+  },
+  {
+    id: "t5",
+    kind: "pdf",
+    title: "Old diesel particulate filter study (2004)",
+    meta: "arXiv:0401.9928 (Irrelevant emissions test)",
+    triage: "cut",
+    tags: [],
+  },
+];
+---
+
+<div class="triage-tool">
+  <div class="tool-intro">
+    <div class="tool-intro-text">
+      <h3 class="tool-heading serif">Keep / Maybe / Cut & outline tags</h3>
+      <p class="muted">
+        Triage your reading pile in seconds. Cut items dim and move out of the way; outline tags
+        double as section names for your future script.
+      </p>
+    </div>
+    <div class="triage-stats muted">
+      <span>Triage: <strong class="nums">3</strong> keep, <strong class="nums">1</strong> maybe, <strong class="nums">1</strong> cut</span>
+    </div>
+  </div>
+
+  <div class="triage-list" role="list">
+    {
+      ITEMS.map((item) => (
+        <div
+          class:list={["triage-row", item.triage === "cut" && "is-cut", item.triage === "keep" && "is-keep"]}
+          data-id={item.id}
+          data-triage={item.triage}
+        >
+          <div class="triage-tile">
+            <SourceTile kind={item.kind} size={28} />
+          </div>
+
+          <div class="triage-info">
+            <span class="triage-title serif">{item.title}</span>
+            <span class="triage-meta muted">{item.meta}</span>
+          </div>
+
+          <!-- Outline Tag Chips -->
+          <div class="triage-tags">
+            {item.tags.map((tag) => (
+              <span class="chip tag-chip">
+                <Tag size={11} stroke-width={1.75} class="muted" />
+                <span>{tag}</span>
+              </span>
+            ))}
+            <button type="button" class="chip add-tag-chip" title="Add outline section tag">
+              <span>+ Tag</span>
+            </button>
+          </div>
+
+          <!-- Segmented Control -->
+          <div class="segmented-control" role="group" aria-label={`Triage ${item.title}`}>
+            <button
+              type="button"
+              class:list={["segment-btn", item.triage === "keep" && "is-active"]}
+              data-val="keep"
+              title="Keep source"
+            >
+              <Check size={12} stroke-width={2} />
+              <span>Keep</span>
+            </button>
+            <button
+              type="button"
+              class:list={["segment-btn", item.triage === "maybe" && "is-active"]}
+              data-val="maybe"
+              title="Maybe keep"
+            >
+              <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <path d="M12 17h.01"></path>
+              </svg>
+              <span>Maybe</span>
+            </button>
+            <button
+              type="button"
+              class:list={["segment-btn", item.triage === "cut" && "is-active"]}
+              data-val="cut"
+              title="Cut source"
+            >
+              <X size={12} stroke-width={2} />
+              <span>Cut</span>
+            </button>
+          </div>
+        </div>
+      ))
+    }
+  </div>
+</div>
+
+<script>
+  const tool = document.querySelector(".triage-tool");
+  if (tool) {
+    const rows = Array.from(tool.querySelectorAll(".triage-row")) as HTMLElement[];
+
+    rows.forEach((row) => {
+      const buttons = Array.from(row.querySelectorAll(".segment-btn")) as HTMLButtonElement[];
+
+      buttons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const val = btn.dataset.val;
+          if (!val) return;
+
+          buttons.forEach((b) => b.classList.remove("is-active"));
+          btn.classList.add("is-active");
+
+          row.classList.remove("is-keep", "is-cut", "is-maybe");
+          if (val === "cut") {
+            row.classList.add("is-cut");
+          } else if (val === "keep") {
+            row.classList.add("is-keep");
+          } else {
+            row.classList.add("is-maybe");
+          }
+          row.dataset.triage = val;
+        });
+      });
+    });
+  }
+</script>
+
+<style>
+  .triage-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tool-intro {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-heading {
+    font-size: 20px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .triage-stats {
+    font-size: 13px;
+  }
+
+  .triage-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .triage-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 9px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    transition:
+      opacity 200ms var(--ease-out),
+      background-color 150ms var(--ease-out);
+  }
+
+  .triage-row.is-cut {
+    opacity: 0.42;
+    background: var(--muted);
+  }
+
+  .triage-row.is-cut .triage-title {
+    text-decoration: line-through;
+  }
+
+  .triage-row.is-keep {
+    border-color: color-mix(in oklab, var(--success) 40%, var(--border));
+  }
+
+  .triage-tile {
+    display: flex;
+    align-items: center;
+  }
+
+  .triage-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .triage-title {
+    font-size: 14.5px;
+    font-weight: 500;
+    color: var(--foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .triage-meta {
+    font-size: 12px;
+  }
+
+  .triage-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  @media (max-width: 720px) {
+    .triage-tags {
+      display: none;
+    }
+  }
+
+  .tag-chip {
+    font-size: 11.5px;
+    height: 22px;
+    padding-inline: 8px;
+    background: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .add-tag-chip {
+    font-size: 11.5px;
+    height: 22px;
+    padding-inline: 8px;
+    background: transparent;
+    border: 1px dashed var(--border-strong);
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+
+  .add-tag-chip:hover {
+    color: var(--foreground);
+    border-color: var(--foreground);
+  }
+
+  /* Segmented Control */
+  .segmented-control {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--muted);
+    border: 1px solid var(--border-strong);
+  }
+
+  .segment-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding-inline: 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color 140ms var(--ease-out),
+      color 140ms var(--ease-out),
+      box-shadow 140ms var(--ease-out);
+  }
+
+  .segment-btn:hover {
+    color: var(--foreground);
+  }
+
+  .segment-btn.is-active[data-val="keep"] {
+    background: var(--card);
+    color: var(--success);
+    box-shadow: var(--shadow-raised);
+    font-weight: 600;
+  }
+
+  .segment-btn.is-active[data-val="maybe"] {
+    background: var(--card);
+    color: var(--warning);
+    box-shadow: var(--shadow-raised);
+    font-weight: 600;
+  }
+
+  .segment-btn.is-active[data-val="cut"] {
+    background: var(--card);
+    color: var(--destructive);
+    box-shadow: var(--shadow-raised);
+    font-weight: 600;
+  }
+</style>

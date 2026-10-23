@@ -1,0 +1,907 @@
+---
+/**
+ * Files.astro (id "files"): "Your files, your Drive"
+ * Interactive diagram showing how a source fans out into:
+ * 1. Clean Markdown (.md) with front matter and footnotes
+ * 2. Google Drive mirror with Google Docs for NotebookLM & Gemini
+ * 3. Desktop local Documents/Sourcefold copy with Word (.docx) beside each file.
+ * Interactive "Save to Drive" button + Ctrl/Cmd+S keyboard shortcut + Offline/Signed-in toggle.
+ * Accuracy: Supabase keeps links, titles, folders and notes; article text is pushed to Drive and cleared.
+ */
+import {
+  Cloud,
+  CloudOff,
+  Folder,
+  HardDrive,
+  Lock,
+  RefreshCw,
+  Database,
+} from "@lucide/astro";
+import SectionHeader from "../SectionHeader.astro";
+import SourceTile from "../SourceTile.astro";
+---
+
+<section id="files" class="section" data-files-section>
+  <div class="container">
+    <SectionHeader
+      label="Your files, your Drive"
+      title="Clean Markdown on disk, mirrored to "
+      marked="your Google Drive"
+      lede="Every source is a tidy .md file with a small header and footnotes. Save to Drive mirrors your folders with Google Doc copies ready for NotebookLM, Gemini, Obsidian or VS Code. Sourcefold can only see files it created in your Drive (drive.file); Supabase keeps only links, titles, folders and notes."
+    />
+
+    <!-- Interactive Diagram Card -->
+    <div class="sheet diagram-wrapper" data-ui="diagram" data-files-diagram data-reveal>
+      <!-- Top Toolbar: Toggle Mode & Save Trigger -->
+      <div class="diagram-toolbar">
+        <div class="mode-toggle-group" role="tablist" aria-label="Drive sync mode">
+          <span class="toggle-caption muted" id="mode-caption">Mode:</span>
+          <button
+            type="button"
+            id="mode-tab-signed-in"
+            class="toggle-btn is-active"
+            role="tab"
+            aria-selected="true"
+            aria-controls="dest-card-drive"
+            tabindex="0"
+            data-mode="signed-in"
+          >
+            <Cloud size={14} aria-hidden="true" />
+            <span>Signed in (Drive sync)</span>
+          </button>
+          <button
+            type="button"
+            id="mode-tab-offline"
+            class="toggle-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="dest-card-drive"
+            tabindex="-1"
+            data-mode="offline"
+          >
+            <CloudOff size={14} aria-hidden="true" />
+            <span>Offline (local only)</span>
+          </button>
+        </div>
+
+        <div class="save-action-group">
+          <button
+            type="button"
+            class="btn btn-ink btn-sm save-trigger-btn"
+            data-files-save-btn
+            aria-label="Save to Drive (Ctrl+S or Cmd+S)"
+          >
+            <RefreshCw size={14} class="save-icon" aria-hidden="true" />
+            <span class="save-label">Save to Drive</span>
+            <span class="kbd-combo" aria-hidden="true">
+              <kbd class="kbd">Ctrl</kbd>
+              <kbd class="kbd">S</kbd>
+            </span>
+          </button>
+          <div class="save-status-indicator" data-save-status aria-live="polite">
+            <span class="ping-dot" aria-hidden="true"></span>
+            <span class="status-msg">Ready to sync</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fan-out Diagram Content -->
+      <div class="diagram-grid">
+        <!-- Center Origin: The Saved Source -->
+        <div class="origin-column">
+          <div class="origin-card card">
+            <div class="origin-badge">Saved item</div>
+            <div class="origin-item">
+              <SourceTile kind="youtube" size={32} />
+              <div class="origin-meta">
+                <span class="origin-title serif">How turbo lag actually works</span>
+                <span class="origin-folder muted">Cars / Engines / Lag and boost</span>
+              </div>
+            </div>
+            <div class="fan-arrows" aria-hidden="true">
+              <span class="fan-line line-1"></span>
+              <span class="fan-line line-2"></span>
+              <span class="fan-line line-3"></span>
+            </div>
+          </div>
+
+          <div class="origin-desc">
+            <span class="label">One source, three formats</span>
+            <p class="muted text-sm">
+              Press <kbd class="kbd">Ctrl</kbd> <kbd class="kbd">S</kbd> while this section is visible to run the sync.
+            </p>
+          </div>
+        </div>
+
+        <!-- Three Destinations Fanning Out -->
+        <div class="destinations-column">
+          <!-- 1. The Tidy .md File -->
+          <div class="dest-card card" data-dest-card="markdown">
+            <div class="dest-card-header">
+              <div class="dest-title-wrap">
+                <code class="dest-ext">.md</code>
+                <h3 class="h4 dest-title">Tidy Markdown with YAML front matter</h3>
+              </div>
+              <span class="dest-chip chip">CommonMark</span>
+            </div>
+            <pre class="code-preview mono"><code><span class="muted">---</span>
+<span class="k">source:</span> youtube
+<span class="k">title:</span> How turbo lag actually works
+<span class="k">channel:</span> Engineering Explained
+<span class="k">duration:</span> 12:40
+<span class="k">saved:</span> 2026-10-22
+<span class="k">folder:</span> Cars/Engines/Lag and boost
+<span class="muted">---</span>
+<span class="heading-line"># How turbo lag actually works</span>
+<span class="quote-line muted">&gt; Saved from [YouTube](https://youtu.be/...) on 2026-10-22.</span>
+<span class="heading-line">## Transcript</span>
+[0:47](https://youtu.be/...) Anti-lag keeps the turbine spooled...
+<span class="heading-line">## References</span>
+<span class="footnote-line">[^1]: [sae.org](https://sae.org) - SAE Technical Paper 2308</span></code></pre>
+            <div class="dest-footer muted text-xs">
+              Human-readable CommonMark with footnotes. Compatible with Obsidian and VS Code.
+            </div>
+          </div>
+
+          <!-- 2. Google Drive Folder Mirror -->
+          <div id="dest-card-drive" class="dest-card card" data-dest-card="drive">
+            <div class="dest-card-header">
+              <div class="dest-title-wrap">
+                <Cloud size={16} class="dest-icon-cloud" aria-hidden="true" />
+                <h3 class="h4 dest-title">Google Drive mirror</h3>
+              </div>
+              <span class="dest-chip chip gdoc-chip">Google Docs copy</span>
+            </div>
+
+            <!-- Drive Tree View -->
+            <div class="tree-preview" data-drive-tree>
+              <div class="tree-node root-folder">
+                <Folder size={14} class="folder-icon" aria-hidden="true" />
+                <code class="folder-name">Sourcefold/</code>
+              </div>
+              <div class="tree-children">
+                <div class="tree-node">
+                  <Folder size={14} class="folder-icon" aria-hidden="true" />
+                  <code class="folder-name">Cars/</code>
+                </div>
+                <div class="tree-children">
+                  <div class="tree-node">
+                    <Folder size={14} class="folder-icon" aria-hidden="true" />
+                    <code class="folder-name">Engines/</code>
+                  </div>
+                  <div class="tree-children">
+                    <div class="tree-node">
+                      <Folder size={14} class="folder-icon" aria-hidden="true" />
+                      <code class="folder-name">Lag and boost/</code>
+                    </div>
+                    <div class="tree-children file-children">
+                      <div class="tree-file file-md">
+                        <code class="file-badge">MD</code>
+                        <code class="file-name">How turbo lag actually works.md</code>
+                      </div>
+                      <div class="tree-file file-gdoc">
+                        <code class="file-badge gdoc-badge">DOC</code>
+                        <span class="file-name">How turbo lag actually works</span>
+                        <span class="ai-ready-badge">NotebookLM &amp; Gemini ready</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Offline Dim Overlay -->
+            <div class="offline-overlay" data-offline-overlay aria-hidden="true">
+              <CloudOff size={24} aria-hidden="true" />
+              <div class="offline-msg">
+                <strong>Offline mode</strong>
+                <span>No Google account required. Local SQLite and Markdown on disk; Drive mirror is skipped.</span>
+              </div>
+            </div>
+
+            <div class="dest-footer muted text-xs">
+              Sourcefold can only see files it created in your Drive (<code>drive.file</code> scope).
+            </div>
+          </div>
+
+          <!-- 3. Desktop Documents/Sourcefold Copy with Word .docx -->
+          <div class="dest-card card" data-dest-card="local">
+            <div class="dest-card-header">
+              <div class="dest-title-wrap">
+                <HardDrive size={16} class="dest-icon-disk" aria-hidden="true" />
+                <h3 class="h4 dest-title">Desktop Documents / Sourcefold</h3>
+              </div>
+              <span class="dest-chip chip docx-chip">Word .docx beside each file</span>
+            </div>
+
+            <div class="local-files-preview">
+              <div class="local-path muted text-xs">
+                <code>~/Documents/Sourcefold/Cars/Engines/Lag and boost/</code>
+              </div>
+              <div class="local-file-list">
+                <div class="local-file-item">
+                  <code class="file-pill pill-md">.md</code>
+                  <code class="local-fname">How turbo lag actually works.md</code>
+                  <span class="local-fmeta muted">Clean Markdown</span>
+                </div>
+                <div class="local-file-item">
+                  <code class="file-pill pill-docx">.docx</code>
+                  <code class="local-fname">How turbo lag actually works.docx</code>
+                  <span class="local-fmeta muted">Word document copy</span>
+                </div>
+                <div class="local-file-item">
+                  <code class="file-pill pill-dir">_files</code>
+                  <code class="local-fname">How turbo lag actually works_files/</code>
+                  <span class="local-fmeta muted">Images saved locally</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="dest-footer muted text-xs">
+              Every text source has an exported Word .docx copy on disk, readable by any local tool.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Privacy & Architecture Callouts -->
+      <div class="privacy-strip">
+        <div class="privacy-pill">
+          <Lock size={15} class="privacy-icon" aria-hidden="true" />
+          <div class="privacy-text">
+            <strong>drive.file scope only</strong>: Sourcefold can only see and touch files it created inside its own folder. It cannot see your other Drive documents.
+          </div>
+        </div>
+        <div class="privacy-pill">
+          <Database size={15} class="privacy-icon" aria-hidden="true" />
+          <div class="privacy-text">
+            <strong>What Sourcefold's database keeps</strong>: Supabase keeps only links, titles, metadata, folders and notes; article text and images are pushed to your Drive right after saving and then cleared from Supabase.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { sleep, prefersReducedMotion } from "../../lib/reveal";
+
+  const section = document.querySelector<HTMLElement>("[data-files-section]");
+  if (section) {
+    const saveBtn = section.querySelector<HTMLButtonElement>("[data-files-save-btn]")!;
+    const statusMsg = section.querySelector<HTMLElement>("[data-save-status] .status-msg")!;
+    const pingDot = section.querySelector<HTMLElement>("[data-save-status] .ping-dot")!;
+    const modeBtns = Array.from(section.querySelectorAll<HTMLButtonElement>("[data-mode]"));
+    const driveCard = section.querySelector<HTMLElement>('[data-dest-card="drive"]')!;
+    const offlineOverlay = section.querySelector<HTMLElement>("[data-offline-overlay]")!;
+    const treeFiles = section.querySelectorAll<HTMLElement>(".tree-file");
+
+    let isSectionVisible = false;
+    let isSaving = false;
+    let currentMode: "signed-in" | "offline" = "signed-in";
+
+    // Track intersection strictly so Ctrl+S does NOT trigger when scrolled away
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.target === section) {
+            isSectionVisible = e.isIntersecting && e.intersectionRatio >= 0.35;
+          }
+        });
+      },
+      { threshold: [0, 0.35, 0.7] },
+    );
+    observer.observe(section);
+
+    function setMode(mode: "signed-in" | "offline") {
+      if (mode === currentMode) return;
+      currentMode = mode;
+      modeBtns.forEach((b) => {
+        const active = b.dataset.mode === mode;
+        b.classList.toggle("is-active", active);
+        b.setAttribute("aria-selected", active ? "true" : "false");
+        b.tabIndex = active ? 0 : -1;
+      });
+
+      if (currentMode === "offline") {
+        driveCard.classList.add("is-offline");
+        offlineOverlay.classList.add("is-visible");
+        offlineOverlay.setAttribute("aria-hidden", "false");
+        statusMsg.textContent = "Offline (local SQLite & MD)";
+        saveBtn.querySelector(".save-label")!.textContent = "Save locally";
+      } else {
+        driveCard.classList.remove("is-offline");
+        offlineOverlay.classList.remove("is-visible");
+        offlineOverlay.setAttribute("aria-hidden", "true");
+        statusMsg.textContent = "Ready to sync";
+        saveBtn.querySelector(".save-label")!.textContent = "Save to Drive";
+      }
+    }
+
+    // Mode Toggle (Signed in vs Offline)
+    modeBtns.forEach((btn, index) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.dataset.mode as "signed-in" | "offline";
+        setMode(mode);
+      });
+
+      btn.addEventListener("keydown", (e) => {
+        let targetIndex = -1;
+        if (e.key === "ArrowRight") {
+          targetIndex = (index + 1) % modeBtns.length;
+        } else if (e.key === "ArrowLeft") {
+          targetIndex = (index - 1 + modeBtns.length) % modeBtns.length;
+        } else if (e.key === "Home") {
+          targetIndex = 0;
+        } else if (e.key === "End") {
+          targetIndex = modeBtns.length - 1;
+        }
+
+        if (targetIndex >= 0) {
+          e.preventDefault();
+          const targetBtn = modeBtns[targetIndex];
+          targetBtn.focus();
+          const mode = targetBtn.dataset.mode as "signed-in" | "offline";
+          setMode(mode);
+        }
+      });
+    });
+
+    async function triggerSave() {
+      if (isSaving) return;
+      isSaving = true;
+
+      saveBtn.classList.add("is-spinning");
+      statusMsg.textContent = currentMode === "offline" ? "Writing to disk..." : "Syncing to Drive...";
+      pingDot.classList.remove("pings");
+
+      if (prefersReducedMotion()) {
+        await sleep(300);
+      } else {
+        // Animate pulse on cards
+        treeFiles.forEach((f) => f.classList.add("is-saving-pulse"));
+        await sleep(650);
+        treeFiles.forEach((f) => f.classList.remove("is-saving-pulse"));
+      }
+
+      saveBtn.classList.remove("is-spinning");
+      statusMsg.textContent = currentMode === "offline" ? "Saved to disk" : "Saved to Drive";
+
+      // Trigger two pings on the dot
+      pingDot.classList.add("pings");
+
+      setTimeout(() => {
+        isSaving = false;
+      }, 1200);
+    }
+
+    saveBtn.addEventListener("click", triggerSave);
+
+    // Ctrl+S / Cmd+S handler ONLY when this section is actively in view
+    window.addEventListener("keydown", (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        // Never swallow browser save if focus is in an input or textarea
+        const active = document.activeElement;
+        if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || (active as HTMLElement).isContentEditable)) {
+          return;
+        }
+
+        // Precision bounding check
+        const rect = section.getBoundingClientRect();
+        const vh = window.innerHeight || document.documentElement.clientHeight;
+        const visibleH = Math.max(0, Math.min(rect.bottom, vh) - Math.max(rect.top, 0));
+        const inViewNow = isSectionVisible && visibleH > Math.min(rect.height * 0.35, vh * 0.35);
+
+        if (inViewNow) {
+          e.preventDefault();
+          triggerSave();
+        }
+      }
+    });
+  }
+</script>
+
+<style>
+  [data-ui="diagram"] {
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  /* Toolbar */
+  [data-ui="diagram"] .diagram-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 20px;
+    background: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  [data-ui="diagram"] .mode-toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  [data-ui="diagram"] .toggle-caption {
+    font-size: 12px;
+    margin-right: 4px;
+  }
+
+  [data-ui="diagram"] .toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition:
+      color 140ms var(--ease-out),
+      background-color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out);
+  }
+
+  [data-ui="diagram"] .toggle-btn:hover {
+    color: var(--foreground);
+    border-color: var(--border-strong);
+  }
+
+  [data-ui="diagram"] .toggle-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  [data-ui="diagram"] .toggle-btn.is-active {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+  }
+
+  [data-ui="diagram"] .save-action-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  [data-ui="diagram"] .save-trigger-btn {
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  [data-ui="diagram"] .save-trigger-btn:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  [data-ui="diagram"] .save-trigger-btn.is-spinning :global(.save-icon) {
+    animation: spin 700ms linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  [data-ui="diagram"] .kbd-combo {
+    display: inline-flex;
+    gap: 3px;
+    margin-left: 2px;
+  }
+
+  [data-ui="diagram"] .save-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+  }
+
+  [data-ui="diagram"] .ping-dot {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+  }
+
+  [data-ui="diagram"] .ping-dot.pings::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid var(--success);
+    animation: pingTwo 900ms ease-out 2;
+  }
+
+  @keyframes pingTwo {
+    0% {
+      transform: scale(0.8);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(2.4);
+      opacity: 0;
+    }
+  }
+
+  /* Grid layout */
+  [data-ui="diagram"] .diagram-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 24px;
+    padding: 24px;
+    background: color-mix(in oklab, var(--desk) 20%, var(--background));
+  }
+
+  @media (max-width: 900px) {
+    [data-ui="diagram"] .diagram-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Origin card */
+  [data-ui="diagram"] .origin-column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  [data-ui="diagram"] .origin-card {
+    padding: 18px;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+
+  [data-ui="diagram"] .origin-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    margin-bottom: 12px;
+  }
+
+  [data-ui="diagram"] .origin-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  [data-ui="diagram"] .origin-meta {
+    display: flex;
+    flex-direction: column;
+  }
+
+  [data-ui="diagram"] .origin-title {
+    font-size: 14.5px;
+    font-weight: 500;
+    line-height: 1.3;
+    color: var(--foreground);
+  }
+
+  [data-ui="diagram"] .origin-folder {
+    font-size: 11.5px;
+    margin-top: 3px;
+  }
+
+  [data-ui="diagram"] .fan-arrows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+  }
+
+  [data-ui="diagram"] .fan-line {
+    height: 2px;
+    background: color-mix(in oklab, var(--primary) 20%, var(--border));
+    border-radius: 1px;
+    position: relative;
+  }
+
+  [data-ui="diagram"] .fan-line::after {
+    content: "▶";
+    position: absolute;
+    right: -4px;
+    top: -5px;
+    font-size: 8px;
+    color: var(--muted-foreground);
+  }
+
+  [data-ui="diagram"] .origin-desc {
+    padding: 14px;
+    border-radius: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+  }
+
+  /* Destinations */
+  [data-ui="diagram"] .destinations-column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  [data-ui="diagram"] .dest-card {
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    position: relative;
+    transition: opacity 240ms var(--ease-out);
+  }
+
+  [data-ui="diagram"] .dest-card.is-offline {
+    opacity: 0.45;
+  }
+
+  [data-ui="diagram"] .dest-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  [data-ui="diagram"] .dest-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  [data-ui="diagram"] .dest-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  [data-ui="diagram"] .dest-ext {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  [data-ui="diagram"] .dest-icon-cloud {
+    color: var(--source-bluesky);
+  }
+
+  [data-ui="diagram"] .dest-icon-disk {
+    color: var(--source-web);
+  }
+
+  [data-ui="diagram"] .gdoc-chip {
+    background: color-mix(in oklab, var(--source-bluesky) 14%, transparent);
+    color: var(--source-bluesky);
+  }
+
+  [data-ui="diagram"] .docx-chip {
+    background: color-mix(in oklab, var(--source-web) 14%, transparent);
+    color: var(--foreground);
+  }
+
+  /* Code preview */
+  [data-ui="diagram"] .code-preview {
+    font-size: 11.5px;
+    line-height: 1.6;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  [data-ui="diagram"] .code-preview .k {
+    color: var(--source-substack);
+    font-weight: 500;
+  }
+
+  [data-ui="diagram"] .code-preview .heading-line {
+    font-weight: 600;
+    color: var(--foreground);
+    display: block;
+    margin-top: 4px;
+  }
+
+  [data-ui="diagram"] .code-preview .quote-line {
+    font-style: italic;
+    display: block;
+  }
+
+  [data-ui="diagram"] .code-preview .footnote-line {
+    color: var(--muted-foreground);
+    display: block;
+  }
+
+  /* Tree preview */
+  [data-ui="diagram"] .tree-preview {
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--background);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  [data-ui="diagram"] .tree-node {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-block: 2px;
+  }
+
+  [data-ui="diagram"] .tree-children {
+    padding-left: 16px;
+    border-left: 1px solid var(--border);
+    margin-left: 6px;
+  }
+
+  [data-ui="diagram"] .file-children {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 2px;
+  }
+
+  [data-ui="diagram"] .tree-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px;
+    border-radius: 5px;
+    transition: background-color 200ms var(--ease-out);
+  }
+
+  [data-ui="diagram"] .tree-file.is-saving-pulse {
+    background: var(--marker-soft);
+  }
+
+  [data-ui="diagram"] .file-badge {
+    font-size: 10px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  [data-ui="diagram"] .gdoc-badge {
+    background: var(--source-bluesky);
+    color: white;
+  }
+
+  [data-ui="diagram"] .ai-ready-badge {
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--marker-soft);
+    color: var(--foreground);
+    margin-left: auto;
+  }
+
+  /* Offline overlay: opaque surface step instead of glassmorphism */
+  [data-ui="diagram"] .offline-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: color-mix(in oklab, var(--card) 95%, var(--desk));
+    border: 1px solid var(--border);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  [data-ui="diagram"] .offline-overlay.is-visible {
+    display: flex;
+  }
+
+  [data-ui="diagram"] .offline-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 440px;
+    font-size: 13px;
+  }
+
+  /* Local files preview */
+  [data-ui="diagram"] .local-files-preview {
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--background);
+    border: 1px solid var(--border);
+  }
+
+  [data-ui="diagram"] .local-path {
+    margin-bottom: 8px;
+  }
+
+  [data-ui="diagram"] .local-file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  [data-ui="diagram"] .local-file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  [data-ui="diagram"] .file-pill {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--muted);
+    font-weight: 600;
+  }
+
+  [data-ui="diagram"] .pill-md {
+    color: var(--source-grokipedia);
+  }
+  [data-ui="diagram"] .pill-docx {
+    color: var(--source-bluesky);
+  }
+  [data-ui="diagram"] .pill-dir {
+    color: var(--source-web);
+  }
+
+  [data-ui="diagram"] .local-fmeta {
+    margin-left: auto;
+    font-size: 11px;
+  }
+
+  [data-ui="diagram"] .dest-footer {
+    margin-top: 10px;
+    line-height: 1.4;
+  }
+
+  /* Privacy callouts */
+  [data-ui="diagram"] .privacy-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 760px) {
+    [data-ui="diagram"] .privacy-strip {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  [data-ui="diagram"] .privacy-pill {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+
+  [data-ui="diagram"] .privacy-icon {
+    flex-shrink: 0;
+    color: var(--success);
+    margin-top: 2px;
+  }
+</style>

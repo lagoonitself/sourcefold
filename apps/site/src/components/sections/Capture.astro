@@ -1,0 +1,1821 @@
+---
+/**
+ * Capture.astro (section id "save") — "Save from anywhere"
+ * Bento grid covering all 7 capture paths with rich interaction and animation.
+ */
+import { Check, ChevronDown, Folder, RotateCcw } from "@lucide/astro";
+import SectionHeader from "../SectionHeader.astro";
+import SourceTile from "../SourceTile.astro";
+---
+
+<section id="save" class="section">
+  <div class="container">
+    <SectionHeader
+      label="Save from anywhere"
+      title="Paste links, click the extension, or save "
+      marked="whole channels"
+      after="."
+      lede="Articles, transcripts, cited references, or entire publications. Every capture lands as clean Markdown in your project folder, ready to read or search."
+    />
+
+    <div class="bento-grid" data-reveal="stagger">
+      <!-- 1. Paste 30–40 links at once -->
+      <div class="sheet card-bulk" id="card-bulk-paste">
+        <div class="card-inner">
+          <div class="card-header-bar">
+            <span class="chip">Website &amp; desktop</span>
+            <span class="muted nums">Bulk import</span>
+          </div>
+
+          <div class="card-headings">
+            <h3 class="h3">Paste 30–40 links at once</h3>
+            <p class="muted">
+              Any mix of articles, videos, and papers. Watch each link queue, fetch, and format in parallel.
+            </p>
+          </div>
+
+          <div class="bulk-mock-panel" data-ui>
+            <div class="bulk-input-row">
+              <div class="bulk-input-text mono">
+                https://en.wikipedia.org/wiki/Wankel_engine, https://youtube.com/watch?v=Q3pWg1Zt9ac,
+                https://enginebay.substack.com/p/last-rotary...
+              </div>
+              <button type="button" class="btn btn-ink btn-sm" id="bulk-replay-btn">
+                <RotateCcw size={13} stroke-width={2} />
+                <span>Paste 38 links</span>
+              </button>
+            </div>
+
+            <div class="bulk-progress-wrap">
+              <div class="bulk-progress-info">
+                <span class="nums bulk-counter-text" id="bulk-counter">31 of 38 saved</span>
+                <span class="muted nums">Parallel queue</span>
+              </div>
+              <div class="progress-track" role="progressbar" aria-valuenow={31} aria-valuemin={0} aria-valuemax={38}>
+                <div class="progress-bar-fill" id="bulk-progress-bar" style="width: 81.5%"></div>
+              </div>
+            </div>
+
+            <!-- Flicking queue tiles -->
+            <div class="bulk-items-stream" id="bulk-stream" aria-label="Active imports">
+              <div class="stream-row is-saved" data-index="0">
+                <SourceTile kind="wikipedia" size={26} />
+                <span class="stream-title serif">Wankel engine: apex seal thermodynamics</span>
+                <span class="stream-badge status-saved"><Check size={11} stroke-width={2.2} /> Saved</span>
+              </div>
+              <div class="stream-row is-saved" data-index="1">
+                <SourceTile kind="youtube" size={26} />
+                <span class="stream-title serif">How turbo lag actually works (transcript)</span>
+                <span class="stream-badge status-saved"><Check size={11} stroke-width={2.2} /> Saved</span>
+              </div>
+              <div class="stream-row is-saved" data-index="2">
+                <SourceTile kind="grokipedia" size={26} />
+                <span class="stream-title serif">Turbocharger: variable-geometry turbines</span>
+                <span class="stream-badge status-saved"><Check size={11} stroke-width={2.2} /> Saved</span>
+              </div>
+              <div class="stream-row is-saving" data-index="3">
+                <SourceTile kind="substack" size={26} />
+                <span class="stream-title serif">The last rotary: why Mazda persevered</span>
+                <span class="stream-badge status-saving"><span class="spin-dot"></span> Saving...</span>
+              </div>
+              <div class="stream-row is-queued" data-index="4">
+                <SourceTile kind="pdf" size={26} />
+                <span class="stream-title serif">Transient response of variable-geometry turbines</span>
+                <span class="stream-badge status-queued">Queued</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Browser extension -->
+      <div class="sheet card-extension" id="card-browser-ext">
+        <div class="card-inner">
+          <div class="card-header-bar">
+            <span class="chip">Browser extension</span>
+            <div class="kbd-wrap" title="Global keyboard shortcut">
+              <span class="kbd">Alt</span>
+              <span class="kbd">Shift</span>
+              <span class="kbd">S</span>
+            </div>
+          </div>
+
+          <div class="card-headings">
+            <h3 class="h3">The browser extension</h3>
+            <p class="muted">
+              Chrome, Edge, Brave, and Arc. Auto mode sends saves directly to the desktop app when
+              open, or straight to the website.
+            </p>
+          </div>
+
+          <!-- Mock browser window -->
+          <div class="browser-mock" data-ui>
+            <div class="browser-chrome-bar">
+              <div class="traffic-dots">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              </div>
+              <div class="browser-url-pill mono">
+                caranddriver.com/features/turbo-explained
+              </div>
+              <button
+                type="button"
+                class="shortcut-pill-btn"
+                id="btn-trigger-shortcut"
+                title="Simulate Alt+Shift+S"
+              >
+                <span class="shortcut-pill-label">Try shortcut</span>
+                <span class="kbd kbd-tiny">Alt</span><span class="kbd kbd-tiny">⇧</span><span class="kbd kbd-tiny">S</span>
+              </button>
+            </div>
+
+            <div class="browser-page-area">
+              <div class="browser-page-content">
+                <span class="mini-category">Engineering Explained</span>
+                <h4 class="mini-article-title serif">Turbochargers: how exhaust energy creates boost</h4>
+                <p class="mini-article-p">
+                  Compressing intake air increases oxygen density in combustion chambers...
+                </p>
+              </div>
+
+              <!-- Animated popup sliding down -->
+              <div class="ext-popup-mock" id="ext-popup">
+                <div class="ext-popup-header">
+                  <div class="ext-brand">
+                    <SourceTile kind="note" size={20} />
+                    <span class="ext-brand-title">Save to Sourcefold</span>
+                  </div>
+                  <span class="ext-auto-badge">Auto</span>
+                </div>
+
+                <div class="ext-folder-select">
+                  <Folder size={13} stroke-width={1.75} class="ext-folder-icon" />
+                  <span class="ext-folder-name">Cars / Engines / Turbocharging</span>
+                  <ChevronDown size={12} stroke-width={2} class="ext-folder-arrow" />
+                </div>
+
+                <div class="ext-popup-action">
+                  <button type="button" class="btn btn-ink btn-sm ext-save-btn" id="ext-save-action">
+                    <span id="ext-btn-text">Save to Turbocharging</span>
+                  </button>
+                  <div class="ext-saved-indicator" id="ext-saved-indicator" hidden>
+                    <Check size={13} stroke-width={2.2} />
+                    <span>Saved to desktop app</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Right-click a Grokipedia link -->
+      <div class="sheet card-context-menu" id="card-context-menu">
+        <div class="card-inner">
+          <div class="card-header-bar">
+            <span class="chip">Grokipedia</span>
+            <span class="muted nums">One click</span>
+          </div>
+
+          <div class="card-headings">
+            <h3 class="h3">Right-click without opening</h3>
+            <p class="muted">
+              See a link in an article? Right-click or hover to save it straight to your project folder.
+            </p>
+          </div>
+
+          <div class="context-mock-canvas" id="context-mock-canvas" data-ui>
+            <div class="context-reading-snippet">
+              <p class="snippet-text serif">
+                Modern turbochargers frequently incorporate a
+                <span class="context-link-trigger" id="grokipedia-link-target" tabindex="0" role="button">
+                  variable-geometry turbine
+                  <span class="link-hint-pill">Right-click</span>
+                </span>
+                to vary housing area ratio and spool earlier without restricting peak horsepower.
+              </p>
+            </div>
+
+            <!-- Mock floating context menu -->
+            <div class="mock-context-menu" id="mock-context-menu">
+              <div class="context-item muted-item">Open link in new tab</div>
+              <div class="context-item muted-item">Copy link address</div>
+              <div class="context-divider"></div>
+              <div class="context-item active-sourcefold-item" id="context-save-trigger" role="button" tabindex="0">
+                <div class="context-item-left">
+                  <SourceTile kind="grokipedia" size={18} />
+                  <span>Save to Sourcefold</span>
+                </div>
+              </div>
+              <div class="context-item muted-item">Inspect element</div>
+            </div>
+
+            <div class="context-feedback-badge" id="context-feedback-badge" hidden>
+              <Check size={12} stroke-width={2.2} />
+              <span>Saved to Cars / Engines / Turbocharging</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Whole YouTube playlist or channel -->
+      <div class="sheet card-youtube" id="card-youtube-playlist">
+        <div class="card-inner">
+          <div class="card-header-bar">
+            <span class="chip">Desktop app</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="yt-refresh-btn" title="Replay demo">
+              <RotateCcw size={12} stroke-width={2} />
+              <span>Replay</span>
+            </button>
+          </div>
+
+          <div class="card-headings">
+            <h3 class="h3">A whole YouTube playlist or channel</h3>
+            <p class="muted">
+              In the desktop app, save a whole YouTube playlist or channel. Each video becomes its
+              English transcript in timestamped paragraphs that open the video at that second, plus
+              the description.
+            </p>
+          </div>
+
+          <div class="yt-mock-window" data-ui>
+            <div class="yt-header-row">
+              <div class="yt-url-bar mono">
+                youtube.com/playlist?list=PLengineering_turbo_fundamentals
+              </div>
+              <span class="chip chip-sm">4 videos detected</span>
+            </div>
+
+            <div class="yt-playlist-title-row">
+              <span class="yt-series-name serif">Advanced Turbocharging Masterclass (4 parts)</span>
+              <span class="muted nums">1h 11m total</span>
+            </div>
+
+            <!-- Video list with live badges -->
+            <div class="yt-video-list" id="yt-video-list">
+              <div class="yt-video-row is-saved" data-time="14:32">
+                <div class="yt-row-left">
+                  <SourceTile kind="youtube" size={26} />
+                  <div class="yt-meta">
+                    <span class="yt-title serif">Fundamentals of boost and manifold pressure</span>
+                    <span class="yt-sub muted nums">14:32 · High Definition</span>
+                  </div>
+                </div>
+                <span class="yt-status-badge badge-saved">
+                  <Check size={11} stroke-width={2.2} />
+                  <span>Transcript saved, 14:32</span>
+                </span>
+              </div>
+
+              <div class="yt-video-row is-saved" data-time="18:05">
+                <div class="yt-row-left">
+                  <SourceTile kind="youtube" size={26} />
+                  <div class="yt-meta">
+                    <span class="yt-title serif">Twin-scroll vs single-scroll turbine housings</span>
+                    <span class="yt-sub muted nums">18:05 · High Definition</span>
+                  </div>
+                </div>
+                <span class="yt-status-badge badge-saved">
+                  <Check size={11} stroke-width={2.2} />
+                  <span>Transcript saved, 18:05</span>
+                </span>
+              </div>
+
+              <div class="yt-video-row is-saving" id="yt-row-3" data-time="22:40">
+                <div class="yt-row-left">
+                  <SourceTile kind="youtube" size={26} />
+                  <div class="yt-meta">
+                    <span class="yt-title serif">Wastegate sizing, boost creep and bleed ports</span>
+                    <span class="yt-sub muted nums">22:40 · High Definition</span>
+                  </div>
+                </div>
+                <span class="yt-status-badge badge-saving" id="yt-status-3">
+                  <span class="spin-dot"></span>
+                  <span>Saving transcript, 22:40</span>
+                </span>
+              </div>
+
+              <div class="yt-video-row is-queued" id="yt-row-4" data-time="16:15">
+                <div class="yt-row-left">
+                  <SourceTile kind="youtube" size={26} />
+                  <div class="yt-meta">
+                    <span class="yt-title serif">Anti-lag combustion cycles and turbine wear</span>
+                    <span class="yt-sub muted nums">16:15 · High Definition</span>
+                  </div>
+                </div>
+                <span class="yt-status-badge badge-queued" id="yt-status-4">
+                  <span>Queued (16:15)</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Substack publication between two dates -->
+      <div class="sheet card-substack" id="card-substack">
+        <div class="card-inner">
+          <div class="card-header-bar">
+            <span class="chip">Desktop app</span>
+            <span class="muted nums">Date range</span>
+          </div>
+
+          <div class="card-headings">
+            <h3 class="h3">Substack between two dates</h3>
+            <p class="muted">
+              Drag the range slider to pull an author's complete archive. Free and paid posts you
+              subscribe to, with all images kept in place.
+            </p>
+          </div>
+
+          <div class="substack-mock-ctrl" data-ui>
+            <div class="substack-domain-row">
+              <span class="mono muted domain-text">enginebay.substack.com</span>
+              <span class="chip chip-sm">Archive import</span>
+            </div>
+
+            <div class="substack-range-slider-box">
+              <div class="slider-labels-row">
+                <span class="date-badge nums" id="label-date-start">Mar 2024</span>
+                <span class="slider-mid-count nums" id="substack-count-display">23 posts</span>
+                <span class="date-badge nums" id="label-date-end">Oct 2026</span>
+              </div>
+
+              <div class="range-slider-container">
+                <input
+                  type="range"
+                  min="4"
+                  max="38"
+                  value="23"
+                  class="styled-range"
+                  id="substack-range-slider"
+                  aria-label="Adjust Substack publication post count"
+                />
+              </div>
+
+              <div class="substack-range-caption">
+                <span class="muted" id="substack-range-summary">
+                  23 posts from Mar 2024 to Oct 2026
+                </span>
+              </div>
+            </div>
+
+            <div class="substack-sample-posts" id="substack-posts-preview">
+              <div class="sub-post-row">
+                <SourceTile kind="substack" size={22} />
+                <span class="sub-post-title serif">The last rotary: engineering the 16X</span>
+                <span class="muted nums">Apr 2024</span>
+              </div>
+              <div class="sub-post-row">
+                <SourceTile kind="substack" size={22} />
+                <span class="sub-post-title serif">Why twin-scroll beats sequential twin-turbo</span>
+                <span class="muted nums">Nov 2024</span>
+              </div>
+              <div class="sub-post-row">
+                <SourceTile kind="substack" size={22} />
+                <span class="sub-post-title serif">Variable-geometry turbine vanes in production</span>
+                <span class="muted nums">Aug 2025</span>
+              </div>
+            </div>
+
+            <div class="substack-action-row">
+              <button type="button" class="btn btn-ink btn-sm" id="substack-save-btn">
+                <span id="substack-btn-text">Save 23 posts</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Cited sources on Grokipedia and Wikipedia -->
+      <div class="sheet card-cited" id="card-cited-sources">
+        <div class="card-inner">
+          <div class="card-header-bar">
+            <span class="chip">Grokipedia &amp; Wikipedia</span>
+            <span class="muted nums">One-pass citations</span>
+          </div>
+
+          <div class="card-headings">
+            <h3 class="h3">Cited sources in one go</h3>
+            <p class="muted">
+              Inspect every source an article references. Tick the ones you want for your own research
+              and save them all together.
+            </p>
+          </div>
+
+          <div class="cited-checklist-mock" data-ui>
+            <div class="cited-list-header">
+              <span class="cited-article-title serif">Turbocharger (references cited)</span>
+              <span class="muted nums" id="ticked-counter-label">4 of 5 selected</span>
+            </div>
+
+            <div class="cited-items-list" id="cited-list">
+              <label class="cited-row is-ticked" data-cited-id="c1">
+                <input type="checkbox" checked class="cited-checkbox" />
+                <span class="cited-item-text">
+                  Watson, N. &amp; Janota, M. (1982). <em>Turbocharging the Internal Combustion Engine</em>.
+                </span>
+                <span class="cited-tag">Book</span>
+              </label>
+
+              <label class="cited-row is-ticked" data-cited-id="c2">
+                <input type="checkbox" checked class="cited-checkbox" />
+                <span class="cited-item-text">
+                  SAE Technical Paper 2004-01-0988: <em>Transient Response of VGT Systems</em>.
+                </span>
+                <span class="cited-tag">Paper</span>
+              </label>
+
+              <label class="cited-row" data-cited-id="c3">
+                <input type="checkbox" class="cited-checkbox" />
+                <span class="cited-item-text">
+                  Garrett Motion: <em>Aerodynamics of Modern Compressor Wheels (Whitepaper)</em>.
+                </span>
+                <span class="cited-tag">Web</span>
+              </label>
+
+              <label class="cited-row is-ticked" data-cited-id="c4">
+                <input type="checkbox" checked class="cited-checkbox" />
+                <span class="cited-item-text">
+                  Baines, N. C. (2005). <em>Fundamentals of Turbocharging</em>. Concepts NREC.
+                </span>
+                <span class="cited-tag">Book</span>
+              </label>
+
+              <label class="cited-row is-ticked" data-cited-id="c5">
+                <input type="checkbox" checked class="cited-checkbox" />
+                <span class="cited-item-text">
+                  Hiereth, P. &amp; Prenninger, P. (2007). <em>Charging the Internal Combustion Engine</em>.
+                </span>
+                <span class="cited-tag">Book</span>
+              </label>
+            </div>
+
+            <div class="cited-action-bar">
+              <button type="button" class="btn btn-ink btn-sm" id="btn-save-cited">
+                <Check size={13} stroke-width={2.2} id="cited-check-icon" />
+                <span>Save <span class="nums" id="cited-button-count">4</span> sources</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-all-cited">
+                Toggle all
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. X posts and threads -->
+      <div class="sheet card-x-thread" id="card-x-thread">
+        <div class="card-inner">
+          <div class="card-header-bar">
+            <span class="chip">Browser extension</span>
+            <span class="muted nums">Conversation trees</span>
+          </div>
+
+          <div class="card-headings">
+            <h3 class="h3">X posts and threads with intact trees</h3>
+            <p class="muted">
+              Save the author's full thread with high-resolution photos and GIFs. Replies stay
+              organized as a visual tree rather than an unstructured list.
+            </p>
+          </div>
+
+          <!-- Thread tree mock -->
+          <div class="x-thread-tree-mock" data-ui>
+            <!-- Root tweet -->
+            <div class="tweet-card root-tweet">
+              <div class="tweet-avatar-col">
+                <div class="avatar-circle">BL</div>
+                <div class="tree-stem-line"></div>
+              </div>
+              <div class="tweet-content-col">
+                <div class="tweet-author-line">
+                  <span class="author-name">Boost Lab</span>
+                  <span class="author-handle mono">@boostlab</span>
+                  <span class="meta-dot">·</span>
+                  <span class="muted nums">Oct 20</span>
+                  <span class="chip chip-sm x-author-badge">Author</span>
+                </div>
+                <p class="tweet-text serif">
+                  Why modern inline-six engines favor a single twin-scroll turbine over sequential twin
+                  turbos: a breakdown of exhaust pulse separation and turbine kinetic energy (thread breakdown):
+                </p>
+
+                <!-- Media photo / graphic preview -->
+                <div class="tweet-media-box">
+                  <div class="media-diagram-schematic">
+                    <svg viewBox="0 0 460 88" fill="none" class="pulse-diagram-svg" aria-label="Exhaust pulse schematic">
+                      <rect x="10" y="16" width="90" height="26" rx="4" fill="var(--muted)" stroke="var(--border)"></rect>
+                      <text x="55" y="33" fill="var(--foreground)" font-size="11" font-weight="600" text-anchor="middle" font-family="var(--font-sans)">Cyl 1, 2, 3</text>
+                      <rect x="10" y="48" width="90" height="26" rx="4" fill="var(--muted)" stroke="var(--border)"></rect>
+                      <text x="55" y="65" fill="var(--foreground)" font-size="11" font-weight="600" text-anchor="middle" font-family="var(--font-sans)">Cyl 4, 5, 6</text>
+
+                      <!-- Path 1 into scroll A -->
+                      <path d="M 100 29 C 180 29, 230 35, 310 38" stroke="var(--foreground)" stroke-width="2"></path>
+                      <!-- Path 2 into scroll B -->
+                      <path d="M 100 61 C 180 61, 230 53, 310 50" stroke="var(--foreground)" stroke-width="2" stroke-dasharray="4 2"></path>
+
+                      <!-- Split housing -->
+                      <rect x="310" y="24" width="130" height="42" rx="6" fill="color-mix(in oklab, var(--primary) 8%, var(--card))" stroke="var(--border-strong)"></rect>
+                      <text x="375" y="43" fill="var(--foreground)" font-size="11" font-weight="600" text-anchor="middle" font-family="var(--font-sans)">Divided housing</text>
+                      <text x="375" y="57" fill="var(--muted-foreground)" font-size="9.5" text-anchor="middle" font-family="var(--font-sans)">240° pulse delta</text>
+                    </svg>
+                  </div>
+                  <div class="media-caption-bar">
+                    <span class="caption-name mono">pulse-diagram-inline6.png</span>
+                    <span class="muted nums">Saved full resolution</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Branch 1: Thread continuation -->
+            <div class="tweet-card reply-branch">
+              <div class="tweet-avatar-col">
+                <div class="avatar-circle">BL</div>
+                <div class="tree-stem-line stem-short"></div>
+              </div>
+              <div class="tweet-content-col">
+                <div class="tweet-author-line">
+                  <span class="author-name">Boost Lab</span>
+                  <span class="author-handle mono">@boostlab</span>
+                  <span class="meta-dot">·</span>
+                  <span class="chip chip-sm x-author-badge">Author</span>
+                </div>
+                <p class="tweet-text serif">
+                  1/ Because cylinders 1–3 and 4–6 fire alternatingly every 240 crankshaft degrees,
+                  dividing the exhaust manifold keeps exhaust pressure waves from colliding and
+                  canceling spool velocity.
+                </p>
+              </div>
+            </div>
+
+            <!-- Branch 2: Nested reply from reader -->
+            <div class="tweet-card reply-nested">
+              <div class="tweet-avatar-col">
+                <div class="avatar-circle avatar-alt">TT</div>
+              </div>
+              <div class="tweet-content-col">
+                <div class="tweet-author-line">
+                  <span class="author-name">Turbo Tuner</span>
+                  <span class="author-handle mono">@turbotuner</span>
+                  <span class="meta-dot">·</span>
+                  <span class="muted nums">Oct 20</span>
+                </div>
+                <p class="tweet-text serif">
+                  Does this preserve throttle response on larger 3.0L+ engines without choking the top end?
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { whileVisible } from "../../lib/reveal";
+
+  const root = document.querySelector("#save");
+  if (root) {
+    // 1. Bulk Paste animation
+    const bulkCounter = root.querySelector("#bulk-counter") as HTMLElement | null;
+    const bulkProgressBar = root.querySelector("#bulk-progress-bar") as HTMLElement | null;
+    const bulkReplayBtn = root.querySelector("#bulk-replay-btn") as HTMLButtonElement | null;
+    const streamRows = root.querySelectorAll("#bulk-stream .stream-row");
+
+    let bulkCount = 31;
+    let bulkInterval: number | null = null;
+
+    function runBulkCycle() {
+      if (!bulkCounter || !bulkProgressBar) return;
+      bulkCount++;
+      if (bulkCount > 38) {
+        bulkCount = 12;
+      }
+      bulkCounter.textContent = `${bulkCount} of 38 saved`;
+      const pct = Math.round((bulkCount / 38) * 100);
+      bulkProgressBar.style.width = `${pct}%`;
+
+      // Update rows status based on count
+      streamRows.forEach((row, idx) => {
+        const threshold = 18 + idx * 4;
+        if (bulkCount >= threshold) {
+          row.classList.remove("is-saving", "is-queued");
+          row.classList.add("is-saved");
+          const badge = row.querySelector(".stream-badge");
+          if (badge) badge.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg> Saved`;
+        } else if (bulkCount >= threshold - 3) {
+          row.classList.remove("is-saved", "is-queued");
+          row.classList.add("is-saving");
+          const badge = row.querySelector(".stream-badge");
+          if (badge) badge.innerHTML = `<span class="spin-dot"></span> Saving...`;
+        } else {
+          row.classList.remove("is-saved", "is-saving");
+          row.classList.add("is-queued");
+          const badge = row.querySelector(".stream-badge");
+          if (badge) badge.textContent = `Queued`;
+        }
+      });
+    }
+
+    whileVisible(root, () => {
+      bulkInterval = window.setInterval(runBulkCycle, 1400);
+      return () => {
+        if (bulkInterval) clearInterval(bulkInterval);
+      };
+    });
+
+    if (bulkReplayBtn) {
+      bulkReplayBtn.addEventListener("click", () => {
+        bulkCount = 24;
+        runBulkCycle();
+      });
+    }
+
+    // 2. Extension Alt+Shift+S demo
+    const extPopup = root.querySelector("#ext-popup") as HTMLElement | null;
+    const extSaveAction = root.querySelector("#ext-save-action") as HTMLButtonElement | null;
+    const extSavedIndicator = root.querySelector("#ext-saved-indicator") as HTMLElement | null;
+    const triggerShortcutBtn = root.querySelector("#btn-trigger-shortcut") as HTMLButtonElement | null;
+
+    function playExtensionSave() {
+      if (!extPopup || !extSaveAction || !extSavedIndicator) return;
+      extPopup.classList.add("popup-animate");
+      extSaveAction.style.display = "none";
+      extSavedIndicator.hidden = false;
+
+      setTimeout(() => {
+        extSaveAction.style.display = "inline-flex";
+        extSavedIndicator.hidden = true;
+      }, 2600);
+    }
+
+    if (triggerShortcutBtn) {
+      triggerShortcutBtn.addEventListener("click", playExtensionSave);
+    }
+    if (extSaveAction) {
+      extSaveAction.addEventListener("click", playExtensionSave);
+    }
+
+    // Global shortcut listener when section is visible
+    window.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.altKey && e.shiftKey && (e.key === "S" || e.key === "s")) {
+        const rect = root.getBoundingClientRect();
+        if (rect.top < window.innerHeight && rect.bottom > 0) {
+          e.preventDefault();
+          playExtensionSave();
+        }
+      }
+    });
+
+    // 3. Grokipedia right-click context menu
+    const grokLink = root.querySelector("#grokipedia-link-target") as HTMLElement | null;
+    const contextMenu = root.querySelector("#mock-context-menu") as HTMLElement | null;
+    const contextSaveTrigger = root.querySelector("#context-save-trigger") as HTMLElement | null;
+    const contextFeedback = root.querySelector("#context-feedback-badge") as HTMLElement | null;
+
+    function toggleContextMenu(show?: boolean) {
+      if (!contextMenu) return;
+      if (typeof show === "boolean") {
+        contextMenu.classList.toggle("is-open", show);
+      } else {
+        contextMenu.classList.toggle("is-open");
+      }
+    }
+
+    if (grokLink) {
+      grokLink.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        toggleContextMenu(true);
+      });
+      grokLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        toggleContextMenu();
+      });
+    }
+
+    if (contextSaveTrigger) {
+      contextSaveTrigger.addEventListener("click", () => {
+        toggleContextMenu(false);
+        if (contextFeedback) {
+          contextFeedback.hidden = false;
+          setTimeout(() => {
+            contextFeedback.hidden = true;
+          }, 2400);
+        }
+      });
+    }
+
+    // 4. YouTube playlist rows toggle / cycle
+    const ytRefreshBtn = root.querySelector("#yt-refresh-btn") as HTMLButtonElement | null;
+    const ytRow3 = root.querySelector("#yt-row-3") as HTMLElement | null;
+    const ytRow4 = root.querySelector("#yt-row-4") as HTMLElement | null;
+    const ytStatus3 = root.querySelector("#yt-status-3") as HTMLElement | null;
+    const ytStatus4 = root.querySelector("#yt-status-4") as HTMLElement | null;
+
+    if (ytRefreshBtn && ytRow3 && ytRow4 && ytStatus3 && ytStatus4) {
+      ytRefreshBtn.addEventListener("click", () => {
+        ytStatus3.innerHTML = `<span class="spin-dot"></span><span>Saving transcript, 22:40</span>`;
+        ytRow3.className = "yt-video-row is-saving";
+        ytStatus4.textContent = "Queued (16:15)";
+        ytRow4.className = "yt-video-row is-queued";
+
+        setTimeout(() => {
+          ytRow3.className = "yt-video-row is-saved";
+          ytStatus3.className = "yt-status-badge badge-saved";
+          ytStatus3.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Transcript saved, 22:40</span>`;
+
+          ytRow4.className = "yt-video-row is-saving";
+          ytStatus4.className = "yt-status-badge badge-saving";
+          ytStatus4.innerHTML = `<span class="spin-dot"></span><span>Saving transcript, 16:15</span>`;
+
+          setTimeout(() => {
+            ytRow4.className = "yt-video-row is-saved";
+            ytStatus4.className = "yt-status-badge badge-saved";
+            ytStatus4.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Transcript saved, 16:15</span>`;
+          }, 1400);
+        }, 1200);
+      });
+    }
+
+    // 5. Substack publication slider
+    const substackSlider = root.querySelector("#substack-range-slider") as HTMLInputElement | null;
+    const substackCountDisplay = root.querySelector("#substack-count-display") as HTMLElement | null;
+    const substackSummary = root.querySelector("#substack-range-summary") as HTMLElement | null;
+    const substackBtnText = root.querySelector("#substack-btn-text") as HTMLElement | null;
+    const substackSaveBtn = root.querySelector("#substack-save-btn") as HTMLButtonElement | null;
+
+    if (substackSlider && substackCountDisplay && substackSummary && substackBtnText) {
+      substackSlider.addEventListener("input", () => {
+        const val = substackSlider.value;
+        substackCountDisplay.textContent = `${val} posts`;
+        substackSummary.textContent = `${val} posts from Mar 2024 to Oct 2026`;
+        substackBtnText.textContent = `Save ${val} posts`;
+      });
+    }
+
+    if (substackSaveBtn && substackBtnText) {
+      substackSaveBtn.addEventListener("click", () => {
+        const currentText = substackBtnText.textContent;
+        substackBtnText.textContent = "Saved to folder";
+        setTimeout(() => {
+          if (substackSlider) {
+            substackBtnText.textContent = `Save ${substackSlider.value} posts`;
+          } else {
+            substackBtnText.textContent = currentText;
+          }
+        }, 2000);
+      });
+    }
+
+    // 6. Cited sources checklist
+    const citedList = root.querySelector("#cited-list") as HTMLElement | null;
+    const citedCountLabel = root.querySelector("#ticked-counter-label") as HTMLElement | null;
+    const citedButtonCount = root.querySelector("#cited-button-count") as HTMLElement | null;
+    const btnSaveCited = root.querySelector("#btn-save-cited") as HTMLButtonElement | null;
+    const btnToggleAll = root.querySelector("#btn-toggle-all-cited") as HTMLButtonElement | null;
+
+    function updateCitedCount() {
+      if (!citedList || !citedCountLabel || !citedButtonCount) return;
+      const checkboxes = citedList.querySelectorAll<HTMLInputElement>(".cited-checkbox");
+      let checkedCount = 0;
+      checkboxes.forEach((cb) => {
+        const parentRow = cb.closest(".cited-row");
+        if (cb.checked) {
+          checkedCount++;
+          parentRow?.classList.add("is-ticked");
+        } else {
+          parentRow?.classList.remove("is-ticked");
+        }
+      });
+      citedCountLabel.textContent = `${checkedCount} of ${checkboxes.length} selected`;
+      citedButtonCount.textContent = `${checkedCount}`;
+    }
+
+    if (citedList) {
+      citedList.addEventListener("change", (e) => {
+        if ((e.target as HTMLElement).classList.contains("cited-checkbox")) {
+          updateCitedCount();
+        }
+      });
+    }
+
+    if (btnToggleAll && citedList) {
+      btnToggleAll.addEventListener("click", () => {
+        const checkboxes = citedList.querySelectorAll<HTMLInputElement>(".cited-checkbox");
+        const allChecked = Array.from(checkboxes).every((cb) => cb.checked);
+        checkboxes.forEach((cb) => {
+          cb.checked = !allChecked;
+        });
+        updateCitedCount();
+      });
+    }
+
+    if (btnSaveCited) {
+      btnSaveCited.addEventListener("click", () => {
+        const originalContent = btnSaveCited.innerHTML;
+        btnSaveCited.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Sources saved</span>`;
+        setTimeout(() => {
+          btnSaveCited.innerHTML = originalContent;
+          updateCitedCount();
+        }, 2200);
+      });
+    }
+  }
+</script>
+
+<style>
+  #save :global(.section-header h2) {
+    text-wrap: balance;
+    max-width: 24ch;
+  }
+
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 18px;
+  }
+
+  .card-inner {
+    padding: clamp(18px, 2.5vw, 26px);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+  }
+
+  .card-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .card-headings {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .chip-sm {
+    height: 20px;
+    padding-inline: 7px;
+    font-size: 11px;
+  }
+
+  /* Grid column spans (Desktop default ≥ 1040px) */
+  .card-bulk {
+    grid-column: span 7;
+  }
+
+  .card-extension {
+    grid-column: span 5;
+  }
+
+  .card-context-menu {
+    grid-column: span 4;
+  }
+
+  .card-youtube {
+    grid-column: span 8;
+  }
+
+  .card-substack {
+    grid-column: span 6;
+  }
+
+  .card-cited {
+    grid-column: span 6;
+  }
+
+  .card-x-thread {
+    grid-column: span 12;
+  }
+
+  /* 1024px viewports (901px - 1100px): balanced packing, no holes */
+  @media (max-width: 1100px) and (min-width: 901px) {
+    .card-bulk {
+      grid-column: span 7;
+    }
+    .card-extension {
+      grid-column: span 5;
+    }
+    .card-context-menu {
+      grid-column: span 5;
+    }
+    .card-youtube {
+      grid-column: span 7;
+    }
+    .card-substack {
+      grid-column: span 6;
+    }
+    .card-cited {
+      grid-column: span 6;
+    }
+    .card-x-thread {
+      grid-column: span 12;
+    }
+  }
+
+  /* 768px viewports (641px - 900px): two-column pairs and full spans, no holes */
+  @media (max-width: 900px) and (min-width: 641px) {
+    .card-bulk {
+      grid-column: span 12;
+    }
+    .card-extension {
+      grid-column: span 6;
+    }
+    .card-context-menu {
+      grid-column: span 6;
+    }
+    .card-youtube {
+      grid-column: span 12;
+    }
+    .card-substack {
+      grid-column: span 6;
+    }
+    .card-cited {
+      grid-column: span 6;
+    }
+    .card-x-thread {
+      grid-column: span 12;
+    }
+  }
+
+  /* 390px mobile viewports (<= 640px): single column clean stack */
+  @media (max-width: 640px) {
+    .bento-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .card-bulk,
+    .card-extension,
+    .card-context-menu,
+    .card-youtube,
+    .card-substack,
+    .card-cited,
+    .card-x-thread {
+      grid-column: 1 / -1;
+    }
+
+    .yt-video-row {
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .yt-status-badge {
+      margin-left: auto;
+    }
+
+    .reply-nested {
+      margin-left: 12px;
+    }
+  }
+
+  /* 1. Bulk card details */
+  .bulk-mock-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: color-mix(in oklab, var(--muted) 45%, var(--card));
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  .bulk-input-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 6px 8px 6px 12px;
+    border-radius: 8px;
+  }
+
+  .bulk-input-text {
+    font-size: 11px;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .bulk-progress-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .bulk-progress-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+
+  .bulk-counter-text {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 6px;
+    background: var(--muted);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 999px;
+    transition: width 300ms var(--ease-spring);
+  }
+
+  .bulk-items-stream {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .stream-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    transition: background-color 160ms var(--ease-out);
+  }
+
+  .stream-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+  }
+
+  .stream-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .status-saved {
+    background: color-mix(in oklab, var(--success) 12%, transparent);
+    color: var(--success);
+  }
+
+  .status-saving {
+    background: color-mix(in oklab, var(--warning) 12%, transparent);
+    color: var(--warning);
+  }
+
+  .status-queued {
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  .spin-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulseDot 1s infinite alternate;
+  }
+
+  @keyframes pulseDot {
+    0% {
+      opacity: 0.3;
+      transform: scale(0.8);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1.2);
+    }
+  }
+
+  /* 2. Extension card */
+  .kbd-wrap {
+    display: flex;
+    gap: 3px;
+  }
+
+  .browser-mock {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .browser-chrome-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .traffic-dots {
+    display: flex;
+    gap: 4px;
+  }
+
+  .traffic-dots .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border-strong);
+  }
+
+  .browser-url-pill {
+    flex: 1;
+    font-size: 10.5px;
+    color: var(--muted-foreground);
+    background: var(--card);
+    padding: 3px 8px;
+    border-radius: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shortcut-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background-color 140ms var(--ease-out);
+  }
+
+  .shortcut-pill-btn:hover {
+    background: var(--accent);
+  }
+
+  .kbd-tiny {
+    min-width: 16px;
+    height: 16px;
+    font-size: 9.5px;
+    padding-inline: 3px;
+  }
+
+  .browser-page-area {
+    padding: 16px;
+    min-height: 160px;
+    position: relative;
+  }
+
+  .mini-category {
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    letter-spacing: 0.04em;
+  }
+
+  .mini-article-title {
+    font-size: 16px;
+    line-height: 1.25;
+    margin: 4px 0 6px 0;
+  }
+
+  .mini-article-p {
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+    line-height: 1.45;
+  }
+
+  /* Extension popup */
+  .ext-popup-mock {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 250px;
+    max-width: calc(100% - 24px);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-float);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 10;
+    transition: transform 220ms var(--ease-spring);
+  }
+
+  .ext-popup-mock.popup-animate {
+    animation: extPopupBounce 320ms var(--ease-spring);
+  }
+
+  @keyframes extPopupBounce {
+    0% {
+      transform: scale(0.95) translateY(-4px);
+    }
+    100% {
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .ext-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .ext-brand {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ext-brand-title {
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .ext-auto-badge {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--success);
+    background: color-mix(in oklab, var(--success) 12%, transparent);
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+
+  .ext-folder-select {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: var(--muted);
+    font-size: 11.5px;
+  }
+
+  .ext-folder-icon {
+    color: var(--muted-foreground);
+    flex-shrink: 0;
+  }
+
+  .ext-folder-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  .ext-folder-arrow {
+    color: var(--muted-foreground);
+  }
+
+  .ext-save-btn {
+    width: 100%;
+  }
+
+  .ext-saved-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--success) 14%, transparent);
+    color: var(--success);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+
+  /* 3. Context Menu Card */
+  .context-mock-canvas {
+    position: relative;
+    padding: 16px;
+    background: color-mix(in oklab, var(--muted) 40%, var(--card));
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    min-height: 180px;
+  }
+
+  .snippet-text {
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: var(--foreground);
+  }
+
+  .context-link-trigger {
+    color: var(--source-grokipedia);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    position: relative;
+    display: inline-block;
+    padding: 1px 2px;
+    border-radius: 4px;
+  }
+
+  .link-hint-pill {
+    position: absolute;
+    bottom: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-sans);
+    font-size: 9.5px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    white-space: nowrap;
+    opacity: 0.8;
+  }
+
+  .mock-context-menu {
+    position: absolute;
+    top: 70px;
+    left: 40px;
+    width: 210px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-float);
+    padding: 4px;
+    z-index: 20;
+    transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out);
+  }
+
+  .mock-context-menu:not(.is-open) {
+    opacity: 0.9;
+  }
+
+  .context-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .muted-item {
+    color: var(--muted-foreground);
+  }
+
+  .muted-item:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+
+  .context-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 3px 0;
+  }
+
+  .active-sourcefold-item {
+    background: var(--marker-soft);
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  .context-item-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .context-feedback-badge {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 11.5px;
+    font-weight: 500;
+    box-shadow: var(--shadow-float);
+  }
+
+  /* 4. YouTube card */
+  .yt-mock-window {
+    background: color-mix(in oklab, var(--muted) 45%, var(--card));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .yt-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .yt-url-bar {
+    font-size: 11px;
+    color: var(--muted-foreground);
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 6px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .yt-playlist-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13.5px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .yt-series-name {
+    font-weight: 500;
+  }
+
+  .yt-video-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .yt-video-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .yt-row-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .yt-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .yt-title {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .yt-sub {
+    font-size: 11px;
+  }
+
+  .yt-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .badge-saved {
+    background: color-mix(in oklab, var(--success) 12%, transparent);
+    color: var(--success);
+  }
+
+  .badge-saving {
+    background: color-mix(in oklab, var(--warning) 12%, transparent);
+    color: var(--warning);
+  }
+
+  .badge-queued {
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  /* 5. Substack card */
+  .substack-mock-ctrl {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: color-mix(in oklab, var(--muted) 45%, var(--card));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .substack-domain-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11.5px;
+  }
+
+  .substack-range-slider-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .slider-labels-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+
+  .date-badge {
+    font-weight: 600;
+    background: var(--muted);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+
+  .slider-mid-count {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .range-slider-container {
+    width: 100%;
+  }
+
+  .styled-range {
+    width: 100%;
+    accent-color: var(--foreground);
+    cursor: pointer;
+  }
+
+  .substack-range-caption {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .substack-sample-posts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sub-post-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12.5px;
+  }
+
+  .sub-post-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 6. Cited sources card */
+  .cited-checklist-mock {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: color-mix(in oklab, var(--muted) 45%, var(--card));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .cited-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12.5px;
+    padding-bottom: 4px;
+  }
+
+  .cited-article-title {
+    font-weight: 500;
+  }
+
+  .cited-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .cited-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: background-color 140ms var(--ease-out);
+  }
+
+  .cited-row.is-ticked {
+    background-color: var(--marker-soft);
+  }
+
+  .cited-checkbox {
+    accent-color: var(--foreground);
+    cursor: pointer;
+  }
+
+  .cited-item-text {
+    flex: 1;
+    line-height: 1.35;
+  }
+
+  .cited-tag {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    background: var(--muted);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  .cited-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  /* 7. X Thread tree */
+  .x-thread-tree-mock {
+    display: flex;
+    flex-direction: column;
+    background: color-mix(in oklab, var(--muted) 45%, var(--card));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+
+  .tweet-card {
+    display: flex;
+    gap: 12px;
+  }
+
+  .tweet-avatar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 34px;
+    flex-shrink: 0;
+  }
+
+  .avatar-circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--foreground);
+    color: var(--primary-foreground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .avatar-alt {
+    background: var(--source-web);
+  }
+
+  .tree-stem-line {
+    width: 2px;
+    flex: 1;
+    background: var(--border-strong);
+    margin-top: 4px;
+    min-height: 30px;
+  }
+
+  .stem-short {
+    min-height: 20px;
+  }
+
+  .tweet-content-col {
+    flex: 1;
+    padding-bottom: 16px;
+  }
+
+  .tweet-author-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    margin-bottom: 4px;
+  }
+
+  .author-name {
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  .author-handle {
+    font-size: 11.5px;
+    color: var(--muted-foreground);
+  }
+
+  .meta-dot {
+    color: var(--muted-foreground);
+  }
+
+  .x-author-badge {
+    background: color-mix(in oklab, var(--primary) 10%, transparent);
+    color: var(--foreground);
+  }
+
+  .tweet-text {
+    font-size: 14.5px;
+    line-height: 1.45;
+    margin-bottom: 10px;
+  }
+
+  .tweet-media-box {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    overflow: hidden;
+  }
+
+  .media-diagram-schematic {
+    padding: 10px 14px;
+    background: color-mix(in oklab, var(--muted) 35%, var(--card));
+  }
+
+  .pulse-diagram-svg {
+    width: 100%;
+    max-height: 80px;
+    display: block;
+  }
+
+  .media-caption-bar {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 12px;
+    font-size: 11px;
+    border-top: 1px solid var(--border);
+    background: var(--card);
+  }
+
+  .reply-branch {
+    margin-top: 4px;
+  }
+
+  .reply-nested {
+    margin-left: 24px;
+    margin-top: 4px;
+  }
+</style>

@@ -1,0 +1,68 @@
+---
+/**
+ * A source type shown as a tile: a rounded square filled with the source colour at 12%, its icon in
+ * the source colour. Always put the source name in text somewhere next to it.
+ */
+import {
+  BookOpen,
+  BookText,
+  ChevronsUp,
+  Cloud,
+  FileText,
+  Globe,
+  Image,
+  MessageSquareText,
+  MessagesSquare,
+  MonitorPlay,
+  Newspaper,
+  StickyNote,
+} from "@lucide/astro";
+import { sourceByKind, type SourceKind } from "../lib/sources";
+
+interface Props {
+  kind: SourceKind;
+  /** Tile edge in px (28–40). */
+  size?: number;
+  class?: string;
+}
+
+const { kind, size = 30, class: className } = Astro.props;
+const info = sourceByKind(kind);
+const Icon = {
+  grokipedia: BookOpen,
+  wikipedia: BookText,
+  youtube: MonitorPlay,
+  substack: Newspaper,
+  x: MessageSquareText,
+  reddit: MessagesSquare,
+  hackernews: ChevronsUp,
+  bluesky: Cloud,
+  pdf: FileText,
+  web: Globe,
+  note: StickyNote,
+  image: Image,
+}[kind];
+---
+
+<span
+  class:list={["source-tile", className]}
+  style={`--tile:${info.color};--size:${size}px`}
+  data-kind={kind}
+  aria-hidden="true"
+>
+  <Icon size={Math.round(size * 0.53)} stroke-width={1.75} />
+</span>
+
+<style>
+  .source-tile {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--size);
+    height: var(--size);
+    border-radius: 8px;
+    color: var(--tile);
+    background: color-mix(in oklab, var(--tile) 12%, transparent);
+  }
+</style>

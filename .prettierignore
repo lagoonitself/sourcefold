@@ -15,3 +15,4 @@ packages/core/test/golden/
 packages/core/test/x-media/
 packages/core/src/wikipedia/fixtures/
 packages/core/src/*/fixtures/
+.astro

@@ -1,0 +1,42 @@
+---
+/**
+ * The opener of a feature section: a small label, a large serif heading and a lede.
+ * Put the words to highlight in the `marked` prop; they get the highlighter stroke, swept in on view.
+ */
+interface Props {
+  label: string;
+  /** Heading text before the highlighted words. */
+  title: string;
+  /** Highlighted words (optional), shown after `title`. */
+  marked?: string;
+  /** Heading text after the highlighted words. */
+  after?: string;
+  lede?: string;
+  align?: "left" | "center";
+}
+const { label, title, marked, after, lede, align = "left" } = Astro.props;
+---
+
+<header class:list={["section-header", align]} data-reveal="stagger">
+  <span class="label">{label}</span>
+  <h2 class="h2">
+    {title}
+    {marked && <span class="marker marker-sweep">{marked}</span>}
+    {after}
+  </h2>
+  {lede && <p class="lede">{lede}</p>}
+</header>
+
+<style>
+  .section-header {
+    display: grid;
+    gap: 16px;
+    max-width: 760px;
+    margin-bottom: clamp(40px, 6vw, 64px);
+  }
+  .section-header.center {
+    margin-inline: auto;
+    text-align: center;
+    justify-items: center;
+  }
+</style>

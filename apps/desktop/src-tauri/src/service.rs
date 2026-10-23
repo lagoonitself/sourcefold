@@ -1345,7 +1345,7 @@ fn source_kind_source_line(kind: &str, fields: &ItemFileFields) -> String {
 
 /// Front matter fields for an item that is already saved: its title and place come from the
 /// item, everything else from what was saved with it, so a rename, move or note edit keeps them.
-fn item_file_fields(item: &Item, title: String, folder: Option<String>) -> ItemFileFields {
+pub(crate) fn item_file_fields(item: &Item, title: String, folder: Option<String>) -> ItemFileFields {
     let meta = &item.meta;
     ItemFileFields {
         title,

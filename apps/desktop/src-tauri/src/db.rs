@@ -90,6 +90,16 @@ impl Database {
         Ok(db)
     }
 
+    /// Runs `f` with the connection locked, for work that must be one transaction (project file
+    /// import). `f` must not call other `Database` methods: the lock is not re-entrant.
+    pub(crate) fn with_conn<T>(&self, f: impl FnOnce(&mut Connection) -> Result<T>) -> Result<T> {
+        let mut conn = match self.conn.lock() {
+            Ok(c) => c,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        f(&mut conn)
+    }
+
     fn init_schema(&self) -> Result<()> {
         let conn = match self.conn.lock() {
             Ok(c) => c,

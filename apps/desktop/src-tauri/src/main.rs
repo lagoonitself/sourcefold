@@ -85,6 +85,7 @@ fn main() {
     // Build and run Tauri application
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(db)
         .manage(auth_flow_state)
         .setup(move |_app| {
@@ -159,6 +160,11 @@ fn main() {
             commands::search_put_vectors,
             commands::search_delete_vectors,
             commands::open_claude_extension,
+            commands::project_file_export,
+            commands::project_file_inspect,
+            commands::project_file_import,
+            commands::project_file_write,
+            commands::project_file_read,
         ])
         .run(tauri::generate_context!())
         .expect("error while running sourcefold desktop application");

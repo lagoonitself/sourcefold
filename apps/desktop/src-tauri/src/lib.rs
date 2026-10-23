@@ -3,6 +3,7 @@ pub mod commands;
 pub mod db;
 pub mod models;
 pub mod local_copy;
+pub mod project_file;
 pub mod native_host;
 pub mod native_installer;
 pub mod search;

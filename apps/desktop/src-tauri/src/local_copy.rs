@@ -552,7 +552,7 @@ fn images_dir(md_path: &Path) -> Option<PathBuf> {
     is_md.then(|| md_path.with_file_name(format!("{}_files", stem)))
 }
 
-fn link_part(s: &str) -> String {
+pub(crate) fn link_part(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {

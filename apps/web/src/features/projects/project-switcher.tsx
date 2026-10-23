@@ -1,8 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, Check, ChevronsUpDown, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Check,
+  ChevronsUpDown,
+  Download,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -24,6 +34,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { FolderNode } from "@/features/folders/tree";
+import { ExportProjectDialog } from "@/features/project-file/export-project-dialog";
+import {
+  ImportProjectDialog,
+  ProjectFileInput,
+} from "@/features/project-file/import-project-dialog";
+import type { ProjectFileContents } from "@sourcefold/core/project-file";
 import { NameDialog } from "./name-dialog";
 import { rememberProject } from "./project";
 
@@ -38,6 +54,9 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [importContents, setImportContents] = useState<ProjectFileContents | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const createProject = useCreateProject();
   const activeProjects = projects.filter((p) => !p.archived);
@@ -171,6 +190,10 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
             <Plus className="size-4" aria-hidden="true" />
             New project
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => importInputRef.current?.click()}>
+            <Upload className="size-4" aria-hidden="true" />
+            Import project file
+          </DropdownMenuItem>
           {current && (
             <>
               <DropdownMenuItem onClick={() => setIsRenaming(true)}>
@@ -188,6 +211,10 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
                   Archive project
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem onClick={() => setIsExporting(true)}>
+                <Download className="size-4" aria-hidden="true" />
+                Download project file
+              </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" onClick={() => setIsConfirmingDelete(true)}>
                 <Trash2 className="size-4" aria-hidden="true" />
                 Delete project
@@ -198,6 +225,14 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
       </DropdownMenu>
 
       <NewProjectDialog open={isCreating} onOpenChange={setIsCreating} onSubmit={createProject} />
+
+      <ProjectFileInput inputRef={importInputRef} onContents={setImportContents} />
+      <ImportProjectDialog contents={importContents} onClose={() => setImportContents(null)} />
+      <ExportProjectDialog
+        open={isExporting}
+        onOpenChange={setIsExporting}
+        project={current ? { id: current.id, name: current.name } : null}
+      />
 
       <NameDialog
         open={isRenaming}

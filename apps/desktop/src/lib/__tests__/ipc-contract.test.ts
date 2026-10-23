@@ -339,3 +339,37 @@ describe("IPC contract checker", () => {
     ]);
   });
 });
+
+describe("IPC contract: the project file commands", () => {
+  const apiFile = "features/project-file/project-file-api.ts";
+  const source = () => readFileSync(path.join(srcDir, apiFile), "utf8");
+
+  it("project-file-api.ts calls the commands with the keys the Rust commands take", () => {
+    const keysOf = (command: string) =>
+      extractInvokeCalls(apiFile, source()).find((c) => c.command === command)?.keys;
+    expect(keysOf("project_file_export")).toEqual(["projectId", "path"]);
+    expect(keysOf("project_file_inspect")).toEqual(["path"]);
+    expect(keysOf("project_file_import")).toEqual(["path"]);
+    expect(keysOf("project_file_read")).toEqual(["path"]);
+  });
+
+  it("sends the raw-bytes write with the header the Rust command reads", () => {
+    // project_file_write takes the zip as the raw body, so it is called with `invoke`, not
+    // `tauriInvoke`, and the generic check above can't see it.
+    const rust = readFileSync(path.join(rustDir, "commands/project_file.rs"), "utf8");
+    const header = /const PATH_HEADER: &str = "([^"]+)"/.exec(rust)?.[1];
+    expect(header).toBe("x-project-file-path");
+    expect(source()).toContain(`invoke("project_file_write", bytes, {`);
+    expect(source()).toContain(`"${header}": encodeURIComponent(path)`);
+    const { registered } = loadRealRegistry();
+    for (const command of [
+      "project_file_export",
+      "project_file_inspect",
+      "project_file_import",
+      "project_file_write",
+      "project_file_read",
+    ]) {
+      expect(registered).toContain(command);
+    }
+  });
+});

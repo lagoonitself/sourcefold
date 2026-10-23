@@ -12,6 +12,8 @@ const signSchema = z.object({
   file_name: z.string().min(1).max(300),
   mime_type: z.enum(ALLOWED_MIME_TYPES, { message: "Upload a PNG, JPEG, GIF or WebP image." }),
   size: z.number().int().min(1).max(10485760, "Images can be up to 10 MB."),
+  // A project file import keeps the id it chose for the image.
+  item_id: z.string().uuid("Invalid item ID.").optional(),
 });
 
 /**
@@ -55,7 +57,20 @@ export async function POST(request: Request) {
     return jsonError(400, invalidFolderMessage("sources must be saved in a group"));
   }
 
-  const itemId = crypto.randomUUID();
+  let itemId = crypto.randomUUID();
+  if (parsed.data.item_id) {
+    itemId = parsed.data.item_id;
+    const { data: existing, error: existingError } = await db
+      .from("items")
+      .select("id")
+      .eq("id", itemId)
+      .maybeSingle();
+    if (existingError) {
+      console.error("Failed to check the item ID for an image upload:", existingError);
+      return jsonError(500, "Something went wrong. Try again.");
+    }
+    if (existing) return jsonError(409, "That item ID is already in use.");
+  }
   const storagePath = `${userId}/${itemId}/${toSafeFileName(file_name)}`;
 
   const { data: signed, error: signError } = await db.storage

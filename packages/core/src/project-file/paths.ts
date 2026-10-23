@@ -40,7 +40,8 @@ export function projectFilePaths(
 ): Map<string, SourcePaths> {
   const root = safeName(projectName);
   const groupIds = new Set(groups.map((g) => g.id));
-  const parentOf = (g: PathGroup) => (g.parent_id !== null && groupIds.has(g.parent_id) ? g.parent_id : null);
+  const parentOf = (g: PathGroup) =>
+    g.parent_id !== null && groupIds.has(g.parent_id) ? g.parent_id : null;
 
   // Sibling names, made unique per parent.
   const siblings = new Map<string | null, PathGroup[]>();

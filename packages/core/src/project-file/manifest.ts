@@ -150,7 +150,9 @@ export const projectFileManifestSchema = z.object({
   sources: z.array(projectFileSourceSchema).max(PROJECT_FILE_LIMITS.sources),
   x_posts: z.array(projectFileXPostSchema).max(PROJECT_FILE_LIMITS.sources * 50),
   highlights: z.array(projectFileHighlightSchema).max(PROJECT_FILE_LIMITS.highlights),
-  outline_sections: z.array(projectFileOutlineSectionSchema).max(PROJECT_FILE_LIMITS.outlineSections),
+  outline_sections: z
+    .array(projectFileOutlineSectionSchema)
+    .max(PROJECT_FILE_LIMITS.outlineSections),
   cards: z.array(projectFileCardSchema).max(PROJECT_FILE_LIMITS.cards),
 });
 
@@ -240,7 +242,8 @@ function manifestReferenceProblem(m: ProjectFileManifest): string | null {
   }
   const posts = new Set(m.x_posts.map((p) => p.id));
   for (const post of m.x_posts) {
-    if (!sources.has(post.source_id)) return `an X post belongs to a source that isn't in the file.`;
+    if (!sources.has(post.source_id))
+      return `an X post belongs to a source that isn't in the file.`;
     if (post.parent_id !== null && !posts.has(post.parent_id)) {
       return `an X post replies to a post that isn't in the file.`;
     }
@@ -279,7 +282,10 @@ export interface ProjectFileSummary {
   bytes: number;
 }
 
-export function summarizeProjectFile(manifest: ProjectFileManifest, bytes: number): ProjectFileSummary {
+export function summarizeProjectFile(
+  manifest: ProjectFileManifest,
+  bytes: number,
+): ProjectFileSummary {
   return {
     name: manifest.project.name,
     groups: manifest.groups.length,

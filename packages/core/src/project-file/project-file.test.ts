@@ -28,7 +28,10 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
 async function goldenFile(): Promise<Uint8Array> {
   const writer = new ProjectFileWriter();
-  writer.add("Cars/Engines/Turbocharger.md", "---\nsource: grokipedia\n---\n\n# Turbocharger\n\nBody\n");
+  writer.add(
+    "Cars/Engines/Turbocharger.md",
+    "---\nsource: grokipedia\n---\n\n# Turbocharger\n\nBody\n",
+  );
   writer.add("Cars/Engines/Diesel/Thread by Jack (@jack).md", "# Thread\n");
   writer.add("Cars/Engines/Diesel/Thread by Jack (@jack)_files/abc.jpg", PNG);
   writer.add("Cars/Engines/Diesel/Diagram.png", PNG);
@@ -112,7 +115,15 @@ describe("project file paths", () => {
 
   it("refuses unsafe paths", () => {
     expect(isSafeEntryPath("Cars/Engines/Turbo.md")).toBe(true);
-    for (const bad of ["../x.md", "/etc/passwd", "a/../../b.md", "C:/x.md", "a\\b.md", "a//b.md", "a/./b"]) {
+    for (const bad of [
+      "../x.md",
+      "/etc/passwd",
+      "a/../../b.md",
+      "C:/x.md",
+      "a\\b.md",
+      "a//b.md",
+      "a/./b",
+    ]) {
       expect(isSafeEntryPath(bad), bad).toBe(false);
     }
   });
@@ -124,9 +135,11 @@ describe("project file zip", () => {
     const contents = readProjectFile(file);
     expect(contents.manifest).toEqual(golden);
     expect(contents.entries.size).toBe(4);
-    expect(new TextDecoder().decode(contents.entries.get("Cars/Engines/Diesel/Thread by Jack (@jack).md"))).toBe(
-      "# Thread\n",
-    );
+    expect(
+      new TextDecoder().decode(
+        contents.entries.get("Cars/Engines/Diesel/Thread by Jack (@jack).md"),
+      ),
+    ).toBe("# Thread\n");
     expect(mediaInFolder(contents.entries, golden.sources[1]!.media_folder)).toEqual([
       { name: "abc.jpg", data: PNG },
     ]);
@@ -154,7 +167,9 @@ describe("project file zip", () => {
   });
 
   it("refuses something that isn't a zip", () => {
-    expect(() => readProjectFile(strToU8("hello there"))).toThrow(/isn't a Sourcefold project file/);
+    expect(() => readProjectFile(strToU8("hello there"))).toThrow(
+      /isn't a Sourcefold project file/,
+    );
   });
 
   it("won't add the same path twice or an unsafe one", () => {

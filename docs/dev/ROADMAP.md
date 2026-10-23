@@ -156,7 +156,7 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
 
 Plan: `docs/dev/PLAN-sharing.md` (2026-10-22).
 
-- [ ] Phase 1: project file. Download and import a `.sourcefold` file on the website and the desktop app (signed in and offline); manifest builder in `packages/core` with golden files.
+- [x] Phase 1: project file. Download and import a `.sourcefold` file on the website and the desktop app (signed in and offline); manifest builder in `packages/core` with golden files. Built 2026-10-23 on `project-files`; waiting for the owner's test, then merge and deploy.
 - [ ] Phase 2: sharing foundation. Members and invites, `project_id` on rows, new database rules, every token route and database function checked for membership, R2 storage for shared projects with a 9.5 GB stop, Share dialog, "Shared" in the website, desktop, extension and Claude.
 - [ ] Phase 3: live updates (Supabase Realtime on the website, the desktop's choice after a test), "changed while you were editing" checks, who added each source.
 - [ ] Phase 4: history panel, Undo per change, source versions in the reader.

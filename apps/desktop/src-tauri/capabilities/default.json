@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Default permissions for Sourcefold Desktop",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-start-dragging", "opener:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "opener:default",
+    "dialog:default"
+  ]
 }

@@ -5,9 +5,11 @@ import {
   Check,
   ChevronDown,
   ChevronsUpDown,
+  Download,
   FolderPlus,
   Pencil,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
@@ -32,6 +34,17 @@ import type { Folder } from "@/lib/types";
 import { archiveProject, createFolder, deleteFolder, renameFolder } from "@/lib/api";
 import { isMacPlatform } from "../shortcuts/key-utils";
 import { cn } from "@/lib/utils";
+import {
+  ExportProjectDialog,
+  ImportProjectDialog,
+  type ExportRequest,
+} from "../project-file/ProjectFileDialogs";
+import {
+  chooseExportPath,
+  chooseImportPath,
+  openProjectFile,
+  type OpenedProjectFile,
+} from "../project-file/project-file-api";
 
 export interface ProjectSwitcherProps {
   projects: Folder[];
@@ -59,6 +72,8 @@ export function ProjectSwitcher({
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [showArchived, setShowArchived] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [exportRequest, setExportRequest] = React.useState<ExportRequest | null>(null);
+  const [importFile, setImportFile] = React.useState<OpenedProjectFile | null>(null);
   const isMac = React.useMemo(() => isMacPlatform(), []);
 
   const activeProjects = projects.filter((p) => !p.archived_at);
@@ -144,6 +159,27 @@ export function ProjectSwitcher({
       toast.error(err.message || "Failed to delete project");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleExportProject = async () => {
+    if (!currentProject) return;
+    const project = { id: currentProject.id, name: currentProject.name };
+    try {
+      const path = await chooseExportPath(project.name);
+      if (path) setExportRequest({ project, path });
+    } catch (err: any) {
+      toast.error(err?.message || String(err) || "Couldn't open the save window");
+    }
+  };
+
+  const handleImportProject = async () => {
+    try {
+      const path = await chooseImportPath();
+      if (!path) return;
+      setImportFile(await openProjectFile(path));
+    } catch (err: any) {
+      toast.error(err?.message || String(err) || "Couldn't open that file");
     }
   };
 
@@ -284,6 +320,11 @@ export function ProjectSwitcher({
             <span>New project</span>
           </DropdownMenuItem>
 
+          <DropdownMenuItem onClick={handleImportProject}>
+            <Upload className="size-4" />
+            <span>Import project file</span>
+          </DropdownMenuItem>
+
           {currentProject && (
             <>
               <DropdownMenuItem
@@ -311,6 +352,11 @@ export function ProjectSwitcher({
                 <Kbd>{isMac ? "⇧⌘A" : "Ctrl+Shift+A"}</Kbd>
               </DropdownMenuItem>
 
+              <DropdownMenuItem onClick={handleExportProject}>
+                <Download className="size-4" />
+                <span>Download project file</span>
+              </DropdownMenuItem>
+
               <DropdownMenuSeparator />
 
               <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
@@ -321,6 +367,16 @@ export function ProjectSwitcher({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <ExportProjectDialog request={exportRequest} onClose={() => setExportRequest(null)} />
+      <ImportProjectDialog
+        file={importFile}
+        onClose={() => setImportFile(null)}
+        onImported={async (projectId) => {
+          await onRefresh();
+          onSelectProject(projectId);
+        }}
+      />
 
       {/* New Project Dialog */}
       <Dialog open={newProjectOpen} onOpenChange={setNewProjectOpen}>

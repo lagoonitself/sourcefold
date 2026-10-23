@@ -378,7 +378,10 @@ export async function importProjectViaApi(
   // 1. The project and its groups, parents first.
   const groups = groupsParentsFirst(manifest.groups);
   const groupBatches = batchBySize(groups, IMPORT_BATCH_BYTES);
-  const created = await post({ project: { name: manifest.project.name }, groups: groupBatches[0] ?? [] });
+  const created = await post({
+    project: { name: manifest.project.name },
+    groups: groupBatches[0] ?? [],
+  });
   for (const batch of groupBatches.slice(1)) {
     signal?.throwIfAborted();
     await post({ groups: batch });
@@ -426,7 +429,9 @@ export async function importProjectViaApi(
     if (dropped.has(source.id)) continue;
     const { file, media_folder: _media, ...row } = source;
     const markdown =
-      source.kind !== "image" && file !== null ? bodyFromDriveFile(textOf(contents.entries.get(file)!)) : null;
+      source.kind !== "image" && file !== null
+        ? bodyFromDriveFile(textOf(contents.entries.get(file)!))
+        : null;
     const importRow: ProjectImportSource = {
       ...row,
       markdown,
@@ -456,10 +461,13 @@ export async function importProjectViaApi(
   const cards = manifest.cards.map((c) => ({
     ...c,
     source_id: c.source_id !== null && dropped.has(c.source_id) ? null : c.source_id,
-    highlight_id: c.highlight_id !== null && !keptHighlights.has(c.highlight_id) ? null : c.highlight_id,
+    highlight_id:
+      c.highlight_id !== null && !keptHighlights.has(c.highlight_id) ? null : c.highlight_id,
   }));
   // A quote card always points at a source; one whose source was skipped goes too.
-  const keptCards = cards.filter((c) => c.kind === "line" || c.kind === "broll" || c.source_id !== null);
+  const keptCards = cards.filter(
+    (c) => c.kind === "line" || c.kind === "broll" || c.source_id !== null,
+  );
 
   for (const batch of batchBySize(groupsParentsFirst(xPosts), IMPORT_BATCH_BYTES)) {
     signal?.throwIfAborted();

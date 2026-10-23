@@ -168,7 +168,9 @@ export function readProjectFile(file: Uint8Array): ProjectFileContents {
       throw new ProjectFileError(`This project file is damaged: "${source.file}" is missing.`);
     }
     if (source.media_folder !== null && !isSafeEntryPath(source.media_folder)) {
-      throw new ProjectFileError(`This project file is damaged: "${source.media_folder}" isn't allowed.`);
+      throw new ProjectFileError(
+        `This project file is damaged: "${source.media_folder}" isn't allowed.`,
+      );
     }
   }
 

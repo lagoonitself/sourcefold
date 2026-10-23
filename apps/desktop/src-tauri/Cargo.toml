@@ -23,3 +23,5 @@ tiny_http = "0.12"
 regex = "1.10"
 scraper = "0.22"
 htmd = "0.1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+tauri-plugin-dialog = "2"

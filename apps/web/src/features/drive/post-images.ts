@@ -67,6 +67,15 @@ async function findFolder(
   return found.find((f) => !groupFolderIds.has(f.id))?.id ?? null;
 }
 
+/** Drive's id of a post's `_files` folder, or null when it has none (project files read it). */
+export function findPostImagesFolder(
+  token: string,
+  spot: FileSpot,
+  groupFolderIds: ReadonlySet<string>,
+): Promise<string | null> {
+  return findFolder(token, spot, groupFolderIds);
+}
+
 async function inBatches<T>(items: T[], run: (item: T) => Promise<void>): Promise<void> {
   for (let i = 0; i < items.length; i += CONCURRENCY) {
     await Promise.all(items.slice(i, i + CONCURRENCY).map(run));

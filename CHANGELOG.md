@@ -2,12 +2,6 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
-## Unreleased
-
-### Fixed
-
-- Saving a Grokipedia article from the extension said "Something went wrong. Try again." when the extension was signed in by itself. The extension's background couldn't turn the article into Markdown because it has no page to parse the HTML with.
-
 ## 0.4.1 (2026-10-23)
 
 ### New
@@ -18,6 +12,7 @@ Each release's downloads are on the [releases page](https://github.com/lagoonits
 
 - The extension works with the 0.4.0 desktop app again. It said "Can't read the desktop app's sign-in" because the app now shares its sign-in in a new form.
 - Paid Substack posts you subscribe to are saved in full, not as "Paid post, not saved", on pages that show a subscribe or paywall box outside the post (such as the substack.com reader).
+- Saving a Grokipedia article from the extension said "Something went wrong. Try again." when the extension was signed in by itself. The extension's background couldn't turn the article into Markdown because it has no page to parse the HTML with.
 
 ## 0.4.0 (2026-10-23)
 

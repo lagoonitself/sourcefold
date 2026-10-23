@@ -2,6 +2,12 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
+## Unreleased
+
+### Fixed
+
+- Saving a Grokipedia article from the extension said "Something went wrong. Try again." when the extension was signed in by itself. The extension's background couldn't turn the article into Markdown because it has no page to parse the HTML with.
+
 ## 0.4.1 (2026-10-23)
 
 ### New

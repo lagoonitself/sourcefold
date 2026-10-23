@@ -41,7 +41,7 @@ export function createMarkdownConverter(): TurndownService {
 
 let converter: TurndownService | null = null;
 
-export function htmlToMarkdown(html: string): string {
+export function htmlToMarkdown(html: string | HTMLElement): string {
   if (!converter) {
     converter = createMarkdownConverter();
   }

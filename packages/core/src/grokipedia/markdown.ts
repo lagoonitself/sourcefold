@@ -1,4 +1,4 @@
-import { htmlToMarkdown } from "../html-to-markdown";
+import { htmlToMarkdownAnywhere as htmlToMarkdown } from "../html-to-markdown-server";
 import type { GrokipediaArticle } from "./parse";
 
 export function grokipediaToMarkdown(

@@ -1,10 +1,12 @@
 # Build contract: the desktop app and the extension work without the website
 
-Status: contract written 2026-10-18, being built.
+Status: contract written 2026-10-18, paused the same day, resumed 2026-10-23 on branch `desktop-first` (off `project-files`). See "Progress" at the end.
 
 ## Owner's decision (2026-10-18)
 
 The desktop app and the extension must not depend on the website. You sign in with the same Google account everywhere, and everything works: saving, Drive, the local copy, highlights, search. The website becomes an optional place to see (and still save) sources. If the website is down or never deployed, the desktop app and the extension keep working.
+
+The owner restated it on 2026-10-23: "I want the user to be able to sign in even with only the desktop app, and all features working with only the desktop app; web is optional." Choices made that day (the recommended options): Drive tokens come from the Edge Function below (not a separate Google "Desktop" client); Claude (MCP) starts the desktop app in the background when it is closed instead of using the website; the extension gets its own Google sign-in. Do this before shared projects (phase 2 in `docs/dev/PLAN-sharing.md`): once requests run under RLS, membership can be checked in the database rules instead of ~116 hand-written `user_id` filters.
 
 ## What stays and what goes
 
@@ -60,7 +62,7 @@ createDriveTokenSource(supabase, config): () => Promise<string>   // calls the E
 
 `fetch("/api/…")` answers **exactly** what the website's route answers today: same paths, methods, query parameters, request bodies, status codes, `{ data }` / `{ error: { message } }` envelopes and plain-text bodies. That is the whole contract for callers: the desktop's `httpFetch` / `remoteFetch` and the extension's web calls swap the network for `localApi.fetch` and nothing else changes. Port each route's logic from `apps/web/src/app/api/**/route.ts` and the modules it calls; use the route's own tests as the spec (copy and adapt them).
 
-Routes to port: `GET /api/health`, `/api/folders` (GET, POST), `/api/folders/[id]` (GET, PATCH, DELETE), `/api/items` (GET list by `folder`, title search by `q`), `/api/items/[id]` (GET, PATCH, DELETE), `/api/items/check`, `/api/items/[id]/content`, `/api/items/[id]/file`, `/api/capture`, `/api/grokipedia`, `/api/wikipedia`, `/api/source`, `/api/notes`, `/api/highlights` (GET, POST), `/api/highlights/[id]` (PUT, PATCH, DELETE), `/api/x/[itemId]/posts`, `/api/x/recent`, `/api/uploads`, `/api/uploads/sign`, `/api/drive/save`, `/api/drive/status`, `/api/mirror`. Not ported: `/api/tokens*`, `/desktop/connect`, `/auth/callback`.
+Routes to port: `GET /api/health`, `/api/folders` (GET, POST), `/api/folders/[id]` (GET, PATCH, DELETE), `/api/items` (GET list by `folder`, by `project`, title search by `q`), `/api/items/[id]/merge`, `/api/cards` (GET, POST), `/api/cards/[id]`, `/api/outline-sections` (GET, POST), `/api/outline-sections/[id]`, `/api/projects/[id]/export`, `/api/projects/[id]/import`, `/api/items/[id]/media`, `/api/items/[id]/media/[name]`, `/api/items/[id]/media-upload`, `/api/items/[id]` (GET, PATCH, DELETE), `/api/items/check`, `/api/items/[id]/content`, `/api/items/[id]/file`, `/api/capture`, `/api/grokipedia`, `/api/wikipedia`, `/api/source`, `/api/notes`, `/api/highlights` (GET, POST), `/api/highlights/[id]` (PUT, PATCH, DELETE), `/api/x/[itemId]/posts`, `/api/x/recent`, `/api/uploads`, `/api/uploads/sign`, `/api/drive/save`, `/api/drive/status`, `/api/mirror`. Not ported: `/api/tokens*`, `/desktop/connect`, `/auth/callback`.
 
 Rules for the port:
 
@@ -87,19 +89,20 @@ Rules for the port:
 
 ### Config
 
-- Desktop: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Extension: `WXT_SUPABASE_URL`, `WXT_SUPABASE_ANON_KEY`. The anon (publishable) key is public by design.
-- `.github/workflows/desktop-release.yml`: from repository variables `SOURCEFOLD_SUPABASE_URL` and `SOURCEFOLD_SUPABASE_ANON_KEY`. `SOURCEFOLD_WEB_URL` becomes optional.
+- Desktop: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. Extension: `WXT_SUPABASE_URL`, `WXT_SUPABASE_PUBLISHABLE_KEY`. The publishable key (`sb_publishable_…`, what the website uses as `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) is public by design.
+- `.github/workflows/desktop-release.yml`: from repository variables `SOURCEFOLD_SUPABASE_URL` and `SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY` (both set on the owner's repo 2026-10-23). `SOURCEFOLD_WEB_URL` becomes optional.
 - Local dev: `apps/desktop/.env.local` and `apps/extension/.env.local` (gitignored). Document in README.
 
 ### One-time setup (owner, in dashboards)
 
 1. Supabase → Authentication → URL Configuration → Redirect URLs: add `http://127.0.0.1:*/**` and `https://ccgpcafkpkdfndhamegkcafmhfpkajml.chromiumapp.org/**`.
 2. Deploy the Edge Function and set its secrets `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (the same values as the website's), `ALLOWED_EMAIL`.
-3. GitHub repository variables `SOURCEFOLD_SUPABASE_URL`, `SOURCEFOLD_SUPABASE_ANON_KEY`.
+3. GitHub repository variables `SOURCEFOLD_SUPABASE_URL`, `SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY`.
+4. Authentication → Hooks → **Before user created** → Postgres function `public.hook_before_user_created` (after migration `20261023010000_signup_allow_list.sql` is applied). Keep `public.signup_allow_list` the same as `ALLOWED_EMAIL` (`*` = anyone).
 
 ## Known limits
 
-- `ALLOWED_EMAIL` is enforced by the website and the Edge Function (Drive), not by Supabase itself. Data was never at risk (RLS keeps each person's library to themselves), but someone not on the list could sign in from the desktop app and save sources without Drive. A Supabase "before user created" auth hook can close that later.
+- `ALLOWED_EMAIL` is enforced at sign-up by the "before user created" hook (`public.signup_allow_list`), by the website and by the Edge Function. Accounts made before an address was removed from the list can still sign in to Supabase; they just lose Drive.
 
 ## Done when
 
@@ -107,3 +110,13 @@ Rules for the port:
 - The extension, with the desktop app closed, signs in with Google and saves a page that lands in Drive; with the desktop app open and signed in, it saves without its own sign-in.
 - The website still lists everything and still saves, and its tests pass.
 - `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test` and `cargo test` pass; `packages/client` has tests for every ported route.
+
+## Progress
+
+Order of work: (0) owner tests `project-files`, merge; (1) Supabase groundwork; (2) `packages/client` routes; (3) desktop sign-in and the switch to the local API; (4) extension; (5) MCP starts the desktop app in the background instead of using the website; (6) release config and docs.
+
+- **2026-10-23, step 1:**
+  - RLS audit on the live database: every table the routes use (`folders`, `items`, `x_posts`, `highlights`, `cards`, `outline_sections`, `drive_state`) has select/insert/update/delete policies for the owner, and every function the routes call (`acquire_drive_sync_lock`, `mark_item_stored_in_drive`, `mark_item_synced`, `drive_dirty_items`, `soft_delete_folder`, …) is executable by `authenticated`. The non-definer ones run under RLS, so a wrong `p_user_id` finds nothing. Storage buckets `images` and `post-media` have owner policies. `google_tokens` has RLS and no policies, so only the Edge Function (service role) and `save_google_refresh_token` reach it. So no grants were needed.
+  - `supabase/functions/google-access-token/index.ts` deployed to the owner's project (version 1, `verify_jwt: false` because it checks the token itself with `auth.getUser`). Without a token it answers 401; without its secrets it answers 500 "The Drive token service isn't set up yet."
+  - Migration `20261023010000_signup_allow_list.sql` written (allow list table seeded with `*`, hook function); not applied yet.
+  - Still for the owner: redirect URLs, the Edge Function's three secrets (the MCP secret prompt came back "declined"), turning on the hook after the migration.

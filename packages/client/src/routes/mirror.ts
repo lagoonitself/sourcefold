@@ -9,7 +9,7 @@ import type { RouteContext } from "../context";
 const PAGE = 1000;
 
 // Every file in the library with its path in Drive, so the desktop app can keep a copy on disk.
-export async function GET(auth: RouteContext, request: Request) {
+export async function GET(auth: RouteContext) {
   const { db, userId } = auth;
 
   const { data: folders, error: foldersError } = await db

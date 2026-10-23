@@ -1,7 +1,7 @@
 import { jsonData } from "../../http";
 import type { RouteContext } from "../../context";
 
-export async function GET(auth: RouteContext, request: Request) {
+export async function GET(auth: RouteContext) {
   const { db, userId } = auth;
 
   const connected = await auth.host.drive.isConnected(userId);

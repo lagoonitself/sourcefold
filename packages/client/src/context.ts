@@ -24,7 +24,13 @@ export type RouteHandler = (
   params: RouteParams,
 ) => Promise<Response>;
 
-/** One route file: its handlers by HTTP method. */
+/**
+ * One route file: its handlers by HTTP method. Each handler types its own params
+ * (`{ id: string }`); the router only calls it for a path that matched its pattern.
+ */
 export type RouteModule = Partial<
-  Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", RouteHandler>
+  Record<
+    "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    (ctx: RouteContext, request: Request, params: never) => Promise<Response>
+  >
 >;

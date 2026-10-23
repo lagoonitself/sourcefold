@@ -1,6 +1,15 @@
 import * as React from "react";
 import { motion } from "motion/react";
-import { Check, CircleAlert, Cloud, HardDrive, Loader2, LogIn, X } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  CircleAlert,
+  Cloud,
+  HardDrive,
+  Loader2,
+  LogIn,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -15,12 +24,15 @@ import {
   setOfflineMode,
   startSignIn,
 } from "@/lib/remote-client";
+import {
+  getSupabaseConfig,
+  isSupabaseConfigured,
+  setSupabaseConfig,
+  supabaseConfigProblem,
+} from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { SourceTile } from "../items/source-kinds";
 import { isMacPlatform } from "../shortcuts/key-utils";
-
-const DEFAULT_WEB_URL =
-  ((import.meta as any).env?.VITE_SOURCEFOLD_WEB_URL as string) || "http://localhost:3000";
 
 /** One orchestrated entrance: each block rises in 60ms after the one before it. */
 function rise(index: number, extraDelay = 0) {
@@ -87,11 +99,18 @@ function SampleStack() {
 }
 
 export function WelcomeScreen() {
-  const [webUrl, setWebUrl] = React.useState(DEFAULT_WEB_URL);
   const [isSigningIn, setIsSigningIn] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
   const isMac = React.useMemo(() => isMacPlatform(), []);
-  const webUrlId = React.useId();
+  // Advanced: the Supabase project to sign in to. Prefilled from the build; open when the build
+  // has none (a self-hosted copy built without them).
+  const [showAdvanced, setShowAdvanced] = React.useState(() => !isSupabaseConfigured());
+  const [supabaseUrl, setSupabaseUrl] = React.useState(() => getSupabaseConfig().supabaseUrl);
+  const [publishableKey, setPublishableKey] = React.useState(
+    () => getSupabaseConfig().supabasePublishableKey,
+  );
+  const supabaseUrlId = React.useId();
+  const publishableKeyId = React.useId();
 
   React.useEffect(() => {
     const expired = getExpiredSessionMessage();
@@ -121,16 +140,25 @@ export function WelcomeScreen() {
 
   const handleSignIn = React.useCallback(async () => {
     if (isSigningIn) return;
-    const url = webUrl.trim();
-    if (!url) {
-      setAuthError("Enter your Sourcefold web address first.");
+    const typed = { supabaseUrl, supabasePublishableKey: publishableKey };
+    const problem = supabaseConfigProblem(typed);
+    if (problem) {
+      setShowAdvanced(true);
+      setAuthError(problem);
       return;
+    }
+    const current = getSupabaseConfig();
+    if (
+      typed.supabaseUrl.trim().replace(/\/+$/, "") !== current.supabaseUrl ||
+      typed.supabasePublishableKey.trim() !== current.supabasePublishableKey
+    ) {
+      setSupabaseConfig(typed);
     }
     setAuthError(null);
     clearExpiredSessionMessage();
     setIsSigningIn(true);
     try {
-      const session = await startSignIn(url);
+      const session = await startSignIn();
       toast.success(`Signed in as ${session.email || "your account"}`);
     } catch (err: any) {
       if (!isSignInCancelledError(err)) {
@@ -141,7 +169,7 @@ export function WelcomeScreen() {
     } finally {
       setIsSigningIn(false);
     }
-  }, [isSigningIn, webUrl]);
+  }, [isSigningIn, supabaseUrl, publishableKey]);
 
   const handleCancelSignIn = React.useCallback(async () => {
     await cancelSignIn();
@@ -263,23 +291,10 @@ export function WelcomeScreen() {
                     Use my Sourcefold account
                   </h2>
                   <p className="text-[13px] leading-[19px] text-muted-foreground">
-                    Sign in with your browser to sync with Google Drive and the extension.
+                    Sign in with Google to keep your sources in your account and Google Drive, and
+                    to save from the extension.
                   </p>
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor={webUrlId} className="text-[12px] font-medium text-muted-foreground">
-                  Sourcefold web address
-                </label>
-                <Input
-                  id={webUrlId}
-                  value={webUrl}
-                  onChange={(e) => setWebUrl(e.target.value)}
-                  placeholder="http://localhost:3000"
-                  disabled={isSigningIn}
-                  autoFocus
-                />
               </div>
 
               {isSigningIn ? (
@@ -296,11 +311,68 @@ export function WelcomeScreen() {
                   </Button>
                 </div>
               ) : (
-                <Button onClick={handleSignIn} className="w-full">
+                <Button onClick={handleSignIn} className="w-full" autoFocus>
                   <LogIn className="size-4" />
-                  Sign in with browser
+                  Sign in with Google
                 </Button>
               )}
+
+              <div className="flex flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((open) => !open)}
+                  aria-expanded={showAdvanced}
+                  className="flex w-fit cursor-pointer items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ChevronRight
+                    className={cn(
+                      "size-3.5 transition-transform duration-200",
+                      showAdvanced && "rotate-90",
+                    )}
+                    aria-hidden="true"
+                  />
+                  Advanced
+                </button>
+                {showAdvanced && (
+                  <div className="flex flex-col gap-3 motion-safe:animate-rise-in">
+                    <p className="text-[12px] leading-[17px] text-muted-foreground">
+                      Only change these if you run your own copy of Sourcefold.
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      <label
+                        htmlFor={supabaseUrlId}
+                        className="text-[12px] font-medium text-muted-foreground"
+                      >
+                        Supabase address
+                      </label>
+                      <Input
+                        id={supabaseUrlId}
+                        value={supabaseUrl}
+                        onChange={(e) => setSupabaseUrl(e.target.value)}
+                        placeholder="https://your-project.supabase.co"
+                        disabled={isSigningIn}
+                        spellCheck={false}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label
+                        htmlFor={publishableKeyId}
+                        className="text-[12px] font-medium text-muted-foreground"
+                      >
+                        Publishable key
+                      </label>
+                      <Input
+                        id={publishableKeyId}
+                        value={publishableKey}
+                        onChange={(e) => setPublishableKey(e.target.value)}
+                        placeholder="sb_publishable_…"
+                        disabled={isSigningIn}
+                        spellCheck={false}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </motion.section>
 
             <motion.button

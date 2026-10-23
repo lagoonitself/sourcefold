@@ -1,10 +1,4 @@
-import {
-  getRemoteConfig,
-  isRemoteConfigured,
-  isSessionExpiredError,
-  remoteFetch,
-  SessionExpiredError,
-} from "./remote-client";
+import { isRemoteConfigured, localApiFetch, remoteFetch } from "./remote-client";
 import type {
   Card,
   CardInput,
@@ -51,38 +45,21 @@ async function httpFetch<T>(path: string, options: RequestInit = {}): Promise<T>
 
 /**
  * Like `httpFetch`, for endpoints that answer with plain text (a Markdown file) instead of JSON.
- * A 401 is handed to `remoteFetch`, which signs the session out and tells the app; this function
- * cannot do that itself because that code is private to remote-client.ts.
+ * `localApiFetch` signs an expired session out and tells the app.
  */
 async function httpFetchText(path: string): Promise<string> {
   if (!isRemoteConfigured()) {
-    throw new Error(
-      "Sourcefold requires the Tauri desktop app or a signed-in Sourcefold Web connection.",
-    );
+    throw new Error("Sign in, or use Sourcefold on this computer only, to open this.");
   }
-  const { remoteApiUrl, apiToken } = getRemoteConfig();
   const endpoint = path.startsWith("/") ? `/api${path}` : `/api/${path}`;
-  const res = await fetch(`${remoteApiUrl.replace(/\/+$/, "")}${endpoint}`, {
-    headers: { Authorization: `Bearer ${apiToken}` },
-  });
+  const res = await localApiFetch(endpoint);
 
   if (res.ok) return await res.text();
-
-  if (res.status === 401) {
-    try {
-      await remoteFetch<unknown>(endpoint);
-    } catch (err) {
-      if (isSessionExpiredError(err)) throw err;
-    }
-    throw new SessionExpiredError();
-  }
 
   const body = await res.json().catch(() => null);
   const message = body?.error?.message ?? body?.message ?? body?.error;
   throw new Error(
-    typeof message === "string" && message
-      ? message
-      : `Remote API request failed with status ${res.status}`,
+    typeof message === "string" && message ? message : `Request failed with status ${res.status}`,
   );
 }
 

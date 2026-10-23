@@ -259,7 +259,7 @@ fn status_reply(db: &Arc<Mutex<Database>>) -> Response<Cursor<Vec<u8>>> {
         json!({
             "version": env!("CARGO_PKG_VERSION"),
             "mode": mode_of(db),
-            "web_url": session.as_ref().map(|s| s.web_url.clone()),
+            "supabase_url": session.as_ref().map(|s| s.supabase_url.clone()),
             "email": session.as_ref().and_then(|s| s.email.clone()),
         }),
         None,
@@ -571,22 +571,17 @@ mod tests {
             json!({
                 "version": env!("CARGO_PKG_VERSION"),
                 "mode": "signed_out",
-                "web_url": null,
+                "supabase_url": null,
                 "email": null,
             })
         );
 
-        let sess = session::Session {
-            web_url: "https://web.sourcefold.app".to_string(),
-            token: "tok".to_string(),
-            email: Some("me@example.com".to_string()),
-            signed_in_at: "2026-10-18T00:00:00Z".to_string(),
-        };
+        let sess = session::test_session();
         session::save_session_to(&session_file, &sess).unwrap();
         let (_, body, _) = call(&ctx, &db, Method::Get, "/api/agent/status", "", &auth());
         assert_eq!(body["mode"], "signed_in");
-        assert_eq!(body["web_url"], "https://web.sourcefold.app");
-        assert_eq!(body["email"], "me@example.com");
+        assert_eq!(body["supabase_url"], "https://project.supabase.co");
+        assert_eq!(body["email"], "user@example.com");
 
         // Offline wins even when a session file is still there.
         db.lock().unwrap().set_setting("offline_mode", "true").unwrap();

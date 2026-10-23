@@ -159,9 +159,9 @@ export interface NativeHostStatus {
   message?: string;
 }
 
+/** The signed-in account (the Supabase session itself stays in `lib/supabase.ts`). */
 export interface Session {
-  web_url: string;
-  token: string;
+  user_id: string;
   email: string;
   signed_in_at: string;
 }
@@ -169,7 +169,6 @@ export interface Session {
 export interface SessionStatus {
   signedIn: boolean;
   offline: boolean;
-  webUrl?: string | null;
   email?: string | null;
-  token?: string | null;
+  userId?: string | null;
 }

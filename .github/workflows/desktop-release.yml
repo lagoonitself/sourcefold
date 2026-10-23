@@ -10,8 +10,9 @@ name: Release
 # Sourcefold-Windows-Setup.exe, Sourcefold-Mac.dmg, Sourcefold-Chrome-Extension.zip and
 # Sourcefold-Claude.mcpb (the desktop app's Settings → Claude falls back to downloading it).
 #
-# Set the repository variable SOURCEFOLD_WEB_URL to the deployed website so the desktop app and
-# the extension point at it out of the box.
+# Set the repository variables SOURCEFOLD_SUPABASE_URL and SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY so
+# the desktop app signs in to your Supabase project out of the box (it needs no website). The
+# optional SOURCEFOLD_WEB_URL points the extension and the release notes at the website.
 
 on:
   push:
@@ -115,6 +116,8 @@ jobs:
         working-directory: apps/desktop
         shell: bash
         env:
+          VITE_SUPABASE_URL: ${{ vars.SOURCEFOLD_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
         run: >-
           npm run tauri -- build ${{ matrix.args }}

@@ -2,6 +2,7 @@ pub mod agent;
 pub mod commands;
 pub mod db;
 pub mod models;
+pub mod local_api;
 pub mod local_copy;
 pub mod project_file;
 pub mod native_host;

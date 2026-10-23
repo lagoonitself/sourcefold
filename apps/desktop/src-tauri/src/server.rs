@@ -370,18 +370,8 @@ pub fn handle_request_with_agent(
 
         // Extension session contract
         (&Method::Get, "/api/session") => {
-            let session_data = if let Some(session) = crate::session::load_session() {
-                json!({
-                    "signedIn": true,
-                    "webUrl": session.web_url,
-                    "token": session.token,
-                    "email": session.email,
-                })
-            } else {
-                json!({
-                    "signedIn": false
-                })
-            };
+            let session_data =
+                crate::session::session_json(crate::session::load_session().as_ref());
 
             json_response(200, json!({ "data": session_data }), allowed_origin)
         }
@@ -1101,21 +1091,17 @@ mod tests {
         assert_eq!(json_body["data"]["signedIn"], false);
 
         // Case 5: Signed in state with valid extension Origin
-        let sess = crate::session::Session {
-            web_url: "https://web.sourcefold.app".to_string(),
-            token: "valid_session_token_123".to_string(),
-            email: Some("user@sourcefold.app".to_string()),
-            signed_in_at: "2026-10-15T00:00:00Z".to_string(),
-        };
+        let sess = crate::session::test_session();
         crate::session::save_session_to(&session_file, &sess).unwrap();
 
         let resp = handle_request(&db, &Method::Get, "/api/session", "", &[], &standard_headers());
         assert_eq!(resp.status_code().0, 200);
         let json_body = read_json_response(resp);
         assert_eq!(json_body["data"]["signedIn"], true);
-        assert_eq!(json_body["data"]["webUrl"], "https://web.sourcefold.app");
-        assert_eq!(json_body["data"]["token"], "valid_session_token_123");
-        assert_eq!(json_body["data"]["email"], "user@sourcefold.app");
+        assert_eq!(json_body["data"]["accessToken"], sess.access_token);
+        assert_eq!(json_body["data"]["supabaseUrl"], sess.supabase_url);
+        assert_eq!(json_body["data"]["userId"], sess.user_id);
+        assert_eq!(json_body["data"]["email"], "user@example.com");
 
         crate::session::clear_session_from(&session_file).unwrap();
         crate::session::set_session_path_override(None);

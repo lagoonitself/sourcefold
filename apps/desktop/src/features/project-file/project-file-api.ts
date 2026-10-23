@@ -11,16 +11,12 @@ import {
   type SkippedSource,
 } from "@sourcefold/core/project-file";
 import { shouldUseTauri } from "@/lib/api";
-import {
-  getRemoteConfig,
-  isSessionExpiredError,
-  remoteFetch,
-  SessionExpiredError,
-} from "@/lib/remote-client";
+import { localApiFetch, remoteFetch } from "@/lib/remote-client";
 
 // Download and import a project file (docs/PROJECT-FILE.md). Offline, Rust reads and writes the
-// local database and the files on disk. Signed in, the webview talks to the web API with the
-// shared code in @sourcefold/core and Rust only reads or writes the file the user picked.
+// local database and the files on disk. Signed in, the webview runs the shared code in
+// @sourcefold/core against the local API (the website's API run in the app) and Rust only reads or
+// writes the file the user picked.
 
 const FILTERS = [{ name: "Sourcefold project", extensions: ["sourcefold", "zip"] }];
 
@@ -29,7 +25,7 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
   return invoke<T>(cmd, args);
 }
 
-/** The signed-in web API, as the shared export and import code wants it. */
+/** The signed-in local API, as the shared export and import code wants it. */
 function remoteProjectFileApi(signal: AbortSignal): ProjectFileApi {
   return {
     json<T>(path: string, init?: { method: "GET" | "POST"; body?: unknown }): Promise<T> {
@@ -40,22 +36,8 @@ function remoteProjectFileApi(signal: AbortSignal): ProjectFileApi {
       });
     },
     async bytes(path: string): Promise<Uint8Array> {
-      const { remoteApiUrl, apiToken } = getRemoteConfig();
-      const endpoint = `/api${path}`;
-      const res = await fetch(`${remoteApiUrl.replace(/\/+$/, "")}${endpoint}`, {
-        headers: { Authorization: `Bearer ${apiToken}` },
-        signal,
-      });
+      const res = await localApiFetch(`/api${path}`, { signal });
       if (res.ok) return new Uint8Array(await res.arrayBuffer());
-      if (res.status === 401) {
-        // remoteFetch signs the session out and tells the app when the token is the problem.
-        try {
-          await remoteFetch<unknown>(endpoint, { signal });
-        } catch (err) {
-          if (isSessionExpiredError(err)) throw err;
-        }
-        throw new SessionExpiredError();
-      }
       const body = await res.json().catch(() => null);
       const message = body?.error?.message ?? body?.message;
       throw new Error(

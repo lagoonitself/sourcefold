@@ -84,20 +84,7 @@ pub fn handle_native_request(db_mutex: &Arc<Mutex<Database>>, req: Value) -> Val
             "app": "sourcefold"
         }),
 
-        "get_session" => {
-            if let Some(session) = crate::session::load_session() {
-                json!({
-                    "signedIn": true,
-                    "webUrl": session.web_url,
-                    "token": session.token,
-                    "email": session.email,
-                })
-            } else {
-                json!({
-                    "signedIn": false
-                })
-            }
-        }
+        "get_session" => crate::session::session_json(crate::session::load_session().as_ref()),
 
         "list_folders" => {
             let db = match db_mutex.lock() {
@@ -511,19 +498,14 @@ mod tests {
         assert_eq!(res_out["signedIn"], false);
 
         // Signed in state
-        let sess = session::Session {
-            web_url: "https://web.sourcefold.app".to_string(),
-            token: "native_token_999".to_string(),
-            email: Some("native@sourcefold.app".to_string()),
-            signed_in_at: "2026-10-15T00:00:00Z".to_string(),
-        };
+        let sess = session::test_session();
         session::save_session_to(&session_file, &sess).unwrap();
 
         let res_in = handle_native_request(&db, json!({ "type": "get_session" }));
         assert_eq!(res_in["signedIn"], true);
-        assert_eq!(res_in["webUrl"], "https://web.sourcefold.app");
-        assert_eq!(res_in["token"], "native_token_999");
-        assert_eq!(res_in["email"], "native@sourcefold.app");
+        assert_eq!(res_in["accessToken"], sess.access_token);
+        assert_eq!(res_in["supabaseUrl"], sess.supabase_url);
+        assert_eq!(res_in["email"], "user@example.com");
 
         session::clear_session_from(&session_file).unwrap();
         session::set_session_path_override(None);

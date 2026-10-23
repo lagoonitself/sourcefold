@@ -6,9 +6,12 @@ use crate::local_copy::{self, LocalCopyReport};
 use crate::service;
 
 #[tauri::command]
-pub async fn sync_local_copy(db: State<'_, Database>) -> Result<LocalCopyReport, String> {
+pub async fn sync_local_copy(
+    app: tauri::AppHandle,
+    db: State<'_, Database>,
+) -> Result<LocalCopyReport, String> {
     let db = db.inner().clone();
-    Ok(local_copy::sync(&db).await)
+    Ok(local_copy::sync(&app, &db).await)
 }
 
 #[tauri::command]

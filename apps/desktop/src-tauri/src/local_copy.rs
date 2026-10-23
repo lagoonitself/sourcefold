@@ -2,9 +2,10 @@
 //! file on this computer, in the storage folder (by default `Documents/Sourcefold`), with the same
 //! layout and content as Drive (docs/FILE-FORMAT.md).
 //!
-//! The web app lists every file with its path and a version (`GET /api/mirror`); files whose
-//! version changed are downloaded again (`GET /api/items/:id/content`). Only files this module
-//! wrote (tracked in `local_copy_files`) are ever moved or deleted.
+//! The local API (the website's API run in the webview, see `local_api.rs`) lists every file with
+//! its path and a version (`GET /api/mirror`); files whose version changed are downloaded again
+//! (`GET /api/items/:id/content`). Only files this module wrote (tracked in `local_copy_files`) are
+//! ever moved or deleted.
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -13,10 +14,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
 
 use crate::db::Database;
+use crate::local_api::{self, LocalApiResponse};
 use crate::service::{is_safe_to_delete, remove_empty_parent_dirs, resolve_storage_dir};
-use crate::session::{load_session, Session};
+use crate::session::load_session;
 
 const SETTING_KEY: &str = "local_copy";
 const CONCURRENCY: usize = 4;
@@ -172,22 +175,18 @@ fn remove_tracked(root: &Path, rel: &str, keep: &HashSet<PathBuf>) {
     }
 }
 
-fn api_error(status: reqwest::StatusCode, body: &str) -> String {
+fn api_error(status: u16, body: &str) -> String {
     let message = serde_json::from_str::<serde_json::Value>(body)
         .ok()
         .and_then(|v| v.pointer("/error/message").and_then(|m| m.as_str()).map(String::from));
-    match (status.as_u16(), message) {
+    match (status, message) {
         (401, _) => "Your session expired. Sign in again in Settings.".to_string(),
-        (404, _) if body.trim_start().starts_with('<') => {
-            "The web app doesn't have the local copy feature yet. Deploy the latest version."
-                .to_string()
-        }
         (_, Some(m)) => m,
-        (code, None) => format!("The web app answered with an error ({}).", code),
+        (code, None) => format!("Sourcefold answered with an error ({}).", code),
     }
 }
 
-async fn fetch_manifest(client: &reqwest::Client, session: &Session) -> Result<Vec<RemoteFile>, String> {
+async fn fetch_manifest(app: &AppHandle) -> Result<Vec<RemoteFile>, String> {
     #[derive(Deserialize)]
     struct Data {
         files: Vec<RemoteFile>,
@@ -196,26 +195,19 @@ async fn fetch_manifest(client: &reqwest::Client, session: &Session) -> Result<V
     struct Envelope {
         data: Data,
     }
-    let url = format!("{}/api/mirror", session.web_url.trim_end_matches('/'));
-    let res = client
-        .get(url)
-        .bearer_auth(&session.token)
-        .send()
-        .await
-        .map_err(|e| format!("Couldn't reach the web app: {}", e))?;
-    let status = res.status();
-    let body = res.text().await.map_err(|e| e.to_string())?;
-    if !status.is_success() {
-        return Err(api_error(status, &body));
+    let res = local_api::call(app, "GET", "/api/mirror", None).await?;
+    let body = res.text();
+    if !res.is_success() {
+        return Err(api_error(res.status, &body));
     }
     serde_json::from_str::<Envelope>(&body)
         .map(|e| e.data.files)
-        .map_err(|e| format!("The web app sent an unexpected answer: {}", e))
+        .map_err(|e| format!("Sourcefold sent an unexpected list of files: {}", e))
 }
 
-/// True for the web app's "its Google Doc isn't in Drive yet" answer, which is not a failure.
-fn is_not_ready(status: reqwest::StatusCode, body: &str) -> bool {
-    status.as_u16() == 404
+/// True for the "its Google Doc isn't in Drive yet" answer, which is not a failure.
+fn is_not_ready(status: u16, body: &str) -> bool {
+    status == 404
         && serde_json::from_str::<serde_json::Value>(body)
             .ok()
             .and_then(|v| v.pointer("/error/code").and_then(|c| c.as_str()).map(|c| c == "not_ready"))
@@ -224,33 +216,22 @@ fn is_not_ready(status: reqwest::StatusCode, body: &str) -> bool {
 
 /// The file's bytes. `Ok(None)` for a Word copy whose Google Doc isn't ready yet: skip it quietly
 /// and try again next time.
-async fn fetch_content(
-    client: &reqwest::Client,
-    session: &Session,
-    file: &RemoteFile,
-) -> Result<Option<Vec<u8>>, String> {
+async fn fetch_content(app: &AppHandle, file: &RemoteFile) -> Result<Option<Vec<u8>>, String> {
     let docx = file.is_docx();
-    let url = format!(
-        "{}/api/items/{}/content{}",
-        session.web_url.trim_end_matches('/'),
+    let path = format!(
+        "/api/items/{}/content{}",
         file.id,
         if docx { "?format=docx" } else { "" }
     );
-    let res = client
-        .get(url)
-        .bearer_auth(&session.token)
-        .send()
-        .await
-        .map_err(|e| format!("Couldn't reach the web app: {}", e))?;
-    let status = res.status();
-    if !status.is_success() {
-        let body = res.text().await.unwrap_or_default();
-        if docx && is_not_ready(status, &body) {
+    let res: LocalApiResponse = local_api::call(app, "GET", &path, None).await?;
+    if !res.is_success() {
+        let body = res.text();
+        if docx && is_not_ready(res.status, &body) {
             return Ok(None);
         }
-        return Err(api_error(status, &body));
+        return Err(api_error(res.status, &body));
     }
-    res.bytes().await.map(|b| Some(b.to_vec())).map_err(|e| e.to_string())
+    Ok(Some(res.body))
 }
 
 enum Plan {
@@ -302,20 +283,17 @@ fn stale(remote: &[RemoteFile], tracked: &HashMap<String, (String, String)>) -> 
 }
 
 /// Brings the local copy up to date. Never runs twice at once; never deletes files it didn't write.
-pub async fn sync(db: &Database) -> LocalCopyReport {
+pub async fn sync(app: &AppHandle, db: &Database) -> LocalCopyReport {
     let root = resolve_storage_dir(db);
     let mut report = LocalCopyReport {
         folder: root.to_string_lossy().to_string(),
         ..Default::default()
     };
 
-    let session = match load_session() {
-        Some(s) if is_enabled(db) && !is_offline(db) => s,
-        _ => {
-            report.status = "off".into();
-            return report;
-        }
-    };
+    if load_session().is_none() || !is_enabled(db) || is_offline(db) {
+        report.status = "off".into();
+        return report;
+    }
     if RUNNING.swap(true, Ordering::SeqCst) {
         report.status = "busy".into();
         return report;
@@ -328,7 +306,7 @@ pub async fn sync(db: &Database) -> LocalCopyReport {
     }
     let _release = Release;
 
-    let result = run(db, &root, &session, &mut report).await;
+    let result = run(app, db, &root, &mut report).await;
     if let Err(message) = result {
         report.failed.push(LocalCopyFailure { path: String::new(), message });
     }
@@ -337,13 +315,13 @@ pub async fn sync(db: &Database) -> LocalCopyReport {
     report
 }
 
-async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCopyReport) -> Result<(), String> {
+async fn run(app: &AppHandle, db: &Database, root: &Path, report: &mut LocalCopyReport) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| e.to_string())?;
 
-    let remote = fetch_manifest(&client, session).await?;
+    let remote = fetch_manifest(app).await?;
     report.total = remote.len();
 
     let tracked: HashMap<String, (String, String)> = db
@@ -395,8 +373,8 @@ async fn run(db: &Database, root: &Path, session: &Session, report: &mut LocalCo
     for chunk in downloads.chunks(CONCURRENCY) {
         let mut set = tokio::task::JoinSet::new();
         for (i, (file, _)) in chunk.iter().enumerate() {
-            let (client, session, file) = (client.clone(), session.clone(), file.clone());
-            set.spawn(async move { (i, fetch_content(&client, &session, &file).await) });
+            let (app, file) = (app.clone(), file.clone());
+            set.spawn(async move { (i, fetch_content(&app, &file).await) });
         }
         let mut fetched: Vec<Result<Option<Vec<u8>>, String>> =
             (0..chunk.len()).map(|_| Err("Download stopped.".to_string())).collect();
@@ -940,12 +918,18 @@ mod tests {
 
     #[test]
     fn not_ready_is_only_the_404_with_that_code() {
-        use reqwest::StatusCode;
         let body = r#"{"error":{"message":"Not in Drive yet.","code":"not_ready"}}"#;
-        assert!(is_not_ready(StatusCode::NOT_FOUND, body));
-        assert!(!is_not_ready(StatusCode::INTERNAL_SERVER_ERROR, body));
-        assert!(!is_not_ready(StatusCode::NOT_FOUND, r#"{"error":{"message":"Item not found."}}"#));
-        assert!(!is_not_ready(StatusCode::NOT_FOUND, "<html>404</html>"));
+        assert!(is_not_ready(404, body));
+        assert!(!is_not_ready(500, body));
+        assert!(!is_not_ready(404, r#"{"error":{"message":"Item not found."}}"#));
+        assert!(!is_not_ready(404, "<html>404</html>"));
+    }
+
+    #[test]
+    fn api_errors_read_the_message_and_say_when_to_sign_in_again() {
+        assert_eq!(api_error(401, "{}"), "Your session expired. Sign in again in Settings.");
+        assert_eq!(api_error(500, r#"{"error":{"message":"Drive is down."}}"#), "Drive is down.");
+        assert_eq!(api_error(502, "oops"), "Sourcefold answered with an error (502).");
     }
 
     #[test]

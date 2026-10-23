@@ -30,6 +30,7 @@ import {
   startSignIn,
   type Session,
 } from "@/lib/remote-client";
+import { getSupabaseConfig, setSupabaseConfig, supabaseConfigProblem } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { SubstackCookieSettings } from "../substack/SubstackCookieSettings";
 import { LocalCopySettings } from "../local-copy/LocalCopySettings";
@@ -60,9 +61,6 @@ const SECTIONS: SectionConfig[] = [
   { id: "substack", label: "Substack", icon: Newspaper },
 ];
 
-const DEFAULT_WEB_URL =
-  ((import.meta as any).env?.VITE_SOURCEFOLD_WEB_URL as string) || "http://localhost:3000";
-
 export function SettingsDialog({
   open,
   onOpenChange,
@@ -79,7 +77,10 @@ export function SettingsDialog({
   // Account state
   const [session, setSession] = React.useState<Session | null>(null);
   const [isOffline, setIsOffline] = React.useState(false);
-  const [webUrl, setWebUrl] = React.useState(DEFAULT_WEB_URL);
+  const [supabaseUrl, setSupabaseUrl] = React.useState(() => getSupabaseConfig().supabaseUrl);
+  const [publishableKey, setPublishableKey] = React.useState(
+    () => getSupabaseConfig().supabasePublishableKey,
+  );
   const [isSigningIn, setIsSigningIn] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
 
@@ -89,9 +90,6 @@ export function SettingsDialog({
       const current = sessionFromStatus(status);
       setSession(current);
       setIsOffline(status.offline);
-      if (current?.web_url) {
-        setWebUrl(current.web_url);
-      }
     } catch (e) {
       console.error("Failed to load session status", e);
     }
@@ -166,15 +164,23 @@ export function SettingsDialog({
   };
 
   const handleStartSignIn = async () => {
-    const url = webUrl.trim();
-    if (!url) {
-      setAuthError("Enter your Sourcefold web address first.");
+    const typed = { supabaseUrl, supabasePublishableKey: publishableKey };
+    const problem = supabaseConfigProblem(typed);
+    if (problem) {
+      setAuthError(problem);
       return;
+    }
+    const current = getSupabaseConfig();
+    if (
+      typed.supabaseUrl.trim().replace(/\/+$/, "") !== current.supabaseUrl ||
+      typed.supabasePublishableKey.trim() !== current.supabasePublishableKey
+    ) {
+      setSupabaseConfig(typed);
     }
     setAuthError(null);
     setIsSigningIn(true);
     try {
-      const newSession = await startSignIn(url);
+      const newSession = await startSignIn();
       setSession(newSession);
       setIsOffline(false);
       toast.success(`Signed in as ${newSession.email || "your account"}`);
@@ -486,11 +492,9 @@ export function SettingsDialog({
                         <div className="text-[13.5px] font-medium text-foreground">
                           {session.email}
                         </div>
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {session.web_url}
-                        </div>
                         <p className="text-[12.5px] leading-[18px] text-muted-foreground pt-1">
-                          Connected to web app and syncing with Google Drive and Chrome extension.
+                          Your sources are in your account and Google Drive. The Chrome extension
+                          and Claude use this sign-in.
                         </p>
                       </div>
                       <div className="shrink-0 pt-0.5">
@@ -522,9 +526,9 @@ export function SettingsDialog({
                           Working offline
                         </span>
                         <p className="text-[12.5px] leading-[18px] text-muted-foreground">
-                          Sourcefold Desktop is storing all your items locally on your computer.
-                          Sign in with your browser to connect to the Sourcefold Web App, enable
-                          Google Drive sync, and sync with the Chrome extension.
+                          Sourcefold is keeping everything on this computer. Sign in with Google to
+                          keep your sources in your account and Google Drive, and to save from the
+                          Chrome extension.
                         </p>
                       </div>
                       {isOffline && (
@@ -536,20 +540,36 @@ export function SettingsDialog({
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[13.5px] font-medium text-foreground">
-                        Web app URL
-                      </label>
-                      <Input
-                        value={webUrl}
-                        onChange={(e) => setWebUrl(e.target.value)}
-                        placeholder="http://localhost:3000"
-                        disabled={isSigningIn}
-                        className="font-mono text-xs"
-                      />
-                      <p className="text-[12px] text-muted-foreground">
-                        The URL of your hosted or local Sourcefold Web instance.
-                      </p>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[13.5px] font-medium text-foreground">
+                          Supabase address
+                        </label>
+                        <Input
+                          value={supabaseUrl}
+                          onChange={(e) => setSupabaseUrl(e.target.value)}
+                          placeholder="https://your-project.supabase.co"
+                          disabled={isSigningIn}
+                          spellCheck={false}
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[13.5px] font-medium text-foreground">
+                          Publishable key
+                        </label>
+                        <Input
+                          value={publishableKey}
+                          onChange={(e) => setPublishableKey(e.target.value)}
+                          placeholder="sb_publishable_…"
+                          disabled={isSigningIn}
+                          spellCheck={false}
+                          className="font-mono text-xs"
+                        />
+                        <p className="text-[12px] text-muted-foreground">
+                          Only change these if you run your own copy of Sourcefold.
+                        </p>
+                      </div>
                     </div>
 
                     <div className="pt-1 flex items-center gap-2">
@@ -557,7 +577,7 @@ export function SettingsDialog({
                         <>
                           <Button type="button" disabled size="sm" className="gap-1.5">
                             <Loader2 className="size-3.5 animate-spin" />
-                            Waiting for browser sign-in...
+                            Waiting for you to finish in the browser…
                           </Button>
                           <Button
                             type="button"
@@ -570,7 +590,7 @@ export function SettingsDialog({
                         </>
                       ) : (
                         <Button type="button" size="sm" onClick={handleStartSignIn}>
-                          Sign in with browser
+                          Sign in with Google
                         </Button>
                       )}
                     </div>

@@ -8,14 +8,39 @@ use tiny_http::{Header, Response, Server};
 use crate::db::Database;
 use crate::session::{self, Session};
 
+// Sign-in goes straight to Supabase (Google), without the website (docs/dev/handoff-no-website.md):
+// `start_sign_in` opens a listener on 127.0.0.1 and returns its port; the webview asks Supabase
+// for the Google sign-in address with `http://127.0.0.1:<port>/callback` as the way back and opens
+// it. Supabase sends the browser back with `?code=…`, which goes to the webview as
+// `oauth-callback`; the webview finishes the sign-in (PKCE) and reports the session with
+// `session_set`.
+
+pub const OAUTH_CALLBACK_EVENT: &str = "oauth-callback";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionStatus {
     pub signed_in: bool,
-    pub web_url: Option<String>,
     pub email: Option<String>,
-    pub token: Option<String>,
+    pub user_id: Option<String>,
     pub offline: bool,
+}
+
+/// What the webview reports after sign-in and on every token refresh.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionInput {
+    pub supabase_url: String,
+    pub publishable_key: String,
+    pub access_token: String,
+    pub expires_at: i64,
+    pub user_id: String,
+    pub email: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CallbackPayload {
+    code: String,
 }
 
 pub struct AuthFlowState {
@@ -70,34 +95,32 @@ pub fn parse_query_param(query: &str, key: &str) -> Option<String> {
     None
 }
 
-pub fn validate_web_url(web_url: &str) -> Result<String, String> {
-    let trimmed = web_url.trim().trim_end_matches('/');
-    if trimmed.is_empty() {
-        return Err("Web URL is required".to_string());
-    }
-
-    let parsed = reqwest::Url::parse(trimmed).map_err(|e| format!("Invalid URL: {}", e))?;
+/// Checks what the webview reports before it is written for the extension and Claude.
+pub fn session_from_input(input: SessionInput, previous: Option<&Session>) -> Result<Session, String> {
+    let supabase_url = input.supabase_url.trim().trim_end_matches('/').to_string();
+    let parsed = reqwest::Url::parse(&supabase_url).map_err(|_| "Invalid Supabase address.".to_string())?;
     let host = parsed.host_str().unwrap_or("");
     let is_local = host == "localhost" || host == "127.0.0.1";
-    let is_valid_scheme = parsed.scheme() == "https" || (parsed.scheme() == "http" && is_local);
-
-    if !is_valid_scheme {
-        return Err("Web URL must use https (or http for localhost/127.0.0.1)".to_string());
+    if !(parsed.scheme() == "https" || (parsed.scheme() == "http" && is_local)) {
+        return Err("The Supabase address must use https.".to_string());
     }
-
-    if !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err("Web URL must not contain username or password credentials".to_string());
+    if input.access_token.trim().is_empty() || input.user_id.trim().is_empty() {
+        return Err("The sign-in is incomplete.".to_string());
     }
-
-    if parsed.query().is_some() {
-        return Err("Web URL must not contain query parameters".to_string());
-    }
-
-    if parsed.fragment().is_some() {
-        return Err("Web URL must not contain URL fragments".to_string());
-    }
-
-    Ok(trimmed.to_string())
+    // Keep the first sign-in time across token refreshes.
+    let signed_in_at = previous
+        .filter(|p| p.user_id == input.user_id)
+        .map(|p| p.signed_in_at.clone())
+        .unwrap_or_else(|| Utc::now().to_rfc3339());
+    Ok(Session {
+        supabase_url,
+        publishable_key: input.publishable_key.trim().to_string(),
+        access_token: input.access_token.trim().to_string(),
+        expires_at: input.expires_at,
+        user_id: input.user_id.trim().to_string(),
+        email: input.email.filter(|e| !e.trim().is_empty()),
+        signed_in_at,
+    })
 }
 
 fn html_response(html: String, status: u16) -> Response<std::io::Cursor<Vec<u8>>> {
@@ -106,6 +129,23 @@ fn html_response(html: String, status: u16) -> Response<std::io::Cursor<Vec<u8>>
         resp.add_header(header);
     }
     resp
+}
+
+fn page(title: &str, message: &str, ok: bool, status: u16) -> Response<std::io::Cursor<Vec<u8>>> {
+    let color = if ok { "#16a34a" } else { "#e11d48" };
+    let html = format!(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Sourcefold</title></head><body style=\"font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fafafa;\"><div style=\"background: white; border: 1px solid #e5e5e5; border-radius: 8px; padding: 24px 32px; text-align: center;\"><h1 style=\"color: {}; font-size: 20px; margin: 0 0 8px;\">{}</h1><p style=\"color: #666; margin: 0;\">{}</p></div></body></html>",
+        color, title, message
+    );
+    html_response(html, status)
+}
+
+/// Escapes text from the query string before it goes into the page.
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 #[tauri::command]
@@ -119,20 +159,26 @@ pub async fn get_session(db: State<'_, Database>) -> Result<SessionStatus, Strin
     if let Some(s) = session::load_session() {
         Ok(SessionStatus {
             signed_in: true,
-            web_url: Some(s.web_url),
             email: s.email,
-            token: Some(s.token),
+            user_id: Some(s.user_id),
             offline: false,
         })
     } else {
         Ok(SessionStatus {
             signed_in: false,
-            web_url: None,
             email: None,
-            token: None,
+            user_id: None,
             offline,
         })
     }
+}
+
+/// The webview reports its Supabase session: after sign-in and on every token refresh.
+#[tauri::command]
+pub async fn session_set(session: SessionInput) -> Result<(), String> {
+    let previous = session::load_session();
+    let next = session_from_input(session, previous.as_ref())?;
+    session::save_session(&next).map_err(|e| format!("Couldn't save the sign-in: {}", e))
 }
 
 #[tauri::command]
@@ -167,15 +213,13 @@ pub async fn cancel_sign_in(auth_state: State<'_, Arc<AuthFlowState>>) -> Result
     Ok(())
 }
 
+/// Opens the listener the browser comes back to and returns its port. The webview then opens the
+/// Supabase sign-in address with `http://127.0.0.1:<port>/callback` as the way back.
 #[tauri::command]
 pub async fn start_sign_in(
     app: tauri::AppHandle,
-    db: State<'_, Database>,
     auth_state: State<'_, Arc<AuthFlowState>>,
-    web_url: String,
-) -> Result<(), String> {
-    let validated_url = validate_web_url(&web_url)?;
-
+) -> Result<u16, String> {
     // Cancel any previous sign-in attempt
     {
         let mut guard = match auth_state.active_server.lock() {
@@ -194,9 +238,7 @@ pub async fn start_sign_in(
         .map(|addr| addr.port())
         .ok_or_else(|| "Failed to get loopback server port".to_string())?;
 
-    let state = uuid::Uuid::new_v4().to_string();
     let server_arc = Arc::new(server);
-
     {
         let mut guard = match auth_state.active_server.lock() {
             Ok(g) => g,
@@ -205,22 +247,10 @@ pub async fn start_sign_in(
         *guard = Some(server_arc.clone());
     }
 
-    let connect_url = format!(
-        "{}/desktop/connect?callback=http%3A%2F%2F127.0.0.1%3A{}%2Fauth%2Fcallback&state={}",
-        validated_url, port, state
-    );
-
-    // Open browser with system default
-    use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_url(&connect_url, None::<&str>)
-        .map_err(|e| format!("Failed to open system browser: {}", e))?;
-
     let app_clone = app.clone();
-    let db_clone = db.inner().clone();
     let auth_state_arc = auth_state.inner().clone();
 
-    // Spawn waiting thread (timeout: 5 minutes = 300 seconds)
+    // Wait for the browser to come back (5 minutes at most).
     std::thread::spawn(move || {
         let deadline = std::time::Instant::now() + Duration::from_secs(300);
         let mut timed_out = false;
@@ -242,68 +272,39 @@ pub async fn start_sign_in(
                         None => (url_raw.as_str(), ""),
                     };
 
-                    if path != "/auth/callback" {
+                    if path != "/callback" {
                         let resp = Response::from_string("Not Found").with_status_code(404);
                         let _ = request.respond(resp);
                         continue;
                     }
 
-                    let rec_state = parse_query_param(query, "state");
-                    let rec_token = parse_query_param(query, "token");
-                    let rec_email = parse_query_param(query, "email");
-
-                    if rec_state.as_deref() != Some(&state) {
-                        let html = "<!DOCTYPE html><html><body style=\"font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fafafa;\"><div style=\"background: white; border: 1px solid #e5e5e5; border-radius: 8px; padding: 24px 32px; text-align: center;\"><h1 style=\"color: #e11d48; font-size: 20px; margin: 0 0 8px;\">Sign-in Failed</h1><p style=\"color: #666; margin: 0;\">State parameter mismatch. You can close this tab.</p></div></body></html>".to_string();
-                        let resp = html_response(html, 400);
-                        let _ = request.respond(resp);
-                        continue;
-                    }
-
-                    let token = match rec_token {
-                        Some(t) if !t.trim().is_empty() => t.trim().to_string(),
-                        _ => {
-                            let html = "<!DOCTYPE html><html><body style=\"font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fafafa;\"><div style=\"background: white; border: 1px solid #e5e5e5; border-radius: 8px; padding: 24px 32px; text-align: center;\"><h1 style=\"color: #e11d48; font-size: 20px; margin: 0 0 8px;\">Sign-in Failed</h1><p style=\"color: #666; margin: 0;\">Missing authentication token. You can close this tab.</p></div></body></html>".to_string();
-                            let resp = html_response(html, 400);
-                            let _ = request.respond(resp);
-                            continue;
+                    if let Some(code) = parse_query_param(query, "code").filter(|c| !c.trim().is_empty()) {
+                        let _ = request.respond(page(
+                            "Signed in",
+                            "You can close this tab and go back to Sourcefold.",
+                            true,
+                            200,
+                        ));
+                        let _ = app_clone.emit(OAUTH_CALLBACK_EVENT, CallbackPayload { code: code.trim().to_string() });
+                        if let Some(window) = app_clone.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
                         }
-                    };
-
-                    // Save session
-                    let sess = Session {
-                        web_url: validated_url.clone(),
-                        token,
-                        email: rec_email.filter(|e| !e.trim().is_empty()),
-                        signed_in_at: Utc::now().to_rfc3339(),
-                    };
-
-                    if let Err(e) = session::save_session(&sess) {
-                        let err_msg = format!("Failed to save session: {}", e);
-                        let _ = app_clone.emit("auth-error", &err_msg);
-                        let html = format!(
-                            "<!DOCTYPE html><html><body style=\"font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fafafa;\"><div style=\"background: white; border: 1px solid #e5e5e5; border-radius: 8px; padding: 24px 32px; text-align: center;\"><h1 style=\"color: #e11d48; font-size: 20px; margin: 0 0 8px;\">Sign-in Failed</h1><p style=\"color: #666; margin: 0;\">{}</p></div></body></html>",
-                            err_msg
-                        );
-                        let resp = html_response(html, 500);
-                        let _ = request.respond(resp);
-                        continue;
+                        break;
                     }
 
-                    // Success response with plain wording
-                    let html = "<!DOCTYPE html><html><body style=\"font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fafafa;\"><div style=\"background: white; border: 1px solid #e5e5e5; border-radius: 8px; padding: 24px 32px; text-align: center;\"><h1 style=\"color: #16a34a; font-size: 20px; margin: 0 0 8px;\">Signed in to Sourcefold Desktop</h1><p style=\"color: #666; margin: 0;\">You're signed in. You can close this tab and go back to Sourcefold.</p></div></body></html>".to_string();
-                    let resp = html_response(html, 200);
-                    let _ = request.respond(resp);
-
-                    let _ = db_clone.set_setting("offline_mode", "false");
-
-                    // Emit auth-changed
-                    let _ = app_clone.emit("auth-changed", ());
-
-                    // Bring window to front
-                    if let Some(window) = app_clone.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
+                    // Supabase (or Google) refused: `?error=…&error_description=…`.
+                    let message = parse_query_param(query, "error_description")
+                        .or_else(|| parse_query_param(query, "error"))
+                        .filter(|m| !m.trim().is_empty())
+                        .unwrap_or_else(|| "The sign-in didn't finish.".to_string());
+                    let _ = request.respond(page(
+                        "Sign-in failed",
+                        &format!("{} You can close this tab.", escape_html(&message)),
+                        false,
+                        400,
+                    ));
+                    let _ = app_clone.emit("auth-error", &message);
                     break;
                 }
                 Ok(None) => {
@@ -341,7 +342,7 @@ pub async fn start_sign_in(
         }
     });
 
-    Ok(())
+    Ok(port)
 }
 
 #[cfg(test)]
@@ -357,24 +358,48 @@ mod tests {
         assert_eq!(parse_query_param(q, "missing"), None);
     }
 
+    fn input(user_id: &str) -> SessionInput {
+        SessionInput {
+            supabase_url: "https://project.supabase.co/".into(),
+            publishable_key: "sb_publishable_x".into(),
+            access_token: "eyJ.a.b".into(),
+            expires_at: 1_800_000_000,
+            user_id: user_id.into(),
+            email: Some("me@example.com".into()),
+        }
+    }
+
     #[test]
-    fn test_validate_web_url() {
-        // Valid https URLs
-        assert!(validate_web_url("https://app.sourcefold.com").is_ok());
-        assert!(validate_web_url("https://sourcefold.app/").is_ok());
+    fn session_input_is_checked_and_keeps_the_first_sign_in_time() {
+        let first = session_from_input(input("u1"), None).unwrap();
+        assert_eq!(first.supabase_url, "https://project.supabase.co");
+        assert_eq!(first.user_id, "u1");
 
-        // Valid http for localhost/127.0.0.1
-        assert!(validate_web_url("http://localhost:5173").is_ok());
-        assert!(validate_web_url("http://127.0.0.1:3000").is_ok());
+        let mut earlier = first.clone();
+        earlier.signed_in_at = "2026-01-01T00:00:00Z".into();
+        let refreshed = session_from_input(input("u1"), Some(&earlier)).unwrap();
+        assert_eq!(refreshed.signed_in_at, "2026-01-01T00:00:00Z");
+        let other = session_from_input(input("u2"), Some(&earlier)).unwrap();
+        assert_ne!(other.signed_in_at, "2026-01-01T00:00:00Z");
+    }
 
-        // Invalid http for remote host
-        assert!(validate_web_url("http://evil.com").is_err());
+    #[test]
+    fn session_input_refuses_bad_addresses_and_empty_tokens() {
+        let mut bad = input("u1");
+        bad.supabase_url = "http://evil.example".into();
+        assert!(session_from_input(bad, None).is_err());
 
-        // Invalid with credentials
-        assert!(validate_web_url("https://user:pass@sourcefold.app").is_err());
+        let mut local = input("u1");
+        local.supabase_url = "http://127.0.0.1:54321".into();
+        assert!(session_from_input(local, None).is_ok());
 
-        // Invalid with query or fragment
-        assert!(validate_web_url("https://sourcefold.app?query=1").is_err());
-        assert!(validate_web_url("https://sourcefold.app#fragment").is_err());
+        let mut empty = input("u1");
+        empty.access_token = " ".into();
+        assert!(session_from_input(empty, None).is_err());
+    }
+
+    #[test]
+    fn page_text_from_the_query_is_escaped() {
+        assert_eq!(escape_html("<b>\"x\" & y</b>"), "&lt;b&gt;&quot;x&quot; &amp; y&lt;/b&gt;");
     }
 }

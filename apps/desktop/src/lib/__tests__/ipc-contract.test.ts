@@ -201,7 +201,8 @@ describe("IPC contract: tauriInvoke calls match the Rust commands", () => {
   it("parses the parameters of the commands the earlier mismatches were about", () => {
     const { registry } = loadRealRegistry();
     expect(registry.get("set_offline_mode")).toEqual([{ name: "offline", required: true }]);
-    expect(registry.get("start_sign_in")).toEqual([{ name: "webUrl", required: true }]);
+    expect(registry.get("start_sign_in")).toEqual([]);
+    expect(registry.get("session_set")).toEqual([{ name: "session", required: true }]);
     expect(registry.get("get_item")).toEqual([{ name: "id", required: true }]);
     expect(registry.get("get_session")).toEqual([]);
     expect(registry.get("move_folder")).toEqual([
@@ -371,5 +372,26 @@ describe("IPC contract: the project file commands", () => {
     ]) {
       expect(registered).toContain(command);
     }
+  });
+});
+
+describe("IPC contract: the local API bridge", () => {
+  it("answers local-api-request with the headers the Rust command reads", () => {
+    // local_api_respond takes the body as raw bytes, so it is called with `invoke`, not
+    // `tauriInvoke`, and the generic check above can't see it.
+    const rust = readFileSync(path.join(rustDir, "local_api.rs"), "utf8");
+    const constant = (name: string) =>
+      new RegExp(`pub const ${name}: &str = "([^"]+)"`).exec(rust)?.[1];
+    const ts = readFileSync(path.join(srcDir, "lib/local-api.ts"), "utf8");
+
+    expect(constant("REQUEST_EVENT")).toBe("local-api-request");
+    expect(ts).toContain(`listen<BridgeRequest>("${constant("REQUEST_EVENT")}"`);
+    expect(ts).toContain(`invoke("local_api_respond", bytes, {`);
+    for (const name of ["ID_HEADER", "STATUS_HEADER", "CONTENT_TYPE_HEADER"]) {
+      const header = constant(name);
+      expect(header).toMatch(/^x-local-api-/);
+      expect(ts).toContain(`"${header}":`);
+    }
+    expect(loadRealRegistry().registered).toContain("local_api_respond");
   });
 });

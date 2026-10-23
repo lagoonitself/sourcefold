@@ -2,7 +2,7 @@
 
 use std::env;
 use std::sync::{Arc, Mutex};
-use sourcefold_desktop::{agent, commands, db::Database, native_host, native_installer, search, server};
+use sourcefold_desktop::{agent, commands, db::Database, local_api, native_host, native_installer, search, server};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -88,6 +88,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(db)
         .manage(auth_flow_state)
+        .manage(local_api::LocalApiBridge::default())
         .setup(move |_app| {
             let handle = _app.handle().clone();
             server::start_local_server(server_db, server::DEFAULT_PORT, Some(handle));
@@ -127,6 +128,8 @@ fn main() {
             commands::sign_out,
             commands::set_offline_mode,
             commands::start_sign_in,
+            commands::session_set,
+            commands::local_api_respond,
             commands::cancel_sign_in,
             commands::substack_fetch,
             commands::get_substack_cookie,

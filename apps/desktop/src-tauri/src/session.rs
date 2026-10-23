@@ -3,15 +3,43 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 static SESSION_PATH_OVERRIDE: RwLock<Option<PathBuf>> = RwLock::new(None);
 
+/// The signed-in account, as the webview's Supabase client last reported it (`session_set`).
+/// The webview keeps the Supabase session and refreshes it; this file only lets the extension
+/// (`/api/session`, the native host) and Claude borrow the current access token. It never holds
+/// the Supabase refresh token: sharing that would break Supabase's refresh-token rotation.
+///
+/// Files from before 2026-10-23 (`web_url` + an `sf_` token) don't parse, so they read as signed
+/// out and the app asks to sign in again once.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Session {
-    pub web_url: String,
-    pub token: String,
+    pub supabase_url: String,
+    pub publishable_key: String,
+    pub access_token: String,
+    /// Unix seconds.
+    pub expires_at: i64,
+    pub user_id: String,
     pub email: Option<String>,
     pub signed_in_at: String,
+}
+
+/// What the extension gets from `/api/session` and the native host's `get_session`.
+pub fn session_json(session: Option<&Session>) -> Value {
+    match session {
+        Some(s) => json!({
+            "signedIn": true,
+            "supabaseUrl": s.supabase_url,
+            "supabasePublishableKey": s.publishable_key,
+            "accessToken": s.access_token,
+            "expiresAt": s.expires_at,
+            "userId": s.user_id,
+            "email": s.email,
+        }),
+        None => json!({ "signedIn": false }),
+    }
 }
 
 pub fn app_data_dir() -> PathBuf {
@@ -87,6 +115,20 @@ pub fn clear_session_from(path: &Path) -> io::Result<()> {
 #[cfg(test)]
 pub static TEST_SESSION_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// A signed-in session for tests.
+#[cfg(test)]
+pub fn test_session() -> Session {
+    Session {
+        supabase_url: "https://project.supabase.co".to_string(),
+        publishable_key: "sb_publishable_test".to_string(),
+        access_token: "eyJ.test.token".to_string(),
+        expires_at: 4_102_444_800,
+        user_id: "00000000-0000-4000-8000-000000000001".to_string(),
+        email: Some("user@example.com".to_string()),
+        signed_in_at: "2026-10-23T00:00:00Z".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,13 +140,7 @@ mod tests {
 
         assert_eq!(load_session_from(&session_file), None);
 
-        let session = Session {
-            web_url: "https://test.sourcefold.app".to_string(),
-            token: "sf_test_token_12345".to_string(),
-            email: Some("user@example.com".to_string()),
-            signed_in_at: "2026-10-15T00:00:00Z".to_string(),
-        };
-
+        let session = test_session();
         save_session_to(&session_file, &session).expect("failed to save session");
 
         let loaded = load_session_from(&session_file).expect("failed to load session");
@@ -116,8 +152,33 @@ mod tests {
         // Clearing an already removed session should succeed
         assert!(clear_session_from(&session_file).is_ok());
 
-        // Cleanup
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn an_old_website_session_reads_as_signed_out() {
+        let temp_dir = std::env::temp_dir().join(format!("sf_test_old_session_{}", uuid::Uuid::new_v4()));
+        let session_file = temp_dir.join("session.json");
+        fs::create_dir_all(&temp_dir).unwrap();
+        fs::write(
+            &session_file,
+            r#"{"web_url":"https://web.sourcefold.app","token":"sf_abc","email":"a@b.c","signed_in_at":"2026-10-15T00:00:00Z"}"#,
+        )
+        .unwrap();
+        assert_eq!(load_session_from(&session_file), None);
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn the_extension_gets_the_access_token_and_never_a_refresh_token() {
+        let value = session_json(Some(&test_session()));
+        assert_eq!(value["signedIn"], true);
+        assert_eq!(value["accessToken"], "eyJ.test.token");
+        assert_eq!(value["supabaseUrl"], "https://project.supabase.co");
+        assert_eq!(value["supabasePublishableKey"], "sb_publishable_test");
+        assert_eq!(value["userId"], "00000000-0000-4000-8000-000000000001");
+        assert!(value.get("refreshToken").is_none());
+        assert_eq!(session_json(None), json!({ "signedIn": false }));
     }
 
     #[test]
@@ -135,13 +196,7 @@ mod tests {
         set_session_path_override(Some(session_file.clone()));
         assert_eq!(session_file_path(), session_file);
 
-        let session = Session {
-            web_url: "https://override.sourcefold.app".to_string(),
-            token: "token_override_xyz".to_string(),
-            email: Some("injected@example.com".to_string()),
-            signed_in_at: "2026-10-15T12:00:00Z".to_string(),
-        };
-
+        let session = test_session();
         save_session(&session).expect("failed to save session with override");
         let loaded = load_session().expect("failed to load session with override");
         assert_eq!(loaded, session);

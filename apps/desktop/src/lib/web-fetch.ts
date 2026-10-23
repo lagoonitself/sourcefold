@@ -1,3 +1,4 @@
+import type { FetchUrl } from "@sourcefold/client";
 import { SourceError, type SourceFetch, type SourceFetchResponse } from "@sourcefold/core";
 
 /**
@@ -115,4 +116,39 @@ export const desktopSourceFetch: SourceFetch = async (request) => {
     result.bytes = response.bytes ? decodeBase64(response.bytes) : new Uint8Array();
   }
   return result;
+};
+
+/** Statuses a `Response` can carry; anything else from Rust is reported as a bad gateway. */
+function responseStatus(status: number): number {
+  return status >= 200 && status <= 599 ? status : 502;
+}
+
+function headersOf(init?: RequestInit): Record<string, string> {
+  const out: Record<string, string> = {};
+  new Headers(init?.headers).forEach((value, name) => {
+    out[name] = value;
+  });
+  return out;
+}
+
+/**
+ * `fetch` for links people give us, for the shared API code in `@sourcefold/client` (Grokipedia
+ * pages, images copied into Drive). Same Rust request as `desktopSourceFetch`: no CORS, and this
+ * computer's own addresses refused, like the website's `publicFetch`.
+ */
+export const desktopFetchUrl: FetchUrl = async (url, init) => {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const res = await desktopSourceFetch({
+    url,
+    method: method === "POST" ? "POST" : "GET",
+    headers: headersOf(init),
+    body: typeof init?.body === "string" ? init.body : undefined,
+    responseType: "bytes",
+    signal: init?.signal ?? undefined,
+  });
+  const body = res.bytes ?? new Uint8Array();
+  return new Response(body.byteLength > 0 ? (body as BodyInit) : null, {
+    status: responseStatus(res.status),
+    headers: res.headers,
+  });
 };

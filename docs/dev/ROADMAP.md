@@ -158,7 +158,7 @@ Contract: `docs/dev/handoff-no-website.md`. Comes before phase 2 of sharing.
 
 - [x] Step 1: Supabase groundwork. RLS audit (nothing to grant), Edge Function `google-access-token` deployed, sign-up allow list migration applied, GitHub variables set, owner set the secrets (2026-10-23). Owner: redirect URLs if not done, turn on the hook.
 - [x] Step 2: the website's API running inside the app and extension from `packages/client` (2026-10-23). The code moved rather than being copied: the website's routes are thin wrappers around the same handlers; `createLocalApi` routes 29 paths plus health, with Drive pushes in-process.
-- [ ] Step 3: desktop signs in with Google through Supabase, uses the local API, pushes to Drive itself, local copy without the website.
+- [x] Step 3: desktop signs in with Google through Supabase, uses the local API, pushes to Drive itself, local copy without the website (built 2026-10-23, waiting for the owner's test).
 - [ ] Step 4: extension uses the desktop app's sign-in or its own.
 - [ ] Step 5: Claude starts the desktop app in the background instead of using the website.
 - [ ] Step 6: release variables, README, INSTALL and SELF-HOSTING with the website optional.

@@ -156,7 +156,7 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
 
 Contract: `docs/dev/handoff-no-website.md`. Comes before phase 2 of sharing.
 
-- [x] Step 1: Supabase groundwork. RLS audit (nothing to grant), Edge Function `google-access-token` deployed, sign-up allow list migration written, GitHub variables set (2026-10-23). Owner: redirect URLs, function secrets, turn on the hook; agent: apply the migration once the owner agrees.
+- [x] Step 1: Supabase groundwork. RLS audit (nothing to grant), Edge Function `google-access-token` deployed, sign-up allow list migration applied, GitHub variables set, owner set redirect URLs and secrets (2026-10-23). Owner: turn on the hook.
 - [ ] Step 2: the website's API (30 routes) running inside the app and extension from `packages/client`, with the website importing the shared modules.
 - [ ] Step 3: desktop signs in with Google through Supabase, uses the local API, pushes to Drive itself, local copy without the website.
 - [ ] Step 4: extension uses the desktop app's sign-in or its own.

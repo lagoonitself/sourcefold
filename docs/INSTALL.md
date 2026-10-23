@@ -39,9 +39,9 @@ All downloads are on the [latest release](https://github.com/lagoonitself/source
 
 ### Sign in, or use it offline
 
-1. On the welcome screen, check the website address and click **Sign in with browser**.
-2. Your browser opens the Sourcefold website. Sign in with Google if asked, then click **Connect**.
-3. Back in the app, your projects appear. Changes sync both ways with the website.
+1. On the welcome screen, click **Sign in with Google**.
+2. Your browser opens Google. Pick your account and allow access; the page then says "Signed in".
+3. Back in the app, your projects appear. The app works on its own and doesn't need the website open; the website shows the same library.
 
 Prefer not to sign in? Click **Use offline on this computer**. Everything stays in `Documents/Sourcefold` on this computer.
 

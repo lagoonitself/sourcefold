@@ -81,7 +81,7 @@ export function closedDesktop(): DesktopBridge {
 export function fakeDesktop(parts: Partial<DesktopBridge> = {}): DesktopBridge {
   return {
     status: vi.fn(async () => ({
-      version: "0.3.0",
+      version: "0.4.0",
       mode: "signed_in" as const,
       web_url: TEST_CREDENTIALS.webUrl,
       email: TEST_CREDENTIALS.email,

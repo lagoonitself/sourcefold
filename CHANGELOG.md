@@ -2,9 +2,11 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
-## Unreleased
+## 0.4.0 (2026-10-23)
 
 ### New
+
+- **The desktop app signs in by itself.** Click **Sign in with Google** on the welcome screen; the app no longer goes through the website, and does everything (adding links, Drive, the local copy, project files) on its own. You sign in once more after updating.
 
 - **Project files.** Open the project menu and choose **Download project file** to save a whole project as one `.sourcefold` file: its groups, every source with its text and images, X threads, notes, highlights, tags, keep/maybe/cut, summaries, quote cards, the outline and b-roll. Send it to someone, and **Import project file** gives them their own copy as a new project. It works on the website and in the desktop app, signed in or offline, with a progress bar and a Cancel button (cancelling leaves nothing half-done). Post images and GIFs come from the file, so they don't have to be downloaded from the web again.
 

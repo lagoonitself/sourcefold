@@ -79,6 +79,31 @@ describe("createLocalApi", () => {
     expect(await res.json()).toEqual({ error: { message: "Sign in to continue." } });
   });
 
+  it("takes the user from currentUserId when given, without touching auth", async () => {
+    const fake = createFakeDb({ folders: [] }, { folder_item_counts: [] });
+    const db = Object.defineProperty(
+      Object.assign(fake.db, { functions: { invoke: vi.fn() } }),
+      "auth",
+      {
+        get(): never {
+          throw new Error("auth isn't available with the accessToken option");
+        },
+      },
+    ) as unknown as LocalApiDeps["supabase"];
+    const borrowed = (userId: string | null) =>
+      createLocalApi({
+        supabase: db,
+        fetchUrl: vi.fn(),
+        parseHtml: vi.fn(),
+        currentUserId: async () => userId,
+      });
+
+    expect((await borrowed(USER_ID).fetch("/api/folders")).status).toBe(200);
+    const folderQuery = fake.queries.find((q) => q.table === "folders")!;
+    expect(callsOf(folderQuery, "eq")).toContainEqual(["user_id", USER_ID]);
+    expect((await borrowed(null).fetch("/api/folders")).status).toBe(401);
+  });
+
   it("answers 404 for unknown paths and 405 for methods a route doesn't have", async () => {
     const { db } = createFakeDb({});
     expect((await api(db).fetch("/api/nope")).status).toBe(404);

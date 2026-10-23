@@ -124,13 +124,9 @@ The **Release** workflow builds `Sourcefold-Windows-Setup.exe`, `Sourcefold-Mac.
    - Turn on **Developer mode** in the top-right corner.
    - Click **Load unpacked** and select the unzipped folder (or `apps/extension/.output/chrome-mv3`).
 3. Connection modes:
-   - **Auto (default):** the extension talks to the desktop app over Chrome Native Messaging or local HTTP (`127.0.0.1:23456`). If the desktop app is signed in, saves go to your account through the web API. If the desktop app is offline, saves go to your local SQLite library. If the desktop app is closed, saves fall back to your configured web app address and access token.
-   - **Desktop app only:** saves only to the desktop app (account or offline library).
-   - **Web app only:** saves directly to the web app address and access token configured in extension options.
-4. Set up web app fallback:
-   - In the Sourcefold web app, open **Settings** and generate a new access token.
-   - In extension options (right-click the extension icon and select **Options**, or click the gear icon in the popup), enter your web address (`http://localhost:3000` or `https://<app>.vercel.app`) and paste the access token.
-   - Click **Test connection** to verify connectivity.
+   - **Auto (default):** when the extension is signed in (popup or Options → **Sign in with Google**), saves go straight to your account: the extension runs the same API code as the website inside its background worker, against Supabase and Google Drive. Otherwise it asks the desktop app over Chrome Native Messaging or local HTTP (`127.0.0.1:23456`): signed in, the extension borrows its access token; offline, saves go to the local SQLite library.
+   - **Desktop app only:** saves only through the desktop app (its sign-in or its offline library).
+4. Your own Supabase project: build with `WXT_SUPABASE_URL` and `WXT_SUPABASE_PUBLISHABLE_KEY` (the release workflow takes them from the `SOURCEFOLD_SUPABASE_URL` and `SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY` repository variables), or set them in Options → **Advanced**. In Supabase → Authentication → URL Configuration, add `https://<extension id>.chromiumapp.org/**` to the redirect URLs (the extension's ID comes from the `key` in `apps/extension/wxt.config.ts`).
 5. Shortcuts and actions:
    - Press `Alt+Shift+S` to open the extension popup and save the current tab. The popup shows where saves will land.
    - Right-click any Grokipedia link and select **Save link to Sourcefold** to queue the article without opening it.

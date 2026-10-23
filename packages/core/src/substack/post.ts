@@ -38,13 +38,18 @@ function visibleTextLength(html: string): number {
 // nothing after it. Subscribers get the marker too, but with the paid text after it.
 function isLocked(bodyHtml: string, doc: Document): boolean {
   if (!bodyHtml.trim()) return true;
+  let unlocked = false;
   for (const marker of PAYWALL_MARKERS) {
     const at = bodyHtml.lastIndexOf(marker);
     if (at !== -1) {
       const after = bodyHtml.slice(bodyHtml.indexOf(">", at) + 1);
       if (visibleTextLength(after) < 40) return true;
+      unlocked = true;
     }
   }
+  // The paid text after the marker settles it: the page can still show subscribe boxes and
+  // paywall blocks elsewhere (the substack.com reader does), which say nothing about this post.
+  if (unlocked) return false;
   return Boolean(doc.querySelector(PAGE_PAYWALL_SELECTOR));
 }
 

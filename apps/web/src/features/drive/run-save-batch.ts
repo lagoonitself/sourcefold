@@ -22,6 +22,7 @@ import {
 import { loadHighlightsForItems } from "@/features/highlights/load";
 import { syncGoogleDoc, trashGoogleDoc } from "./google-doc-sync";
 import { syncPostImages, trashPostImages } from "./post-images";
+import { stagedMediaFor } from "./staged-media";
 
 export interface SaveBatchFailedItem {
   id: string;
@@ -518,7 +519,14 @@ export async function runSaveBatch(
               : null;
           const current = { parentId: targetParentDriveId, fileName };
           await Promise.all([
-            syncPostImages(accessToken, current, previous, body, groupFolderIds),
+            syncPostImages(
+              accessToken,
+              current,
+              previous,
+              body,
+              groupFolderIds,
+              stagedMediaFor(supabase, userId, item.id),
+            ),
             syncGoogleDoc(accessToken, current, previous, body),
           ]);
         }

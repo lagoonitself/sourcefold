@@ -87,15 +87,39 @@ export interface RunOptions {
   onProgress: (progress: ProjectFileProgress) => void;
 }
 
+/**
+ * Runs an offline (Rust) export or import: its `project-file-progress` events go to
+ * `onProgress`, and aborting `signal` asks Rust to stop at its next step.
+ */
+async function runOffline<T>(
+  { signal, onProgress }: RunOptions,
+  run: () => Promise<T>,
+): Promise<T> {
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlisten = await listen<ProjectFileProgress>("project-file-progress", (event) =>
+    onProgress(event.payload),
+  );
+  const cancel = () => void tauriInvoke<void>("project_file_cancel").catch(() => {});
+  signal.addEventListener("abort", cancel);
+  try {
+    return await run();
+  } finally {
+    signal.removeEventListener("abort", cancel);
+    unlisten();
+  }
+}
+
 export async function exportProjectFile(
   projectId: string,
   path: string,
   { signal, onProgress }: RunOptions,
 ): Promise<ExportOutcome> {
   if (shouldUseTauri()) {
-    const report = await tauriInvoke<{ file_name: string; skipped: SkippedSource[] }>(
-      "project_file_export",
-      { projectId, path },
+    const report = await runOffline({ signal, onProgress }, () =>
+      tauriInvoke<{ file_name: string; skipped: SkippedSource[] }>("project_file_export", {
+        projectId,
+        path,
+      }),
     );
     return { skipped: report.skipped };
   }
@@ -149,20 +173,17 @@ export async function importProjectFile(
   { signal, onProgress }: RunOptions,
 ): Promise<ImportOutcome> {
   if (file.mode === "offline") {
-    const report = await tauriInvoke<{
-      project_id: string;
-      name: string;
-      skipped: SkippedSource[];
-    }>("project_file_import", { path: file.path });
+    const report = await runOffline({ signal, onProgress }, () =>
+      tauriInvoke<{
+        project_id: string;
+        name: string;
+        skipped: SkippedSource[];
+      }>("project_file_import", { path: file.path }),
+    );
     return { projectId: report.project_id, name: report.name, skipped: report.skipped };
   }
   return await importProjectViaApi(remoteProjectFileApi(signal), file.contents, {
     signal,
     onProgress,
   });
-}
-
-/** Offline the work happens in one Rust call, which can't be stopped part way. */
-export function canCancel(): boolean {
-  return !shouldUseTauri();
 }

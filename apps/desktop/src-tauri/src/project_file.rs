@@ -13,6 +13,7 @@ use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::{DateTime, Utc};
 use rusqlite::params;
@@ -52,6 +53,40 @@ const ALLOWED_EXTENSIONS: [&str; 9] = ["md", "png", "jpg", "jpeg", "gif", "webp"
 const IMAGE_EXTENSIONS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "webp", "avif", "svg"];
 /// Already compressed; stored as is. Everything else is deflated.
 const STORED_EXTENSIONS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "webp", "avif", "mp4"];
+
+/// What a cancelled export or import answers; the app shows nothing for it.
+pub const CANCELLED: &str = "Cancelled.";
+
+/// Lets the app follow a long export or import ("Copying files 12 of 80") and stop it.
+pub struct RunControl<'a> {
+    cancelled: &'a AtomicBool,
+    report: &'a (dyn Fn(&str, usize, usize) + Sync),
+}
+
+static NEVER_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+impl<'a> RunControl<'a> {
+    pub fn new(cancelled: &'a AtomicBool, report: &'a (dyn Fn(&str, usize, usize) + Sync)) -> Self {
+        Self { cancelled, report }
+    }
+
+    /// No progress and no way to stop, for tests and callers that don't need either.
+    pub fn none() -> RunControl<'static> {
+        RunControl { cancelled: &NEVER_CANCELLED, report: &|_, _, _| {} }
+    }
+
+    fn check(&self) -> Result<(), String> {
+        if self.cancelled.load(Ordering::Relaxed) {
+            Err(CANCELLED.to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn progress(&self, phase: &str, done: usize, total: usize) {
+        (self.report)(phase, done, total);
+    }
+}
 
 // -----------------------------------------------------------------------------
 // The manifest (mirrors manifest.ts)
@@ -1020,6 +1055,16 @@ fn export_error(err: impl std::fmt::Display) -> String {
 /// app writes it to disk, image sources, and the images and GIFs of posts. Sources whose file
 /// can't be read are listed in `skipped` and are in the file without it.
 pub fn export_project_file(db: &Database, project_id: &str, dest: &Path) -> Result<ExportReport, String> {
+    export_project_file_with(db, project_id, dest, &RunControl::none())
+}
+
+/// `export_project_file` with progress and cancelling. A cancelled export leaves no file behind.
+pub fn export_project_file_with(
+    db: &Database,
+    project_id: &str,
+    dest: &Path,
+    control: &RunControl,
+) -> Result<ExportReport, String> {
     let project = db
         .get_folder(project_id)
         .map_err(|_| "That project isn't there any more.".to_string())?;
@@ -1119,6 +1164,7 @@ pub fn export_project_file(db: &Database, project_id: &str, dest: &Path) -> Resu
         &storage_root,
         &part,
         &mut skipped,
+        control,
     );
     match result {
         Ok(()) => {
@@ -1149,6 +1195,7 @@ fn write_project_zip(
     storage_root: &Path,
     part: &Path,
     skipped: &mut Vec<Skipped>,
+    control: &RunControl,
 ) -> Result<(), String> {
     let out = File::create(part).map_err(export_error)?;
     let mut zip = ZipWriter::new(BufWriter::new(out));
@@ -1158,7 +1205,10 @@ fn write_project_zip(
     let mut x_posts: Vec<ManifestXPost> = Vec::new();
     let mut highlights: Vec<ManifestHighlight> = Vec::new();
 
-    for item in items {
+    control.progress("files", 0, items.len());
+    for (index, item) in items.iter().enumerate() {
+        control.check()?;
+        control.progress("files", index, items.len());
         let (file_path, media_path) = paths[&item.id].clone();
         let mut file: Option<String> = None;
         let mut media_folder: Option<String> = None;
@@ -1391,6 +1441,8 @@ fn write_project_zip(
     json.push('\n');
     zip.start_file(MANIFEST_PATH, deflated(false)).map_err(export_error)?;
     zip.write_all(json.as_bytes()).map_err(export_error)?;
+    control.check()?;
+    control.progress("packing", 0, 1);
     let mut inner = zip.finish().map_err(export_error)?;
     inner.flush().map_err(export_error)?;
     Ok(())
@@ -1447,7 +1499,16 @@ fn db_error(err: rusqlite::Error) -> String {
 /// rewired, then the Markdown files, images and `_files` folders on disk. A name already in use
 /// becomes "Cars (2)".
 pub fn import_project_file(db: &Database, path: &Path) -> Result<ImportReport, String> {
+    import_project_file_with(db, path, &RunControl::none())
+}
+
+/// `import_project_file` with progress and cancelling. Cancelled before the database commit,
+/// nothing was added; after it, the new project is deleted again with its files.
+pub fn import_project_file_with(db: &Database, path: &Path, control: &RunControl) -> Result<ImportReport, String> {
+    control.progress("reading", 0, 1);
     let mut archive = open_project_file(path)?;
+    control.check()?;
+    control.progress("reading", 1, 1);
     let m = archive.manifest.clone();
 
     // New ids for everything.
@@ -1666,6 +1727,7 @@ pub fn import_project_file(db: &Database, path: &Path) -> Result<ImportReport, S
         })
         .collect();
 
+    control.check()?;
     let now = Utc::now().to_rfc3339();
     db.with_conn(|conn| {
         let tx = conn.transaction()?;
@@ -1739,7 +1801,15 @@ pub fn import_project_file(db: &Database, path: &Path) -> Result<ImportReport, S
     // After the commit, the files go where the app keeps them: the Markdown (which also makes
     // the search index look again), image sources, and a post's images in `<name>_files/`.
     let storage_root = service::resolve_storage_dir(db);
-    for job in jobs {
+    let total = jobs.len();
+    control.progress("saving", 0, total);
+    for (index, job) in jobs.into_iter().enumerate() {
+        if control.check().is_err() {
+            let _ = service::delete_folder(db, &project_id);
+            crate::search::notify();
+            return Err(CANCELLED.to_string());
+        }
+        control.progress("saving", index, total);
         match job {
             DiskJob::Text { item_id, folder_id, title, created_at, file, media_folder } => {
                 let text = db.get_item(&item_id).ok().and_then(|i| i.markdown).unwrap_or_default();
@@ -2433,6 +2503,48 @@ mod tests {
         zip_with(&bad_path, &[("sourcefold.json", bad.to_string().into_bytes())]);
         assert!(import_project_file(&db, &bad_path).is_err());
         assert_eq!(db.get_folders(true).len(), before + 3);
+    }
+
+    #[test]
+    fn cancelling_leaves_no_file_and_no_project() {
+        let (db, dir) = test_db("cancel");
+        let storage = dir.join("storage");
+        let project_id = build_project(&db, &storage);
+        let file = dir.join("Cars.sourcefold");
+        export_project_file(&db, &project_id, &file).unwrap();
+
+        // Stopped part way through the export: no file, no `.part` left over.
+        let cancelled = AtomicBool::new(false);
+        let report = |phase: &str, done: usize, _total: usize| {
+            if phase == "files" && done == 1 {
+                cancelled.store(true, Ordering::Relaxed);
+            }
+        };
+        let dest = dir.join("Stopped.sourcefold");
+        let err = export_project_file_with(&db, &project_id, &dest, &RunControl::new(&cancelled, &report)).unwrap_err();
+        assert_eq!(err, CANCELLED);
+        assert!(!dest.exists());
+        assert!(!dir.join("Stopped.sourcefold.part").exists());
+
+        // Stopped while writing files, after the commit: the project goes again.
+        let projects_before = db.get_folders(false).iter().filter(|f| f.parent_id.is_none()).count();
+        let cancelled = AtomicBool::new(false);
+        let report = |phase: &str, done: usize, _total: usize| {
+            if phase == "saving" && done == 1 {
+                cancelled.store(true, Ordering::Relaxed);
+            }
+        };
+        let err = import_project_file_with(&db, &file, &RunControl::new(&cancelled, &report)).unwrap_err();
+        assert_eq!(err, CANCELLED);
+        let projects_after = db.get_folders(false).iter().filter(|f| f.parent_id.is_none()).count();
+        assert_eq!(projects_before, projects_after);
+        assert!(!storage.join("Cars (2)").join("Engines").join("Turbocharger.md").exists());
+
+        // Stopped while reading: nothing at all.
+        let cancelled = AtomicBool::new(true);
+        let err = import_project_file_with(&db, &file, &RunControl::new(&cancelled, &|_, _, _| {})).unwrap_err();
+        assert_eq!(err, CANCELLED);
+        assert_eq!(db.get_folders(false).iter().filter(|f| f.parent_id.is_none()).count(), projects_before);
     }
 
     #[test]

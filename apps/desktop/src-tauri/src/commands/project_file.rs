@@ -1,10 +1,30 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
+use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request, Response};
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::db::Database;
-use crate::project_file::{self, ExportReport, ImportReport, ProjectFileSummary};
+use crate::project_file::{self, ExportReport, ImportReport, ProjectFileSummary, RunControl};
+
+/// Set by `project_file_cancel`; the running export or import stops at its next step. One runs
+/// at a time (the dialog is modal), so one flag is enough.
+static CANCEL: AtomicBool = AtomicBool::new(false);
+
+/// The `project-file-progress` event: the same phases as `ProjectFileProgress` in core.
+#[derive(Clone, Serialize)]
+struct ProgressEvent<'a> {
+    phase: &'a str,
+    done: usize,
+    total: usize,
+}
+
+fn emit_progress(app: &AppHandle) -> impl Fn(&str, usize, usize) + Sync + '_ {
+    move |phase, done, total| {
+        let _ = app.emit("project-file-progress", ProgressEvent { phase, done, total });
+    }
+}
 
 /// Header that carries the (percent-encoded) path of `project_file_write`, because the request
 /// body is the raw bytes of the zip.
@@ -44,15 +64,20 @@ fn checked_path(path: &str) -> Result<PathBuf, String> {
 /// Writes the offline project to a `.sourcefold` file at `path`.
 #[tauri::command]
 pub async fn project_file_export(
+    app: AppHandle,
     db: State<'_, Database>,
     project_id: String,
     path: String,
 ) -> Result<ExportReport, String> {
     let dest = checked_path(&path)?;
     let db = db.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || project_file::export_project_file(&db, &project_id, &dest))
-        .await
-        .map_err(|e| e.to_string())?
+    CANCEL.store(false, Ordering::Relaxed);
+    tauri::async_runtime::spawn_blocking(move || {
+        let report = emit_progress(&app);
+        project_file::export_project_file_with(&db, &project_id, &dest, &RunControl::new(&CANCEL, &report))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// What a project file holds, after checking all of it, for the import preview.
@@ -66,12 +91,27 @@ pub async fn project_file_inspect(path: String) -> Result<ProjectFileSummary, St
 
 /// Imports a project file as a new project.
 #[tauri::command]
-pub async fn project_file_import(db: State<'_, Database>, path: String) -> Result<ImportReport, String> {
+pub async fn project_file_import(
+    app: AppHandle,
+    db: State<'_, Database>,
+    path: String,
+) -> Result<ImportReport, String> {
     let file = checked_path(&path)?;
     let db = db.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || project_file::import_project_file(&db, &file))
-        .await
-        .map_err(|e| e.to_string())?
+    CANCEL.store(false, Ordering::Relaxed);
+    tauri::async_runtime::spawn_blocking(move || {
+        let report = emit_progress(&app);
+        project_file::import_project_file_with(&db, &file, &RunControl::new(&CANCEL, &report))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Stops the running offline export or import at its next step.
+#[tauri::command]
+pub async fn project_file_cancel() -> Result<(), String> {
+    CANCEL.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 /// Saves the zip the webview built (signed in). The bytes are the raw request body; the path is

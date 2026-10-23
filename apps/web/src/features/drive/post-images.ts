@@ -2,6 +2,7 @@ import "server-only";
 import { markdownImageUrls, postImageFileNames, postImagesFolderName } from "@sourcefold/core";
 import { createFolder, listChildren, updateFile, uploadFile } from "@/lib/google/drive";
 import { publicFetch } from "@/lib/public-fetch";
+import type { StagedMedia } from "./staged-media";
 
 // A copy of each image in a post, in `<file name>_files/` next to its file in Drive
 // (docs/FILE-FORMAT.md, "Post images"). The Markdown keeps linking to the web copy.
@@ -86,6 +87,9 @@ async function inBatches<T>(items: T[], run: (item: T) => Promise<void>): Promis
  * Brings a post's image folder in line with its Markdown: follows a rename or move of the post,
  * uploads images it doesn't have yet, trashes ones the post no longer uses, and trashes the
  * folder when the post has no images. Safe to run again after a partial run.
+ *
+ * `staged`: copies that came in a project file. They are used before the web copy, and deleted
+ * once every image they were for is in Drive.
  */
 export async function syncPostImages(
   token: string,
@@ -93,6 +97,7 @@ export async function syncPostImages(
   previous: FileSpot | null,
   markdown: string,
   groupFolderIds: ReadonlySet<string>,
+  staged?: StagedMedia,
 ): Promise<void> {
   const urls = markdownImageUrls(markdown);
   const wantedName = postImagesFolderName(current.fileName);
@@ -136,14 +141,20 @@ export async function syncPostImages(
       await updateFile(token, f.id, { trashed: true });
     },
   );
+  let usedStaged = false;
   await inBatches(
     [...wanted].filter(([name]) => !have.has(name)),
     async ([name, url]) => {
-      const image = await fetchImage(url);
+      const fromFile = staged ? await staged.read(name) : null;
+      if (fromFile) usedStaged = true;
+      const image = fromFile ?? (await fetchImage(url));
       if (image)
         await uploadFile(token, { name, parentId, mimeType: image.mimeType, body: image.body });
     },
   );
+  // Only after every upload above worked: a failed one throws, and the next save tries again
+  // with the staged copies still there.
+  if (usedStaged) await staged!.clear();
 }
 
 /** Trashes a deleted post's image folder, if it has one. */

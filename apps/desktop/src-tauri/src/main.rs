@@ -165,6 +165,7 @@ fn main() {
             commands::project_file_import,
             commands::project_file_write,
             commands::project_file_read,
+            commands::project_file_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running sourcefold desktop application");

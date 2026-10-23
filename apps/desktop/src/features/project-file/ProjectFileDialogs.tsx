@@ -14,12 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/Dialog";
-import {
-  canCancel,
-  exportProjectFile,
-  importProjectFile,
-  type OpenedProjectFile,
-} from "./project-file-api";
+import { exportProjectFile, importProjectFile, type OpenedProjectFile } from "./project-file-api";
 
 /** The sentence and bar position for a step of an export or import. */
 export function describeProgress(progress: ProjectFileProgress | null): {
@@ -37,9 +32,11 @@ export function describeProgress(progress: ProjectFileProgress | null): {
     case "packing":
       return { label: "Packing…", percent: done >= total ? 100 : 95 };
     case "uploading":
-      return { label: `Uploading images ${done} of ${total}`, percent: share * 30 };
+      return { label: `Uploading images ${done} of ${total}`, percent: share * 20 };
     case "saving":
-      return { label: `Saving sources ${done} of ${total}`, percent: 30 + share * 70 };
+      return { label: `Saving sources ${done} of ${total}`, percent: 20 + share * 60 };
+    case "images":
+      return { label: `Copying post images ${done} of ${total}`, percent: 80 + share * 20 };
   }
 }
 
@@ -139,7 +136,6 @@ export function ExportProjectDialog({
 
   const running = state.status === "running";
   const close = () => {
-    if (running && !canCancel()) return;
     controllerRef.current?.abort();
     onClose();
   };
@@ -168,11 +164,9 @@ export function ExportProjectDialog({
         )}
         <DialogFooter>
           {running ? (
-            canCancel() && (
-              <Button type="button" variant="outline" onClick={close}>
-                Cancel
-              </Button>
-            )
+            <Button type="button" variant="outline" onClick={close}>
+              Cancel
+            </Button>
           ) : (
             <Button type="button" onClick={close} autoFocus>
               Close
@@ -242,9 +236,12 @@ export function ImportProjectDialog({
   const importing = state.status === "importing";
   const close = () => {
     if (importing) {
-      if (!canCancel()) return;
       controllerRef.current?.abort();
-      toast("Import cancelled. What was already added stays as a project you can delete.");
+      toast(
+        file?.mode === "offline"
+          ? "Import cancelled. Nothing was added."
+          : "Import cancelled. What was already added stays as a project you can delete.",
+      );
     }
     onClose();
   };
@@ -281,7 +278,7 @@ export function ImportProjectDialog({
               </Button>
             </>
           )}
-          {importing && canCancel() && (
+          {importing && (
             <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>

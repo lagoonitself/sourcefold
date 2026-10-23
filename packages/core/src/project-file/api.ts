@@ -1,7 +1,8 @@
 // Export and import a project through the Sourcefold web API (docs/PROJECT-FILE.md, "Over the
 // web API"). The website and the signed-in desktop app both run this; the offline desktop app
 // does the same in Rust. The routes are in apps/web/src/app/api/projects/[id]/export and
-// …/import, apps/web/src/app/api/items/[id]/media and apps/web/src/app/api/uploads/sign.
+// …/import, apps/web/src/app/api/items/[id]/media, …/media-upload and
+// apps/web/src/app/api/uploads/sign.
 
 import { bodyFromDriveFile } from "../drive-file";
 import { markdownImageUrls } from "../post-images";
@@ -110,6 +111,27 @@ export interface UploadSignResponse {
   apikey: string | null;
 }
 
+/**
+ * Body of `POST /api/items/{id}/media-upload`: one image or GIF of an imported post, staged for
+ * the Drive save. It answers like `/uploads/sign` (a signed upload URL).
+ */
+export interface PostMediaUploadRequest {
+  file_name: string;
+  mime_type: string;
+  size: number;
+}
+
+/** What `/media-upload` stages: the types and size the Drive save keeps (no SVG). */
+export const STAGED_MEDIA_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "video/mp4",
+];
+export const STAGED_MEDIA_BYTES = 25 * 1024 * 1024;
+
 /** Image types `POST /api/uploads/sign` accepts, and its size cap. */
 export const UPLOADABLE_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 export const UPLOADABLE_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -134,7 +156,7 @@ export interface ProjectFileApi {
 }
 
 export interface ProjectFileProgress {
-  phase: "reading" | "files" | "packing" | "uploading" | "saving";
+  phase: "reading" | "files" | "packing" | "uploading" | "saving" | "images";
   done: number;
   total: number;
 }
@@ -454,7 +476,48 @@ export async function importProjectViaApi(
     onProgress?.({ phase: "saving", done: saved, total: rows.length });
   }
 
-  // 4. What hangs off the sources. Anything tied to a skipped source is left out or unlinked.
+  // 4. The images and GIFs of posts, staged for the Drive save, which copies them into the
+  // post's `_files` folder instead of downloading them from the web again. One that fails is
+  // only downloaded from the web as before, so it isn't listed as skipped.
+  const media = manifest.sources
+    .filter((s) => s.kind !== "image" && !dropped.has(s.id))
+    .flatMap((source) =>
+      mediaInFolder(contents.entries, source.media_folder).map((f) => ({ source, ...f })),
+    )
+    .filter((f) => {
+      const type = projectFileMediaType(f.name);
+      return (
+        type !== null &&
+        STAGED_MEDIA_TYPES.includes(type) &&
+        f.data.byteLength > 0 &&
+        f.data.byteLength <= STAGED_MEDIA_BYTES
+      );
+    });
+  let staged = 0;
+  onProgress?.({ phase: "images", done: 0, total: media.length });
+  await eachLimited(media, CONCURRENCY, signal, async (f) => {
+    const mimeType = projectFileMediaType(f.name)!;
+    try {
+      const signed = await api.json<UploadSignResponse>(
+        `/items/${encodeURIComponent(f.source.id)}/media-upload`,
+        {
+          method: "POST",
+          body: {
+            file_name: f.name,
+            mime_type: mimeType,
+            size: f.data.byteLength,
+          } satisfies PostMediaUploadRequest,
+        },
+      );
+      await putSigned(signed, f.data, mimeType);
+    } catch (err) {
+      if (signal?.aborted) throw err;
+    }
+    staged += 1;
+    onProgress?.({ phase: "images", done: staged, total: media.length });
+  });
+
+  // 5. What hangs off the sources. Anything tied to a skipped source is left out or unlinked.
   const xPosts = manifest.x_posts.filter((p) => !dropped.has(p.source_id));
   const highlights = manifest.highlights.filter((h) => !dropped.has(h.source_id));
   const keptHighlights = new Set(highlights.map((h) => h.id));

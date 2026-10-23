@@ -15,9 +15,11 @@ export function describeProgress(progress: ProjectFileProgress): {
     case "packing":
       return { label: "Packing…", percent: done >= total ? 100 : 95 };
     case "uploading":
-      return { label: `Uploading images ${done} of ${total}`, percent: share * 30 };
+      return { label: `Uploading images ${done} of ${total}`, percent: share * 20 };
     case "saving":
-      return { label: `Saving sources ${done} of ${total}`, percent: 30 + share * 70 };
+      return { label: `Saving sources ${done} of ${total}`, percent: 20 + share * 60 };
+    case "images":
+      return { label: `Copying post images ${done} of ${total}`, percent: 80 + share * 20 };
   }
 }
 

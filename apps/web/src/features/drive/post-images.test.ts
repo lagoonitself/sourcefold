@@ -99,6 +99,41 @@ describe("syncPostImages", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("uses the copies from a project file first, then deletes them", async () => {
+    const staged = {
+      read: vi.fn(async (name: string) =>
+        name === "a.png" ? { body: new Uint8Array([9]), mimeType: "image/png" } : null,
+      ),
+      clear: vi.fn(async () => {}),
+    };
+    await syncPostImages(
+      "t",
+      { parentId: "g", fileName: "Post.md" },
+      null,
+      md(A, B),
+      new Set(),
+      staged,
+    );
+    expect(live()).toEqual(["f1/a.png", "f1/b.jpeg", "g/Post_files"]);
+    // Only b.jpeg came from the web.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain("b.jpeg");
+    expect(staged.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the staged copies alone when it used none of them", async () => {
+    const staged = { read: vi.fn(async () => null), clear: vi.fn(async () => {}) };
+    await syncPostImages(
+      "t",
+      { parentId: "g", fileName: "Post.md" },
+      null,
+      md(A),
+      new Set(),
+      staged,
+    );
+    expect(staged.clear).not.toHaveBeenCalled();
+  });
+
   it("trashes the folder when the post has no images left", async () => {
     drive.set("old", { name: "Post_files", parent: "g", mimeType: FOLDER, trashed: false });
     await syncPostImages("t", { parentId: "g", fileName: "Post.md" }, null, "Text.", new Set());

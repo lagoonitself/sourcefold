@@ -8,6 +8,7 @@ import {
   batchBySize,
   formatProjectFileSummary,
   groupsParentsFirst,
+  importProjectViaApi,
   isSafeEntryPath,
   mediaInFolder,
   parseProjectManifest,
@@ -17,7 +18,9 @@ import {
   remapProjectIds,
   summarizeProjectFile,
   uniqueProjectName,
+  type ProjectFileApi,
   type ProjectFileManifest,
+  type UploadSignResponse,
 } from "./index";
 
 const golden = JSON.parse(
@@ -216,5 +219,77 @@ describe("import batches", () => {
     const batches = batchBySize(rows, 350);
     expect(batches.flat()).toEqual(rows);
     for (const batch of batches) expect(JSON.stringify(batch).length).toBeLessThan(400);
+  });
+});
+
+describe("importing through the web API", () => {
+  function fakeApi(failMedia = false) {
+    const calls: { path: string; body?: unknown }[] = [];
+    const puts: { url: string; bytes: number[]; type: string }[] = [];
+    const signed = (path: string): UploadSignResponse => ({
+      item_id: "x",
+      storage_path: path,
+      signed_url: `https://storage.test/${path}`,
+      apikey: null,
+    });
+    const api: ProjectFileApi = {
+      async json<T>(path: string, init?: { method: "GET" | "POST"; body?: unknown }) {
+        calls.push({ path, body: init?.body });
+        if (path.endsWith("/media-upload")) {
+          if (failMedia) throw new Error("Storage is down");
+          return signed(path) as T;
+        }
+        if (path === "/uploads/sign") return signed(path) as T;
+        return { name: "Cars" } as T;
+      },
+      async bytes() {
+        return new Uint8Array();
+      },
+      async putSigned(s, data, type) {
+        puts.push({ url: s.signed_url, bytes: [...data], type });
+      },
+    };
+    return { api, calls, puts };
+  }
+
+  it("stages each post's images after its source is saved and before the import finishes", async () => {
+    const contents = readProjectFile(await goldenFile());
+    const { api, calls, puts } = fakeApi();
+    const result = await importProjectViaApi(api, contents);
+    expect(result.skipped).toEqual([]);
+
+    const media = calls.filter((c) => c.path.endsWith("/media-upload"));
+    expect(media).toHaveLength(1);
+    expect(media[0]!.body).toEqual({
+      file_name: "abc.jpg",
+      mime_type: "image/jpeg",
+      size: PNG.byteLength,
+    });
+    // The post's new id, not the one in the file.
+    const thread = golden.sources.find((s) => s.media_folder !== null)!;
+    expect(media[0]!.path).not.toContain(thread.id);
+    expect(puts.find((p) => p.url.endsWith("/media-upload"))).toEqual({
+      url: `https://storage.test/${media[0]!.path}`,
+      bytes: [...PNG],
+      type: "image/jpeg",
+    });
+
+    const at = (match: (c: { path: string; body?: unknown }) => boolean) => calls.findIndex(match);
+    const lastSources = calls.reduce(
+      (last, c, i) => ((c.body as { sources?: unknown })?.sources ? i : last),
+      -1,
+    );
+    const done = at((c) => (c.body as { done?: boolean })?.done === true);
+    const staging = at((c) => c.path.endsWith("/media-upload"));
+    expect(staging).toBeGreaterThan(lastSources);
+    expect(staging).toBeLessThan(done);
+  });
+
+  it("still imports when staging an image fails (the Drive save downloads it instead)", async () => {
+    const contents = readProjectFile(await goldenFile());
+    const { api, calls } = fakeApi(true);
+    const result = await importProjectViaApi(api, contents);
+    expect(result.skipped).toEqual([]);
+    expect(calls.some((c) => (c.body as { done?: boolean })?.done === true)).toBe(true);
   });
 });

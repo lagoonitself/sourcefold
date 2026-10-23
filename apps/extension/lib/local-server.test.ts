@@ -3,8 +3,13 @@ import { browser } from "wxt/browser";
 import { EXTENSION_ID_HEADER, localServerFetch, localServerHeaders } from "./local-server";
 import { apiFetchDesktopHttp } from "./api";
 import { invalidateTargetCache, resolveTarget } from "./target";
+import { missingHostPermissionMessage } from "./permissions";
 
-const AUTO_SETTINGS = { connectionMode: "auto" } as const;
+const AUTO_SETTINGS = {
+  appUrl: "http://localhost:3000",
+  token: "",
+  connectionMode: "auto",
+} as const;
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -62,7 +67,7 @@ describe("Local server identity header", () => {
     // Native messaging fails in the mock; HTTP answers 403 for both session and health.
     const target = await resolveTarget({ forceRefresh: true, settings: { ...AUTO_SETTINGS } });
 
-    expect(target.type).toBe("signed-out");
+    expect(target.type).toBe("unconfigured");
     expect(seen.map((s) => s.path)).toEqual(["/api/session", "/api/health"]);
     for (const call of seen) {
       expect(call.id).toBe(browser.runtime.id);
@@ -91,7 +96,49 @@ describe("Local server identity header", () => {
 
     expect(target.type).toBe("error");
     expect(target.displayLabel).toBe(
-      "This desktop app is too old to share its sign-in. Update it, or sign in with Google here.",
+      "Can't read the desktop app's sign-in. Open Options to fix it.",
     );
+  });
+});
+
+describe("Background save permission message", () => {
+  const originalBrowser = (globalThis as any).browser;
+
+  afterEach(() => {
+    (globalThis as any).browser = originalBrowser;
+  });
+
+  const webTarget = {
+    type: "desktop-web" as const,
+    displayLabel: "Saving to your account (via desktop app)",
+    webUrl: "https://app.sourcefold.example",
+    token: "sf_token",
+  };
+
+  it("tells the user to allow access when the web host isn't granted", async () => {
+    (globalThis as any).browser = { permissions: { contains: async () => false } };
+    expect(await missingHostPermissionMessage(webTarget)).toBe(
+      'Open the popup and click "Allow access to app.sourcefold.example" to save from here.',
+    );
+    expect(await missingHostPermissionMessage({ ...webTarget, type: "web" })).toContain(
+      "Allow access to app.sourcefold.example",
+    );
+  });
+
+  it("returns null when access is granted, for loopback web apps and for offline targets", async () => {
+    (globalThis as any).browser = { permissions: { contains: async () => true } };
+    expect(await missingHostPermissionMessage(webTarget)).toBeNull();
+
+    (globalThis as any).browser = { permissions: { contains: async () => false } };
+    expect(
+      await missingHostPermissionMessage({ ...webTarget, webUrl: "http://localhost:3000" }),
+    ).toBeNull();
+    expect(
+      await missingHostPermissionMessage({
+        type: "desktop-offline",
+        displayLabel: "Saving to this computer (desktop app, offline)",
+        transport: "http",
+      }),
+    ).toBeNull();
   });
 });

@@ -2,16 +2,8 @@ import { browser } from "wxt/browser";
 import { detectSource } from "@sourcefold/core";
 import { saveGrokipedia, ApiError } from "../lib/api";
 import { getLastFolderId, clearLastFolderId } from "../lib/last-folder";
-import { invalidateTargetCache } from "../lib/target";
-import {
-  accountFetch,
-  accountStatus,
-  resetAccountClients,
-  resolveAccountTarget,
-  signIn,
-  signOut,
-} from "../lib/account";
-import { serveAccountChannel } from "../lib/account-channel";
+import { resolveTarget } from "../lib/target";
+import { missingHostPermissionMessage } from "../lib/permissions";
 
 const SUCCESS_COLOR = "#1F5E4E";
 const ERROR_COLOR = "#B42318";
@@ -32,25 +24,6 @@ async function showErrorBadge(title: string) {
 }
 
 export default defineBackground(() => {
-  // The popup and options page save and sign in through here (lib/account-channel.ts).
-  serveAccountChannel({
-    resolveTarget: (forceRefresh) => resolveAccountTarget(forceRefresh),
-    fetch: accountFetch,
-    status: accountStatus,
-    signIn: async () => {
-      const status = await signIn();
-      await showSuccessBadge().catch(() => {});
-      return status;
-    },
-    signOut,
-  });
-
-  browser.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local") return;
-    if ("supabaseConfig" in changes) resetAccountClients();
-    else if ("connectionMode" in changes) invalidateTargetCache();
-  });
-
   browser.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === BADGE_CLEAR_ALARM) {
       await browser.action.setBadgeText({ text: "" });
@@ -78,9 +51,15 @@ export default defineBackground(() => {
           return;
         }
 
-        const target = await resolveAccountTarget();
-        if (target.type === "signed-out" || target.type === "error") {
+        const target = await resolveTarget();
+        if (target.type === "unconfigured" || target.type === "error") {
           await showErrorBadge(target.displayLabel);
+          return;
+        }
+
+        const missingPermission = await missingHostPermissionMessage(target);
+        if (missingPermission) {
+          await showErrorBadge(missingPermission);
           return;
         }
 

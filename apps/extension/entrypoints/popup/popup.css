@@ -607,12 +607,6 @@
   align-self: stretch;
 }
 
-.notice-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .skeleton {
   display: flex;
   flex-direction: column;

@@ -1,24 +1,31 @@
 import { browser } from "wxt/browser";
-import type { ClientConfig } from "@sourcefold/client";
 
-/**
- * Auto: the extension's own sign-in, else the desktop app (its offline library, or its sign-in).
- * Desktop: only ever the desktop app. Older versions had "web" (a website address and an `sf_`
- * token) and "native" / "http"; those read as auto and desktop.
- */
-export type ConnectionMode = "auto" | "desktop";
+export type ConnectionMode = "auto" | "desktop" | "web";
+export type LegacyConnectionMode = "native" | "http";
+export type AnyConnectionMode = ConnectionMode | LegacyConnectionMode;
 
 export interface ExtensionSettings {
-  connectionMode: ConnectionMode;
+  appUrl: string;
+  token: string;
+  connectionMode?: ConnectionMode;
 }
 
-export const DEFAULT_SETTINGS: ExtensionSettings = {
+// Release builds set WXT_SOURCEFOLD_WEB_URL to the hosted web app, so nobody has to type it.
+const DEFAULT_APP_URL =
+  (import.meta.env.WXT_SOURCEFOLD_WEB_URL as string | undefined) || "http://localhost:3000";
+
+export const DEFAULT_SETTINGS: Required<ExtensionSettings> = {
+  appUrl: DEFAULT_APP_URL,
+  token: "",
   connectionMode: "auto",
 };
 
 export function normalizeConnectionMode(mode: unknown): ConnectionMode {
   if (mode === "desktop" || mode === "native" || mode === "http") {
     return "desktop";
+  }
+  if (mode === "web") {
+    return "web";
   }
   return "auto";
 }
@@ -38,8 +45,25 @@ export function isLocalUrl(urlStr: string): boolean {
   }
 }
 
+export function isTokenRequired(settings: ExtensionSettings): boolean {
+  const mode = normalizeConnectionMode(settings.connectionMode);
+  if (mode === "desktop") {
+    return false;
+  }
+  if (mode === "auto") {
+    // In auto mode, desktop handles its own auth or session token.
+    // If desktop is unreachable and fallback to web is needed, token might be needed,
+    // but popup should attempt resolution before forcing user to enter a token.
+    return false;
+  }
+  if (isLocalUrl(settings.appUrl)) {
+    return false;
+  }
+  return true;
+}
+
 // Invalidation listeners can be registered (e.g. Target Resolver cache)
-type SettingsChangeListener = (settings: ExtensionSettings) => void;
+type SettingsChangeListener = (settings: Required<ExtensionSettings>) => void;
 const changeListeners: SettingsChangeListener[] = [];
 
 export function onSettingsChanged(listener: SettingsChangeListener): () => void {
@@ -50,107 +74,49 @@ export function onSettingsChanged(listener: SettingsChangeListener): () => void 
   };
 }
 
-const LEGACY_KEYS = ["appUrl", "token"];
-
-export async function getSettings(): Promise<ExtensionSettings> {
-  const result = await browser.storage.local.get(["connectionMode", ...LEGACY_KEYS]);
+export async function getSettings(): Promise<Required<ExtensionSettings>> {
+  const result = await browser.storage.local.get(["appUrl", "token", "connectionMode"]);
+  const rawUrl = typeof result.appUrl === "string" ? result.appUrl.trim() : "";
+  const appUrl = rawUrl.length > 0 ? rawUrl.replace(/\/+$/, "") : DEFAULT_SETTINGS.appUrl;
+  const token = typeof result.token === "string" ? result.token.trim() : DEFAULT_SETTINGS.token;
   const rawMode = result.connectionMode;
   const connectionMode = normalizeConnectionMode(rawMode);
 
-  // Older versions kept a website address and an `sf_` token; nothing uses them any more.
-  if (rawMode !== undefined && rawMode !== connectionMode) {
-    await browser.storage.local.set({ connectionMode }).catch(() => {});
-  }
-  if (LEGACY_KEYS.some((key) => key in result)) {
-    await browser.storage.local.remove(LEGACY_KEYS).catch(() => {});
+  // If a legacy mode was stored ("native" | "http"), migrate it to "desktop"
+  if (rawMode === "native" || rawMode === "http") {
+    try {
+      await browser.storage.local.set({ connectionMode });
+    } catch {
+      // Storage set non-critical failure
+    }
   }
 
-  return { connectionMode };
+  return { appUrl, token, connectionMode };
 }
 
-function notify(settings: ExtensionSettings): void {
+export async function saveSettings(partial: Partial<ExtensionSettings>): Promise<void> {
+  const toSave: Record<string, string> = {};
+
+  if (partial.appUrl !== undefined) {
+    toSave.appUrl = partial.appUrl.trim().replace(/\/+$/, "");
+  }
+
+  if (partial.token !== undefined) {
+    toSave.token = partial.token.trim();
+  }
+
+  if (partial.connectionMode !== undefined) {
+    toSave.connectionMode = normalizeConnectionMode(partial.connectionMode);
+  }
+
+  await browser.storage.local.set(toSave);
+
+  const updated = await getSettings();
   for (const listener of changeListeners) {
     try {
-      listener(settings);
+      listener(updated);
     } catch {
       // Ignore listener error
     }
   }
-}
-
-export async function saveSettings(partial: Partial<ExtensionSettings>): Promise<void> {
-  if (partial.connectionMode !== undefined) {
-    await browser.storage.local.set({
-      connectionMode: normalizeConnectionMode(partial.connectionMode),
-    });
-  }
-  notify(await getSettings());
-}
-
-// The account lives in Supabase. Release builds set WXT_SUPABASE_URL and
-// WXT_SUPABASE_PUBLISHABLE_KEY (public by design); self-hosters can change them in Options.
-const SUPABASE_CONFIG_KEY = "supabaseConfig";
-
-const env = ((import.meta as { env?: Record<string, string | undefined> }).env ?? {}) as Record<
-  string,
-  string | undefined
->;
-
-export const BUILD_SUPABASE_CONFIG: ClientConfig = {
-  supabaseUrl: env.WXT_SUPABASE_URL ?? "",
-  supabasePublishableKey: env.WXT_SUPABASE_PUBLISHABLE_KEY ?? "",
-};
-
-function cleanConfig(config: ClientConfig): ClientConfig {
-  return {
-    supabaseUrl: config.supabaseUrl.trim().replace(/\/+$/, ""),
-    supabasePublishableKey: config.supabasePublishableKey.trim(),
-  };
-}
-
-/** The build's Supabase project, or the one picked under Options → Advanced. */
-export async function getSupabaseConfig(): Promise<ClientConfig> {
-  const result = await browser.storage.local.get([SUPABASE_CONFIG_KEY]);
-  const saved = result[SUPABASE_CONFIG_KEY] as Partial<ClientConfig> | undefined;
-  if (saved?.supabaseUrl && saved.supabasePublishableKey) {
-    return cleanConfig({
-      supabaseUrl: saved.supabaseUrl,
-      supabasePublishableKey: saved.supabasePublishableKey,
-    });
-  }
-  return cleanConfig(BUILD_SUPABASE_CONFIG);
-}
-
-/** Whether the Advanced value differs from the build's. */
-export async function hasCustomSupabaseConfig(): Promise<boolean> {
-  const result = await browser.storage.local.get([SUPABASE_CONFIG_KEY]);
-  return Boolean(result[SUPABASE_CONFIG_KEY]);
-}
-
-export function isSupabaseConfigured(config: ClientConfig): boolean {
-  return Boolean(config.supabaseUrl && config.supabasePublishableKey);
-}
-
-/** Checks an address typed under Advanced. Returns the problem, or null. */
-export function supabaseConfigProblem(config: ClientConfig): string | null {
-  const { supabaseUrl, supabasePublishableKey } = cleanConfig(config);
-  if (!supabaseUrl) return "Enter the Supabase address.";
-  let url: URL;
-  try {
-    url = new URL(supabaseUrl);
-  } catch {
-    return "That isn't a web address.";
-  }
-  if (url.protocol !== "https:" && !(isLocalUrl(supabaseUrl) && url.protocol === "http:")) {
-    return "The address must start with https://.";
-  }
-  if (!supabasePublishableKey) return "Enter the publishable key.";
-  return null;
-}
-
-/** Saves the Advanced choice (null goes back to the build's). */
-export async function setSupabaseConfig(config: ClientConfig | null): Promise<void> {
-  if (config) await browser.storage.local.set({ [SUPABASE_CONFIG_KEY]: cleanConfig(config) });
-  else await browser.storage.local.remove([SUPABASE_CONFIG_KEY]);
-  notify(await getSettings());
 }

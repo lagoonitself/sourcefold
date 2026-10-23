@@ -167,12 +167,11 @@ export function createLocalApi(
 
     // The session lives on this computer; reading it needs no request. The database checks the
     // token itself, so a stale user id can only ever find nothing.
-    const userId = deps.currentUserId
-      ? await deps.currentUserId()
-      : ((await supabase.auth.getSession()).data.session?.user.id ?? null);
-    if (!userId) return jsonError(401, "Sign in to continue.");
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user) return jsonError(401, "Sign in to continue.");
 
-    const ctx: RouteContext = { db: supabase, userId, via: "session", host };
+    const ctx: RouteContext = { db: supabase, userId: user.id, via: "session", host };
     const request = new Request(url, init);
     try {
       // The params have exactly the names in the matched pattern.

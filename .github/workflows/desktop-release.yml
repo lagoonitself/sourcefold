@@ -11,8 +11,8 @@ name: Release
 # Sourcefold-Claude.mcpb (the desktop app's Settings → Claude falls back to downloading it).
 #
 # Set the repository variables SOURCEFOLD_SUPABASE_URL and SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY so
-# the desktop app and the extension sign in to your Supabase project out of the box (they need no
-# website). The optional SOURCEFOLD_WEB_URL points the release notes at the website.
+# the desktop app signs in to your Supabase project out of the box (it needs no website). The
+# optional SOURCEFOLD_WEB_URL points the extension and the release notes at the website.
 
 on:
   push:
@@ -156,8 +156,7 @@ jobs:
 
       - name: Build extension
         env:
-          WXT_SUPABASE_URL: ${{ vars.SOURCEFOLD_SUPABASE_URL }}
-          WXT_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY }}
+          WXT_SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
         run: npm run build -w @sourcefold/extension
 
       - name: Zip and upload

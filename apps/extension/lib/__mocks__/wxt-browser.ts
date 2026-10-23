@@ -35,12 +35,6 @@ export const browser = {
       throw new Error("No native host connected");
     },
     openOptionsPage() {},
-    onMessage: {
-      addListener(_listener: unknown) {},
-    },
-    async sendMessage(_message: unknown) {
-      throw new Error("No background in tests");
-    },
   },
   permissions: {
     async contains(_perms: any) {

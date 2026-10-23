@@ -7,6 +7,7 @@ import {
   Cloud,
   CornerDownLeft,
   HardDrive,
+  Laptop,
   LoaderCircle,
   Settings,
 } from "lucide-react";
@@ -32,7 +33,8 @@ import {
 } from "../../lib/folder-tree";
 import { getLastPlaces, rememberPlace, type LastPlaces } from "../../lib/last-folder";
 import { capturePage, type CaptureResult } from "../../lib/capture-page";
-import { resolveTarget, signIn } from "../../lib/account-channel";
+import { resolveTarget } from "../../lib/target";
+import { hasHostPermission, hostOf, requestHostPermission } from "../../lib/permissions";
 import { hostLabel, pageKindLabel, pageKindOf, type PageKind } from "../../lib/page-kind";
 import {
   readPopupCache,
@@ -52,8 +54,8 @@ const CANNOT_SAVE_MESSAGE =
 const GROUP_FILTER_FROM = 7;
 const NO_PLACES: LastPlaces = { groupId: null, projectId: null, groupByProject: {} };
 
-/** Why the popup can't save yet. `signIn`: offer Google sign-in (it fixes the problem). */
-type Blocker = { message: string; signIn: boolean };
+type Blocker =
+  { kind: "setup" } | { kind: "error"; message: string } | { kind: "permission"; webUrl: string };
 
 interface PageInfo {
   tabId: number | null;
@@ -101,7 +103,9 @@ function TargetBadge({ target }: { target: TargetSnapshot }) {
   const { Icon, text } =
     target.type === "desktop-offline"
       ? { Icon: HardDrive, text: "This computer" }
-      : { Icon: Cloud, text: "Your account" };
+      : target.type === "desktop-web"
+        ? { Icon: Laptop, text: "Desktop app" }
+        : { Icon: Cloud, text: hostOf(target.key) };
   return (
     <span className="target-badge" title={target.displayLabel}>
       <Icon size={13} aria-hidden="true" />
@@ -118,8 +122,6 @@ export default function App() {
   const [target, setTarget] = useState<TargetSnapshot | null>(null);
   const [blocker, setBlocker] = useState<Blocker | null>(null);
   const [booting, setBooting] = useState(true);
-  const [signingIn, setSigningIn] = useState(false);
-  const [signInError, setSignInError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -250,11 +252,19 @@ export default function App() {
   const refresh = async (cachedKey: string | null): Promise<void> => {
     try {
       const resolved = await resolveTarget({ forceRefresh: true });
-      if (resolved.type === "signed-out" || resolved.type === "error") {
-        setBlocker({
-          message: resolved.displayLabel,
-          signIn: !(resolved.type === "signed-out" && resolved.reason === "desktop_not_reachable"),
-        });
+      if (resolved.type === "unconfigured") {
+        setBlocker({ kind: "setup" });
+        return;
+      }
+      if (resolved.type === "error") {
+        setBlocker({ kind: "error", message: resolved.displayLabel });
+        return;
+      }
+      if (
+        (resolved.type === "web" || resolved.type === "desktop-web") &&
+        !(await hasHostPermission(resolved.webUrl))
+      ) {
+        setBlocker({ kind: "permission", webUrl: resolved.webUrl });
         return;
       }
       setBlocker(null);
@@ -270,7 +280,7 @@ export default function App() {
       void writePopupCache({ target: snapshot, folders: fresh }).catch(() => {});
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 401) {
-        setBlocker({ message: err.message, signIn: true });
+        setBlocker({ kind: "error", message: err.message });
       } else {
         setResult({ tone: "error", text: errorText(err, "Couldn't load your projects.") });
       }
@@ -582,19 +592,11 @@ export default function App() {
     }
   };
 
-  // The Google window takes focus, which usually closes the popup; the background finishes the
-  // sign-in either way and the next popup opens signed in.
-  const startSignIn = async () => {
-    setSigningIn(true);
-    setSignInError(null);
-    try {
-      await signIn();
-      setBooting(true);
+  const grantPermission = async () => {
+    if (blocker?.kind !== "permission") return;
+    if (await requestHostPermission(blocker.webUrl)) {
+      setBlocker(null);
       readyRef.current = refresh(target?.key ?? null);
-    } catch (err: unknown) {
-      setSignInError(errorText(err, "The sign-in didn't finish. Try again."));
-    } finally {
-      setSigningIn(false);
     }
   };
 
@@ -653,31 +655,30 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const renderBlocker = (b: Blocker) => (
-    <div className="notice">
-      <p>{b.message}</p>
-      <div className="notice-actions">
-        {b.signIn && (
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => void startSignIn()}
-            disabled={signingIn}
-          >
-            {signingIn ? "Finish in the Google window…" : "Sign in with Google"}
+  const renderBlocker = (b: Blocker) => {
+    if (b.kind === "permission") {
+      return (
+        <div className="notice">
+          <p>Sourcefold needs permission to reach {hostOf(b.webUrl)}.</p>
+          <button type="button" className="btn-primary" onClick={() => void grantPermission()}>
+            Allow access to {hostOf(b.webUrl)}
           </button>
-        )}
-        <button
-          type="button"
-          className={b.signIn ? "btn-outline" : "btn-primary"}
-          onClick={openSettings}
-        >
+        </div>
+      );
+    }
+    return (
+      <div className="notice">
+        <p>
+          {b.kind === "setup"
+            ? "Open the Sourcefold desktop app, or set up the web app in Options."
+            : b.message}
+        </p>
+        <button type="button" className="btn-primary" onClick={openSettings}>
           Open options
         </button>
       </div>
-      {signInError && <p className="result result-error">{signInError}</p>}
-    </div>
-  );
+    );
+  };
 
   const saveLabel = () => {
     if (saving) {

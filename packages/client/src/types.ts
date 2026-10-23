@@ -21,11 +21,6 @@ export interface LocalApiDeps {
   parseHtml(html: string): Document;
   /** Called after anything that changes items or folders. */
   onItemsChanged?(): void;
-  /**
-   * The signed-in user, for a client made with supabase-js's `accessToken` option (the extension
-   * borrowing the desktop app's token), whose `auth` can't be used. Default: the client's session.
-   */
-  currentUserId?(): Promise<string | null>;
 }
 
 export interface LocalApi {

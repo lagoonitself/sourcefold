@@ -1,20 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { browser } from "wxt/browser";
 import {
-  BUILD_SUPABASE_CONFIG,
-  DEFAULT_SETTINGS,
   getSettings,
-  getSupabaseConfig,
-  hasCustomSupabaseConfig,
   saveSettings,
-  setSupabaseConfig,
-  supabaseConfigProblem,
+  DEFAULT_SETTINGS,
+  isLocalUrl,
   type ConnectionMode,
 } from "../../lib/settings";
-import { accountStatus, resolveTarget, signIn, signOut } from "../../lib/account-channel";
-import type { AccountStatus } from "../../lib/account";
+import { resolveTarget, invalidateTargetCache } from "../../lib/target";
 import { localServerFetch } from "../../lib/local-server";
-import { listFolders } from "../../lib/api";
+import { sendNativeMessage } from "../../lib/native-messaging";
+import { unwrapResponse, type Folder } from "../../lib/api";
 
 interface NativeHostStatus {
   installed: boolean;
@@ -22,63 +18,30 @@ interface NativeHostStatus {
   manifest_path?: string;
 }
 
-type Status = { message: string; isError: boolean } | null;
-
-function errorText(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
-}
-
-function StatusLine({ status }: { status: Status }) {
-  if (!status) return null;
-  return (
-    <p className={`status-message ${status.isError ? "status-error" : "status-success"}`}>
-      {status.message}
-    </p>
-  );
-}
-
 export default function App() {
-  const [account, setAccount] = useState<AccountStatus | null>(null);
-  const [accountBusy, setAccountBusy] = useState(false);
-  const [accountResult, setAccountResult] = useState<Status>(null);
-
+  const [appUrl, setAppUrl] = useState(DEFAULT_SETTINGS.appUrl);
+  const [token, setToken] = useState("");
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>(
     DEFAULT_SETTINGS.connectionMode,
   );
-  const [testResult, setTestResult] = useState<Status>(null);
+  const [saveStatus, setSaveStatus] = useState<{ message: string; isError: boolean } | null>(null);
+  const [testResult, setTestResult] = useState<{ message: string; isError: boolean } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
-
-  const [supabaseUrl, setSupabaseUrl] = useState("");
-  const [publishableKey, setPublishableKey] = useState("");
-  const [customConfig, setCustomConfig] = useState(false);
-  const [advancedResult, setAdvancedResult] = useState<Status>(null);
 
   // Native host registration state
   const [nativeHostStatus, setNativeHostStatus] = useState<NativeHostStatus | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
-  const [registerResult, setRegisterResult] = useState<Status>(null);
-
-  const loadAccount = async () => {
-    try {
-      setAccount(await accountStatus());
-    } catch (err: unknown) {
-      setAccount({ signedIn: false });
-      setAccountResult({ message: errorText(err, "Couldn't read the sign-in."), isError: true });
-    }
-  };
+  const [registerResult, setRegisterResult] = useState<{
+    message: string;
+    isError: boolean;
+  } | null>(null);
 
   useEffect(() => {
     async function load() {
-      const [settings, config, custom] = await Promise.all([
-        getSettings(),
-        getSupabaseConfig(),
-        hasCustomSupabaseConfig(),
-      ]);
+      const settings = await getSettings();
+      setAppUrl(settings.appUrl);
+      setToken(settings.token);
       setConnectionMode(settings.connectionMode);
-      setSupabaseUrl(config.supabaseUrl);
-      setPublishableKey(config.supabasePublishableKey);
-      setCustomConfig(custom);
-      void loadAccount();
 
       // Check native host status from local desktop if running
       try {
@@ -87,92 +50,189 @@ export default function App() {
           headers: { Accept: "application/json" },
         });
         if (res.ok) {
-          setNativeHostStatus(await res.json());
+          const data = await res.json();
+          setNativeHostStatus(data);
         }
       } catch {
         // Desktop not running
       }
     }
-    void load();
+    load();
   }, []);
 
-  const handleSignIn = async () => {
-    setAccountBusy(true);
-    setAccountResult(null);
-    try {
-      const status = await signIn();
-      setAccount(status);
-      setAccountResult({
-        message: status.email ? `Signed in as ${status.email}.` : "Signed in.",
-        isError: false,
-      });
-    } catch (err: unknown) {
-      setAccountResult({ message: errorText(err, "The sign-in didn't finish."), isError: true });
-    } finally {
-      setAccountBusy(false);
-    }
-  };
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaveStatus(null);
+    const targetUrl = appUrl.trim().replace(/\/+$/, "");
 
-  const handleSignOut = async () => {
-    setAccountBusy(true);
-    setAccountResult(null);
     try {
-      await signOut();
-      setAccount({ signedIn: false });
-    } catch (err: unknown) {
-      setAccountResult({ message: errorText(err, "Couldn't sign out."), isError: true });
-    } finally {
-      setAccountBusy(false);
-    }
-  };
+      const parsed = new URL(targetUrl);
+      const origin = parsed.origin;
+      const isLoopback = isLocalUrl(targetUrl);
 
-  const changeMode = async (mode: ConnectionMode) => {
-    setConnectionMode(mode);
-    setTestResult(null);
-    await saveSettings({ connectionMode: mode });
+      if (parsed.protocol !== "https:" && !isLoopback) {
+        setSaveStatus({ message: "Remote URLs must use HTTPS", isError: true });
+        return;
+      }
+
+      if (!isLoopback) {
+        const granted = await browser.permissions.request({ origins: [`${origin}/*`] });
+        if (!granted) {
+          setSaveStatus({
+            message: "Sourcefold needs permission to reach that address.",
+            isError: true,
+          });
+          return;
+        }
+      }
+    } catch {
+      setSaveStatus({ message: "Please enter a valid URL", isError: true });
+      return;
+    }
+
+    await saveSettings({ appUrl, token, connectionMode });
+    invalidateTargetCache();
+    setSaveStatus({ message: "Saved", isError: false });
   };
 
   const handleTestConnection = async () => {
     setIsTesting(true);
     setTestResult(null);
+
     try {
-      const target = await resolveTarget({ forceRefresh: true });
-      if (target.type === "signed-out" || target.type === "error") {
-        setTestResult({ message: target.displayLabel, isError: true });
+      // Force fresh resolution with the current form values
+      const currentSettings = { appUrl, token, connectionMode };
+      const target = await resolveTarget({
+        forceRefresh: true,
+        settings: currentSettings,
+      });
+
+      if (target.type === "error") {
+        setTestResult({
+          message: target.displayLabel,
+          isError: true,
+        });
         return;
       }
-      const folders = await listFolders();
-      const projects = folders.filter((f) => !f.parent_id).length;
+
+      if (target.type === "desktop-web") {
+        const headers: Record<string, string> = {
+          Accept: "application/json",
+          Authorization: `Bearer ${target.token}`,
+        };
+        const response = await fetch(`${target.webUrl}/api/folders`, {
+          method: "GET",
+          headers,
+        });
+
+        if (response.status === 401) {
+          setTestResult({
+            message: "Your access token isn't valid. Check your sign-in in the desktop app.",
+            isError: true,
+          });
+          return;
+        }
+
+        const body = await response.json().catch(() => null);
+        const data = unwrapResponse<any>(body);
+        const count = Array.isArray(data) ? data.length : 0;
+        const emailNotice = target.email ? ` as ${target.email}` : "";
+        setTestResult({
+          message: `Connected to your account at ${target.webUrl}${emailNotice} (via desktop app). ${count} folders.`,
+          isError: false,
+        });
+        return;
+      }
+
+      if (target.type === "desktop-offline") {
+        if (target.transport === "native") {
+          try {
+            const raw = await sendNativeMessage<any>({ type: "list_folders" });
+            const folders = unwrapResponse<Folder[]>(raw);
+            const count = Array.isArray(folders) ? folders.length : 0;
+            setTestResult({
+              message: `Connected to this computer (desktop app, offline via native messaging). ${count} folders.`,
+              isError: false,
+            });
+            return;
+          } catch {
+            // Fall back to testing local HTTP
+          }
+        }
+
+        const res = await localServerFetch("/api/folders");
+        if (res.ok) {
+          const body = await res.json().catch(() => null);
+          const data = unwrapResponse<any>(body);
+          const count = Array.isArray(data) ? data.length : 0;
+          setTestResult({
+            message: `Connected to this computer (desktop app, offline via local HTTP). ${count} folders.`,
+            isError: false,
+          });
+          return;
+        }
+
+        setTestResult({
+          message: "Couldn't reach Sourcefold desktop app. Check that the app is running.",
+          isError: true,
+        });
+        return;
+      }
+
+      if (target.type === "web") {
+        const headers: Record<string, string> = {
+          Accept: "application/json",
+        };
+        if (target.token) {
+          headers["Authorization"] = `Bearer ${target.token}`;
+        }
+        const response = await fetch(`${target.webUrl}/api/folders`, {
+          method: "GET",
+          headers,
+        });
+
+        if (response.status === 401) {
+          setTestResult({
+            message: "Your access token isn't valid. Create a new one in Sourcefold's Settings.",
+            isError: true,
+          });
+          return;
+        }
+
+        const body = await response.json().catch(() => null);
+        const data = unwrapResponse<any>(body);
+        if (response.ok && Array.isArray(data)) {
+          const count = data.length;
+          setTestResult({
+            message: `Connected to ${target.webUrl}. ${count} folders.`,
+            isError: false,
+          });
+          return;
+        }
+
+        const errMsg =
+          body?.error?.message ||
+          `Couldn't reach Sourcefold at ${target.webUrl}. Check the address in settings.`;
+        setTestResult({
+          message: errMsg,
+          isError: true,
+        });
+        return;
+      }
+
+      // Unconfigured target
       setTestResult({
-        message: `${target.displayLabel}. ${projects} ${projects === 1 ? "project" : "projects"}.`,
-        isError: false,
+        message: target.displayLabel,
+        isError: true,
       });
-    } catch (err: unknown) {
-      setTestResult({ message: errorText(err, "Couldn't connect."), isError: true });
+    } catch (err: any) {
+      setTestResult({
+        message: err?.message || "Failed to test connection.",
+        isError: true,
+      });
     } finally {
       setIsTesting(false);
     }
-  };
-
-  const handleSaveAdvanced = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const config = { supabaseUrl, supabasePublishableKey: publishableKey };
-    const problem = supabaseConfigProblem(config);
-    if (problem) {
-      setAdvancedResult({ message: problem, isError: true });
-      return;
-    }
-    await setSupabaseConfig(config);
-    setCustomConfig(true);
-    setAdvancedResult({ message: "Saved.", isError: false });
-  };
-
-  const handleUseDefault = async () => {
-    await setSupabaseConfig(null);
-    setSupabaseUrl(BUILD_SUPABASE_CONFIG.supabaseUrl);
-    setPublishableKey(BUILD_SUPABASE_CONFIG.supabasePublishableKey);
-    setCustomConfig(false);
-    setAdvancedResult({ message: "Back to this build's account server.", isError: false });
   };
 
   const handleRegisterNativeHost = async () => {
@@ -220,48 +280,12 @@ export default function App() {
     }
   };
 
-  const signedIn = Boolean(account?.signedIn);
-
   return (
     <div className="options-page">
       <div className="options-container">
         <h1 className="options-title">Sourcefold extension settings</h1>
 
-        <div className="options-form">
-          <h2 className="options-section-title">Account</h2>
-          <p className="form-help">
-            {account === null
-              ? "Checking…"
-              : signedIn
-                ? `Signed in as ${account.email ?? "your Google account"}. Saves go to your account and Google Drive.`
-                : "Sign in with the Google account you use in Sourcefold. Without it, the extension uses the desktop app's sign-in while the app is open."}
-          </p>
-          <div className="options-buttons">
-            {signedIn ? (
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={() => void handleSignOut()}
-                disabled={accountBusy}
-              >
-                {accountBusy ? "Signing out…" : "Sign out"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => void handleSignIn()}
-                disabled={accountBusy || account === null}
-              >
-                {accountBusy ? "Finish in the Google window…" : "Sign in with Google"}
-              </button>
-            )}
-          </div>
-          <StatusLine status={accountResult} />
-        </div>
-
-        <div className="options-section">
-          <h2 className="options-section-title">Where saves go</h2>
+        <form className="options-form" onSubmit={handleSave}>
           <div className="form-group">
             <label className="form-label" htmlFor="connectionMode">
               Connection mode
@@ -270,29 +294,91 @@ export default function App() {
               id="connectionMode"
               className="input-field"
               value={connectionMode}
-              onChange={(e) => void changeMode(e.target.value as ConnectionMode)}
+              onChange={(e) => {
+                setConnectionMode(e.target.value as ConnectionMode);
+                setSaveStatus(null);
+                setTestResult(null);
+              }}
             >
               <option value="auto">Auto (recommended)</option>
               <option value="desktop">Desktop app only</option>
+              <option value="web">Web app only</option>
             </select>
             <p className="form-help">
-              Auto saves to your account when the extension is signed in. Otherwise it uses the
-              desktop app: its sign-in, or its offline library on this computer. Desktop app only
-              always goes through the desktop app.
+              Auto resolves saves using the desktop app session when open, falling back to offline
+              or web settings.
             </p>
           </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="appUrl">
+              Web app address
+            </label>
+            <input
+              id="appUrl"
+              type="text"
+              className="input-field"
+              value={appUrl}
+              onChange={(e) => {
+                setAppUrl(e.target.value);
+                setSaveStatus(null);
+                setTestResult(null);
+              }}
+              placeholder="http://localhost:3000"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="accessToken">
+              Access token
+            </label>
+            <input
+              id="accessToken"
+              type="password"
+              className="input-field mono"
+              value={token}
+              onChange={(e) => {
+                setToken(e.target.value);
+                setSaveStatus(null);
+                setTestResult(null);
+              }}
+              placeholder="Paste token here"
+            />
+            <p className="form-help">
+              Only needed for Web app only mode or as a fallback when the desktop app isn't running.
+            </p>
+          </div>
+
           <div className="options-buttons">
+            <button type="submit" className="btn-primary">
+              Save
+            </button>
             <button
               type="button"
               className="btn-outline"
-              onClick={() => void handleTestConnection()}
+              onClick={handleTestConnection}
               disabled={isTesting}
             >
-              {isTesting ? "Testing…" : "Test connection"}
+              {isTesting ? "Testing\u2026" : "Test connection"}
             </button>
           </div>
-          <StatusLine status={testResult} />
-        </div>
+
+          {saveStatus && (
+            <p
+              className={`status-message ${saveStatus.isError ? "status-error" : "status-success"}`}
+            >
+              {saveStatus.message}
+            </p>
+          )}
+
+          {testResult && (
+            <p
+              className={`status-message ${testResult.isError ? "status-error" : "status-success"}`}
+            >
+              {testResult.message}
+            </p>
+          )}
+        </form>
 
         <div className="options-section">
           <h2 className="options-section-title">Native messaging helper</h2>
@@ -310,74 +396,22 @@ export default function App() {
             <button
               type="button"
               className="btn-outline"
-              onClick={() => void handleRegisterNativeHost()}
+              onClick={handleRegisterNativeHost}
               disabled={isRegistering}
             >
-              {isRegistering ? "Registering…" : "Register native host"}
+              {isRegistering ? "Registering\u2026" : "Register native host"}
             </button>
           </div>
-          <StatusLine status={registerResult} />
-        </div>
-
-        <details className="options-section">
-          <summary className="options-section-title">Advanced</summary>
-          <form className="options-form" onSubmit={(e) => void handleSaveAdvanced(e)}>
-            <p className="form-help">
-              Only for your own copy of Sourcefold: the Supabase project that holds the accounts.
-              {signedIn ? " Sign out before changing it." : ""}
+          {registerResult && (
+            <p
+              className={`status-message ${
+                registerResult.isError ? "status-error" : "status-success"
+              }`}
+            >
+              {registerResult.message}
             </p>
-            <div className="form-group">
-              <label className="form-label" htmlFor="supabaseUrl">
-                Supabase address
-              </label>
-              <input
-                id="supabaseUrl"
-                type="text"
-                className="input-field"
-                value={supabaseUrl}
-                disabled={signedIn}
-                onChange={(e) => {
-                  setSupabaseUrl(e.target.value);
-                  setAdvancedResult(null);
-                }}
-                placeholder="https://your-project.supabase.co"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="publishableKey">
-                Publishable key
-              </label>
-              <input
-                id="publishableKey"
-                type="text"
-                className="input-field mono"
-                value={publishableKey}
-                disabled={signedIn}
-                onChange={(e) => {
-                  setPublishableKey(e.target.value);
-                  setAdvancedResult(null);
-                }}
-                placeholder="sb_publishable_…"
-              />
-            </div>
-            <div className="options-buttons">
-              <button type="submit" className="btn-primary" disabled={signedIn}>
-                Save
-              </button>
-              {customConfig && (
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => void handleUseDefault()}
-                  disabled={signedIn}
-                >
-                  Use the default
-                </button>
-              )}
-            </div>
-            <StatusLine status={advancedResult} />
-          </form>
-        </details>
+          )}
+        </div>
       </div>
     </div>
   );

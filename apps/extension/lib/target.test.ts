@@ -4,224 +4,499 @@ import {
   resolveTarget,
   invalidateTargetCache,
   getCachedTarget,
-  type TargetResolverDeps,
+  setCachedTarget,
+  formatWebHostLabel,
+  type ResolvedTarget,
 } from "./target";
-import { normalizeConnectionMode, getSettings } from "./settings";
+import { normalizeConnectionMode, getSettings, saveSettings } from "./settings";
 import { browser } from "wxt/browser";
 
-const inAnHour = () => Math.floor(Date.now() / 1000) + 3600;
-
-function desktopSession(overrides: Record<string, unknown> = {}) {
-  return {
-    signedIn: true,
-    supabaseUrl: "https://abc.supabase.co/",
-    supabasePublishableKey: "sb_publishable_123",
-    accessToken: "eyJ.desktop.token",
-    expiresAt: inAnHour(),
-    userId: "user-1",
-    email: "alice@example.com",
-    ...overrides,
-  };
-}
-
-const AUTO = { connectionMode: "auto" } as const;
-const DESKTOP = { connectionMode: "desktop" } as const;
-
-const nothing: TargetResolverDeps = {
-  queryDesktopNative: async () => null,
-  queryDesktopHttp: async () => null,
-  pingDesktopNative: async () => false,
-  pingDesktopHttp: async () => false,
-};
-
 describe("Session Response Parser", () => {
-  it("parses the desktop app's sign-in, wrapped or bare", () => {
-    const expected = {
-      signedIn: true,
-      supabaseUrl: "https://abc.supabase.co",
-      supabasePublishableKey: "sb_publishable_123",
-      accessToken: "eyJ.desktop.token",
-      expiresAt: expect.any(Number),
-      userId: "user-1",
-      email: "alice@example.com",
+  it("parses wrapped { data: { signedIn: true, ... } }", () => {
+    const raw = {
+      data: {
+        signedIn: true,
+        webUrl: "https://sourcefold.example.com",
+        token: "sf_token_123",
+        email: "alice@example.com",
+      },
     };
-    expect(parseSessionResponse({ data: desktopSession() })).toEqual(expected);
-    expect(parseSessionResponse(desktopSession())).toEqual(expected);
-    expect(parseSessionResponse(desktopSession({ email: null }))).toMatchObject({
+    const session = parseSessionResponse(raw);
+    expect(session).toEqual({
+      signedIn: true,
+      webUrl: "https://sourcefold.example.com",
+      token: "sf_token_123",
+      email: "alice@example.com",
+    });
+  });
+
+  it("parses bare { signedIn: true, ... }", () => {
+    const raw = {
+      signedIn: true,
+      webUrl: "https://app.sourcefold.com/",
+      token: "sf_secret_abc",
+    };
+    const session = parseSessionResponse(raw);
+    expect(session).toEqual({
+      signedIn: true,
+      webUrl: "https://app.sourcefold.com",
+      token: "sf_secret_abc",
       email: undefined,
     });
   });
 
   it("parses signedIn: false wrapped and bare", () => {
-    expect(parseSessionResponse({ data: { signedIn: false } })).toEqual({ signedIn: false });
-    expect(parseSessionResponse({ signedIn: false })).toEqual({ signedIn: false });
+    expect(parseSessionResponse({ data: { signedIn: false } })).toEqual({
+      signedIn: false,
+    });
+    expect(parseSessionResponse({ signedIn: false })).toEqual({
+      signedIn: false,
+    });
   });
 
-  it("reads an old desktop app's { webUrl, token } answer as unreadable", () => {
-    expect(
-      parseSessionResponse({ signedIn: true, webUrl: "https://a.example", token: "sf_1" }),
-    ).toBeNull();
-  });
-
-  it("returns null for malformed or missing data", () => {
+  it("returns null for malformed or missing signedIn data", () => {
     expect(parseSessionResponse(null)).toBeNull();
     expect(parseSessionResponse({})).toBeNull();
     expect(parseSessionResponse({ signedIn: "yes" })).toBeNull();
-    expect(parseSessionResponse(desktopSession({ accessToken: "" }))).toBeNull();
-    expect(parseSessionResponse(desktopSession({ userId: undefined }))).toBeNull();
-    expect(parseSessionResponse(desktopSession({ expiresAt: "soon" }))).toBeNull();
+    // Missing token or webUrl when signedIn is true
+    expect(parseSessionResponse({ signedIn: true, webUrl: "https://abc.com" })).toBeNull();
+    expect(parseSessionResponse({ signedIn: true, token: "sf_123" })).toBeNull();
+    expect(parseSessionResponse({ signedIn: true, webUrl: "", token: "sf_123" })).toBeNull();
   });
 });
 
 describe("Settings Migration and Normalization", () => {
-  it("reads legacy and website modes as auto or desktop", () => {
+  it("migrates legacy 'native' to 'desktop'", () => {
     expect(normalizeConnectionMode("native")).toBe("desktop");
+  });
+
+  it("migrates legacy 'http' to 'desktop'", () => {
     expect(normalizeConnectionMode("http")).toBe("desktop");
-    expect(normalizeConnectionMode("desktop")).toBe("desktop");
-    expect(normalizeConnectionMode("web")).toBe("auto");
+  });
+
+  it("preserves canonical modes", () => {
     expect(normalizeConnectionMode("auto")).toBe("auto");
+    expect(normalizeConnectionMode("desktop")).toBe("desktop");
+    expect(normalizeConnectionMode("web")).toBe("web");
+  });
+
+  it("defaults unknown or null modes to 'auto'", () => {
     expect(normalizeConnectionMode(undefined)).toBe("auto");
+    expect(normalizeConnectionMode(null)).toBe("auto");
     expect(normalizeConnectionMode("invalid")).toBe("auto");
   });
 
-  it("stores the migrated mode and drops the old website address and token", async () => {
+  it("persists migrated settings to storage", async () => {
     await (browser.storage.local as any).clear();
-    await browser.storage.local.set({
-      connectionMode: "web",
-      appUrl: "https://a.example",
-      token: "sf_1",
-    });
+    await (browser.storage.local as any).set({ connectionMode: "native" });
 
-    expect(await getSettings()).toEqual({ connectionMode: "auto" });
-    expect(await browser.storage.local.get(["connectionMode", "appUrl", "token"])).toEqual({
-      connectionMode: "auto",
-    });
+    const loaded = await getSettings();
+    expect(loaded.connectionMode).toBe("desktop");
+
+    // Check that storage was updated
+    const inStorage = await browser.storage.local.get(["connectionMode"]);
+    expect(inStorage.connectionMode).toBe("desktop");
   });
 });
 
-describe("Target Resolution", () => {
+describe("Format Web Host Label", () => {
+  it("formats standard hosts correctly", () => {
+    expect(formatWebHostLabel("https://sourcefold.app")).toBe("Saving to sourcefold.app");
+    expect(formatWebHostLabel("http://localhost:3000")).toBe("Saving to localhost:3000");
+  });
+});
+
+describe("Target Resolution in Auto Mode", () => {
   beforeEach(() => {
     invalidateTargetCache();
   });
 
-  it("uses the extension's own sign-in first in auto mode, without asking the desktop", async () => {
-    const queryDesktopNative = vi.fn(async () => ({ signedIn: false }));
-    const target = await resolveTarget({
-      forceRefresh: true,
-      settings: AUTO,
-      deps: {
-        ...nothing,
-        queryDesktopNative,
-        getOwnAccount: async () => ({ userId: "u1", email: "me@example.com" }),
-      },
-    });
-    expect(target).toEqual({
-      type: "account",
-      via: "extension",
-      displayLabel: "Saving to your account (me@example.com)",
-      email: "me@example.com",
-    });
-    expect(queryDesktopNative).not.toHaveBeenCalled();
-  });
+  it("Case 1: Desktop signed in -> resolves to desktop-web with session token and webUrl", async () => {
+    const deps = {
+      queryDesktopNative: async () => ({
+        signedIn: true,
+        webUrl: "https://my-cloud.sourcefold.com",
+        token: "sf_user_token",
+        email: "alice@example.com",
+      }),
+      queryDesktopHttp: async () => null,
+      pingDesktopNative: async () => true,
+      pingDesktopHttp: async () => true,
+    };
 
-  it("ignores the extension's own sign-in in desktop mode", async () => {
     const target = await resolveTarget({
       forceRefresh: true,
-      settings: DESKTOP,
-      deps: {
-        ...nothing,
-        queryDesktopHttp: async () => ({ data: { signedIn: false } }),
-        getOwnAccount: async () => ({ userId: "u1" }),
-      },
+      settings: { appUrl: "http://localhost:3000", token: "", connectionMode: "auto" },
+      deps,
     });
-    expect(target).toMatchObject({ type: "desktop-offline", transport: "http" });
-  });
 
-  it("borrows the desktop app's sign-in and hands its token to the background only", async () => {
-    const onDesktopSession = vi.fn();
-    const target = await resolveTarget({
-      forceRefresh: true,
-      settings: AUTO,
-      deps: { ...nothing, queryDesktopNative: async () => desktopSession(), onDesktopSession },
-    });
     expect(target).toEqual({
-      type: "account",
-      via: "desktop",
-      displayLabel: "Saving to your account (alice@example.com, desktop app's sign-in)",
+      type: "desktop-web",
+      displayLabel: "Saving to your account (via desktop app)",
+      webUrl: "https://my-cloud.sourcefold.com",
+      token: "sf_user_token",
       email: "alice@example.com",
     });
-    expect(JSON.stringify(target)).not.toContain("eyJ");
-    expect(onDesktopSession).toHaveBeenCalledWith(
-      expect.objectContaining({ accessToken: "eyJ.desktop.token", userId: "user-1" }),
-    );
   });
 
-  it("prefers the running app's fresh token over the native host's stale file", async () => {
-    const onDesktopSession = vi.fn();
+  it("Case 2: Desktop reachable but not signed in -> resolves to desktop-offline", async () => {
+    const deps = {
+      queryDesktopNative: async () => ({
+        signedIn: false,
+      }),
+      queryDesktopHttp: async () => null,
+      pingDesktopNative: async () => true,
+      pingDesktopHttp: async () => true,
+    };
+
     const target = await resolveTarget({
       forceRefresh: true,
-      settings: AUTO,
+      settings: { appUrl: "http://localhost:3000", token: "", connectionMode: "auto" },
+      deps,
+    });
+
+    expect(target).toEqual({
+      type: "desktop-offline",
+      displayLabel: "Saving to this computer (desktop app, offline)",
+      transport: "native",
+    });
+  });
+
+  it("Case 2 fallback: Desktop local HTTP reachable but not signed in -> resolves to desktop-offline via http", async () => {
+    const deps = {
+      queryDesktopNative: async () => null,
+      queryDesktopHttp: async () => ({
+        signedIn: false,
+      }),
+      pingDesktopNative: async () => false,
+      pingDesktopHttp: async () => true,
+    };
+
+    const target = await resolveTarget({
+      forceRefresh: true,
+      settings: { appUrl: "http://localhost:3000", token: "", connectionMode: "auto" },
+      deps,
+    });
+
+    expect(target).toEqual({
+      type: "desktop-offline",
+      displayLabel: "Saving to this computer (desktop app, offline)",
+      transport: "http",
+    });
+  });
+
+  it("Case 2 error: Desktop reachable but session cannot be read -> resolves to error target without caching", async () => {
+    const queryDesktopNative = vi.fn().mockResolvedValue(null);
+    const queryDesktopHttp = vi.fn().mockResolvedValue(null);
+    const pingDesktopNative = vi.fn().mockResolvedValue(true);
+
+    const target = await resolveTarget({
+      forceRefresh: true,
+      settings: { appUrl: "http://localhost:3000", token: "", connectionMode: "auto" },
       deps: {
-        ...nothing,
-        queryDesktopNative: async () => desktopSession({ accessToken: "old", expiresAt: 10 }),
-        queryDesktopHttp: async () =>
-          new Promise((resolve) => setTimeout(() => resolve(desktopSession()), 10)),
-        onDesktopSession,
+        queryDesktopNative,
+        queryDesktopHttp,
+        pingDesktopNative,
+        pingDesktopHttp: async () => false,
       },
     });
-    expect(target).toMatchObject({ type: "account", via: "desktop" });
-    expect(onDesktopSession.mock.calls[0]![0].accessToken).toBe("eyJ.desktop.token");
+
+    expect(target).toEqual({
+      type: "error",
+      displayLabel: "Can't read the desktop app's sign-in. Open Options to fix it.",
+      error: "Can't read the desktop app's sign-in. Open Options to fix it.",
+    });
+
+    // Verify it is NOT cached
+    expect(getCachedTarget()).toBeNull();
+
+    // Subsequent resolution queries again
+    await resolveTarget({
+      settings: { appUrl: "http://localhost:3000", token: "", connectionMode: "auto" },
+      deps: {
+        queryDesktopNative,
+        queryDesktopHttp,
+        pingDesktopNative,
+        pingDesktopHttp: async () => false,
+      },
+    });
+    expect(queryDesktopNative).toHaveBeenCalledTimes(2);
   });
 
-  it("says the desktop's sign-in expired when only a stale token is there, and doesn't cache it", async () => {
+  it("Case 2 error fallback: Desktop HTTP reachable but session cannot be read -> resolves to error target", async () => {
+    const deps = {
+      queryDesktopNative: async () => null,
+      queryDesktopHttp: async () => null,
+      pingDesktopNative: async () => false,
+      pingDesktopHttp: async () => true,
+    };
+
     const target = await resolveTarget({
       forceRefresh: true,
-      settings: AUTO,
-      deps: { ...nothing, queryDesktopNative: async () => desktopSession({ expiresAt: 10 }) },
+      settings: { appUrl: "http://localhost:3000", token: "", connectionMode: "auto" },
+      deps,
     });
-    expect(target.type).toBe("error");
-    expect(target.displayLabel).toContain("expired");
+
+    expect(target).toEqual({
+      type: "error",
+      displayLabel: "Can't read the desktop app's sign-in. Open Options to fix it.",
+      error: "Can't read the desktop app's sign-in. Open Options to fix it.",
+    });
     expect(getCachedTarget()).toBeNull();
   });
 
-  it("saves to the desktop's offline library when it is signed out", async () => {
+  it("Case 3: Desktop unreachable, web app configured -> resolves to web target", async () => {
+    const deps = {
+      queryDesktopNative: async () => null,
+      queryDesktopHttp: async () => null,
+      pingDesktopNative: async () => false,
+      pingDesktopHttp: async () => false,
+    };
+
     const target = await resolveTarget({
       forceRefresh: true,
-      settings: AUTO,
-      deps: { ...nothing, queryDesktopNative: async () => ({ signedIn: false }) },
+      settings: {
+        appUrl: "https://app.sourcefold.com",
+        token: "sf_web_token_999",
+        connectionMode: "auto",
+      },
+      deps,
     });
-    expect(target).toMatchObject({ type: "desktop-offline", transport: "native" });
+
+    expect(target).toEqual({
+      type: "web",
+      displayLabel: "Saving to app.sourcefold.com",
+      webUrl: "https://app.sourcefold.com",
+      token: "sf_web_token_999",
+    });
   });
 
-  it("explains an old desktop app that answers but can't share its sign-in", async () => {
+  it("Case 4: Desktop unreachable, web app not configured -> unconfigured state", async () => {
+    const deps = {
+      queryDesktopNative: async () => null,
+      queryDesktopHttp: async () => null,
+      pingDesktopNative: async () => false,
+      pingDesktopHttp: async () => false,
+    };
+
     const target = await resolveTarget({
       forceRefresh: true,
-      settings: AUTO,
+      settings: {
+        appUrl: "http://localhost:3000",
+        token: "", // No token configured
+        connectionMode: "auto",
+      },
+      deps,
+    });
+
+    expect(target.type).toBe("unconfigured");
+    expect(target.displayLabel).toBe(
+      "Open the Sourcefold desktop app or set up the web app in Options",
+    );
+  });
+});
+
+describe("Explicit Connection Modes", () => {
+  beforeEach(() => {
+    invalidateTargetCache();
+  });
+
+  it("Desktop app only mode: resolves desktop even when web is configured", async () => {
+    const deps = {
+      queryDesktopNative: async () => ({
+        signedIn: false,
+      }),
+      queryDesktopHttp: async () => null,
+      pingDesktopNative: async () => true,
+      pingDesktopHttp: async () => true,
+    };
+
+    const target = await resolveTarget({
+      forceRefresh: true,
+      settings: {
+        appUrl: "https://app.sourcefold.com",
+        token: "sf_configured_token",
+        connectionMode: "desktop",
+      },
+      deps,
+    });
+
+    expect(target.type).toBe("desktop-offline");
+  });
+
+  it("Desktop app only mode: resolves to error target when desktop is reachable but session cannot be read", async () => {
+    const deps = {
+      queryDesktopNative: async () => null,
+      queryDesktopHttp: async () => null,
+      pingDesktopNative: async () => true,
+      pingDesktopHttp: async () => false,
+    };
+
+    const target = await resolveTarget({
+      forceRefresh: true,
+      settings: {
+        appUrl: "https://app.sourcefold.com",
+        token: "sf_configured_token",
+        connectionMode: "desktop",
+      },
+      deps,
+    });
+
+    expect(target).toEqual({
+      type: "error",
+      displayLabel: "Can't read the desktop app's sign-in. Open Options to fix it.",
+      error: "Can't read the desktop app's sign-in. Open Options to fix it.",
+    });
+    expect(getCachedTarget()).toBeNull();
+  });
+
+  it("Desktop app only mode: fails if desktop is unreachable, does not fallback to web", async () => {
+    const deps = {
+      queryDesktopNative: async () => null,
+      queryDesktopHttp: async () => null,
+      pingDesktopNative: async () => false,
+      pingDesktopHttp: async () => false,
+    };
+
+    const target = await resolveTarget({
+      forceRefresh: true,
+      settings: {
+        appUrl: "https://app.sourcefold.com",
+        token: "sf_configured_token",
+        connectionMode: "desktop",
+      },
+      deps,
+    });
+
+    expect(target.type).toBe("unconfigured");
+    expect((target as any).reason).toBe("desktop_not_reachable");
+  });
+
+  it("Web app only mode: resolves web target directly and never calls desktop", async () => {
+    const queryDesktopNative = vi.fn();
+    const queryDesktopHttp = vi.fn();
+
+    const target = await resolveTarget({
+      forceRefresh: true,
+      settings: {
+        appUrl: "https://app.sourcefold.com",
+        token: "sf_web_token_abc",
+        connectionMode: "web",
+      },
       deps: {
-        ...nothing,
-        queryDesktopHttp: async () => ({ signedIn: true, webUrl: "https://a.example", token: "t" }),
+        queryDesktopNative,
+        queryDesktopHttp,
+      },
+    });
+
+    expect(target.type).toBe("web");
+    expect(target.displayLabel).toBe("Saving to app.sourcefold.com");
+    expect(queryDesktopNative).not.toHaveBeenCalled();
+    expect(queryDesktopHttp).not.toHaveBeenCalled();
+  });
+
+  it("Web app only mode: unconfigured if token or appUrl missing", async () => {
+    const target = await resolveTarget({
+      forceRefresh: true,
+      settings: {
+        appUrl: "https://app.sourcefold.com",
+        token: "",
+        connectionMode: "web",
+      },
+    });
+
+    expect(target.type).toBe("unconfigured");
+    expect((target as any).reason).toBe("web_not_configured");
+  });
+});
+
+describe("Target Caching and Invalidation", () => {
+  beforeEach(() => {
+    invalidateTargetCache();
+  });
+
+  it("returns cached target on consecutive calls within TTL", async () => {
+    const queryDesktopNative = vi.fn().mockResolvedValue({
+      signedIn: true,
+      webUrl: "https://app.sourcefold.com",
+      token: "sf_token",
+    });
+
+    const target1 = await resolveTarget({
+      settings: { appUrl: "", token: "", connectionMode: "auto" },
+      deps: { queryDesktopNative },
+    });
+
+    expect(target1.type).toBe("desktop-web");
+    expect(queryDesktopNative).toHaveBeenCalledTimes(1);
+
+    // Second call without forceRefresh should use cache
+    const target2 = await resolveTarget({
+      settings: { appUrl: "", token: "", connectionMode: "auto" },
+      deps: { queryDesktopNative },
+    });
+
+    expect(target2).toEqual(target1);
+    expect(queryDesktopNative).toHaveBeenCalledTimes(1); // Not called again!
+  });
+
+  it("re-resolves target after invalidateTargetCache() is called", async () => {
+    const queryDesktopNative = vi.fn().mockResolvedValue({
+      signedIn: false,
+    });
+
+    await resolveTarget({
+      settings: { appUrl: "", token: "", connectionMode: "auto" },
+      deps: { queryDesktopNative },
+    });
+    expect(queryDesktopNative).toHaveBeenCalledTimes(1);
+
+    invalidateTargetCache();
+
+    await resolveTarget({
+      settings: { appUrl: "", token: "", connectionMode: "auto" },
+      deps: { queryDesktopNative },
+    });
+    expect(queryDesktopNative).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Desktop lookup speed", () => {
+  beforeEach(() => {
+    invalidateTargetCache();
+  });
+
+  it("uses the local server's answer without waiting for a slow native host", async () => {
+    const neverAnswers = () => new Promise<never>(() => {});
+    const started = Date.now();
+    const target = await resolveTarget({
+      forceRefresh: true,
+      settings: { appUrl: "http://localhost:3000", token: "", connectionMode: "auto" },
+      deps: {
+        queryDesktopNative: neverAnswers,
+        queryDesktopHttp: async () => ({ signedIn: false }),
+        pingDesktopNative: async () => false,
         pingDesktopHttp: async () => true,
       },
     });
-    expect(target.type).toBe("error");
-    expect(target.displayLabel).toContain("too old");
-    expect(getCachedTarget()).toBeNull();
+    expect(target).toMatchObject({ type: "desktop-offline", transport: "http" });
+    expect(Date.now() - started).toBeLessThan(500);
   });
 
-  it("asks to sign in when nothing is there, or to open the app in desktop mode", async () => {
-    const auto = await resolveTarget({ forceRefresh: true, settings: AUTO, deps: nothing });
-    expect(auto).toMatchObject({ type: "signed-out", reason: "signed_out" });
-
-    const desktop = await resolveTarget({ forceRefresh: true, settings: DESKTOP, deps: nothing });
-    expect(desktop).toMatchObject({ type: "signed-out", reason: "desktop_not_reachable" });
-  });
-
-  it("caches a resolved target until forced", async () => {
-    const getOwnAccount = vi.fn(async () => ({ userId: "u1" }));
-    await resolveTarget({ forceRefresh: true, settings: AUTO, deps: { ...nothing, getOwnAccount } });
-    await resolveTarget({ settings: AUTO, deps: { ...nothing, getOwnAccount } });
-    expect(getOwnAccount).toHaveBeenCalledTimes(1);
-    await resolveTarget({ forceRefresh: true, settings: AUTO, deps: { ...nothing, getOwnAccount } });
-    expect(getOwnAccount).toHaveBeenCalledTimes(2);
+  it("asks both channels at once and pings both at once", async () => {
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const started = Date.now();
+    await resolveTarget({
+      forceRefresh: true,
+      settings: { appUrl: "https://app.example.com", token: "t", connectionMode: "auto" },
+      deps: {
+        queryDesktopNative: () => delay(150).then(() => null),
+        queryDesktopHttp: () => delay(150).then(() => null),
+        pingDesktopNative: () => delay(150).then(() => false),
+        pingDesktopHttp: () => delay(150).then(() => false),
+      },
+    });
+    // One-after-another would take about 600 ms.
+    expect(Date.now() - started).toBeLessThan(450);
   });
 });

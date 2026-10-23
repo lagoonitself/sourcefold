@@ -6,7 +6,7 @@
 
 Save everything you read for a project (articles, YouTube transcripts, Wikipedia and Grokipedia, Substack, Reddit, X, PDFs) as clean Markdown in folders. Read it, highlight it, search inside it, and send it to your Google Drive ready for NotebookLM, Gemini or any AI tool.
 
-Built for people who gather a lot of reading before they write or make a video.
+Built for people who gather a lot of reading before they write or make a video. See it in action at **[sourcefold-site.vercel.app](https://sourcefold-site.vercel.app)**.
 
 ## Download
 

@@ -18,7 +18,8 @@ export interface PopupCache {
 }
 
 export function snapshotOf(target: ResolvedTarget): TargetSnapshot {
-  const key = target.type === "desktop-web" || target.type === "web" ? target.webUrl : target.type;
+  const key =
+    target.type === "account" ? `account:${target.email ?? target.via}` : target.type;
   return { key, type: target.type, displayLabel: target.displayLabel };
 }
 

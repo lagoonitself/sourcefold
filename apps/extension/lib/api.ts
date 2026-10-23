@@ -1,8 +1,8 @@
 import { browser } from "wxt/browser";
 import type { CaptureRequest, XPostCapture } from "@sourcefold/core";
-import { isLocalUrl, getSettings } from "./settings";
 import { sendNativeMessage } from "./native-messaging";
-import { resolveTarget, invalidateTargetCache } from "./target";
+import { invalidateTargetCache } from "./target";
+import { accountFetch, resolveTarget } from "./account-channel";
 import { DEFAULT_DESKTOP_HTTP, localServerFetch } from "./local-server";
 
 export interface Folder {
@@ -71,80 +71,30 @@ export function unwrapResponse<T = any>(payload: any): T {
   return payload as T;
 }
 
+/** Reads a Sourcefold answer: the `{ data }` payload, or an `ApiError` with the server's message. */
+export function readAnswer<T>(status: number, json: any, fallback: string): T {
+  if (status === 0 || status >= 400) {
+    const message = json?.error?.message || fallback;
+    throw new ApiError(message, status, json?.error?.code, json?.error?.folder_name);
+  }
+  return unwrapResponse<T>(json);
+}
+
 /**
- * Make an HTTP request to a web API target.
- * Never sends the token anywhere except to the target web URL.
+ * A request to the account (Supabase and Drive, no website), run by the local API in the
+ * background worker. The popup never sees a token.
  */
-export async function apiFetchWeb<T>(
-  baseUrl: string,
-  token: string,
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
-  const cleanBase = baseUrl.replace(/\/+$/, "");
-  const isLoopback = isLocalUrl(cleanBase);
-
-  try {
-    const parsed = new URL(cleanBase);
-    if (parsed.protocol !== "https:" && !isLoopback) {
-      throw new ApiError("Remote Sourcefold addresses must use HTTPS.", 0);
-    }
-  } catch (err) {
-    if (err instanceof ApiError) throw err;
-  }
-
-  const url = `${cleanBase}${path.startsWith("/") ? path : `/${path}`}`;
-  const headers = new Headers(init?.headers);
-  headers.set("Accept", "application/json");
-  if (init?.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  // Token is only sent to the resolved web target
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      ...init,
-      headers,
-    });
-  } catch {
-    // Re-resolve on any network failure
-    invalidateTargetCache();
-    throw new ApiError(
-      `Couldn't reach Sourcefold at ${cleanBase}. Check the address in settings.`,
-      0,
-    );
-  }
-
+export async function apiFetchAccount<T>(path: string, init?: RequestInit): Promise<T> {
+  const body = typeof init?.body === "string" ? init.body : undefined;
+  const res = await accountFetch({ path, method: init?.method ?? "GET", body });
   let json: any = null;
   try {
-    json = await response.json();
+    json = res.body ? JSON.parse(res.body) : null;
   } catch {
     // Non-JSON response
   }
-
-  if (response.status === 401) {
-    // Re-resolve on 401 failure
-    invalidateTargetCache();
-    const message =
-      json?.error?.message ||
-      "Your access token isn't valid. Create a new one in Sourcefold's Settings.";
-    throw new ApiError(message, 401, json?.error?.code);
-  }
-
-  if (!response.ok) {
-    const message =
-      json?.error?.message || `Sourcefold returned ${response.status}: ${response.statusText}`;
-    const code = json?.error?.code;
-    const folderName = json?.error?.folder_name;
-    throw new ApiError(message, response.status, code, folderName);
-  }
-
-  return unwrapResponse<T>(json);
+  if (res.status === 401) invalidateTargetCache();
+  return readAnswer<T>(res.status, json, `Sourcefold returned ${res.status}.`);
 }
 
 /**
@@ -191,28 +141,6 @@ export async function apiFetchDesktopHttp<T>(path: string, init?: RequestInit): 
   return unwrapResponse<T>(json);
 }
 
-/**
- * Fallback / direct apiFetch supporting baseUrlOverride or resolving current settings.
- */
-export async function apiFetch<T>(
-  path: string,
-  init?: RequestInit,
-  baseUrlOverride?: string,
-): Promise<T> {
-  if (baseUrlOverride) {
-    const settings = await getSettings();
-    return apiFetchWeb<T>(baseUrlOverride, settings.token, path, init);
-  }
-  const target = await resolveTarget();
-  if (target.type === "desktop-web" || target.type === "web") {
-    return apiFetchWeb<T>(target.webUrl, target.token, path, init);
-  }
-  if (target.type === "desktop-offline") {
-    return apiFetchDesktopHttp<T>(path, init);
-  }
-  throw new ApiError(target.displayLabel, 0);
-}
-
 async function executeWithTarget<T>(
   nativePayload: any,
   httpPath: string,
@@ -220,13 +148,13 @@ async function executeWithTarget<T>(
 ): Promise<T> {
   const target = await resolveTarget();
 
-  if (target.type === "unconfigured") {
+  if (target.type === "signed-out" || target.type === "error") {
     throw new ApiError(target.displayLabel, 0);
   }
 
-  // Desktop signed in OR configured web app: save to web API
-  if (target.type === "desktop-web" || target.type === "web") {
-    return await apiFetchWeb<T>(target.webUrl, target.token, httpPath, httpInit);
+  // Signed in (the extension itself, or the desktop app's sign-in): the account
+  if (target.type === "account") {
+    return await apiFetchAccount<T>(httpPath, httpInit);
   }
 
   // Desktop reachable but not signed in: save to desktop offline library

@@ -177,7 +177,7 @@ Plan: `docs/dev/PLAN-tldr.md` (2026-10-24). Desktop only.
 - [ ] TL;DR fields in Supabase, SQLite, the local API and project files (without moving `updated_at`).
 - [ ] Sign in with ChatGPT and Settings → ChatGPT.
 - [ ] TL;DR writer and queue, usage-limit pause.
-- [ ] TL;DR pane in the group view, `w` and `b`, the reader's TL;DR box.
+- [ ] TL;DR UI: gist under each row's title, the pane, `w` and `b`, "Write TL;DRs for this group" in group menus, the reader's TL;DR box.
 - [ ] Docs (README, PRIVACY, INSTALL, CHANGELOG) and the gist in Claude's `list_sources` and `read_source`.
 
 ## Next: project files and shared projects

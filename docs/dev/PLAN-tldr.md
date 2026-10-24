@@ -1,6 +1,6 @@
 # Plan: TL;DR for every source
 
-Status: planned 2026-10-24, nothing built yet. Desktop app only. The owner's choices so far are under "Decisions"; open questions are at the end.
+Status: planned 2026-10-24, nothing built yet. Desktop app only. The owner answered the open questions the same day (under "Decisions"); next is the spike (build order step 1).
 
 ## What the owner asked for
 
@@ -12,6 +12,11 @@ Before reading a source, see a TL;DR of it, so time goes only to sources worth r
 - **Sign in with ChatGPT, the official route.** OpenAI opened ChatGPT plan usage to open-source, locally run apps (DevDay, 2026-09-29; docs at `developers.openai.com/siwc`, "open-source app"). Sourcefold qualifies: MIT and running on the user's computer. No partner approval, no client secret. Requests go to the normal Responses API at `https://api.openai.com/v1/responses` with the OAuth access token, and count against the user's ChatGPT plan. We don't use the Codex CLI or its login: that needs Codex installed and is the "legacy" route other apps are moving off.
 - **A TL;DR is its own field, not "My summary".** The research tools decided that "Sourcefold never writes summaries itself"; `summary` stays the user's (or Claude's). A TL;DR is shown with where it came from ("From the article" or "Written by GPT-6 Luna").
 - **TL;DRs stay out of the source's file.** The `.md` in Drive and on disk is what goes into NotebookLM and Gemini; AI-written text would end up treated as part of the source. The TL;DR lives in the database only (Supabase signed in, SQLite offline). If the owner wants it in the file later, it's one section in `docs/FILE-FORMAT.md`.
+- **Owner's answers (2026-10-24):**
+  - **Automatic:** every new save gets a TL;DR without pressing anything.
+  - **Old sources only in the groups the owner picks**, never the whole library at once (the plan's usage is limited). A group is picked from its menu, in the sidebar or the group view, without opening it; ticking subgroups in select mode picks several. Nothing else in the backlog is touched.
+  - **Out of the `.md` files.**
+  - **Readable from the group list without opening the source:** every row shows its gist under the title, and the pane shows the full TL;DR of the focused row.
 - **Desktop only**, like search inside sources. The extension's saves already go to the desktop app when it's running, so they get TL;DRs there. The website and extension don't call ChatGPT.
 
 ## What the user sees
@@ -43,7 +48,7 @@ The group view gets a pane on the right side of the sheet that shows the TL;DR o
   - The article's own TL;DR: shown straight away, labelled "From the article".
   - Being written: three `.skeleton` lines shaped like the text.
   - None yet and not signed in: "Sign in with ChatGPT to get a TL;DR for sources that don't have one." with a button that opens Settings → ChatGPT.
-  - None yet, signed in, auto off: **Write TL;DR** (`w`).
+  - None yet (an old source in a group that wasn't picked): **Write TL;DR** (`w`), for this one source only.
   - Failed: what happened and **Try again**.
   - Usage limit reached: "Your ChatGPT usage limit is reached, so TL;DRs are paused." with a link **Check usage** to `chatgpt.com/settings/usage`. No guessed reset time (OpenAI asks apps not to guess one).
   - Notes, images and sources with no text: "No text to summarize."
@@ -51,8 +56,16 @@ The group view gets a pane on the right side of the sheet that shows the TL;DR o
 
 ### In the list
 
+- **Every row shows its gist** as the muted line under the title (one line, cut with an ellipsis), so a whole group can be skimmed without focusing or opening anything. The author, site, channel and duration that sit on that line today move to the pane. Rows without a TL;DR keep today's line. Rows don't change height. Settings → ChatGPT has **Show TL;DRs in the list** (on) for anyone who wants the old line back.
 - `w` writes (or rewrites) the TL;DR for the focused row, or every ticked row in select mode. The select bar gets **Write TL;DRs**.
-- Rows don't change height. A row whose TL;DR is being written shows a small spinner in its status column, with a tooltip.
+- A row whose TL;DR is being written shows a small spinner in its status column, with a tooltip.
+
+### Picking groups for old sources
+
+- Every group's menu (the three dots on its sidebar row, the group header's menu, and a subgroup row's menu) gets **Write TL;DRs for this group (N)**, where N counts the sources in that group without one. It works without opening the group, and asks first when N is over 25.
+- In select mode, ticked subgroup rows get the same action in the select bar, for several groups at once.
+- A picked group stays picked only until its sources are done; it is a one-off job, not a setting. New saves are covered anyway by the automatic TL;DR.
+- While a group's job runs, its sidebar row shows the remaining count as a muted number with a spinner tooltip ("Writing TL;DRs, 12 left"). The job stops on the usage limit and continues from where it stopped after **Try again**.
 
 ### In the reader
 
@@ -62,7 +75,7 @@ A quiet TL;DR box under the title, above the source panel (gist and points; coll
 
 - Signed out: one line about what it's for, **Sign in with ChatGPT** (opens the browser), and a note that source text is sent to OpenAI to write TL;DRs and counts against the ChatGPT plan.
 - Signed in: the account email, whether plan usage was allowed on the consent page (if the user declined it: "Plan usage wasn't allowed. Sign in again and allow Use your ChatGPT plan."), the **Model** menu (from the account's own model list; defaults to GPT-6 Luna when listed), a switch **Write TL;DRs for new sources** (on by default), **Check usage**, and **Sign out**.
-- Group header menu and command palette: **Write TL;DRs for this group (N)**. It asks first when N is over 25, since the backlog (the owner has 800+ sources) would use a lot of the weekly plan.
+- Command palette: **Write TL;DRs for this group (N)** (the same action as the group menus above).
 
 ## How it works
 
@@ -96,7 +109,11 @@ Follows the open-source app guide. The pattern is the desktop's Google sign-in (
 - **Input, kept small on purpose** (`packages/core/src/tldr/input.ts`, `buildTldrInput`): a Grokipedia article is about 200 KB, and 800 of those would eat the plan. Send at most about 24,000 characters (around 6,000 tokens): title, source type, author, the heading outline, the lead, and the first paragraph of each section; for transcripts, evenly spaced windows with their times. Tested on the fixtures already in `packages/core`.
 - **Request** (Rust `chatgpt_respond`): `POST /v1/responses` with `store: false`, `stream: true`, `instructions` (not a system message), and a JSON schema for the answer (`text.format`): `gist` (≤ 30 words), `points` (3–5, ≤ 20 words each), `best_part` (`{ section: number } | { time: string } | null`). None of the parameters the plan route refuses (`temperature`, `max_output_tokens`, …). The answer counts only after `response.completed`; `response.failed` is a failure.
 - **Errors**, from OpenAI's list: `subscription_sharing_usage_limit_exceeded` (429) pauses the whole queue and shows the limit message; `subscription_sharing_user_not_eligible` (403, Free and Go plans) says so once and stops, no retry, no new sign-in; `…_usage_unavailable` and other 503s retry with bounded backoff (30 s, 2 min, then wait for **Try again**); `…_unsupported_capability` (400) is a bug, logged with `error.param`.
-- **Queue** (`apps/desktop/src/features/tldr/`): there is no stored queue. The work is "sources in the open project with no TL;DR that were saved after auto was turned on", plus anything the user asked for with `w` or **Write TL;DRs for this group**. Two at a time, the focused row first, then newest first. Text comes from `loadReaderText`, so it works signed in and offline.
+- **Queue** (`apps/desktop/src/features/tldr/`), three kinds of work, two TL;DRs at a time:
+  - **New saves:** any source with no TL;DR saved after the feature first started (the start time is kept in settings). Old sources never match, so turning the feature on doesn't touch the backlog.
+  - **Picked groups:** the group ids are kept in settings until each group has no source left without a TL;DR, so a job survives a restart and the usage-limit pause.
+  - **`w`:** the focused or ticked sources, first in line.
+  - The focused row goes first within each kind, then newest first. Text comes from `loadReaderText`, so it works signed in and offline.
 - **When the text changes** (Remove text, Edit as text), the TL;DR is marked stale by a hash of the body and rewritten when auto is on; otherwise the pane says "The text changed since this TL;DR was written." with **Rewrite**.
 
 ### 4. Data
@@ -125,7 +142,7 @@ Follows the open-source app guide. The pattern is the desktop's Google sign-in (
 3. **Data:** migration, SQLite, local API route, manifest, tests.
 4. **ChatGPT sign-in** in Rust and Settings → ChatGPT.
 5. **TL;DR writer and queue**, errors and the limit pause.
-6. **The pane**, `w`, `b`, the reader box, select-bar and palette actions; shortcuts registry and `?` help.
+6. **The UI:** the gist line in rows, the pane, `w`, `b`, **Write TL;DRs for this group** in every group menu and the select bar, the sidebar's remaining count, the reader box, palette actions; shortcuts registry and `?` help.
 7. **Docs and release:** README feature line, `PRIVACY.md` (source text goes to OpenAI only when the user signs in with ChatGPT), `docs/INSTALL.md`, CHANGELOG, `docs/dev/ROADMAP.md`.
 8. **Claude:** the gist in `list_sources` and `read_source`.
 
@@ -134,12 +151,6 @@ Steps 2 and 3 can run in parallel with 4. The spike decides whether anything in 
 ## Risks
 
 - **Preview:** OpenAI calls plan usage for open-source apps a preview; endpoints or rules may change. Everything ChatGPT-specific sits in `src-tauri/src/chatgpt/`, and an OpenAI API key could be added later as a second option behind the same `chatgpt_respond`.
-- **Plan usage:** each TL;DR is roughly 6,000 tokens in and 200 out. Day to day (new saves) that's small; the 800-source backlog is not, hence the confirmation over 25 and the per-app weekly cap the user can set in ChatGPT Settings → Usage → App limits. On Plus, the five-hour limit is shared with ChatGPT and other apps.
+- **Plan usage:** each TL;DR is roughly 6,000 tokens in and 200 out. Day to day (new saves) that's small; the 800-source backlog is not, hence old sources only in picked groups, the confirmation over 25, and the per-app weekly cap the user can set in ChatGPT Settings → Usage → App limits. On Plus, the five-hour limit is shared with ChatGPT and other apps.
 - **Plans:** Plus and Pro can use plan sharing; Free and Go accounts get `subscription_sharing_user_not_eligible`.
 - **Quality:** a TL;DR from the outline and first paragraphs can miss a point buried deep in a long article. "Best part" and the key points are judged on what was sent. If the owner finds them thin, send more text for short sources (under 24,000 characters the whole text is sent anyway).
-
-## Open questions for the owner
-
-1. Auto TL;DRs for new saves: on by default (recommended), or only when you press `w`?
-2. The 800+ sources you already have: write TL;DRs for all of them once (uses a good part of a week's plan), or only per group when you ask?
-3. Keep TL;DRs out of the `.md` files (recommended, so NotebookLM never sees AI text), or add them as a `## TL;DR` section?

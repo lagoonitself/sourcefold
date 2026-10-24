@@ -3871,6 +3871,7 @@ dependencies = [
 name = "sourcefold-desktop"
 version = "0.4.1"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "dirs 5.0.1",
  "htmd",
@@ -3880,6 +3881,7 @@ dependencies = [
  "scraper",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

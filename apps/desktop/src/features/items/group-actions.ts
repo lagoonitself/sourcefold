@@ -9,7 +9,10 @@ export type GroupAction =
   | "status-cut"
   | "status-clear"
   | "edit-tags"
-  | "edit-summary";
+  | "edit-summary"
+  | "tldr-write"
+  | "tldr-pane"
+  | "tldr-group";
 
 export const GROUP_ACTION_EVENT = "sourcefold:group-action";
 
@@ -24,6 +27,9 @@ const COMMAND_ACTIONS: Record<string, GroupAction> = {
   "list.status-clear": "status-clear",
   "list.tags": "edit-tags",
   "list.summary": "edit-summary",
+  "list.tldr-write": "tldr-write",
+  "list.tldr-pane": "tldr-pane",
+  "list.tldr-group": "tldr-group",
 };
 
 export function groupActionForCommand(commandId: string): GroupAction | null {

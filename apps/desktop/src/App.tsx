@@ -61,6 +61,15 @@ import { OutlineView } from "@/features/research/outline/OutlineView";
 import { BrollView } from "@/features/research/broll/BrollView";
 import { DuplicatesView } from "@/features/research/duplicates/DuplicatesView";
 import type { Card } from "@sourcefold/core";
+import { TldrProvider } from "@/features/tldr/TldrProvider";
+import { TldrPane } from "@/features/tldr/TldrPane";
+import { TOGGLE_PANE_EVENT } from "@/features/tldr/tldr-store";
+import { OPEN_SETTINGS_EVENT } from "@/features/tldr/tldr-settings-link";
+import { updateTldrPrefs, useTldrPrefs, getTldrPrefs } from "@/features/tldr/tldr-prefs";
+import { onGroupAction } from "@/features/items/group-actions";
+
+/** The TL;DR pane sits beside the list from this group-view width; below it, it floats. */
+const TLDR_PANE_MIN_WIDTH = 960;
 
 export function App() {
   const isMac = React.useMemo(() => isMacPlatform(), []);
@@ -211,6 +220,41 @@ export function App() {
 
   // Archive project confirm dialog
   const [archiveConfirmOpen, setArchiveConfirmOpen] = React.useState(false);
+
+  // The TL;DR pane (docs/dev/PLAN-tldr.md): beside the list on wide group views (remembered),
+  // floating over it on narrow ones (until closed).
+  const tldrPrefs = useTldrPrefs();
+  const [groupViewEl, setGroupViewEl] = React.useState<HTMLDivElement | null>(null);
+  const [groupViewWide, setGroupViewWide] = React.useState(true);
+  const [tldrFloatOpen, setTldrFloatOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!groupViewEl) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setGroupViewWide(entry.contentRect.width >= TLDR_PANE_MIN_WIDTH);
+    });
+    observer.observe(groupViewEl);
+    return () => observer.disconnect();
+  }, [groupViewEl]);
+  const groupViewWideRef = React.useRef(groupViewWide);
+  groupViewWideRef.current = groupViewWide;
+  React.useEffect(() => {
+    const toggle = () => {
+      if (groupViewWideRef.current) updateTldrPrefs({ paneOpen: !getTldrPrefs().paneOpen });
+      else setTldrFloatOpen((open) => !open);
+    };
+    const offAction = onGroupAction((action) => {
+      if (action === "tldr-pane") toggle();
+    });
+    const openSettingsAt = () => setSettingsOpen(true);
+    window.addEventListener(TOGGLE_PANE_EVENT, toggle);
+    window.addEventListener(OPEN_SETTINGS_EVENT, openSettingsAt);
+    return () => {
+      offAction();
+      window.removeEventListener(TOGGLE_PANE_EVENT, toggle);
+      window.removeEventListener(OPEN_SETTINGS_EVENT, openSettingsAt);
+    };
+  }, []);
+  const tldrPaneShown = groupViewWide ? tldrPrefs.paneOpen : tldrFloatOpen;
 
   // The latest ids, readable from callbacks without making them depend on every selection change.
   const activeProjectIdRef = React.useRef(activeProjectId);
@@ -784,7 +828,10 @@ export function App() {
           />
 
           {activeFolderId ? (
-            <div className="@container/view flex min-h-0 flex-1 flex-col px-5 pt-7 @[720px]/view:px-9 @[720px]/view:pt-9">
+            <div
+              ref={setGroupViewEl}
+              className="@container/view flex min-h-0 flex-1 flex-col px-5 pt-7 @[720px]/view:px-9 @[720px]/view:pt-9"
+            >
               <GroupHeader
                 folders={folders}
                 folderId={activeFolderId}
@@ -813,26 +860,53 @@ export function App() {
                   }}
                 />
               ) : (
-                <>
-                  <SubgroupList
-                    folders={folders}
-                    folderId={activeFolderId}
-                    onSelectGroup={selectGroup}
-                  />
-                  <ItemList
-                    key={activeFolderId}
-                    items={items}
-                    folders={folders}
-                    isFocusedRegion={activeRegion === "list"}
-                    focusedItemId={focusedItemId}
-                    onFocusedItemChange={setFocusedItemId}
-                    onRefresh={refreshItems}
-                    onOpenReader={(item) => {
-                      setReaderHighlightId(null);
-                      setReaderItem(item);
-                    }}
-                  />
-                </>
+                <div className="relative flex min-h-0 flex-1 gap-6">
+                  {/* Its own container, so rows fit the list's width, not the whole view's. */}
+                  <div className="@container/view flex min-w-0 flex-1 flex-col">
+                    <SubgroupList
+                      folders={folders}
+                      folderId={activeFolderId}
+                      onSelectGroup={selectGroup}
+                    />
+                    <ItemList
+                      key={activeFolderId}
+                      items={items}
+                      folders={folders}
+                      isFocusedRegion={activeRegion === "list"}
+                      focusedItemId={focusedItemId}
+                      onFocusedItemChange={setFocusedItemId}
+                      onRefresh={refreshItems}
+                      onOpenReader={(item) => {
+                        setReaderHighlightId(null);
+                        setReaderItem(item);
+                      }}
+                    />
+                  </div>
+                  {tldrPaneShown && (
+                    <TldrPane
+                      item={items.find((i) => i.id === focusedItemId) ?? null}
+                      floating={!groupViewWide}
+                      onClose={() => {
+                        if (groupViewWide) updateTldrPrefs({ paneOpen: false });
+                        else setTldrFloatOpen(false);
+                      }}
+                      onOpen={(item) =>
+                        openSource(item, {
+                          image: (image) => {
+                            openImage(image).catch((err) =>
+                              toast.error(errorMessage(err, "Couldn't open that image.")),
+                            );
+                          },
+                          reader: (source) => {
+                            setReaderHighlightId(null);
+                            setReaderItem(source);
+                          },
+                          browser: (url) => void openUrl(url),
+                        })
+                      }
+                    />
+                  )}
+                </div>
               )}
             </div>
           ) : projectView === "outline" ? (
@@ -1021,6 +1095,8 @@ export function App() {
       />
 
       <MeaningIndexer currentProjectId={activeProjectId} />
+
+      <TldrProvider projectId={activeProjectId} folders={folders} />
 
       <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 

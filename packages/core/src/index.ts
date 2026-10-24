@@ -14,6 +14,7 @@ export { bodyFromDriveFile, buildItemFile, type BuildItemInput, type ItemKind } 
 export { markdownImageUrls, postImageFileNames, postImagesFolderName } from "./post-images";
 export * from "./highlights";
 export * from "./research";
+export * from "./tldr";
 export { SOURCE_CAPTURE_KINDS, isSourceCaptureKind } from "./capture-types";
 export type {
   CaptureRequest,

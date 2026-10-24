@@ -4,7 +4,9 @@ import {
   Folder as FolderIcon,
   FolderPlus,
   ImagePlus,
+  Loader2,
   MoreHorizontal,
+  ScrollText,
   StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +35,39 @@ import { isTypingContext } from "../shortcuts/key-utils";
 import { isTabSwitchKey, toggleGroupTab, type GroupTab } from "../highlights/highlight-rows";
 import { AddImageButton } from "./AddImageButton";
 import { dispatchGroupAction, onGroupAction } from "./group-actions";
+import { requestGroupTldrs, tldrEngine, useGroupRemaining } from "../tldr/tldr-store";
+
+/** "Write TL;DRs" for the open group, or its progress and Stop while it runs. */
+function GroupTldrButton({ folderId }: { folderId: string }) {
+  const remaining = useGroupRemaining(folderId);
+  if (remaining !== null) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => tldrEngine.stopGroup(folderId)}
+        title="Stop writing TL;DRs for this group"
+      >
+        <Loader2 className="size-3.5 motion-safe:animate-spin" aria-hidden="true" />
+        <span className="tabular-nums">{remaining} left</span>
+        <span className="text-muted-foreground">Stop</span>
+      </Button>
+    );
+  }
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => requestGroupTldrs(folderId)}
+      title="Write TL;DRs for every source here without one"
+    >
+      <ScrollText className="size-3.5" aria-hidden="true" />
+      <span>Write TL;DRs</span>
+    </Button>
+  );
+}
 
 function plural(count: number, one: string, many: string) {
   return count === 1 ? `1 ${one}` : `${count} ${many}`;
@@ -118,8 +153,9 @@ export function GroupHeader({
     () =>
       onGroupAction((action) => {
         if (action === "new-subgroup") openSubgroupDialog();
+        else if (action === "tldr-group") requestGroupTldrs(folderId);
       }),
-    [openSubgroupDialog],
+    [openSubgroupDialog, folderId],
   );
 
   const handleCreateSubgroup = async (e?: React.FormEvent) => {
@@ -165,6 +201,7 @@ export function GroupHeader({
 
         {/* Wide actions: visible at >= 640px container width */}
         <div className="hidden items-center gap-2 @[640px]/view:flex">
+          <GroupTldrButton folderId={folderId} />
           <Button
             type="button"
             variant="outline"
@@ -223,6 +260,10 @@ export function GroupHeader({
                 <StickyNote className="size-3.5" aria-hidden="true" />
                 <span>New note</span>
                 <Kbd>c</Kbd>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => requestGroupTldrs(folderId)}>
+                <ScrollText className="size-3.5" aria-hidden="true" />
+                <span>Write TL;DRs</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

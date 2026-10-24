@@ -1,5 +1,15 @@
 import * as React from "react";
-import { ChevronRight, FolderPlus, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronRight,
+  FolderPlus,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+  Loader2,
+  ScrollText,
+  Square,
+} from "lucide-react";
 import { Files, Film, ListTree } from "lucide-react";
 import {
   DndContext,
@@ -51,6 +61,50 @@ import { isMacPlatform, isTypingContext } from "../shortcuts/key-utils";
 import { NEW_GROUP_EVENT } from "@/features/items/group-actions";
 import { cn } from "@/lib/utils";
 import type { ProjectView } from "../research/project-view";
+import { requestGroupTldrs, tldrEngine, useGroupRemaining } from "../tldr/tldr-store";
+
+/** "Write TL;DRs" in a group's menu, or "Stop" while its job runs. Works without opening it. */
+function GroupTldrMenuItem({ groupId }: { groupId: string }) {
+  const remaining = useGroupRemaining(groupId);
+  return remaining !== null ? (
+    <DropdownMenuItem
+      onClick={(e) => {
+        e.stopPropagation();
+        tldrEngine.stopGroup(groupId);
+      }}
+    >
+      <Square className="size-3.5" />
+      <span>Stop writing TL;DRs</span>
+    </DropdownMenuItem>
+  ) : (
+    <DropdownMenuItem
+      onClick={(e) => {
+        e.stopPropagation();
+        requestGroupTldrs(groupId);
+      }}
+    >
+      <ScrollText className="size-3.5" />
+      <span>Write TL;DRs</span>
+    </DropdownMenuItem>
+  );
+}
+
+/** A small spinner on a group's row while its TL;DRs are being written. */
+function GroupTldrProgress({ groupId }: { groupId: string }) {
+  const remaining = useGroupRemaining(groupId);
+  if (remaining === null) return null;
+  const label = remaining === 1 ? "Writing TL;DRs, 1 left" : `Writing TL;DRs, ${remaining} left`;
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className="relative z-10 flex shrink-0 items-center text-muted-foreground"
+    >
+      <Loader2 className="size-3 motion-safe:animate-spin" aria-hidden="true" />
+    </span>
+  );
+}
 
 export interface FolderTreeProps {
   projectId: string;
@@ -934,6 +988,9 @@ function TreeNodeItem({
           </span>
         )}
 
+        {/* TL;DRs still to write in this group, while its job runs */}
+        {!isInlineEditing && <GroupTldrProgress groupId={node.id} />}
+
         {/* Item count */}
         {node.itemCount > 0 && !isInlineEditing && (
           <span className="relative z-10 shrink-0 text-[12px] tabular-nums text-muted-foreground">
@@ -973,6 +1030,7 @@ function TreeNodeItem({
                   <span>Rename</span>
                   <Kbd>r</Kbd>
                 </DropdownMenuItem>
+                <GroupTldrMenuItem groupId={node.id} />
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   variant="destructive"

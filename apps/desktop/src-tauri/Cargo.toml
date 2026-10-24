@@ -25,3 +25,5 @@ scraper = "0.22"
 htmd = "0.1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 tauri-plugin-dialog = "2"
+sha2 = "0.10"
+base64 = "0.22"

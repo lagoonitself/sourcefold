@@ -170,14 +170,14 @@ Contract: `docs/dev/handoff-no-website.md`. Comes before phase 2 of sharing.
 
 ## Next: TL;DR for every source
 
-Plan: `docs/dev/PLAN-tldr.md` (2026-10-24). Desktop only.
+Plan: `docs/dev/PLAN-tldr.md` (2026-10-24). Desktop only. Built 2026-10-24 on branch `tldr`, waiting for the owner's test.
 
-- [ ] Spike: Sign in with ChatGPT, model list, one TL;DR from Rust.
-- [ ] The article's own TL;DR finder in `packages/core` (Wikipedia lead, arXiv abstract, "TL;DR:" lines, "Key takeaways" sections).
-- [ ] TL;DR fields in Supabase, SQLite, the local API and project files (without moving `updated_at`).
-- [ ] Sign in with ChatGPT and Settings → ChatGPT.
-- [ ] TL;DR writer and queue, usage-limit pause.
-- [ ] TL;DR UI: gist under each row's title, the pane, `w` and `b`, "Write TL;DRs for this group" in group menus, the reader's TL;DR box.
+- [x] Sign in with ChatGPT, OpenRouter and OpenCode keys, model lists and answers in Rust (`src-tauri/src/ai/`, 2026-10-24; the spike was folded in, so the owner's first sign-in is its live test).
+- [x] The article's own TL;DR finder in `packages/core` (Wikipedia lead, arXiv abstract, "TL;DR:" lines, "Key takeaways" sections).
+- [x] TL;DRs in their own table in Supabase and SQLite, `/api/tldrs` in the local API (never moving `updated_at`). Not yet in project files.
+- [x] Settings → TL;DR: provider, ChatGPT sign-in, API keys, model picker, automatic and list switches.
+- [x] TL;DR writer and queue, usage-limit pause.
+- [x] TL;DR UI: gist under each row's title, the pane, `w` and `b`, "Write TL;DRs for this group" in group menus, the reader's TL;DR box.
 - [ ] Docs (README, PRIVACY, INSTALL, CHANGELOG) and the gist in Claude's `list_sources` and `read_source`.
 
 ## Next: project files and shared projects

@@ -24,7 +24,7 @@ function summary(report: LocalCopyReport | null, at: Date | null): string {
   return `Up to date: ${files} (${time}).`;
 }
 
-function Switch({
+export function Switch({
   checked,
   onCheckedChange,
   disabled,

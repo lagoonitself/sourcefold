@@ -31,6 +31,7 @@ import { ReaderTextEditor } from "./ReaderTextEditor";
 import { buildReaderHeader, calculateReadingTime } from "./reader-meta";
 import { useReaderContent } from "./use-reader-content";
 import { SourceInfoPanel } from "../research/source-info";
+import { TldrBox } from "../tldr/TldrBox";
 import "./reader.css";
 import type { ReaderFindController, ReaderTypography, ReaderViewProps } from "./types";
 
@@ -451,6 +452,8 @@ export function ReaderView({
                     </a>
                   </div>
                 )}
+
+                <TldrBox item={item} className="mt-6" />
 
                 {onUpdateResearch && (
                   <SourceInfoPanel

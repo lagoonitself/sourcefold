@@ -1,6 +1,6 @@
 # Plan: TL;DR for every source
 
-Status: planned 2026-10-24, nothing built yet. Desktop app only. The owner answered the open questions the same day (under "Decisions"); next is the spike (build order step 1).
+Status: built 2026-10-24 on branch `tldr`, waiting for the owner's test. "As built" at the end says what differs from this plan. Desktop app only.
 
 ## What the owner asked for
 
@@ -150,7 +150,19 @@ Steps 2 and 3 can run in parallel with 4. The spike decides whether anything in 
 
 ## Risks
 
-- **Preview:** OpenAI calls plan usage for open-source apps a preview; endpoints or rules may change. Everything ChatGPT-specific sits in `src-tauri/src/chatgpt/`, and an OpenAI API key could be added later as a second option behind the same `chatgpt_respond`.
+- **Preview:** OpenAI calls plan usage for open-source apps a preview; endpoints or rules may change. Everything ChatGPT-specific sits in `src-tauri/src/ai/chatgpt.rs`; OpenRouter and OpenCode already work behind the same `ai_complete` if it breaks.
 - **Plan usage:** each TL;DR is roughly 6,000 tokens in and 200 out. Day to day (new saves) that's small; the 800-source backlog is not, hence old sources only in picked groups, the confirmation over 25, and the per-app weekly cap the user can set in ChatGPT Settings → Usage → App limits. On Plus, the five-hour limit is shared with ChatGPT and other apps.
 - **Plans:** Plus and Pro can use plan sharing; Free and Go accounts get `subscription_sharing_user_not_eligible`.
 - **Quality:** a TL;DR from the outline and first paragraphs can miss a point buried deep in a long article. "Best part" and the key points are judged on what was sent. If the owner finds them thin, send more text for short sources (under 24,000 characters the whole text is sent anyway).
+
+## As built (2026-10-24, branch `tldr`)
+
+Steps 2–7 are built, apart from the docs and release items listed below. Step 1 (the spike) was folded into the build, so the owner's first ChatGPT sign-in is also the first real test of that route. Step 8 (Claude) isn't done. What changed from the plan:
+
+- **Three providers, not one (owner, 2026-10-24):** ChatGPT (Sign in with ChatGPT), **OpenRouter** and **OpenCode** (Zen), each with a model picker; the last two take an API key. Settings → TL;DR picks one. Code: `apps/desktop/src-tauri/src/ai/` (`mod.rs` settings, keys and dispatch; `chatgpt.rs` sign-in, refresh and the Responses stream; `openai_compat.rs` Chat Completions for OpenRouter `https://openrouter.ai/api/v1` and OpenCode `https://opencode.ai/zen/v1`). Keys live in `ai_keys.json`, ChatGPT tokens in `chatgpt_auth.json` and the choice in `ai_settings.json`, all in the app data folder; the webview only sees `AiStatus`. An OpenRouter key is checked with `GET /key` before it's saved; an OpenCode key isn't (there's no such endpoint).
+- **Default model:** GPT-6 Luna when the provider lists it; otherwise (OpenRouter, OpenCode) the first free model; otherwise the first in the list. It's saved on first use, so Settings shows it.
+- **Plain prompting**, no provider "structured output" switch: `TLDR_INSTRUCTIONS` asks for JSON and `parseTldrAnswer` reads the first JSON object in the answer; an unreadable answer gets one more try.
+- **Storage is its own table**, `item_tldrs` (Supabase migration `20261024000000_item_tldrs.sql`, applied 2026-10-24; a SQLite table with the same name in `tldr_store.rs`), so a TL;DR never moves `items.updated_at`. Routes: `GET /api/tldrs?folder=|project=`, `PUT` and `DELETE /api/tldrs/[itemId]` in `packages/client` (with website wrappers). Offline: `list_tldrs`, `put_tldr`, `delete_tldr`.
+- **Group menus:** the sidebar's group menu (any group, without opening it) and the group header (**Write TL;DRs**, which turns into "12 left, Stop" while it runs). The sidebar row shows a spinner while its group runs. Ticking subgroup rows to pick several groups was dropped: subgroup rows are buttons, and the sidebar menu already covers every group.
+- **Left out for now:** reading time in the pane (it needs the text; the pane shows the source type and its meta line instead), "the text changed since this TL;DR was written" (the hash is stored, but nothing reads it yet), TL;DRs in `.sourcefold` project files, Esc closing the floating pane on narrow windows, and the README, PRIVACY, INSTALL and CHANGELOG updates (they wait for the owner's test).
+- **Where things are:** core `packages/core/src/tldr/` (article finder, input builder, prompt, types); desktop `apps/desktop/src/features/tldr/` (`tldr-engine.ts` the queue, `tldr-store.ts` the app's one engine and its hooks, `TldrProvider.tsx` project loading and the confirm dialog, `TldrPane.tsx`, `TldrBox.tsx` in the reader, `TldrSettings.tsx`, `tldr-prefs.ts`). Picked groups and the start time are kept in `localStorage` (`sourcefold:tldr`).

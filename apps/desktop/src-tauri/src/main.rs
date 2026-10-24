@@ -169,6 +169,19 @@ fn main() {
             commands::project_file_write,
             commands::project_file_read,
             commands::project_file_cancel,
+            commands::list_tldrs,
+            commands::put_tldr,
+            commands::delete_tldr,
+            commands::ai_status,
+            commands::ai_set_provider,
+            commands::ai_set_model,
+            commands::ai_set_api_key,
+            commands::ai_clear_api_key,
+            commands::ai_list_models,
+            commands::ai_complete,
+            commands::chatgpt_sign_in,
+            commands::chatgpt_cancel_sign_in,
+            commands::chatgpt_sign_out,
         ])
         .run(tauri::generate_context!())
         .expect("error while running sourcefold desktop application");

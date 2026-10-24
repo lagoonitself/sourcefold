@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod ai;
 pub mod commands;
 pub mod db;
 pub mod models;
@@ -12,6 +13,7 @@ pub mod server;
 pub mod service;
 pub mod session;
 pub mod substack;
+pub mod tldr_store;
 pub mod web_fetch;
 
 pub use db::Database;

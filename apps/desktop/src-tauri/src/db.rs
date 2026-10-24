@@ -225,6 +225,18 @@ impl Database {
                 updated_at TEXT NOT NULL
             );
 
+            -- TL;DRs (docs/dev/PLAN-tldr.md, tldr_store.rs). Never part of the item's file, so
+            -- changing one doesn't touch items.updated_at.
+            CREATE TABLE IF NOT EXISTS item_tldrs (
+                item_id TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+                tldr TEXT NOT NULL,
+                source TEXT NOT NULL CHECK (source IN ('article', 'ai')),
+                model TEXT,
+                body_hash TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_highlights_item_id ON highlights(item_id);
             CREATE INDEX IF NOT EXISTS idx_items_folder_id ON items(folder_id);
             CREATE INDEX IF NOT EXISTS idx_items_canonical_url ON items(canonical_url);

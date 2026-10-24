@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod auth;
 pub mod claude;
 pub mod folders;
@@ -10,8 +11,10 @@ pub mod research;
 pub mod search;
 pub mod settings;
 pub mod substack;
+pub mod tldrs;
 pub mod web_fetch;
 
+pub use ai::*;
 pub use auth::*;
 pub use claude::*;
 pub use folders::*;
@@ -24,4 +27,5 @@ pub use research::*;
 pub use search::*;
 pub use settings::*;
 pub use substack::*;
+pub use tldrs::*;
 pub use web_fetch::*;

@@ -8,9 +8,11 @@ import {
   FileStack,
   FileText,
   Folder as FolderIcon,
+  Loader2,
   MessageSquare,
   MoreVertical,
   Pencil,
+  ScrollText,
   Tag,
   Trash2,
 } from "lucide-react";
@@ -50,6 +52,10 @@ import {
   StatusIcon,
 } from "./source-kinds";
 import { onGroupAction } from "./group-actions";
+import { tldrEngine, TOGGLE_PANE_EVENT, useTldrVersion } from "../tldr/tldr-store";
+import { getTldrPrefs, useTldrPrefs } from "../tldr/tldr-prefs";
+import { canHaveTldr } from "../tldr/tldr-engine";
+import { listTldrs } from "../tldr/tldr-api";
 import { hasTextSelection, isMacPlatform, isTypingContext } from "../shortcuts/key-utils";
 import {
   BulkStatusMenu,
@@ -133,6 +139,25 @@ export function ItemList({
     [groupId],
   );
   const items = React.useMemo(() => filterItems(allItems, filter), [allItems, filter]);
+
+  // TL;DRs: this group's are loaded first, then its new saves are queued (docs/dev/PLAN-tldr.md).
+  useTldrVersion();
+  const tldrPrefs = useTldrPrefs();
+  React.useEffect(() => {
+    if (!groupId) return;
+    let cancelled = false;
+    listTldrs({ folderId: groupId })
+      .then((list) => {
+        if (cancelled) return;
+        tldrEngine.addTldrs(list);
+        const prefs = getTldrPrefs();
+        if (prefs.auto) tldrEngine.observeNewSaves(sourceItems, prefs.startedAt);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, sourceItems]);
 
   const [tagsTarget, setTagsTarget] = React.useState<Item[] | null>(null);
   const [summaryTarget, setSummaryTarget] = React.useState<Item | null>(null);
@@ -225,6 +250,25 @@ export function ItemList({
 
   // What bulk actions apply to: the selection, else the focused row.
   const actionTargets = selectedItems.length > 0 ? selectedItems : focusedItem ? [focusedItem] : [];
+
+  React.useEffect(() => {
+    tldrEngine.focus(focusedItemId);
+  }, [focusedItemId]);
+
+  /** `w`: write (or write again) the TL;DRs of the focused or ticked sources. */
+  const writeTldrs = React.useCallback((targets: Item[], force: boolean) => {
+    const eligible = targets.filter(canHaveTldr);
+    if (eligible.length === 0) {
+      toast.info("Notes, images and unsaved sources don't get a TL;DR.");
+      return;
+    }
+    const todo = force ? eligible : eligible.filter((i) => !tldrEngine.tldrs.has(i.id));
+    if (todo.length === 0) {
+      toast.info("These sources already have TL;DRs. Press w to write them again.");
+      return;
+    }
+    tldrEngine.enqueue(todo, "manual", force);
+  }, []);
 
   const handleOpenSource = React.useCallback(
     (item: Item, options?: { forceExternal?: boolean }) => {
@@ -330,9 +374,11 @@ export function ItemList({
           if (actionTargets.length > 0) setTagsTarget(actionTargets);
         } else if (action === "edit-summary") {
           if (focusedItem) setSummaryTarget(focusedItem);
+        } else if (action === "tldr-write") {
+          if (actionTargets.length > 0) writeTldrs(actionTargets, true);
         }
       }),
-    [toggleSelecting, handleCopyAll, actionTargets, focusedItem, research],
+    [toggleSelecting, handleCopyAll, actionTargets, focusedItem, research, writeTldrs],
   );
 
   // Range selection helper
@@ -558,6 +604,18 @@ export function ItemList({
         return;
       }
 
+      // TL;DR keys: w write (again), b show or hide the pane
+      if (e.key === "w" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        if (actionTargets.length > 0) writeTldrs(actionTargets, true);
+        return;
+      }
+      if (e.key === "b" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        window.dispatchEvent(new Event(TOGGLE_PANE_EVENT));
+        return;
+      }
+
       // Move to group: m
       if (e.key === "m" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();
@@ -617,6 +675,7 @@ export function ItemList({
     toggleSelected,
     toggleSelecting,
     research,
+    writeTldrs,
   ]);
 
   const handleDeleteConfirmed = async () => {
@@ -744,6 +803,16 @@ export function ItemList({
             <Button
               variant="outline"
               size="sm"
+              disabled={selectedItems.length === 0}
+              onClick={() => writeTldrs(selectedItems, false)}
+              title="Write TL;DRs for the ticked sources that have none (w writes them all again)"
+            >
+              <ScrollText className="size-3.5" aria-hidden="true" />
+              <span>Write TL;DRs</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               disabled={selectedLinkCount === 0}
               onClick={() => void handleCopyLinks(selectedItems)}
               title="Copy links (y)"
@@ -827,10 +896,14 @@ export function ItemList({
             const hasNote = Boolean(item.kind !== "note" && item.note && item.note.trim());
             const canRead = opensInReader(item);
             const kind = getSourceKind(item.kind);
-            const metaLine = researchMetaLine(
-              item,
-              getSourceMetaLine(item.kind, item.meta as Record<string, unknown> | null),
-            );
+            const tldr = tldrPrefs.showInList ? tldrEngine.tldrs.get(item.id) : undefined;
+            const tldrState = tldrEngine.states.get(item.id);
+            const metaLine = tldr
+              ? tldr.tldr.gist
+              : researchMetaLine(
+                  item,
+                  getSourceMetaLine(item.kind, item.meta as Record<string, unknown> | null),
+                );
             const staggerDelay = index < 12 ? index * 0.02 : 0;
 
             return (
@@ -906,7 +979,13 @@ export function ItemList({
                     )}
                   </div>
                   {metaLine && (
-                    <div className="truncate font-sans text-[12px] leading-[16px] text-muted-foreground">
+                    <div
+                      className={cn(
+                        "truncate font-sans text-[12px] leading-[16px]",
+                        tldr ? "text-foreground/75" : "text-muted-foreground",
+                      )}
+                      title={tldr ? tldr.tldr.gist : undefined}
+                    >
                       {metaLine}
                     </div>
                   )}
@@ -921,7 +1000,16 @@ export function ItemList({
                 </div>
 
                 <div className="flex w-5 shrink-0 items-center justify-end">
-                  <StatusIcon status={item.status} error={item.error} />
+                  {tldrState?.status === "writing" ? (
+                    <span role="img" aria-label="Writing the TL;DR" title="Writing the TL;DR">
+                      <Loader2
+                        className="size-3.5 text-muted-foreground motion-safe:animate-spin"
+                        aria-hidden="true"
+                      />
+                    </span>
+                  ) : (
+                    <StatusIcon status={item.status} error={item.error} />
+                  )}
                 </div>
 
                 {/* Row actions: on hover, on keyboard focus, and on the keyboard-focused row */}

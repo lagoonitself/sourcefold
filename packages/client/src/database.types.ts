@@ -287,6 +287,47 @@ export type Database = {
           },
         ];
       };
+      item_tldrs: {
+        Row: {
+          body_hash: string | null;
+          created_at: string;
+          item_id: string;
+          model: string | null;
+          source: string;
+          tldr: Json;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          body_hash?: string | null;
+          created_at?: string;
+          item_id: string;
+          model?: string | null;
+          source: string;
+          tldr: Json;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          body_hash?: string | null;
+          created_at?: string;
+          item_id?: string;
+          model?: string | null;
+          source?: string;
+          tldr?: Json;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_tldrs_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: true;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       items: {
         Row: {
           author: string | null;

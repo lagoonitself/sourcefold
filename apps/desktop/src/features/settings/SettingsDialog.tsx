@@ -8,6 +8,7 @@ import {
   Moon,
   Newspaper,
   Palette,
+  ScrollText,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -36,6 +37,8 @@ import { SubstackCookieSettings } from "../substack/SubstackCookieSettings";
 import { LocalCopySettings } from "../local-copy/LocalCopySettings";
 import { SearchSettings } from "../search/SearchSettings";
 import { ClaudeSettings } from "../claude/ClaudeSettings";
+import { TldrSettings } from "../tldr/TldrSettings";
+import { OPEN_SETTINGS_EVENT } from "../tldr/tldr-settings-link";
 
 export interface SettingsDialogProps {
   open: boolean;
@@ -44,7 +47,8 @@ export interface SettingsDialogProps {
   onThemeChange: (theme: "light" | "dark" | "system") => void;
 }
 
-type SettingsSection = "general" | "appearance" | "account" | "search" | "claude" | "substack";
+type SettingsSection =
+  "general" | "appearance" | "account" | "search" | "tldr" | "claude" | "substack";
 
 interface SectionConfig {
   id: SettingsSection;
@@ -57,6 +61,7 @@ const SECTIONS: SectionConfig[] = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "account", label: "Account", icon: User },
   { id: "search", label: "Search", icon: Search },
+  { id: "tldr", label: "TL;DR", icon: ScrollText },
   { id: "claude", label: "Claude", icon: Sparkles },
   { id: "substack", label: "Substack", icon: Newspaper },
 ];
@@ -68,6 +73,16 @@ export function SettingsDialog({
   onThemeChange,
 }: SettingsDialogProps) {
   const [activeSection, setActiveSection] = React.useState<SettingsSection>("general");
+
+  // "Set up TL;DRs" and similar links open Settings at their section.
+  React.useEffect(() => {
+    const onOpenAt = (event: Event) => {
+      const section = (event as CustomEvent<{ section?: string }>).detail?.section;
+      if (SECTIONS.some((s) => s.id === section)) setActiveSection(section as SettingsSection);
+    };
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpenAt);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpenAt);
+  }, []);
   const [settings, setSettings] = React.useState<Settings | null>(null);
   const [storagePath, setStoragePath] = React.useState("");
   const [hostStatus, setHostStatus] = React.useState<NativeHostStatus | null>(null);
@@ -265,6 +280,7 @@ export function SettingsDialog({
               {activeSection === "appearance" && "Appearance"}
               {activeSection === "account" && "Account"}
               {activeSection === "search" && "Search"}
+              {activeSection === "tldr" && "TL;DR"}
               {activeSection === "claude" && "Claude"}
               {activeSection === "substack" && "Substack"}
             </h2>
@@ -600,6 +616,8 @@ export function SettingsDialog({
             )}
 
             {activeSection === "search" && <SearchSettings open={open} />}
+
+            {activeSection === "tldr" && <TldrSettings open={open} />}
 
             {activeSection === "claude" && (
               <ClaudeSettings

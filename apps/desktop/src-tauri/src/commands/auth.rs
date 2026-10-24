@@ -131,7 +131,7 @@ fn html_response(html: String, status: u16) -> Response<std::io::Cursor<Vec<u8>>
     resp
 }
 
-fn page(title: &str, message: &str, ok: bool, status: u16) -> Response<std::io::Cursor<Vec<u8>>> {
+pub(crate) fn page(title: &str, message: &str, ok: bool, status: u16) -> Response<std::io::Cursor<Vec<u8>>> {
     let color = if ok { "#16a34a" } else { "#e11d48" };
     let html = format!(
         "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Sourcefold</title></head><body style=\"font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fafafa;\"><div style=\"background: white; border: 1px solid #e5e5e5; border-radius: 8px; padding: 24px 32px; text-align: center;\"><h1 style=\"color: {}; font-size: 20px; margin: 0 0 8px;\">{}</h1><p style=\"color: #666; margin: 0;\">{}</p></div></body></html>",
@@ -141,7 +141,7 @@ fn page(title: &str, message: &str, ok: bool, status: u16) -> Response<std::io::
 }
 
 /// Escapes text from the query string before it goes into the page.
-fn escape_html(text: &str) -> String {
+pub(crate) fn escape_html(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")

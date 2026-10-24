@@ -549,6 +549,31 @@ export const SHORTCUT_COMMANDS: ReadonlyArray<ShortcutCommand> = [
     combos: ["u"],
     when: "list",
   },
+  // TL;DRs (docs/dev/PLAN-tldr.md)
+  {
+    id: "list.tldr-write",
+    title: "Write TL;DR",
+    description: "Write the focused or ticked sources' TL;DRs, or write them again",
+    group: "Sources",
+    combos: ["w"],
+    when: "list",
+  },
+  {
+    id: "list.tldr-pane",
+    title: "Show or hide the TL;DR pane",
+    description: "The TL;DR of the focused source, beside the list",
+    group: "Sources",
+    combos: ["b"],
+    when: "list",
+  },
+  {
+    id: "list.tldr-group",
+    title: "Write TL;DRs for this group",
+    description: "Every source in the open group and its subgroups that has no TL;DR yet",
+    group: "Groups",
+    combos: [],
+    when: "list",
+  },
   {
     id: "projects.outline",
     title: "Outline",

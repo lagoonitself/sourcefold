@@ -104,7 +104,7 @@ pub fn parse_models(provider: Provider, body: &Value) -> Vec<ModelInfo> {
         .collect();
     if provider == Provider::Openrouter {
         // OpenRouter has hundreds; alphabetical by name is easiest to scan with the search box.
-        out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        out.sort_by_key(|m| m.name.to_lowercase());
     }
     out
 }

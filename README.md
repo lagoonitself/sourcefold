@@ -39,6 +39,7 @@ The apps aren't from a paid publisher, so Windows and macOS warn you the first t
 
 - Search inside every source in a project, not just titles. Use `"exact phrases"` and `-word`.
 - Turn on search by meaning and find a passage even when it uses different words. It runs on your computer; nothing is sent anywhere.
+- See a TL;DR of every source under its title, and read the gist and key points before deciding to open it. Sourcefold uses the article's own summary when it has one; otherwise ChatGPT (with your ChatGPT plan), or any model on OpenRouter or OpenCode, writes it. Desktop app, **Settings → TL;DR**.
 
 **Organize**
 

@@ -63,7 +63,7 @@ describe("get_status", () => {
     expect(isError).toBe(false);
     expect(text).toContain("Signed in as owner@example.com at https://sourcefold.test");
     expect(text).toContain("using the desktop app's sign-in");
-    expect(text).toContain("Desktop app: open, version 0.4.1, signed in");
+    expect(text).toContain("Desktop app: open, version 0.5.0, signed in");
     expect(text).toContain("3 changes not saved yet");
     expect(text).toContain("last saved 2026-10-17");
   });

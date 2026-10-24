@@ -168,9 +168,9 @@ Contract: `docs/dev/handoff-no-website.md`. Comes before phase 2 of sharing.
 - [ ] Step 5: Claude starts the desktop app in the background instead of using the website.
 - [ ] Step 6: release variables, README, INSTALL and SELF-HOSTING with the website optional.
 
-## Next: TL;DR for every source
+## Done: TL;DR for every source
 
-Plan: `docs/dev/PLAN-tldr.md` (2026-10-24). Desktop only. Built 2026-10-24 on branch `tldr`, waiting for the owner's test.
+Plan: `docs/dev/PLAN-tldr.md` (2026-10-24). Desktop only. Built 2026-10-24, tested by the owner, merged into `main` and released as v0.5.0.
 
 - [x] Sign in with ChatGPT, OpenRouter and OpenCode keys, model lists and answers in Rust (`src-tauri/src/ai/`, 2026-10-24; the spike was folded in, so the owner's first sign-in is its live test).
 - [x] The article's own TL;DR finder in `packages/core` (Wikipedia lead, arXiv abstract, "TL;DR:" lines, "Key takeaways" sections).
@@ -178,7 +178,8 @@ Plan: `docs/dev/PLAN-tldr.md` (2026-10-24). Desktop only. Built 2026-10-24 on br
 - [x] Settings → TL;DR: provider, ChatGPT sign-in, API keys, model picker, automatic and list switches.
 - [x] TL;DR writer and queue, usage-limit pause.
 - [x] TL;DR UI: gist under each row's title, the pane, `w` and `b`, "Write TL;DRs for this group" in group menus, the reader's TL;DR box.
-- [ ] Docs (README, PRIVACY, INSTALL, CHANGELOG) and the gist in Claude's `list_sources` and `read_source`.
+- [x] Docs (README, PRIVACY, INSTALL, CHANGELOG), 2026-10-24.
+- [ ] The gist in Claude's `list_sources` and `read_source`.
 
 ## Next: project files and shared projects
 

@@ -1,6 +1,6 @@
 # Plan: TL;DR for every source
 
-Status: built 2026-10-24 on branch `tldr`, waiting for the owner's test. "As built" at the end says what differs from this plan. Desktop app only.
+Status: built 2026-10-24, tested by the owner, merged into `main` and released as v0.5.0. "As built" at the end says what differs from this plan. Desktop app only.
 
 ## What the owner asked for
 

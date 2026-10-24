@@ -50,6 +50,7 @@ Prefer not to sign in? Click **Use offline on this computer**. Everything stays 
 - **Add links** to paste links, including a YouTube playlist or a Substack address.
 - `Enter` on a source opens the reader. Select text to highlight it.
 - `/` searches inside your sources. To search by meaning too, open **Settings → Search** (a one-time 175 MB download).
+- **Settings → TL;DR** gives every source a short TL;DR. Click **Sign in with ChatGPT** to use your ChatGPT plan, or paste an OpenRouter or OpenCode key. New saves get one by themselves; for older sources, open a group's `…` menu and choose **Write TL;DRs**.
 - `?` lists every keyboard shortcut; `Ctrl+K` (`Cmd+K` on Mac) runs any command.
 
 ## Chrome extension

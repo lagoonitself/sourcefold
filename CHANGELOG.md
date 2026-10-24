@@ -2,6 +2,12 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
+## 0.5.0 (2026-10-24)
+
+### New
+
+- **TL;DRs for your sources, in the desktop app.** Every source you save gets a short TL;DR: one sentence with the gist, 3 to 5 key points and the part most worth reading. It shows under each title in the group list, and a pane on the right shows the full TL;DR of the source you're on, so you can move down a group with `j`/`k`, press `1`/`2`/`3` to keep, maybe or cut, and only open what's worth reading. When the article has its own summary (Wikipedia's lead, a Reddit post's "TL;DR:"), Sourcefold uses that and no AI is involved. Otherwise it's written by the AI you pick in **Settings → TL;DR**: **Sign in with ChatGPT** to use your ChatGPT plan, or paste an OpenRouter or OpenCode key and pick any model, free ones included. Sources you saved before get TL;DRs only for the groups you choose (**Write TL;DRs** in a group's menu or header), so your plan's usage isn't spent on your whole library. `w` writes one again, `b` hides or shows the pane, and the reader shows the TL;DR under the title. TL;DRs stay out of your `.md` files.
+
 ## 0.4.1 (2026-10-23)
 
 ### New

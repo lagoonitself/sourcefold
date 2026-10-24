@@ -168,6 +168,18 @@ Contract: `docs/dev/handoff-no-website.md`. Comes before phase 2 of sharing.
 - [ ] Step 5: Claude starts the desktop app in the background instead of using the website.
 - [ ] Step 6: release variables, README, INSTALL and SELF-HOSTING with the website optional.
 
+## Next: TL;DR for every source
+
+Plan: `docs/dev/PLAN-tldr.md` (2026-10-24). Desktop only.
+
+- [ ] Spike: Sign in with ChatGPT, model list, one TL;DR from Rust.
+- [ ] The article's own TL;DR finder in `packages/core` (Wikipedia lead, arXiv abstract, "TL;DR:" lines, "Key takeaways" sections).
+- [ ] TL;DR fields in Supabase, SQLite, the local API and project files (without moving `updated_at`).
+- [ ] Sign in with ChatGPT and Settings → ChatGPT.
+- [ ] TL;DR writer and queue, usage-limit pause.
+- [ ] TL;DR pane in the group view, `w` and `b`, the reader's TL;DR box.
+- [ ] Docs (README, PRIVACY, INSTALL, CHANGELOG) and the gist in Claude's `list_sources` and `read_source`.
+
 ## Next: project files and shared projects
 
 Plan: `docs/dev/PLAN-sharing.md` (2026-10-22).

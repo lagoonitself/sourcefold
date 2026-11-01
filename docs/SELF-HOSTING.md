@@ -28,7 +28,12 @@ You don't need it to use Sourcefold. If someone already runs a Sourcefold websit
 4. Configure URLs in **Authentication** → **URL Configuration**:
    - Set **Site URL** to `http://localhost:3000` (update this to your deployed Vercel URL later).
    - Under **Redirect URLs**, add `http://localhost:3000/**` (and your deployed Vercel redirect URL later).
-5. Copy project API keys in **Project Settings** → **API Keys**:
+5. Enable web MCP sign-in in **Authentication** → **OAuth Server**:
+   - Enable the OAuth 2.1 Server.
+   - Set the authorization path to `/oauth/consent`.
+   - Enable dynamic client registration so Claude and ChatGPT can register as OAuth clients.
+   - Keep the consent screen enabled; users must review and approve new clients.
+6. Copy project API keys in **Project Settings** → **API Keys**:
    - Copy the **Project URL** and the **publishable key** (starts with `sb_publishable_`).
    - Copy the **secret key** (starts with `sb_secret_`).
 
@@ -80,6 +85,10 @@ You don't need it to use Sourcefold. If someone already runs a Sourcefold websit
    npm run dev
    ```
 5. Open `http://localhost:3000` in Chrome and sign in with your Google account.
+
+The web MCP connector uses the OAuth Server setting for local and deployed websites. Once your
+website is available, add its `/api/mcp` URL in Claude or ChatGPT as described in
+[INSTALL.md](INSTALL.md#claude-or-chatgpt-on-the-web).
 
 ## 4. Deploy to Vercel
 

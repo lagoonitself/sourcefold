@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isEmailAllowed } from "@/lib/env";
 import { ReconnectDriveButton } from "@/features/settings/reconnect-drive-button";
 import { TokenManager } from "@/features/settings/token-manager";
+import { McpConnector } from "@/features/settings/mcp-connector";
 import { SettingsAppAddress } from "./settings-app-address";
 
 export const dynamic = "force-dynamic";
@@ -132,6 +133,10 @@ export default async function SettingsPage() {
           <TokenManager initialTokens={tokensResult.data ?? []} />
         </div>
       </section>
+
+      <Separator className="my-6" />
+
+      <McpConnector />
     </div>
   );
 }

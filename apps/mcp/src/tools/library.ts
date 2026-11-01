@@ -24,7 +24,6 @@ import {
   requireInProject,
   sourcesIn,
 } from "./library-data";
-import { rememberId } from "./short-ids";
 
 /** More sources than this in a project tree: urls are dropped to keep the reply small. */
 export const TREE_URL_LIMIT = 300;
@@ -167,7 +166,7 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     },
     readOnly: true,
     idempotent: true,
-    run: async ({ project_id, group_id, include_sources, compact }, { api }) => {
+    run: async ({ project_id, group_id, include_sources, compact }, { api, mode }) => {
       const index = await loadFolderIndex(api);
       const project = requireFolder(index, project_id, "project");
       const startGroup = group_id ? requireFolder(index, group_id, "group") : null;
@@ -198,7 +197,7 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
       let total = 0;
       for (const value of loaded.values()) if (Array.isArray(value)) total += value.length;
       if (!include_sources) total = groups.reduce((sum, g) => sum + sourcesIn(g), 0);
-      const isCompact = compact || total > TREE_URL_LIMIT;
+      const isCompact = mode !== "remote" && (compact || total > TREE_URL_LIMIT);
       const withUrls = !isCompact && total <= TREE_URL_LIMIT;
 
       const lines: string[] = [];
@@ -241,7 +240,7 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         } else if (items) {
           for (const item of items) {
             if (isCompact) {
-              rememberId(item.id);
+              ctx.shortIds?.rememberId(item.id);
             }
             if (capReached || charCount >= 60_000) {
               capReached = true;

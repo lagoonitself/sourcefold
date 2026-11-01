@@ -102,11 +102,12 @@ function grokipediaWeb(existing: Set<string> = new Set()) {
         },
       };
     },
+    "POST /link-queue": () => ({ status: 201, json: { data: [] } }),
   });
 }
 
 describe("add_links", () => {
-  it("saves, reports duplicates and skips X posts", async () => {
+  it("saves, reports duplicates and queues X posts for Chrome", async () => {
     const web = grokipediaWeb(new Set(["https://grokipedia.com/page/Old"]));
     const desktop = fakeDesktop();
     const h = await connect((server, ctx) => void registerAddTools(server, ctx, NO_PACING), {
@@ -122,13 +123,36 @@ describe("add_links", () => {
     });
     expect(result.isError).toBe(false);
     expect(result.text).toContain("Adding to Cars › Turbo");
-    expect(result.text).toContain("3 of 3 links done (1 saved, 1 already saved, 1 skipped)");
+    expect(result.text).toContain(
+      "3 of 3 links done (1 saved, 1 already saved, 1 waiting for Chrome)",
+    );
     expect(result.text).toContain("saved [item-1]: Article 1");
     expect(result.text).toContain("Already saved in Turbo");
-    expect(result.text).toMatch(/X posts are saved with the Sourcefold extension/);
+    expect(result.text).toMatch(/waiting for Chrome.*Needs Chrome with the Sourcefold extension/);
     expect(result.text).toContain("Finished.");
     // The app is told after each save and once more when the tool answers.
     expect(desktop.changed).toHaveBeenCalled();
+  });
+
+  it("queues a refused stdio link for the desktop app when signed in", async () => {
+    vi.spyOn(saveLinkModule, "saveLink").mockRejectedValue(
+      new SourceError("blocked", "The site refused the connection."),
+    );
+    const web = grokipediaWeb();
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx, NO_PACING), {
+      web,
+    });
+    const result = await h.call("add_links", {
+      group_id: "g1",
+      links: ["https://grokipedia.com/page/Blocked"],
+    });
+
+    expect(result.text).toContain("waiting for your computer");
+    expect(web.calls).toContain("POST /link-queue");
+    expect(web.bodies.at(-1)).toMatchObject({
+      folder_id: "g1",
+      links: [expect.objectContaining({ needs: "desktop" })],
+    });
   });
 
   it("refuses a project as the target", async () => {

@@ -1,4 +1,5 @@
 import {
+  SourceError,
   canonicalizeUrl,
   canonicalWikipediaUrl,
   classifySubstackLink,
@@ -66,11 +67,14 @@ export type SaveOutcome =
 export interface LinkDeps {
   api: WebApi;
   desktop: DesktopBridge;
+  addedBy?: string;
   sourceFetch: SourceFetch;
   /** Guarded `fetch` for libraries that take a WHATWG fetch (Wikipedia). */
   publicFetch: typeof fetch;
   /** Whether the desktop app answered when the job started (paid Substack posts need it). */
   desktopOpen: boolean;
+  /** Remote add-links queues paid posts instead of creating a placeholder item. */
+  deferUnavailable?: boolean;
 }
 
 export interface CheckUrlResult {
@@ -121,12 +125,17 @@ export function checkDuplicate(
   return { isDuplicate: false, message: "" };
 }
 
-async function checkUrl(api: WebApi, url: string, groupId: string): Promise<CheckUrlResult> {
-  return api.post<CheckUrlResult>("/items/check", { url, folder_id: groupId });
+async function checkUrl(
+  api: WebApi,
+  url: string,
+  groupId: string,
+  timeoutMs?: number,
+): Promise<CheckUrlResult> {
+  return api.post<CheckUrlResult>("/items/check", { url, folder_id: groupId }, { timeoutMs });
 }
 
-async function capture(api: WebApi, request: CaptureRequest): Promise<Item> {
-  const res = await api.post<{ item?: Item } | Item>("/capture", request);
+async function capture(api: WebApi, request: CaptureRequest, timeoutMs?: number): Promise<Item> {
+  const res = await api.post<{ item?: Item } | Item>("/capture", request, { timeoutMs });
   return (res as { item?: Item }).item ?? (res as Item);
 }
 
@@ -135,14 +144,27 @@ async function captureOrDuplicate(
   api: WebApi,
   request: CaptureRequest,
   title: string,
+  timeoutMs?: number,
 ): Promise<SaveOutcome> {
   try {
-    const item = await capture(api, request);
+    const item = await capture(api, request, timeoutMs);
     return { status: "saved", title: item.title || title, itemId: item.id };
   } catch (err) {
     if (isDuplicateError(err)) return { status: "duplicate", title, message: err.message };
     throw err;
   }
+}
+
+/** Whether the user's own computer or browser should retry a cloud fetch. */
+export function isCloudRefusal(err: unknown): boolean {
+  if (err instanceof ApiError)
+    return err.status === 0 || [401, 403, 407, 429, 451, 503].includes(err.status);
+  if (err instanceof SourceError) return err.code === "blocked" || err.code === "fetch_failed";
+  if (!(err instanceof Error)) return false;
+  if (err.name === "AbortError" || err.name === "TimeoutError") return true;
+  return /captcha|bot check|refused (?:the )?(?:request|connection)|blocked this request|too many requests|timed? ?out|timeout|network|connection (?:reset|closed|refused)|socket|fetch failed|\b(?:401|403|407|429|451|503)\b/i.test(
+    err.message,
+  );
 }
 
 export async function saveLink(
@@ -152,16 +174,17 @@ export async function saveLink(
   deps: LinkDeps,
   signal?: AbortSignal,
   allowDuplicates = false,
+  requestTimeoutMs?: number,
 ): Promise<SaveOutcome> {
   switch (kind) {
     case "grokipedia":
-      return saveGrokipedia(url, groupId, deps, allowDuplicates);
+      return saveGrokipedia(url, groupId, deps, allowDuplicates, requestTimeoutMs);
     case "wikipedia":
-      return saveWikipedia(url, groupId, deps, signal, allowDuplicates);
+      return saveWikipedia(url, groupId, deps, signal, allowDuplicates, requestTimeoutMs);
     case "substack":
-      return saveSubstack(url, groupId, deps, allowDuplicates);
+      return saveSubstack(url, groupId, deps, allowDuplicates, signal, requestTimeoutMs);
     case "source":
-      return saveSource(url, groupId, deps, signal, allowDuplicates);
+      return saveSource(url, groupId, deps, signal, allowDuplicates, requestTimeoutMs);
     case "x":
       throw new Error(
         "X posts are saved with the Sourcefold extension: open the post in Chrome and click Save.",
@@ -177,18 +200,23 @@ async function saveGrokipedia(
   groupId: string,
   { api }: LinkDeps,
   allowDuplicates = false,
+  timeoutMs?: number,
 ) {
-  const check = await checkUrl(api, url, groupId);
+  const check = await checkUrl(api, url, groupId, timeoutMs);
   const dup = checkDuplicate(check, allowDuplicates);
   if (dup.isDuplicate) {
     return { status: "duplicate", title: null, message: dup.message } as const;
   }
   try {
-    const res = await api.post<{ item?: Item } | Item>("/grokipedia", {
-      url,
-      folder_id: groupId,
-      ...(allowDuplicates ? { allow_duplicate: true } : {}),
-    });
+    const res = await api.post<{ item?: Item } | Item>(
+      "/grokipedia",
+      {
+        url,
+        folder_id: groupId,
+        ...(allowDuplicates ? { allow_duplicate: true } : {}),
+      },
+      { timeoutMs },
+    );
     const item = (res as { item?: Item }).item ?? (res as Item);
     return { status: "saved", title: item.title || url, itemId: item.id } as const;
   } catch (err) {
@@ -204,10 +232,11 @@ async function saveWikipedia(
   { api, publicFetch }: LinkDeps,
   signal?: AbortSignal,
   allowDuplicates = false,
+  timeoutMs?: number,
 ): Promise<SaveOutcome> {
   const url = canonicalWikipediaUrl(inputUrl);
   if (!url) throw new Error(WIKIPEDIA_ERROR_MESSAGES.invalid_url);
-  const before = await checkUrl(api, url, groupId);
+  const before = await checkUrl(api, url, groupId, timeoutMs);
   const dup = checkDuplicate(before, allowDuplicates);
   if (dup.isDuplicate) {
     return { status: "duplicate", title: null, message: dup.message };
@@ -219,7 +248,7 @@ async function saveWikipedia(
     signal,
   });
   if (article.url !== url) {
-    const resolved = await checkUrl(api, article.url, groupId);
+    const resolved = await checkUrl(api, article.url, groupId, timeoutMs);
     const resolvedDup = checkDuplicate(resolved, allowDuplicates);
     if (resolvedDup.isDuplicate) {
       return {
@@ -235,7 +264,7 @@ async function saveWikipedia(
     capture: article,
     ...(allowDuplicates ? { allow_duplicate: true } : {}),
   } as unknown as CaptureRequest;
-  return captureOrDuplicate(api, request, article.title);
+  return captureOrDuplicate(api, request, article.title, timeoutMs);
 }
 
 async function saveSource(
@@ -244,9 +273,10 @@ async function saveSource(
   { api, sourceFetch }: LinkDeps,
   signal?: AbortSignal,
   allowDuplicates = false,
+  timeoutMs?: number,
 ): Promise<SaveOutcome> {
   const url = canonical(inputUrl);
-  const before = await checkUrl(api, url, groupId);
+  const before = await checkUrl(api, url, groupId, timeoutMs);
   const dup = checkDuplicate(before, allowDuplicates);
   if (dup.isDuplicate) {
     return { status: "duplicate", title: null, message: dup.message };
@@ -262,14 +292,18 @@ async function saveSource(
 
   if (result.status === "unavailable") {
     try {
-      await capture(api, {
-        kind: "source_unavailable",
-        folder_id: groupId,
-        source: result.kind,
-        url: result.url,
-        title: result.title,
-        reason: result.reason,
-      });
+      await capture(
+        api,
+        {
+          kind: "source_unavailable",
+          folder_id: groupId,
+          source: result.kind,
+          url: result.url,
+          title: result.title,
+          reason: result.reason,
+        },
+        timeoutMs,
+      );
     } catch (err) {
       if (!isDuplicateError(err)) throw err;
     }
@@ -278,7 +312,7 @@ async function saveSource(
 
   const { kind, capture: source } = result;
   if (canonical(source.url) !== url) {
-    const resolved = await checkUrl(api, source.url, groupId);
+    const resolved = await checkUrl(api, source.url, groupId, timeoutMs);
     const resolvedDup = checkDuplicate(resolved, allowDuplicates);
     if (resolvedDup.isDuplicate) {
       return {
@@ -294,7 +328,7 @@ async function saveSource(
     capture: source,
     ...(allowDuplicates ? { allow_duplicate: true } : {}),
   } as unknown as CaptureRequest;
-  return captureOrDuplicate(api, request, source.title);
+  return captureOrDuplicate(api, request, source.title, timeoutMs);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -302,14 +336,18 @@ async function saveSource(
 // never hands it out), else fetched here without a cookie.
 // ----------------------------------------------------------------------------------------------
 
-function substackFetchFor(deps: LinkDeps, cookieSent: Map<string, boolean>): SubstackFetch {
+function substackFetchFor(
+  deps: LinkDeps,
+  cookieSent: Map<string, boolean>,
+  signal?: AbortSignal,
+): SubstackFetch {
   const raw: SubstackFetch = async (url) => {
     if (deps.desktopOpen) {
       const res = await deps.desktop.substackFetch(url, true);
       cookieSent.set(res.url, res.cookie_sent);
       return { status: res.status, url: res.url, text: res.text, retryAfter: res.retry_after };
     }
-    const res = await deps.sourceFetch({ url });
+    const res = await deps.sourceFetch({ url, signal });
     const retry = Number(res.headers["retry-after"] ?? "");
     return {
       status: res.status,
@@ -326,17 +364,19 @@ async function saveSubstack(
   groupId: string,
   deps: LinkDeps,
   allowDuplicates = false,
+  signal?: AbortSignal,
+  timeoutMs?: number,
 ): Promise<SaveOutcome> {
   const { api } = deps;
   const url = normalizeSubstackPostUrl(inputUrl);
-  const before = await checkUrl(api, url, groupId);
+  const before = await checkUrl(api, url, groupId, timeoutMs);
   const dup = checkDuplicate(before, allowDuplicates);
   if (dup.isDuplicate) {
     return { status: "duplicate", title: null, message: dup.message };
   }
 
   const cookieSent = new Map<string, boolean>();
-  const res = await substackFetchFor(deps, cookieSent)(url);
+  const res = await substackFetchFor(deps, cookieSent, signal)(url);
   if (res.status === 404) throw new Error("Post not found. Check the link.");
   if (res.status === 401 || res.status === 403) {
     throw new Error("Substack refused the request. If it's a paid post, check your cookie.");
@@ -352,22 +392,28 @@ async function saveSubstack(
       : cookieSent.get(res.url)
         ? "Paid post. Your Substack cookie didn't unlock it: you may not subscribe, or the cookie expired."
         : "Paid post. Add your Substack cookie in the desktop app's Settings to save paid posts you subscribe to.";
-    try {
-      await capture(api, {
-        kind: "substack_unavailable",
-        folder_id: groupId,
-        url: parsed.url,
-        title: parsed.title,
-      });
-    } catch (err) {
-      if (!isDuplicateError(err)) throw err;
+    if (!deps.deferUnavailable) {
+      try {
+        await capture(
+          api,
+          {
+            kind: "substack_unavailable",
+            folder_id: groupId,
+            url: parsed.url,
+            title: parsed.title,
+          },
+          timeoutMs,
+        );
+      } catch (err) {
+        if (!isDuplicateError(err)) throw err;
+      }
     }
     return { status: "paid", title: parsed.title, message: reason };
   }
 
   const { capture: post } = parsed;
   if (post.url !== url) {
-    const resolved = await checkUrl(api, post.url, groupId);
+    const resolved = await checkUrl(api, post.url, groupId, timeoutMs);
     const resolvedDup = checkDuplicate(resolved, allowDuplicates);
     if (resolvedDup.isDuplicate) {
       return {
@@ -383,7 +429,7 @@ async function saveSubstack(
     capture: post,
     ...(allowDuplicates ? { allow_duplicate: true } : {}),
   } as unknown as CaptureRequest;
-  const outcome = await captureOrDuplicate(api, request, post.title);
+  const outcome = await captureOrDuplicate(api, request, post.title, timeoutMs);
   if (outcome.status === "saved" && post.access === "paid") outcome.message = "Paid post";
   return outcome;
 }
@@ -431,11 +477,15 @@ export async function listCollection(
     };
   }
 
-  const posts = await discoverSubstackPosts(url, substackFetchFor(deps, new Map()), {
-    after: options.publishedAfter ?? null,
-    before: options.publishedBefore ?? null,
-    signal: options.signal,
-  });
+  const posts = await discoverSubstackPosts(
+    url,
+    substackFetchFor(deps, new Map(), options.signal),
+    {
+      after: options.publishedAfter ?? null,
+      before: options.publishedBefore ?? null,
+      signal: options.signal,
+    },
+  );
   const kept = posts.slice(0, options.limit);
   return {
     title: null,

@@ -3,6 +3,7 @@ import { PanelLeftOpen, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Kbd } from "@/components/ui/Kbd";
 import { DriveSyncStatus } from "@/features/drive";
+import { LinkQueueStatus } from "@/features/link-queue/LinkQueueStatus";
 import type { Folder } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PROJECT_VIEW_LABELS, type ProjectView } from "../research/project-view";
@@ -121,6 +122,7 @@ export function TopBar({
         <Kbd className="hidden @[520px]/topbar:inline-flex">/</Kbd>
       </button>
 
+      <LinkQueueStatus />
       <DriveSyncStatus />
 
       <Button

@@ -51,6 +51,24 @@ export interface Item {
   author_type?: AuthorType | null;
 }
 
+export interface LinkQueueRow {
+  id: string;
+  folder_id: string;
+  url: string;
+  kind: string | null;
+  needs: "desktop" | "browser";
+  status: "waiting" | "working" | "saved" | "duplicate" | "unavailable" | "failed" | "cancelled";
+  claimed_by: string | null;
+  claimed_at: string | null;
+  attempts: number;
+  message: string | null;
+  title: string | null;
+  item_id: string | null;
+  added_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /** `GET /api/agent/status` on the desktop app. */
 export interface DesktopStatus {
   version: string;

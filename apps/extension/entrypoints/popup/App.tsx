@@ -45,9 +45,8 @@ import { ProjectMenu } from "./ProjectMenu";
 import { GroupList, type VisibleGroup } from "./GroupList";
 import { ThreadPicker } from "./ThreadPicker";
 import { enrichXPostsMedia } from "../../lib/x/media";
-
-const CANNOT_SAVE_MESSAGE =
-  "This page can't be saved. Open a web page, YouTube video, Reddit, Hacker News or Bluesky post, Substack post, Grokipedia article or X post.";
+import { CANNOT_SAVE_MESSAGE } from "../../lib/link-queue/copy";
+import { LinkQueueBanner } from "./LinkQueueBanner";
 
 const GROUP_FILTER_FROM = 7;
 const NO_PLACES: LastPlaces = { groupId: null, projectId: null, groupByProject: {} };
@@ -732,6 +731,8 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      <LinkQueueBanner />
 
       {page && (
         <section

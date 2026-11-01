@@ -720,3 +720,38 @@
   font-size: 13px;
   color: var(--muted-foreground);
 }
+
+/* Links an agent queued for this browser. Sits under the header, above the page. */
+.queue-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: var(--sidebar);
+  border-bottom: 1px solid var(--border);
+}
+
+.queue-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.queue-line p {
+  margin: 0;
+  min-width: 0;
+}
+
+.queue-line .spin {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--muted-foreground);
+}
+
+.queue-banner .btn-sm {
+  flex-shrink: 0;
+}

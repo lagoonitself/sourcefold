@@ -8,7 +8,13 @@ import {
   waitUnlessStopped,
   youTubeGapMs,
 } from "@sourcefold/core/capture";
-import { listCollection, saveLink, type LinkDeps, type LinkKind } from "../links/save-link";
+import {
+  isCloudRefusal,
+  listCollection,
+  saveLink,
+  type LinkDeps,
+  type LinkKind,
+} from "../links/save-link";
 import { messageOf } from "./format";
 
 // Background jobs for add_links. A Claude tool call is cut off after a minute or so, and a
@@ -28,6 +34,7 @@ export type RowStatus =
   | "unavailable"
   | "paid"
   | "paused"
+  | "queued"
   | "failed"
   | "skipped";
 
@@ -136,6 +143,7 @@ const DONE: ReadonlySet<RowStatus> = new Set([
   "paid",
   "failed",
   "skipped",
+  "queued",
 ]);
 
 export function isRowDone(row: JobRow): boolean {
@@ -244,13 +252,6 @@ export class AddJobs {
           return row(url, null, {
             status: "skipped",
             message: "Sourcefold can't save this kind of link.",
-          });
-        }
-        if (kind === "x") {
-          return row(url, kind, {
-            status: "skipped",
-            message:
-              "X posts are saved with the Sourcefold extension: open the post in Chrome and click Save.",
           });
         }
         return row(url, kind);
@@ -398,6 +399,15 @@ export class AddJobs {
       } catch (err) {
         if (stopped()) {
           Object.assign(next, { status: "waiting", message: null, resumeAt: null });
+        } else if (await this.queueRefused(job, next, deps, err)) {
+          // The desktop or extension now owns this row.
+        } else if (next.kind === "x") {
+          Object.assign(next, {
+            status: "skipped",
+            resumeAt: null,
+            message:
+              "X posts need Chrome with the Sourcefold extension. Sign in to Sourcefold to queue this link.",
+          });
         } else if (youTube && isYouTubeRateLimit(err)) {
           youTubeLimited = true;
           Object.assign(next, {
@@ -431,6 +441,40 @@ export class AddJobs {
       this.onJobFinished?.(job);
     } catch (err) {
       console.error("[sourcefold] onJobFinished error:", err);
+    }
+  }
+
+  private async queueRefused(job: AddJob, row: JobRow, deps: LinkDeps, err: unknown) {
+    const needs = row.kind === "x" ? "browser" : isCloudRefusal(err) ? "desktop" : null;
+    if (!needs) return false;
+    let signedIn = false;
+    try {
+      signedIn = Boolean(deps.api?.credentials?.());
+    } catch {
+      signedIn = false;
+    }
+    if (!signedIn) return false;
+
+    const reason =
+      row.kind === "x"
+        ? "Needs Chrome with the Sourcefold extension."
+        : `The server couldn't fetch this link: ${messageOf(err)}`.slice(0, 850) +
+          ". Waiting for the Sourcefold desktop app.";
+    try {
+      await deps.api.post("/link-queue", {
+        folder_id: job.groupId,
+        added_by: deps.addedBy ?? "Claude",
+        links: [{ url: row.url, kind: row.kind, needs, message: reason }],
+      });
+      Object.assign(row, { status: "queued", message: reason, resumeAt: null });
+      return true;
+    } catch (queueError) {
+      Object.assign(row, {
+        status: "failed",
+        message: `Could not add this link to the queue: ${messageOf(queueError)}`,
+        resumeAt: null,
+      });
+      return true;
     }
   }
 

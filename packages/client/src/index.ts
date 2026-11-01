@@ -10,7 +10,13 @@ export type { DriveAccess, FetchUrl, Host } from "./host";
 export { createDriveAccess, DRIVE_TOKEN_FUNCTION } from "./drive/token";
 export { DriveAuthError, DriveClientMismatchError } from "./google/errors";
 export { jsonData, jsonError } from "./http";
-export { createLocalApi, matchRoute, LOCAL_ROUTES, type LocalApiWithDrive } from "./router";
+export {
+  createLocalApi,
+  dispatchRoute,
+  matchRoute,
+  LOCAL_ROUTES,
+  type LocalApiWithDrive,
+} from "./router";
 export { createDrivePusher, DRIVE_PUSH_DELAY_MS, type DrivePusher } from "./drive/push";
 
 export const OAUTH_SCOPES = "https://www.googleapis.com/auth/drive.file";

@@ -6,6 +6,7 @@ import type { Credentials } from "../config";
 import { createDesktopBridge, type DesktopBridge } from "../desktop-bridge";
 import type { ToolContext } from "../tools/define";
 import { createWebApi } from "../web-api";
+import { createShortIdStore } from "../tools/short-ids";
 
 // Test harness for tool modules: a fake web app (route table), a fake or missing desktop app, and
 // a real MCP client connected in memory, so tests call tools exactly as Claude does.
@@ -104,7 +105,13 @@ export interface Harness {
 
 export async function connect(
   register: (server: McpServer, ctx: ToolContext) => void,
-  options: { web: FakeWeb; desktop?: DesktopBridge; credentials?: Credentials | null },
+  options: {
+    web: FakeWeb;
+    desktop?: DesktopBridge;
+    credentials?: Credentials | null;
+    mode?: "local" | "remote";
+    addedBy?: string;
+  },
 ): Promise<Harness> {
   const ctx: ToolContext = {
     api: createWebApi({
@@ -113,6 +120,9 @@ export async function connect(
       fetch: options.web.fetch,
     }),
     desktop: options.desktop ?? closedDesktop(),
+    mode: options.mode,
+    addedBy: options.addedBy,
+    shortIds: createShortIdStore(),
   };
   const server = new McpServer({ name: "sourcefold-test", version: "0.0.0" });
   register(server, ctx);

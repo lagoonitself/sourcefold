@@ -12,10 +12,33 @@ import {
   signOut,
 } from "../lib/account";
 import { serveAccountChannel } from "../lib/account-channel";
+import { permissionBannerText } from "../lib/link-queue/copy";
+import { createExtensionLinkQueue, listenForLinkQueue } from "../lib/link-queue/start";
+import { readLinkQueueState } from "../lib/link-queue/state";
+import type { LinkQueueState } from "../lib/link-queue/types";
 
 const SUCCESS_COLOR = "#1F5E4E";
 const ERROR_COLOR = "#B42318";
+const PERMISSION_COLOR = "#B54708";
 const BADGE_CLEAR_ALARM = "sourcefold-clear-badge";
+const LINK_QUEUE_ALARM = "sourcefold-link-queue";
+
+let permissionBadgeOn = false;
+
+async function showPermissionBadge(state: NonNullable<LinkQueueState["permission"]>) {
+  permissionBadgeOn = true;
+  const text = state.count > 9 ? "9+" : String(state.count);
+  await browser.action.setBadgeBackgroundColor({ color: PERMISSION_COLOR });
+  await browser.action.setBadgeText({ text });
+  await browser.action.setTitle({ title: permissionBannerText(state.count, state.hosts) });
+}
+
+async function clearPermissionBadge() {
+  if (!permissionBadgeOn) return;
+  permissionBadgeOn = false;
+  await browser.action.setBadgeText({ text: "" });
+  await browser.action.setTitle({ title: "Sourcefold" });
+}
 
 async function showSuccessBadge() {
   await browser.action.setBadgeBackgroundColor({ color: SUCCESS_COLOR });
@@ -51,11 +74,34 @@ export default defineBackground(() => {
     else if ("connectionMode" in changes) invalidateTargetCache();
   });
 
+  const linkQueue = createExtensionLinkQueue({
+    onState: async (state) => {
+      if (state.permission && state.permission.count > 0)
+        await showPermissionBadge(state.permission);
+      else await clearPermissionBadge();
+    },
+  });
+  listenForLinkQueue(linkQueue);
+  void browser.alarms.create(LINK_QUEUE_ALARM, { periodInMinutes: 1 });
+  void linkQueue.run();
+
   browser.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === BADGE_CLEAR_ALARM) {
+      const state = await readLinkQueueState().catch(() => null);
+      if (state?.permission && state.permission.count > 0) {
+        await showPermissionBadge(state.permission);
+        return;
+      }
+      permissionBadgeOn = false;
       await browser.action.setBadgeText({ text: "" });
       await browser.action.setTitle({ title: "Sourcefold" });
+      return;
     }
+    if (alarm.name === LINK_QUEUE_ALARM) await linkQueue.run();
+  });
+
+  browser.runtime.onStartup.addListener(() => {
+    void linkQueue.run();
   });
 
   browser.runtime.onInstalled.addListener(async () => {

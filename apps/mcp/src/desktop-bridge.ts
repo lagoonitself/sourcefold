@@ -31,6 +31,21 @@ export interface DesktopBridge {
   substackFetch(url: string, withCookie: boolean): Promise<SubstackFetchResult>;
 }
 
+/** A safe bridge for a server request that cannot reach the user's desktop app. */
+export const closedDesktopBridge: DesktopBridge = {
+  status: async () => null,
+  search: async () => {
+    throw new DesktopClosedError();
+  },
+  show: async () => {
+    throw new DesktopClosedError();
+  },
+  changed: async () => {},
+  substackFetch: async () => {
+    throw new DesktopClosedError();
+  },
+};
+
 interface AgentFile {
   port?: number;
   key?: string;

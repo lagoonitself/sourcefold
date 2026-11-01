@@ -141,7 +141,11 @@
     },
     {
       "name": "get_add_progress",
-      "description": "Progress of an add_links job: each link's state (waiting, saving, saved with its source id, already saved, not saved with the reason, paid, paused while YouTube limits requests, failed with the message)."
+      "description": "In Claude Desktop, checks an add_links job by job_id, can wait for it, or stop it after the current link."
+    },
+    {
+      "name": "cancel_waiting_links",
+      "description": "Cancels open link queue rows that have not finished saving."
     },
     {
       "name": "list_collection",

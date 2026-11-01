@@ -213,6 +213,18 @@ async function pingDesktopHttp(timeoutMs = 1500): Promise<boolean> {
   }
 }
 
+/**
+ * The desktop app is open: its local server answers `/api/health`. Not the native host: Chrome
+ * starts the host binary for every message even while the app is closed (so it always "answers"),
+ * and pinging it every minute would start that binary every minute.
+ */
+export async function isDesktopReachable(
+  deps?: Pick<TargetResolverDeps, "pingDesktopHttp">,
+): Promise<boolean> {
+  const httpPing = deps?.pingDesktopHttp ?? pingDesktopHttp;
+  return httpPing().catch(() => false);
+}
+
 type Channel = { via: "native" | "http"; query: () => Promise<unknown> };
 
 /**

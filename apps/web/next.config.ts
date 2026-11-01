@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@sourcefold/core", "@sourcefold/client"],
-  serverExternalPackages: ["linkedom"],
+  transpilePackages: ["@sourcefold/core", "@sourcefold/client", "@sourcefold/mcp"],
+  serverExternalPackages: ["linkedom", "pdfjs-dist"],
   turbopack: {
     rules: {
       "*.css": {

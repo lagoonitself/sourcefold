@@ -27,6 +27,9 @@ import * as itemMediaFile from "./routes/items/[id]/media/[name]";
 import * as itemMediaUpload from "./routes/items/[id]/media-upload";
 import * as itemMerge from "./routes/items/[id]/merge";
 import * as itemsCheck from "./routes/items/check";
+import * as linkQueue from "./routes/link-queue";
+import * as linkQueueClaim from "./routes/link-queue/claim";
+import * as linkQueueItem from "./routes/link-queue/[id]";
 import * as mirror from "./routes/mirror";
 import * as notes from "./routes/notes";
 import * as outlineSections from "./routes/outline-sections";
@@ -61,6 +64,9 @@ export const LOCAL_ROUTES: ReadonlyArray<readonly [string, RouteModule]> = [
   ["/api/items/[id]/media/[name]", itemMediaFile],
   ["/api/items/[id]/media-upload", itemMediaUpload],
   ["/api/items/[id]/merge", itemMerge],
+  ["/api/link-queue", linkQueue],
+  ["/api/link-queue/claim", linkQueueClaim],
+  ["/api/link-queue/[id]", linkQueueItem],
   ["/api/mirror", mirror],
   ["/api/notes", notes],
   ["/api/outline-sections", outlineSections],
@@ -166,8 +172,9 @@ export function createLocalApi(
 
     const match = matchRoute(url.pathname);
     if (!match) return jsonError(404, "Not found.");
-    const handler = METHODS.includes(method) ? match.module[method] : undefined;
-    if (!handler) return jsonError(405, "Method not allowed.");
+    if (!METHODS.includes(method) || !match.module[method]) {
+      return jsonError(405, "Method not allowed.");
+    }
 
     // The session lives on this computer; reading it needs no request. The database checks the
     // token itself, so a stale user id can only ever find nothing.
@@ -177,16 +184,9 @@ export function createLocalApi(
     if (!userId) return jsonError(401, "Sign in to continue.");
 
     const ctx: RouteContext = { db: supabase, userId, via: "session", host };
-    const request = new Request(url, init);
-    try {
-      // The params have exactly the names in the matched pattern.
-      const response = await handler(ctx, request, match.params as never);
-      if (method !== "GET" && response.ok) deps.onItemsChanged?.();
-      return response;
-    } catch (err) {
-      console.error(`${method} ${url.pathname} failed:`, err);
-      return jsonError(500, "Something went wrong. Try again.");
-    }
+    const response = await dispatchRoute(ctx, url.toString(), init);
+    if (method !== "GET" && response.ok) deps.onItemsChanged?.();
+    return response;
   }
 
   return {
@@ -194,4 +194,37 @@ export function createLocalApi(
     flushDrivePush: () => pusher!.flush(),
     dispose: () => pusher?.cancel(),
   };
+}
+
+/** Dispatches a website API path through the shared route handlers as a supplied user. */
+export async function dispatchRoute(
+  ctx: RouteContext,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const url = new URL(path, LOCAL_ORIGIN);
+  const method = (init.method ?? "GET").toUpperCase() as Method;
+  if (url.pathname === "/api/health") {
+    if (method !== "GET") return jsonError(405, "Method not allowed.");
+    try {
+      const { error } = await ctx.db.rpc("health");
+      return error
+        ? Response.json({ error: { message: "Database unreachable" } }, { status: 503 })
+        : jsonData({ status: "ok" });
+    } catch (err) {
+      console.error(`${method} ${url.pathname} failed:`, err);
+      return jsonError(500, "Something went wrong. Try again.");
+    }
+  }
+  const match = matchRoute(url.pathname);
+  if (!match) return jsonError(404, "Not found.");
+  const handler = METHODS.includes(method) ? match.module[method] : undefined;
+  if (!handler) return jsonError(405, "Method not allowed.");
+
+  try {
+    return await handler(ctx, new Request(url, init), match.params as never);
+  } catch (err) {
+    console.error(`${method} ${url.pathname} failed:`, err);
+    return jsonError(500, "Something went wrong. Try again.");
+  }
 }

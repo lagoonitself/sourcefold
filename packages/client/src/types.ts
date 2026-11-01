@@ -33,5 +33,27 @@ export interface LocalApi {
   fetch(path: string, init?: RequestInit): Promise<Response>;
 }
 
+export type LinkQueueNeeds = "desktop" | "browser";
+export type LinkQueueStatus =
+  "waiting" | "working" | "saved" | "duplicate" | "unavailable" | "failed" | "cancelled";
+
+export interface LinkQueueRow {
+  id: string;
+  folder_id: string;
+  url: string;
+  kind: string | null;
+  needs: LinkQueueNeeds;
+  status: LinkQueueStatus;
+  claimed_by: string | null;
+  claimed_at: string | null;
+  attempts: number;
+  message: string | null;
+  title: string | null;
+  item_id: string | null;
+  added_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Error codes the Edge Function and Drive code use. */
 export type DriveErrorCode = "drive_reconnect" | "drive_client_mismatch";

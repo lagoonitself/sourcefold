@@ -16,6 +16,7 @@ Built for people who gather a lot of reading before they write or make a video. 
 | **Mac** (macOS 11+, Apple Silicon or Intel)  | [Sourcefold-Mac.dmg](https://github.com/lagoonitself/sourcefold/releases/latest/download/Sourcefold-Mac.dmg)                                                       |
 | **Chrome extension** (also Edge, Brave, Arc) | [Sourcefold-Chrome-Extension.zip](https://github.com/lagoonitself/sourcefold/releases/latest/download/Sourcefold-Chrome-Extension.zip)                             |
 | **Claude Desktop** extension                 | [Sourcefold-Claude.mcpb](https://github.com/lagoonitself/sourcefold/releases/latest/download/Sourcefold-Claude.mcpb) (or **Settings → Claude** in the desktop app) |
+| **Claude or ChatGPT on the web**             | Connect the URL shown in website **Settings**; nothing to install                                                                                                  |
 | **Website** (nothing to install)             | Ask whoever runs your Sourcefold for the address, or [run your own](docs/SELF-HOSTING.md)                                                                          |
 
 The apps aren't from a paid publisher, so Windows and macOS warn you the first time you open them. **[INSTALL.md](docs/INSTALL.md)** shows the two clicks that get past it, how to load the extension, and how to sign in. What changed in each version is in [CHANGELOG.md](CHANGELOG.md); older downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases).
@@ -51,6 +52,7 @@ The apps aren't from a paid publisher, so Windows and macOS warn you the first t
 
 - Add Sourcefold to Claude Desktop (desktop app: **Settings → Claude → Add to Claude Desktop**) and ask Claude to do anything you do: list and read your sources, add a YouTube playlist to a group, move or delete sources, highlight passages, write notes, save to Drive.
 - It uses the desktop app's sign-in, so there's nothing to set up. With the desktop app open, Claude can also search inside your sources and open things in the app for you. See [INSTALL.md](docs/INSTALL.md#claude-desktop).
+- Connect Claude or ChatGPT on the web with the `/api/mcp` URL in website **Settings**. Sign in and approve access to let it read and change your library or add links. Links that the web server can't fetch wait for your desktop app; X posts also need Chrome with the extension open. See [INSTALL.md](docs/INSTALL.md#claude-or-chatgpt-on-the-web).
 
 **Your files, your Drive**
 

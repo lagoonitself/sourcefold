@@ -16,6 +16,26 @@ All downloads are on the [latest release](https://github.com/lagoonitself/source
 2. Google asks to let Sourcefold see and manage the files it creates in your Drive. Allow it.
 3. Make a project and a group, click **Add links**, paste one or more links, and they save. Press **Save to Drive** (or `Ctrl+S`) to copy everything to your Drive.
 
+## Claude or ChatGPT on the web
+
+The web MCP connector lets Claude or ChatGPT read and change your Sourcefold library, add links,
+and organize sources. Links added through MCP are saved to Sourcefold automatically.
+
+1. Sign in to your Sourcefold website with Google.
+2. Open **Settings** and copy the connector URL under **Use Sourcefold in Claude or ChatGPT on the web**.
+3. In claude.ai, open **Settings → Connectors → Add custom connector** and paste the URL.
+4. In ChatGPT, open **Settings → Apps and Connectors**, create a custom app, and paste the URL.
+5. Follow the sign-in page and review the access request before clicking **Allow**.
+
+Sourcefold first tries to save each link from its web server. If a site blocks the server, the link
+waits for your computer. Open the signed-in Sourcefold desktop app to save links waiting for the
+desktop. X posts also need Chrome with the Sourcefold extension open while the desktop app is open.
+Ask the connected assistant for the add progress to see what is waiting.
+
+Clients that ask for a Bearer token instead of OAuth can use an access token from Sourcefold
+**Settings → Create token**. Treat the token like a password; anyone who has it can access your
+Sourcefold library.
+
 ## Desktop app
 
 ### Windows 10 or 11

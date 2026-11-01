@@ -157,6 +157,17 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [x] Releases carry three fixed-name files (`Sourcefold-Windows-Setup.exe`, `Sourcefold-Mac.dmg`, `Sourcefold-Chrome-Extension.zip`), so `releases/latest/download/…` links always work.
   - [ ] Owner checks the release downloads on Windows and a friend's Mac.
 
+## Built: Sourcefold MCP on the web, links that wait for your computer
+
+Contract: `docs/dev/handoff-web-mcp.md` (2026-11-01, branch `web-mcp`). Built by GPT-6 Luna and Grok 4.7 agents, cross-reviewed, findings fixed.
+
+- [x] `link_queue` table and `claim_link_queue` (migration applied to the live database).
+- [x] Queue routes in `packages/client` (local API and website) and `dispatchRoute`.
+- [x] `/api/mcp` on the website: stateless MCP, `sf_` tokens or Supabase OAuth 2.1, discovery routes, `/oauth/consent`, connector URL in Settings.
+- [x] Remote `add_links`: cloud first, the rest waits (YouTube and Reddit for the desktop, X for Chrome); `get_add_progress`, `cancel_waiting_links`. Claude Desktop queues refused links too.
+- [x] Desktop app saves waiting links while signed in; extension saves browser links in a background tab while the desktop app is open.
+- [ ] Owner: Supabase OAuth Server on, push `main`, add the connector in claude.ai, test.
+
 ## Next: desktop first (the website becomes optional)
 
 Contract: `docs/dev/handoff-no-website.md`. Comes before phase 2 of sharing.

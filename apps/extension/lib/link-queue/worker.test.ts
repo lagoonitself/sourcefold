@@ -131,7 +131,7 @@ describe("link queue worker", () => {
     expect(seen.at(-1)?.progress).toBeNull();
   });
 
-  it("releases the row and records the banner when the host permission is missing", async () => {
+  it("sets the row aside and records the banner when the host permission is missing", async () => {
     const claimed = row({ url: "https://x.com/jack/status/20", kind: "x" });
     const reddit = row({ id: "row-2", url: "https://www.reddit.com/r/test", kind: "reddit" });
     const patch = vi.fn(async () => {});
@@ -151,7 +151,7 @@ describe("link queue worker", () => {
 
     expect(openTab).not.toHaveBeenCalled();
     expect(patch).toHaveBeenCalledWith(claimed.id, {
-      status: "waiting",
+      status: "failed",
       message: "Allow Sourcefold to open x.com in Chrome",
     });
     expect(state().permission).toEqual({
@@ -164,7 +164,7 @@ describe("link queue worker", () => {
   it("sets aside a link for a site not yet allowed and saves the rest", async () => {
     const xRow = row({ id: "row-x", url: "https://x.com/jack/status/20", kind: "x" });
     const page = row({ id: "row-web", url: "https://example.com/post" });
-    const claims = [[xRow, page], [xRow]];
+    const claims = [[xRow, page]];
     const patch = vi.fn(async () => {});
     const openTab = vi.fn(async () => 4);
     const { run } = controller({
@@ -183,9 +183,30 @@ describe("link queue worker", () => {
     expect(openTab).toHaveBeenCalledTimes(1);
     expect(openTab).toHaveBeenCalledWith(page.url);
     expect(patch).toHaveBeenCalledWith(page.id, expect.objectContaining({ status: "saved" }));
-    // Claimed again on the second pass: handed straight back, and the run ends.
-    expect(patch).toHaveBeenLastCalledWith(xRow.id, { status: "waiting" });
+    // Set aside (failed), so later claims skip it; Allow in the popup puts it back in line.
+    expect(patch).toHaveBeenCalledWith(xRow.id, {
+      status: "failed",
+      message: "Allow Sourcefold to open x.com in Chrome",
+    });
     expect(claims).toHaveLength(0);
+  });
+
+  it("shows the Allow banner, not Retry, for links set aside for a permission", async () => {
+    const setAside = row({
+      id: "row-x",
+      url: "https://x.com/jack/status/20",
+      status: "failed",
+      message: "Allow Sourcefold to open x.com in Chrome",
+    });
+    const { run, state } = controller({
+      permissionsContains: async () => false,
+      api: { listRecent: async () => [setAside] },
+    });
+
+    await run();
+
+    expect(state().permission).toMatchObject({ count: 1, hosts: ["x.com"] });
+    expect(state().failed).toBeNull();
   });
 
   it("closes the tab when the page does not finish loading", async () => {

@@ -14,7 +14,13 @@ export async function closeLeftoverQueueTab(): Promise<void> {
 export async function openQueueTab(url: string): Promise<number> {
   const tab = await browser.tabs.create({ url, active: false });
   if (tab.id == null) throw new Error("Chrome didn't open the tab.");
-  await browser.storage.local.set({ [LINK_QUEUE_TAB_KEY]: tab.id });
+  try {
+    await browser.storage.local.set({ [LINK_QUEUE_TAB_KEY]: tab.id });
+  } catch (err) {
+    // Without the stored id neither the caller nor the next start could close it.
+    await browser.tabs.remove(tab.id).catch(() => {});
+    throw err;
+  }
   return tab.id;
 }
 

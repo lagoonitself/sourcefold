@@ -1,7 +1,7 @@
 import { findYouTubeVideos } from "../sources/source-client";
 import { waitUnlessStopped, youTubeGapMs } from "../sources/youtube-pacing";
 import { findPublicationPosts } from "../substack/substack-client";
-import { claimDesktopQueue, patchLinkQueue } from "./api";
+import { claimDesktopQueue, enqueueForBrowser, patchLinkQueue } from "./api";
 import { saveQueuedLink } from "./save-queued-link";
 import type { DrainHooks, DrainProgress } from "./types";
 import { desktopWorkerId } from "./worker-id";
@@ -17,6 +17,7 @@ export function createDesktopDrainHooks(
     signal,
     claim: (body) => claimDesktopQueue(body),
     patch: (id, body) => patchLinkQueue(id, body),
+    enqueueForBrowser: (body) => enqueueForBrowser(body),
     save: (url, folderId, saveSignal) => saveQueuedLink(url, folderId, saveSignal),
     listYouTube: async (url, listSignal) => {
       const list = await findYouTubeVideos(url, { signal: listSignal });

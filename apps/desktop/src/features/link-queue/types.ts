@@ -71,6 +71,8 @@ export interface DrainHooks {
   signal: AbortSignal;
   claim(body: { needs: "desktop"; worker: string; limit: number }): Promise<LinkQueueRow[]>;
   patch(id: string, body: LinkQueuePatch): Promise<void>;
+  /** Queues posts or videos from a collection for the extension, one row each. */
+  enqueueForBrowser(body: { folderId: string; urls: string[]; addedBy: string }): Promise<void>;
   save(url: string, folderId: string, signal: AbortSignal): Promise<SavedLink>;
   listYouTube(url: string, signal: AbortSignal): Promise<YouTubeListResult>;
   listPosts(url: string, signal: AbortSignal): Promise<PublicationListResult>;

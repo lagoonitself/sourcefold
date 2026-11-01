@@ -59,6 +59,7 @@ function createHooks(
     patch: async (id, body) => {
       patches.push({ id, body });
     },
+    enqueueForBrowser: async () => {},
     listYouTube: async () => {
       throw new Error("unexpected YouTube list");
     },
@@ -90,7 +91,7 @@ describe("classify and refusal", () => {
     expect(classifyQueuedLink("not a link", null)).toBe("unknown");
   });
 
-  it("hands refusals to Chrome and keeps YouTube limits and Substack cookie errors", () => {
+  it("hands refusals (Substack too) to Chrome and keeps YouTube limits", () => {
     expect(needsBrowser(new SourceError("blocked", "Reddit blocked this request."))).toBe(true);
     expect(needsBrowser(new SourceError("blocked", YOUTUBE_BLOCKED_MESSAGE))).toBe(false);
     expect(needsBrowser(new Error("The site refused the request. Try again later."))).toBe(true);
@@ -100,7 +101,7 @@ describe("classify and refusal", () => {
       needsBrowser(
         new Error("Substack refused the request. If it's a paid post, check your cookie."),
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(needsBrowser(new SourceError("not_found", "That page doesn't exist anymore."))).toBe(
       false,
     );
@@ -361,6 +362,39 @@ describe("drainDesktopQueue", () => {
     });
     expect(summary.saved).toBe(1);
     expect(summary.libraryChanged).toBe(true);
+  });
+
+  it("queues each refused post of a publication for Chrome and saves the rest", async () => {
+    const queued: { folderId: string; urls: string[]; addedBy: string }[] = [];
+    const hooks = createHooks({
+      claim: async () => [
+        row({ id: "16161616-1616-4161-8161-161616161616", url: "https://astral.substack.com" }),
+      ],
+      listPosts: async () => ({
+        posts: [
+          { url: "https://astral.substack.com/p/one", title: "One" },
+          { url: "https://astral.substack.com/p/two", title: "Two" },
+        ],
+      }),
+      save: async (url) => {
+        if (url.endsWith("/two")) throw new Error("Substack refused the request.");
+        return saved(url);
+      },
+      enqueueForBrowser: async (body) => {
+        queued.push(body);
+      },
+    });
+
+    const summary = await drainDesktopQueue(hooks);
+
+    expect(queued).toEqual([
+      { folderId: FOLDER, urls: ["https://astral.substack.com/p/two"], addedBy: "Claude" },
+    ]);
+    expect(hooks.patches[0]?.body).toEqual({
+      status: "saved",
+      message: "Saved 1 of 2 posts. 1 needs Chrome",
+    });
+    expect(summary.browser).toBe(1);
   });
 
   it("saves a Substack publication as its posts", async () => {

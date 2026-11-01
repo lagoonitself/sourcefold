@@ -35,6 +35,8 @@ type ChildTally = {
   unavailable: number;
   failed: number;
   browser: number;
+  /** Children the site refused this computer; each gets its own row for the extension. */
+  browserUrls: string[];
   firstProblem?: string;
 };
 
@@ -268,7 +270,7 @@ export async function drainDesktopQueue(hooks: DrainHooks): Promise<BatchSummary
           await release(row, YOUTUBE_RELEASE_MESSAGE);
           return "youtube_limited";
         }
-        noteChildProblem(tally, saved.error);
+        noteChildProblem(tally, saved.error, video.url);
         continue;
       }
       noteChildOutcome(tally, saved.value);
@@ -318,7 +320,7 @@ export async function drainDesktopQueue(hooks: DrainHooks): Promise<BatchSummary
           await release(row, row.message);
           return "stopped";
         }
-        noteChildProblem(tally, error);
+        noteChildProblem(tally, error, post.url);
       }
     }
 
@@ -326,9 +328,10 @@ export async function drainDesktopQueue(hooks: DrainHooks): Promise<BatchSummary
     return "done";
   }
 
-  function noteChildProblem(tally: ChildTally, error: unknown) {
+  function noteChildProblem(tally: ChildTally, error: unknown, url: string) {
     if (needsBrowser(error)) {
       tally.browser += 1;
+      tally.browserUrls.push(url);
       return;
     }
     tally.failed += 1;
@@ -359,14 +362,37 @@ export async function drainDesktopQueue(hooks: DrainHooks): Promise<BatchSummary
     truncated: boolean,
   ) {
     note(row);
-    if (tally.browser === total) {
-      await handToBrowser(row);
-      return;
-    }
-    const inLibrary = tally.saved + tally.duplicate;
     const word = total === 1 ? kind : kind === "video" ? "videos" : "posts";
     const titled = clipText(title);
-    if (inLibrary === 0) {
+    // The extension saves pages, not playlists or publications: each refused child gets its own row.
+    let toChrome = 0;
+    if (tally.browserUrls.length > 0) {
+      try {
+        await hooks.enqueueForBrowser({
+          folderId: row.folder_id,
+          urls: tally.browserUrls,
+          addedBy: row.added_by,
+        });
+        toChrome = tally.browserUrls.length;
+        summary.browser += toChrome;
+      } catch (error) {
+        if (isSessionExpiredError(error)) throw error;
+        tally.failed += tally.browserUrls.length;
+        tally.firstProblem ??= errorMessage(error, "Couldn't pass the rest to Chrome.");
+      }
+    }
+    const chromeNote =
+      toChrome > 0 ? `. ${toChrome} ${toChrome === 1 ? "needs" : "need"} Chrome` : "";
+    const inLibrary = tally.saved + tally.duplicate;
+    if (inLibrary === 0 && toChrome === total) {
+      await send(idOf(row), {
+        status: "saved",
+        message: clipText(`All ${total} ${word} need Chrome`),
+        ...(titled ? { title: titled } : {}),
+      });
+      return;
+    }
+    if (inLibrary === 0 && toChrome === 0) {
       const message = tally.firstProblem ?? `Couldn't save any of the ${total} ${word}.`;
       if (tally.unavailable === total && tally.failed === 0) {
         summary.unavailable += 1;
@@ -381,8 +407,8 @@ export async function drainDesktopQueue(hooks: DrainHooks): Promise<BatchSummary
       return;
     }
 
-    const message = collectionMessage(inLibrary, total, kind, truncated);
-    if (tally.saved > 0) {
+    const message = clipText(collectionMessage(inLibrary, total, kind, truncated) + chromeNote);
+    if (tally.saved > 0 || toChrome > 0) {
       summary.saved += 1;
       await send(idOf(row), {
         status: "saved",
@@ -471,7 +497,7 @@ export async function drainDesktopQueue(hooks: DrainHooks): Promise<BatchSummary
 }
 
 function emptyTally(): ChildTally {
-  return { saved: 0, duplicate: 0, unavailable: 0, failed: 0, browser: 0 };
+  return { saved: 0, duplicate: 0, unavailable: 0, failed: 0, browser: 0, browserUrls: [] };
 }
 
 function idOf(row: LinkQueueRow): string {

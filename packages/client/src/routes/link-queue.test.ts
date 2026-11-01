@@ -160,6 +160,28 @@ describe("link queue routes", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ data: expect.objectContaining({ status: "waiting" }) });
     expect(callsOf(fake.queries[0]!, "eq")).toContainEqual(["user_id", USER_ID]);
+    expect(callsOf(fake.queries[0]!, "in")).toContainEqual([
+      "status",
+      ["waiting", "working", "saved", "duplicate", "unavailable", "failed"],
+    ]);
+  });
+
+  it("never brings a cancelled row back when a worker reports late", async () => {
+    const fake = createScriptedDb({
+      link_queue: [{ data: null }, { data: { id: QUEUE_ID } }],
+    });
+    const response = await itemRoute.PATCH(
+      context(fake.db),
+      new Request(`https://sourcefold.test/api/link-queue/${QUEUE_ID}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "saved", title: "Late" }),
+      }),
+      { id: QUEUE_ID },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: { message: "This link was cancelled." } });
   });
 
   it("exposes dispatchRoute for the same handlers", async () => {

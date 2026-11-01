@@ -5,6 +5,7 @@ import {
   TIMEOUT_MESSAGE,
   allowMessage,
   clip,
+  isAllowMessage,
   hostOf,
   originPattern,
   signInMessage,
@@ -73,6 +74,11 @@ function failedRows(rows: LinkQueueRow[]): LinkQueueRow[] {
   return rows.filter((row) => row.needs === "browser" && row.status === "failed");
 }
 
+/** Set aside until the user allows the site (failed, so the claim skips them). */
+function waitingForAllow(rows: LinkQueueRow[]): LinkQueueRow[] {
+  return failedRows(rows).filter((row) => isAllowMessage(row.message));
+}
+
 function dedupe(rows: LinkQueueRow[]): LinkQueueRow[] {
   const seen = new Set<string>();
   const out: LinkQueueRow[] = [];
@@ -130,14 +136,14 @@ async function publish(
   let permission = previous.permission;
   if (open || extraBlocked.length) {
     permission = await permissionState(
-      [...(open ?? []), ...extraBlocked],
+      [...(open ?? []), ...(recent ? waitingForAllow(recent) : []), ...extraBlocked],
       deps.permissionsContains,
     );
   }
 
   let failed = previous.failed;
   if (recent) {
-    const rows = failedRows(recent);
+    const rows = failedRows(recent).filter((row) => !isAllowMessage(row.message));
     failed = rows.length
       ? { count: rows.length, message: rows.length === 1 ? (rows[0]?.message ?? null) : null }
       : null;
@@ -222,8 +228,11 @@ async function processRow(
   }
   const allowed = await deps.permissionsContains([origin]);
   if (!allowed) {
+    // Set aside as failed, not released: a released row is claimed first again every time, and
+    // enough of them would fill every claim and hold up links for sites already allowed.
+    // Allow in the popup sends "retry", which puts these back in line.
     await deps.api.patch(row.id, {
-      status: "waiting",
+      status: "failed",
       message: clip(allowMessage(host)),
     });
     return "permission";

@@ -31,6 +31,11 @@ export function hostOf(url: string): string {
   }
 }
 
+/** Rows set aside until the user allows their site carry this message. */
+export function isAllowMessage(message: string | null): boolean {
+  return Boolean(message?.startsWith("Allow Sourcefold to open "));
+}
+
 export function allowMessage(host: string): string {
   return `Allow Sourcefold to open ${host} in Chrome`;
 }

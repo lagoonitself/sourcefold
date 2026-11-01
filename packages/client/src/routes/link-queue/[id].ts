@@ -25,6 +25,7 @@ const browserSchema = z
   })
   .strict();
 const patchSchema = z.union([resultSchema, releaseSchema, browserSchema]);
+const NOT_CANCELLED = ["waiting", "working", "saved", "duplicate", "unavailable", "failed"];
 
 function publicRow(row: Record<string, unknown>): LinkQueueRow {
   return {
@@ -78,19 +79,33 @@ export async function PATCH(ctx: RouteContext, request: Request, params: { id: s
           claimed_at: null,
         };
 
+  // Cancelling is final: a worker that was still saving must not bring the row back.
   const { data, error } = await ctx.db
     .from("link_queue")
     .update(patch)
     .eq("id", params.id)
     .eq("user_id", ctx.userId)
+    .in("status", NOT_CANCELLED)
     .select(COLUMNS)
     .maybeSingle();
   if (error) {
     console.error("Failed to update link queue row:", error);
     return jsonError(500, "Something went wrong. Try again.");
   }
-  if (!data) return jsonError(404, "Link queue item not found.");
-  return jsonData(publicRow(data as unknown as Record<string, unknown>));
+  if (data) return jsonData(publicRow(data as unknown as Record<string, unknown>));
+
+  const { data: existing, error: existingError } = await ctx.db
+    .from("link_queue")
+    .select("id")
+    .eq("id", params.id)
+    .eq("user_id", ctx.userId)
+    .maybeSingle();
+  if (existingError) {
+    console.error("Failed to check link queue row:", existingError);
+    return jsonError(500, "Something went wrong. Try again.");
+  }
+  if (existing) return jsonError(409, "This link was cancelled.");
+  return jsonError(404, "Link queue item not found.");
 }
 
 export async function DELETE(ctx: RouteContext, _request: Request, params: { id: string }) {

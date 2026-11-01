@@ -47,7 +47,8 @@ export function LinkQueueBanner() {
     setAllowing(true);
     void requested
       .then((granted) => {
-        if (granted) return browser.runtime.sendMessage({ type: LINK_QUEUE_MESSAGE, op: "kick" });
+        // "retry" puts the links set aside for this permission back in line, then saves them.
+        if (granted) return browser.runtime.sendMessage({ type: LINK_QUEUE_MESSAGE, op: "retry" });
       })
       .finally(() => setAllowing(false));
   };

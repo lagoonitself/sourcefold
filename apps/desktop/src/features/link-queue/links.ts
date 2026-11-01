@@ -38,14 +38,13 @@ export function classifyQueuedLink(url: string, kind: string | null): QueuedLink
 /**
  * The site refused this computer too (HTTP 401/403/429, a bot wall, a captcha).
  * YouTube's own limit is paced and tried again, not handed to Chrome.
- * A Substack 401/403 asks for the desktop cookie, so it stays a failure here.
+ * A Substack refusal goes to Chrome too: the user may be signed in to Substack there.
  */
 export function needsBrowser(error: unknown): boolean {
   if (isYouTubeRateLimit(error)) return false;
   if (error instanceof SourceError && error.code === "blocked") return true;
   const message = error instanceof Error ? error.message : "";
-  if (/substack refused/i.test(message)) return false;
-  if (/the site refused|this site refused/i.test(message)) return true;
+  if (/the site refused|this site refused|substack refused/i.test(message)) return true;
   if (/captcha|bot wall|not a bot/i.test(message)) return true;
   return false;
 }

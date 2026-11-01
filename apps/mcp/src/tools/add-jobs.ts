@@ -557,7 +557,10 @@ export class AddJobs {
       const at = job.rows.indexOf(r);
       job.rows.splice(at, 1, ...rows);
     } catch (err) {
-      Object.assign(r, { status: "failed", message: messageOf(err) });
+      // A refused playlist, channel or publication waits for the desktop app, like a single link.
+      if (!(await this.queueRefused(job, r, deps, err))) {
+        Object.assign(r, { status: "failed", message: messageOf(err) });
+      }
     } finally {
       this.notify(job);
     }

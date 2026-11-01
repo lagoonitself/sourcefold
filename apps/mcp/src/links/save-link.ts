@@ -15,6 +15,7 @@ import {
   type SubstackFetch,
 } from "@sourcefold/core";
 import {
+  WikipediaError,
   WIKIPEDIA_ERROR_MESSAGES,
   WIKIPEDIA_USER_AGENT,
   extractSubstack,
@@ -156,10 +157,22 @@ async function captureOrDuplicate(
 }
 
 /** Whether the user's own computer or browser should retry a cloud fetch. */
+const REFUSAL_STATUSES = new Set([401, 403, 407, 429, 451, 503]);
+
 export function isCloudRefusal(err: unknown): boolean {
-  if (err instanceof ApiError)
-    return err.status === 0 || [401, 403, 407, 429, 451, 503].includes(err.status);
-  if (err instanceof SourceError) return err.code === "blocked" || err.code === "fetch_failed";
+  if (err instanceof ApiError) return err.status === 0 || REFUSAL_STATUSES.has(err.status);
+  if (err instanceof SourceError) {
+    if (err.code === "blocked") return true;
+    if (err.code !== "fetch_failed") return false;
+    // "The site answered HTTP 400 instead of the page" is the page's own answer: another computer
+    // would get it too. No status means the request never got an answer (network, reset).
+    const status = /\bHTTP (\d{3})\b/.exec(err.message)?.[1];
+    if (!status) return true;
+    const code = Number(status);
+    return code >= 500 || REFUSAL_STATUSES.has(code);
+  }
+  // Wikipedia turns timeouts, network errors, 429 and 5xx into "fetch_failed".
+  if (err instanceof WikipediaError) return err.code === "fetch_failed";
   if (!(err instanceof Error)) return false;
   if (err.name === "AbortError" || err.name === "TimeoutError") return true;
   return /captcha|bot check|refused (?:the )?(?:request|connection)|blocked this request|too many requests|timed? ?out|timeout|network|connection (?:reset|closed|refused)|socket|fetch failed|\b(?:401|403|407|429|451|503)\b/i.test(

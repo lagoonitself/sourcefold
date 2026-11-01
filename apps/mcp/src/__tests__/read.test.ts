@@ -238,6 +238,20 @@ describe("read_source", () => {
     expect(zero.isError).toBe(true);
   });
 
+  it("on the web server, never answers from memory (every read checks the caller)", async () => {
+    const counters = { content: 0 };
+    const fake = web("web", file("Short text."), counters);
+    const local = await connect(registerReadTools, { web: fake });
+    await local.call("read_source", { source_id: "s1" });
+    expect(counters.content).toBe(1);
+
+    // Another request on the same warm server, possibly another user: it must ask the API again.
+    const remote = await connect(registerReadTools, { web: fake, mode: "remote" });
+    await remote.call("read_source", { source_id: "s1" });
+    await remote.call("read_source", { source_id: "s1" });
+    expect(counters.content).toBe(3);
+  });
+
   it("keeps the text for 10 minutes and asks the web app only once", async () => {
     const counters = { content: 0 };
     const body = [section("First", 15), section("Second", 15), section("Third", 15)].join("\n\n");

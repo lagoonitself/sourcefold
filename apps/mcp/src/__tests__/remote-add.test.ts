@@ -120,6 +120,29 @@ describe("remote add_links", () => {
     expect(links.find((link) => link.url.includes("youtube.com"))?.needs).toBe("desktop");
     expect(links.find((link) => link.url.includes("x.com"))?.needs).toBe("browser");
     expect(queueBodies[0]).toMatchObject({ added_by: "ChatGPT", folder_id: GROUP.id });
+    // One write for every waiting link, so the call stays inside the 60 s function limit.
+    expect(queueBodies).toHaveLength(1);
+    expect(links).toHaveLength(3);
+  });
+
+  it("takes at most 200 links per call and says how many were left out", async () => {
+    const { web, queueBodies } = remoteWeb();
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx), {
+      web,
+      desktop: closedDesktop(),
+      mode: "remote",
+    });
+    const videos = Array.from(
+      { length: 205 },
+      (_, n) => `https://www.youtube.com/watch?v=${String(n).padStart(11, "a")}`,
+    );
+
+    const result = await h.call("add_links", { group_id: GROUP.id, links: [videos.join(" ")] });
+
+    expect(result.isError).toBe(false);
+    expect(queueBodies).toHaveLength(1);
+    expect((queueBodies[0] as { links: unknown[] }).links).toHaveLength(200);
+    expect(result.text).toContain("5 more were left out");
   });
 
   it("queues remaining cloud links after the shared call budget is exhausted", async () => {

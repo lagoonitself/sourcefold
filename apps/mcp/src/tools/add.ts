@@ -48,8 +48,13 @@ const DATE = z
 /** Claude Desktop cuts a tool call off after about a minute. */
 const MAX_WAIT_SECONDS = 50;
 const ROWS_SHOWN = 60;
-const REMOTE_BUDGET_MS = 40_000;
+// Vercel stops the function at 60 s. Saving gets 35 s from the start of the call (finding the
+// group included); writing the waiting links gets at most 15 s after that.
+const REMOTE_BUDGET_MS = 35_000;
 const REMOTE_LINK_TIMEOUT_MS = 12_000;
+const REMOTE_QUEUE_TIMEOUT_MS = 15_000;
+/** Links taken per call: one queue write (the route accepts 200). */
+const REMOTE_MAX_LINKS = 200;
 
 const STATUS_LABEL: Record<JobRow["status"], string> = {
   waiting: "waiting",
@@ -215,23 +220,62 @@ function queueReason(reason: string): string {
   return reason.length > 950 ? `${reason.slice(0, 947)}...` : reason;
 }
 
+interface QueuedLink {
+  url: string;
+  kind: string | null;
+  needs: "desktop" | "browser";
+  message: string;
+  result: RemoteResult;
+}
+
+// Links to queue during one add_links call, written together at the end in one request.
+const queueBatches = new WeakMap<ToolContext, QueuedLink[]>();
+
 async function queueRemoteLink(
   ctx: ToolContext,
-  groupId: string,
+  _groupId: string,
   url: string,
   kind: string | null,
   needs: "desktop" | "browser",
   message: string,
 ): Promise<RemoteResult> {
+  const batch = queueBatches.get(ctx);
+  if (!batch) throw new Error("Remote links are queued inside add_links only.");
+  const result: RemoteResult = { url, status: "waiting", needs, message };
+  batch.push({ url, kind, needs, message, result });
+  return result;
+}
+
+async function flushRemoteQueue(
+  ctx: ToolContext,
+  groupId: string,
+  batch: QueuedLink[],
+): Promise<void> {
+  if (batch.length === 0) return;
+  const fail = (message: string) => {
+    for (const link of batch) {
+      link.result.status = "failed";
+      link.result.message = message;
+      delete link.result.needs;
+    }
+  };
   try {
-    await ctx.api.post<LinkQueueRow[]>("/link-queue", {
-      folder_id: groupId,
-      added_by: (ctx.addedBy ?? "Claude").trim().slice(0, 100) || "Claude",
-      links: [{ url, kind, needs, message: queueReason(message) }],
-    });
-    return { url, status: "waiting", needs, message };
+    await ctx.api.post<LinkQueueRow[]>(
+      "/link-queue",
+      {
+        folder_id: groupId,
+        added_by: (ctx.addedBy ?? "Claude").trim().slice(0, 100) || "Claude",
+        links: batch.map((link) => ({
+          url: link.url,
+          kind: link.kind,
+          needs: link.needs,
+          message: queueReason(link.message),
+        })),
+      },
+      { timeoutMs: REMOTE_QUEUE_TIMEOUT_MS },
+    );
   } catch (err) {
-    return { url, status: "failed", message: `Could not queue this link: ${messageOf(err)}` };
+    fail(`Could not queue this link: ${messageOf(err)}`);
   }
 }
 
@@ -376,10 +420,15 @@ async function addLinksRemote(
   ctx: ToolContext,
 ): Promise<string> {
   const deadline = Date.now() + REMOTE_BUDGET_MS;
-  const urls = [...new Set(extractUrls(args.links.join("\n")))];
-  if (urls.length === 0) {
+  const found = [...new Set(extractUrls(args.links.join("\n")))];
+  if (found.length === 0) {
     throw new Error("No links found. Pass full addresses starting with https://.");
   }
+  const urls = found.slice(0, REMOTE_MAX_LINKS);
+  const left = found.length - urls.length;
+  const batch: QueuedLink[] = [];
+  ctx = { ...ctx };
+  queueBatches.set(ctx, batch);
   const group = await resolveGroup(ctx, args.group_id, Math.min(10_000, REMOTE_BUDGET_MS));
   const deps = await linkDepsFactory(ctx)();
   deps.deferUnavailable = true;
@@ -486,7 +535,18 @@ async function addLinksRemote(
     );
   }
 
-  return formatRemoteResults(group, results);
+  // A publication can list more posts than one queue write takes; the rest are left for later.
+  const overflow = batch.splice(REMOTE_MAX_LINKS);
+  for (const link of overflow) {
+    link.result.status = "failed";
+    link.result.message = `Not queued: one call queues at most ${REMOTE_MAX_LINKS} links. Add it again.`;
+    delete link.result.needs;
+  }
+  await flushRemoteQueue(ctx, group.id, batch);
+  const reply = formatRemoteResults(group, results);
+  return left > 0
+    ? `${reply}\nOnly the first ${REMOTE_MAX_LINKS} links were taken; ${left} more were left out. Call add_links again with the rest.`
+    : reply;
 }
 
 function formatQueueRows(rows: LinkQueueRow[]): string {

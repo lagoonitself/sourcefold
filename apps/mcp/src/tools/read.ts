@@ -172,9 +172,15 @@ async function loadSource(
   id: string,
   ctx: ToolContext,
 ): Promise<CachedSource | { image: true; title: string; note: string | null }> {
-  const hit = cache.get(id);
-  if (hit && hit.expires > Date.now()) return hit;
-  cache.delete(id);
+  // The web server runs every user's requests in one process, and the cache is keyed by item id
+  // alone: a hit would skip the API call that checks the source is the caller's. Only the
+  // stdio server (one user, one process) keeps sources in memory.
+  const remote = ctx.mode === "remote";
+  if (!remote) {
+    const hit = cache.get(id);
+    if (hit && hit.expires > Date.now()) return hit;
+    cache.delete(id);
+  }
 
   const { api } = ctx;
   const base = await api.get<{
@@ -214,6 +220,7 @@ async function loadSource(
     expires: Date.now() + CACHE_TTL_MS,
     item: base,
   };
+  if (remote) return entry;
   cache.set(id, entry);
   while (cache.size > CACHE_MAX_ENTRIES) {
     const oldest = cache.keys().next().value;

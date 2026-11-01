@@ -201,9 +201,14 @@ export function registerRemoveTextTools(server: McpServer, ctx: ToolContext): vo
           failedDeletes.push(h.id);
         }
       }
-      const stack = undoStacks.get(ref.id) ?? [];
-      stack.push({ before: reader.body, after: next, lost });
-      undoStacks.set(ref.id, stack);
+      // Not on the web server: it serves every user from one process and keeps nothing between
+      // requests, so another user's text must never sit here.
+      const remote = ctx.mode === "remote";
+      if (!remote) {
+        const stack = undoStacks.get(ref.id) ?? [];
+        stack.push({ before: reader.body, after: next, lost });
+        undoStacks.set(ref.id, stack);
+      }
 
       const lines = [
         `Removed ${what} from "${ref.title}" [${ref.id}].`,
@@ -221,7 +226,11 @@ export function registerRemoveTextTools(server: McpServer, ctx: ToolContext): vo
           `Couldn't delete ${plural(failedDeletes.length, "highlight")} (${failedDeletes.join(", ")}); the reader will show them as not found.`,
         );
       }
-      lines.push("undo_remove_text with this source_id puts it back.");
+      lines.push(
+        remote
+          ? "This can't be undone from here. To put text back, open the source in the Sourcefold desktop app and use Edit as text."
+          : "undo_remove_text with this source_id puts it back.",
+      );
       return lines.join("\n");
     },
   });
@@ -235,6 +244,11 @@ export function registerRemoveTextTools(server: McpServer, ctx: ToolContext): vo
       source_id: z.string().min(1).describe("The source remove_text changed."),
     },
     run: async ({ source_id }) => {
+      if (ctx.mode === "remote") {
+        throw new Error(
+          "Undo isn't available in the web connector: each request runs on its own, so the removed text isn't kept. Open the source in the Sourcefold desktop app and use Edit as text to put it back.",
+        );
+      }
       const stack = undoStacks.get(source_id);
       const last = stack?.[stack.length - 1];
       if (!last) {

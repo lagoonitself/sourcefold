@@ -417,6 +417,78 @@ export type Database = {
           },
         ];
       };
+      link_queue: {
+        Row: {
+          added_by: string;
+          attempts: number;
+          claimed_at: string | null;
+          claimed_by: string | null;
+          created_at: string;
+          folder_id: string;
+          id: string;
+          item_id: string | null;
+          kind: string | null;
+          message: string | null;
+          needs: string;
+          status: string;
+          title: string | null;
+          updated_at: string;
+          url: string;
+          user_id: string;
+        };
+        Insert: {
+          added_by?: string;
+          attempts?: number;
+          claimed_at?: string | null;
+          claimed_by?: string | null;
+          created_at?: string;
+          folder_id: string;
+          id?: string;
+          item_id?: string | null;
+          kind?: string | null;
+          message?: string | null;
+          needs?: string;
+          status?: string;
+          title?: string | null;
+          updated_at?: string;
+          url: string;
+          user_id?: string;
+        };
+        Update: {
+          added_by?: string;
+          attempts?: number;
+          claimed_at?: string | null;
+          claimed_by?: string | null;
+          created_at?: string;
+          folder_id?: string;
+          id?: string;
+          item_id?: string | null;
+          kind?: string | null;
+          message?: string | null;
+          needs?: string;
+          status?: string;
+          title?: string | null;
+          updated_at?: string;
+          url?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "link_queue_folder_id_fkey";
+            columns: ["folder_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "link_queue_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       outline_sections: {
         Row: {
           created_at: string;
@@ -532,6 +604,38 @@ export type Database = {
       acquire_drive_sync_lock: {
         Args: { p_seconds?: number; p_user_id: string };
         Returns: boolean;
+      };
+      claim_link_queue: {
+        Args: {
+          p_limit?: number;
+          p_needs: string;
+          p_user_id: string;
+          p_worker: string;
+        };
+        Returns: {
+          added_by: string;
+          attempts: number;
+          claimed_at: string | null;
+          claimed_by: string | null;
+          created_at: string;
+          folder_id: string;
+          id: string;
+          item_id: string | null;
+          kind: string | null;
+          message: string | null;
+          needs: string;
+          status: string;
+          title: string | null;
+          updated_at: string;
+          url: string;
+          user_id: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "link_queue";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
       };
       drive_dirty_folders: {
         Args: { p_user_id?: string };

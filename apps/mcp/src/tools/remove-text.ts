@@ -309,7 +309,13 @@ export function registerRemoveTextTools(server: McpServer, ctx: ToolContext): vo
           failedDeletes.push(h.id);
         }
       }
-      await rememberRemoval(ctx, ref.id, { before: reader.body, after: next, lost });
+      // The cut is already saved, so a failure to keep the undo must not read as "nothing removed".
+      let undoKept = true;
+      try {
+        await rememberRemoval(ctx, ref.id, { before: reader.body, after: next, lost });
+      } catch {
+        undoKept = false;
+      }
 
       const lines = [
         `Removed ${what} from "${ref.title}" [${ref.id}].`,
@@ -327,7 +333,11 @@ export function registerRemoveTextTools(server: McpServer, ctx: ToolContext): vo
           `Couldn't delete ${plural(failedDeletes.length, "highlight")} (${failedDeletes.join(", ")}); the reader will show them as not found.`,
         );
       }
-      lines.push("undo_remove_text with this source_id puts it back.");
+      lines.push(
+        undoKept
+          ? "undo_remove_text with this source_id puts it back."
+          : "The removed text couldn't be kept for undo. To put it back, open the source in the Sourcefold desktop app and use Edit as text.",
+      );
       return lines.join("\n");
     },
   });
@@ -362,8 +372,12 @@ export function registerRemoveTextTools(server: McpServer, ctx: ToolContext): vo
       }
 
       await ctx.api.patch(`/items/${encodeURIComponent(ref.id)}`, { markdown: last.before });
-      await dropRemoval(ctx, source_id);
       forgetCachedSource(ref.id);
+      try {
+        await dropRemoval(ctx, source_id);
+      } catch {
+        // The text is back. A leftover entry no longer matches the text, so undo refuses it.
+      }
       let restored = 0;
       for (const h of last.lost) {
         try {

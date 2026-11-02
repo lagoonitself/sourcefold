@@ -75,8 +75,8 @@ export const FONT_OPTIONS: ReadonlyArray<FontOption> = [
   },
   {
     id: "atkinson",
-    name: "Atkinson Hyperlegible",
-    hint: "Sans, every letter distinct",
+    name: "Atkinson",
+    hint: "Hyperlegible: every letter distinct",
     family: `"Atkinson Hyperlegible Next Variable", -apple-system, "Segoe UI", sans-serif`,
     serif: false,
   },

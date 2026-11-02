@@ -144,14 +144,14 @@ export function ReaderSettingsPanel({ className }: { className?: string }) {
                 aria-checked={active}
                 onClick={() => setReaderPrefs({ font: font.id })}
                 className={cn(
-                  "flex cursor-pointer flex-col items-start rounded-[9px] px-2.5 py-2 text-left transition-colors duration-100",
+                  "flex min-w-0 cursor-pointer flex-col items-start rounded-[9px] px-2.5 py-2 text-left transition-colors duration-100",
                   active
                     ? "bg-accent shadow-[inset_0_0_0_1.5px_var(--foreground)]"
                     : "shadow-[inset_0_0_0_1px_var(--border)] hover:bg-muted",
                 )}
               >
                 <span
-                  className="truncate text-[15px] leading-5 text-foreground"
+                  className="block w-full truncate text-[15px] leading-5 text-foreground"
                   style={{ fontFamily: font.family }}
                 >
                   {font.name}

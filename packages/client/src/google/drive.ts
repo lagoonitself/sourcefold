@@ -359,20 +359,22 @@ export async function uploadFile(
   const part2Header = `--${boundary}\r\nContent-Type: ${mediaMimeType}\r\n\r\n`;
   const part2Footer = `\r\n--${boundary}--\r\n`;
 
-  const part1Buffer = Buffer.from(part1, "utf-8");
-  const part2HeaderBuffer = Buffer.from(part2Header, "utf-8");
-  const part2BodyBuffer =
+  // Plain bytes, not Node's Buffer: the desktop app runs this in its webview too.
+  const encoder = new TextEncoder();
+  const parts = [
+    encoder.encode(part1),
+    encoder.encode(part2Header),
     typeof options.body === "string"
-      ? Buffer.from(options.body, "utf-8")
-      : Buffer.from(options.body.buffer, options.body.byteOffset, options.body.byteLength);
-  const part2FooterBuffer = Buffer.from(part2Footer, "utf-8");
-
-  const fullBody = Buffer.concat([
-    part1Buffer,
-    part2HeaderBuffer,
-    part2BodyBuffer,
-    part2FooterBuffer,
-  ]);
+      ? encoder.encode(options.body)
+      : new Uint8Array(options.body.buffer, options.body.byteOffset, options.body.byteLength),
+    encoder.encode(part2Footer),
+  ];
+  const fullBody = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0));
+  let offset = 0;
+  for (const part of parts) {
+    fullBody.set(part, offset);
+    offset += part.byteLength;
+  }
 
   const res = await driveFetch(url.toString(), {
     method: isUpdating ? "PATCH" : "POST",

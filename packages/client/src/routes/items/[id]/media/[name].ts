@@ -29,7 +29,7 @@ export async function GET(
     const bytes = await downloadFileBytes(media.token, file.id);
     if (!bytes) return jsonError(404, "File not found.");
     if (bytes.byteLength > MAX_MEDIA_BYTES) return jsonError(413, "That file is over 4 MB.");
-    return new Response(Buffer.from(bytes), {
+    return new Response(new Uint8Array(bytes), {
       headers: { "Content-Type": file.mimeType, "Cache-Control": "no-store" },
     });
   } catch (err) {

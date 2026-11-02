@@ -421,6 +421,8 @@ export function ReaderModal({
         <motion.div
           key="reader-desk-backdrop"
           className={cn(
+            // The page colour covers the frame too, so Black and Sepia have no grey edge.
+            pageClass(prefs.page),
             "desk-grain fixed inset-0 z-50 flex flex-col select-none bg-desk",
             focusMode ? "p-0" : "p-2",
           )}

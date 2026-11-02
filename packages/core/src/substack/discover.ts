@@ -74,14 +74,14 @@ export function substackPublicationRoot(input: string): string {
   return `https://${host}`;
 }
 
-function cleanPostUrl(raw: string, root: URL): string | null {
+function cleanPostUrl(raw: string, root: URL, allowOtherHost = false): string | null {
   let url: URL;
   try {
     url = new URL(raw, root);
   } catch {
     return null;
   }
-  if (url.hostname.toLowerCase() !== root.hostname.toLowerCase()) return null;
+  if (!allowOtherHost && url.hostname.toLowerCase() !== root.hostname.toLowerCase()) return null;
   if (!/^\/p\/[^/]+\/?$/.test(url.pathname)) return null;
   url.protocol = "https:";
   url.search = "";
@@ -118,10 +118,13 @@ async function fromArchiveApi(
   const posts: DiscoveredPost[] = [];
   const seen = new Set<string>();
   let offset = 0;
+  // A name.substack.com address often redirects to the publication's own domain.
+  // Post canonical URLs then use that domain, so later pages are read from there.
+  let activeRoot = root;
 
   for (let page = 0; page < MAX_ARCHIVE_PAGES; page++) {
     throwIfAborted(options.signal);
-    const endpoint = new URL("/api/v1/archive", root);
+    const endpoint = new URL("/api/v1/archive", activeRoot);
     endpoint.search = new URLSearchParams({
       sort: "new",
       offset: String(offset),
@@ -129,6 +132,14 @@ async function fromArchiveApi(
     }).toString();
 
     const res = await fetch(endpoint.toString());
+    try {
+      const final = new URL(res.url);
+      if (final.protocol === "https:" || final.protocol === "http:") {
+        activeRoot = new URL(final.origin);
+      }
+    } catch {
+      // Keep the root we asked.
+    }
     if (res.status !== 200) {
       throw new SubstackDiscoveryError(`The archive returned status ${res.status}.`);
     }
@@ -151,7 +162,7 @@ async function fromArchiveApi(
           : typeof record.slug === "string"
             ? `/p/${record.slug}`
             : null;
-      const url = raw ? cleanPostUrl(raw, root) : null;
+      const url = raw ? cleanPostUrl(raw, activeRoot, true) : null;
       if (!url || seen.has(url)) continue;
       seen.add(url);
 
@@ -219,6 +230,32 @@ async function fromSitemap(
   }
   posts.sort((a, b) => (b.published ?? "").localeCompare(a.published ?? ""));
   return posts;
+}
+
+/**
+ * True when `url` is a Substack publication, including one on its own domain.
+ * Asks `/api/v1/archive` for a one-post page and accepts only a JSON list.
+ */
+export async function looksLikeSubstackPublication(
+  publicationUrl: string,
+  fetch: SubstackFetch,
+): Promise<boolean> {
+  let root: URL;
+  try {
+    root = new URL(substackPublicationRoot(publicationUrl));
+  } catch {
+    return false;
+  }
+  const endpoint = new URL("/api/v1/archive", root);
+  endpoint.search = new URLSearchParams({ sort: "new", offset: "0", limit: "1" }).toString();
+  try {
+    const res = await fetch(endpoint.toString());
+    if (res.status !== 200) return false;
+    const data = JSON.parse(res.text) as unknown;
+    return Array.isArray(data);
+  } catch {
+    return false;
+  }
 }
 
 /** Lists the publication's posts, newest first. */

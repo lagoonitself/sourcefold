@@ -44,6 +44,7 @@ export { renderXThreadMarkdown, xThreadTitle } from "./x/markdown";
 export {
   SubstackDiscoveryError,
   discoverSubstackPosts,
+  looksLikeSubstackPublication,
   substackPublicationRoot,
   type DiscoverOptions,
   type DiscoveredPost,

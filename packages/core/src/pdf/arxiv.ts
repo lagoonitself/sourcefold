@@ -92,10 +92,12 @@ export function arxivHtmlToCapture(
 
   const blocks: string[] = [];
   renderBlocks(article, HTML_ROOT, blocks);
-  const markdown = blocks
-    .filter((block) => block.trim())
-    .join("\n\n")
-    .trim();
+  const markdown = dedupeRepeatedFigures(
+    blocks
+      .filter((block) => block.trim())
+      .join("\n\n")
+      .trim(),
+  );
 
   return {
     url: `https://arxiv.org/abs/${arxivId}`,
@@ -136,15 +138,30 @@ function renderBlocks(root: Element, base: string, out: string[]): void {
       renderSection(child, base, out);
       continue;
     }
-    if (child.tagName === "FIGURE") {
-      if (hasClass(child, "ltx_figure")) {
+    if (
+      child.tagName === "FIGURE" ||
+      hasClass(child, "ltx_figure") ||
+      hasClass(child, "ltx_table")
+    ) {
+      if (hasClass(child, "ltx_table")) {
+        const table = child.tagName === "TABLE" ? child : child.querySelector("table");
+        const md = table ? markdownTable(table) : null;
+        const caption = figureCaption(child);
+        if (md) out.push(caption ? `${md}\n\n*${caption}*` : md);
+      } else if (child.tagName === "FIGURE" || hasClass(child, "ltx_figure")) {
         const block = figureBlock(child, base);
         if (block) out.push(block);
       }
       continue;
     }
     if (child.tagName === "TABLE") {
-      out.push(...equationBlocks(child));
+      if (hasClass(child, "ltx_eqn_table") || hasClass(child, "ltx_equation")) {
+        out.push(...equationBlocks(child));
+      } else {
+        const md = markdownTable(child);
+        if (md) out.push(md);
+        else out.push(...equationBlocks(child));
+      }
       continue;
     }
     if (child.tagName === "P") {
@@ -288,17 +305,76 @@ function figureBlock(figure: Element, base: string): string {
   const captionText = stripFigureTag(caption);
 
   const images: string[] = [];
+  const seen = new Set<string>();
   for (const media of Array.from(figure.querySelectorAll("img, object"))) {
     const src = imageSource(media, base);
-    if (!src) continue;
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
     const alt = (media.getAttribute("alt") ?? "").trim();
-    const label = !alt || /^refer to caption$/i.test(alt) ? captionText : alt;
+    const label =
+      !alt || /^refer to caption$/i.test(alt) || /^\[?uncaptioned image\]?$/i.test(alt)
+        ? captionText
+        : alt;
     images.push(`![${label}](${src})`);
   }
 
   const parts = [...images];
   if (captionText) parts.push(`*${captionText}*`);
   return parts.join("\n\n");
+}
+
+function figureCaption(figure: Element): string {
+  const captionEl = figure.querySelector("figcaption, .ltx_caption");
+  return captionEl ? stripFigureTag(collapseText(captionEl.textContent ?? "")) : "";
+}
+
+/** A readable table. Equation tables are handled separately and return nothing useful here. */
+function childRows(table: Element): Element[] {
+  const groups = Array.from(table.children).filter(
+    (el) => el.tagName === "THEAD" || el.tagName === "TBODY",
+  );
+  const parents = groups.length > 0 ? groups : [table];
+  return parents.flatMap((parent) =>
+    Array.from(parent.children).filter((el) => el.tagName === "TR"),
+  );
+}
+
+function markdownTable(table: Element): string | null {
+  const rows = childRows(table);
+  const cells = rows.map((row) =>
+    Array.from(row.children)
+      .filter((cell) => cell.tagName === "TD" || cell.tagName === "TH")
+      .map((cell) => collapseText(cell.textContent ?? "").replace(/\|/g, "\\|")),
+  );
+  const width = cells.reduce((max, row) => Math.max(max, row.length), 0);
+  if (width === 0 || cells.every((row) => row.every((cell) => !cell))) return null;
+  const padded = cells.map((row) => {
+    const copy = row.slice();
+    while (copy.length < width) copy.push("");
+    return copy;
+  });
+  const header = padded[0]!;
+  const line = (row: string[]) => `| ${row.join(" | ")} |`;
+  const rule = `| ${header.map(() => "---").join(" | ")} |`;
+  return [line(header), rule, ...padded.slice(1).map(line)].join("\n");
+}
+
+/** LaTeXML often emits a figure twice (an img and an object, or a float and a copy). */
+function dedupeRepeatedFigures(markdown: string): string {
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  for (const block of markdown.split(/\n\n/)) {
+    const images = [...block.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)].map((match) => match[1]!);
+    const lines = block
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const figureOnly = lines.every((line) => line.startsWith("![") || /^\*[^*].*\*$/.test(line));
+    if (images.length > 0 && figureOnly && images.every((src) => seen.has(src))) continue;
+    for (const src of images) seen.add(src);
+    kept.push(block);
+  }
+  return kept.join("\n\n");
 }
 
 /** Drops the leading `Figure 1: ` label LaTeXML puts inside the caption. */

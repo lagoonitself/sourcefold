@@ -95,6 +95,22 @@ describe("parseGrokipediaHtml and grokipediaToMarkdown", () => {
     ).toThrow(GrokipediaParseError);
   });
 
+  it("keeps the LaTeX annotation of a formula and drops the rendered MathML", () => {
+    const html = `
+      <html><body><article>
+        <h1>Attention</h1>
+        <p>The formula is <span class="katex-display"><span class="katex"><span class="katex-mathml"><math display="block"><semantics>
+          <mrow><mi>Attention</mi></mrow>
+          <annotation encoding="application/x-tex">\\mathrm{Attention}(Q, K, V)</annotation>
+        </semantics></math></span><span class="katex-html">Attention(Q,K,V)</span></span></span>.</p>
+      </article></body></html>`;
+    const article = parseGrokipediaHtml(html, "https://grokipedia.com/page/Attention");
+    expect(article.bodyHtml).toContain("$$");
+    expect(article.bodyHtml).toContain("\\mathrm{Attention}(Q, K, V)");
+    expect(article.bodyHtml).not.toContain("katex-html");
+    expect(article.bodyHtml).not.toContain("<math");
+  });
+
   it("preserves gene-editing, protocols, and math superscripts", () => {
     const html = `
       <html>

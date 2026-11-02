@@ -18,6 +18,31 @@ export interface GrokipediaArticle {
 
 export class GrokipediaParseError extends Error {}
 
+/**
+ * MathML and KaTeX put the formula on the page three times (rendered text, MathML,
+ * and the LaTeX annotation). Keep only the annotation.
+ */
+function replaceMathWithLatex(root: HTMLElement): void {
+  const nodes = Array.from(root.querySelectorAll("math, .katex, .katex-display, annotation"));
+  for (const el of nodes) {
+    if (!el.isConnected) continue;
+    const math = el.tagName === "MATH" ? el : el.querySelector("math");
+    const annotation = (math ?? el).querySelector(
+      'annotation[encoding="application/x-tex"], annotation[encoding="text/x-tex"], annotation[encoding="application/x-latex"]',
+    );
+    const tex = (annotation?.textContent ?? math?.getAttribute("alttext") ?? "").trim();
+    if (!tex) continue;
+    const display =
+      math?.getAttribute("display") === "block" ||
+      el.classList?.contains("katex-display") ||
+      Boolean(el.closest(".katex-display"));
+    const text = display ? `\n\n$$\n${tex}\n$$\n\n` : `$${tex}$`;
+    const host = el.closest(".katex-display") ?? el.closest(".katex") ?? el;
+    if (!host.isConnected) continue;
+    host.replaceWith(root.ownerDocument.createTextNode(text));
+  }
+}
+
 export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticle {
   const { document } = parseHTML(html);
 
@@ -286,6 +311,8 @@ export function parseGrokipediaHtml(html: string, url: string): GrokipediaArticl
     }
     el.replaceWith(p);
   }
+
+  replaceMathWithLatex(clone);
 
   const bodyHtml = clone.innerHTML.trim();
 

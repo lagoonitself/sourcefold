@@ -94,6 +94,22 @@ describe("arxivHtmlToCapture", () => {
     expect(result.markdown).toContain("Scientific Theories of Consciousness");
   });
 
+  it("keeps a data table and does not repeat a figure that has two sources", () => {
+    const html = `<article class="ltx_document">
+      <h1 class="ltx_title ltx_title_document">Tables</h1>
+      <table class="ltx_tabular"><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>
+      <figure class="ltx_figure">
+        <img src="figs/one.png" alt="Refer to caption">
+        <object data="figs/one.png"></object>
+        <figcaption>One figure.</figcaption>
+      </figure>
+    </article>`;
+    const result = arxivHtmlToCapture(html, "1234.56789", parseHtml);
+    expect(result.markdown).toContain("| A | B |");
+    expect(result.markdown).toContain("| 1 | 2 |");
+    expect(result.markdown.match(/figs\/one\.png/g)).toHaveLength(1);
+  });
+
   it("reports a parse failure when the HTML cannot be parsed", () => {
     const broken = () => {
       throw new Error("boom");

@@ -6,6 +6,7 @@ import { createNodeSourceFetch, createPublicFetch } from "../links/public-fetch"
 import {
   classifyLink,
   isCloudRefusal,
+  collectionKind,
   listCollection,
   saveLink,
   type LinkDeps,
@@ -280,7 +281,8 @@ async function flushRemoteQueue(
 }
 
 function desktopQueueMessage(reason: string): string {
-  return `The cloud could not fetch this link: ${reason}. Waiting for the Sourcefold desktop app.`;
+  const detail = reason.trim().replace(/[.]+$/, "");
+  return `The cloud could not fetch this link: ${detail}. Waiting for the Sourcefold desktop app.`;
 }
 
 async function saveRemoteCloudLink(
@@ -436,7 +438,11 @@ async function addLinksRemote(
   const results: RemoteResult[] = [];
 
   for (const url of urls) {
-    const kind = classifyLink(url);
+    let kind = classifyLink(url);
+    if (kind !== "publication" && kind !== "youtube_list") {
+      const probed = await collectionKind(url, deps);
+      if (probed === "publication") kind = "publication";
+    }
     if (!kind) {
       results.push({ url, status: "failed", message: "Sourcefold can't save this kind of link." });
       continue;
@@ -568,8 +574,8 @@ function formatQueueRows(rows: LinkQueueRow[]): string {
               : row.status === "duplicate"
                 ? "already saved"
                 : row.status;
-      const id = row.item_id ? ` [${row.item_id}]` : "";
-      return `- ${state}${id}: ${title}${row.message ? ` (${row.message})` : ""} — added by ${row.added_by}`;
+      const saved = row.item_id ? ` saved as [${row.item_id}]` : "";
+      return `- [${row.id}] ${state}${saved}: ${title}${row.message ? ` (${row.message})` : ""} — added by ${row.added_by}`;
     })
     .join("\n");
 }
@@ -611,7 +617,7 @@ async function cancelWaitingLinks(
       if (changed === 0) break;
     }
   }
-  return `${cancelled} ${plural(cancelled, "waiting link")} cancelled.`;
+  return `${plural(cancelled, "waiting link")} cancelled.`;
 }
 
 async function cancelRows(ctx: ToolContext, rows: LinkQueueRow[]): Promise<number> {
@@ -639,7 +645,10 @@ export function registerAddTools(
   defineTool(server, ctx, {
     name: "add_links",
     title: "Add links",
-    description: `Saves links into a group, like pasting them into Sourcefold's Add links. Works for Grokipedia and Wikipedia articles, YouTube videos (their transcript), web pages, PDFs and arXiv papers, Reddit and Hacker News threads, Bluesky posts and Substack posts. A YouTube playlist or channel, or a Substack publication, is expanded into its videos or posts (up to limit_per_collection each; Substack can be narrowed by date).\n\nIn the web connector, links the cloud can't fetch wait for the desktop app, and X posts wait for Chrome with the Sourcefold extension. Check with get_add_progress. In Claude Desktop, saving runs in the background, one link after another; YouTube videos are spaced a few seconds apart and wait when YouTube pushes back. Links already saved in the group are reported, not saved twice. Use list_collection first to look at a playlist or publication without saving.`,
+    description:
+      ctx.mode === "remote"
+        ? "Saves links into a group, like pasting them into Sourcefold's Add links. Works for Grokipedia and Wikipedia articles, web pages, PDFs and arXiv papers, Hacker News threads, Bluesky posts and Substack posts (including a publication on its own domain). A YouTube playlist or channel, or a Substack publication, is expanded into its videos or posts (up to limit_per_collection each; Substack can be narrowed by date).\n\nThis is the web connector: each call saves what a cloud server can fetch, then returns. YouTube, Reddit and pages that refuse the cloud wait for the Sourcefold desktop app. X posts wait for Chrome with the Sourcefold extension. There is no job id. Check what is still waiting with get_add_progress, which lists each waiting link with its queue id. Links already saved in the group are reported, not saved twice. Use list_collection first to look at a playlist or publication without saving."
+        : "Saves links into a group, like pasting them into Sourcefold's Add links. Works for Grokipedia and Wikipedia articles, YouTube videos (their transcript), web pages, PDFs and arXiv papers, Reddit and Hacker News threads, Bluesky posts and Substack posts (including a publication on its own domain). A YouTube playlist or channel, or a Substack publication, is expanded into its videos or posts (up to limit_per_collection each; Substack can be narrowed by date).\n\nSaving runs in the background, one link after another, and this call returns a job id. YouTube videos are spaced a few seconds apart and wait when YouTube pushes back. Check that job with get_add_progress. Links the cloud or this computer can't fetch wait for the desktop app, and X posts wait for Chrome with the Sourcefold extension. Links already saved in the group are reported, not saved twice. Use list_collection first to look at a playlist or publication without saving.",
     input: {
       group_id: z.string().describe("The group to save into (not a project)."),
       links: z
@@ -685,17 +694,22 @@ export function registerAddTools(
       if (urls.length === 0)
         throw new Error("No links found. Pass full addresses starting with https://.");
       const group = await resolveGroup(ctx, args.group_id);
-      const job = jobs.start(
-        group.id,
-        group.path,
-        urls.map((url) => ({ url, kind: classifyLink(url) })),
-        {
-          limitPerCollection: args.limit_per_collection ?? 50,
-          publishedAfter: args.published_after ?? null,
-          publishedBefore: args.published_before ?? null,
-          allowDuplicates: args.allow_duplicates ?? false,
-        },
-      );
+      const deps = await linkDepsFactory(ctx)();
+      const rows = [];
+      for (const url of urls) {
+        let kind = classifyLink(url);
+        if (kind !== "publication" && kind !== "youtube_list") {
+          const probed = await collectionKind(url, deps);
+          if (probed === "publication") kind = "publication";
+        }
+        rows.push({ url, kind });
+      }
+      const job = jobs.start(group.id, group.path, rows, {
+        limitPerCollection: args.limit_per_collection ?? 50,
+        publishedAfter: args.published_after ?? null,
+        publishedBefore: args.published_before ?? null,
+        allowDuplicates: args.allow_duplicates ?? false,
+      });
       await jobs.waitForEnd(job, (args.wait_seconds ?? 25) * 1000);
       return formatJob(job, Date.now(), jobs.ahead(job));
     },
@@ -705,7 +719,9 @@ export function registerAddTools(
     name: "get_add_progress",
     title: "Add progress",
     description:
-      "In Claude Desktop, checks an add_links job by job_id, can wait for it, or stop it after the current link. In the web connector, lists links waiting for or being saved by the desktop app or Chrome; by default it shows open rows. Pass recent=true for rows finished in the last seven days, ids for specific rows, or group_id to filter.",
+      ctx.mode === "remote"
+        ? "Lists links that add_links left waiting for the Sourcefold desktop app or for Chrome with the extension. Each open row includes its queue id in brackets; pass those ids to cancel_waiting_links to cancel one link. By default this shows links still waiting or being saved. Pass recent=true for rows finished in the last seven days, ids for specific rows, or group_id to filter. There are no background job ids on the web connector."
+        : "Checks an add_links job. Pass the job id add_links returned. Omit it to list recent jobs. wait_seconds waits for the job to finish before answering. stop=true stops it after the current link. Links that end up waiting for the desktop app or Chrome are included, each with its queue id.",
     input: {
       job_id: z.string().optional().describe("The job id add_links answered with."),
       ids: z
@@ -806,7 +822,8 @@ export function registerAddTools(
     readOnly: true,
     openWorld: true,
     run: async (args) => {
-      const kind = classifyLink(args.url.trim());
+      const deps = await linkDepsFactory(ctx)();
+      const kind = (await collectionKind(args.url.trim(), deps)) ?? classifyLink(args.url.trim());
       if (kind !== "youtube_list" && kind !== "publication") {
         throw new Error(
           "That isn't a YouTube playlist or channel, or a Substack publication. For single links use add_links.",
@@ -820,7 +837,7 @@ export function registerAddTools(
           publishedAfter: args.published_after ?? null,
           publishedBefore: args.published_before ?? null,
         },
-        await linkDepsFactory(ctx)(),
+        deps,
       );
       if (list.links.length === 0)
         return kind === "publication" ? "No posts found." : "No videos found.";

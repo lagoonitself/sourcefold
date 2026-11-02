@@ -159,7 +159,7 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
 
 ## Built: Sourcefold MCP on the web, links that wait for your computer
 
-Contract: `docs/dev/handoff-web-mcp.md` (2026-11-01, branch `web-mcp`). Built by GPT-6 Luna and Grok 4.7 agents, cross-reviewed, findings fixed.
+Contract: `docs/dev/handoff-web-mcp.md` (2026-11-01, branch `web-mcp`, merged into `main` and deployed 2026-11-02; waiting for the owner's test). Built by GPT-6 Luna and Grok 4.7 agents, cross-reviewed, findings fixed.
 
 - [x] `link_queue` table and `claim_link_queue` (migration applied to the live database).
 - [x] Queue routes in `packages/client` (local API and website) and `dispatchRoute`.

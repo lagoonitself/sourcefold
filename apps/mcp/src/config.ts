@@ -14,8 +14,8 @@ export const DEFAULT_WEB_URL: string =
 export interface Credentials {
   webUrl: string;
   token: string;
-  /** `settings`: the token pasted in Claude Desktop. `desktop`: the desktop app's sign-in. */
-  source: "settings" | "desktop";
+  /** `settings`: the token pasted in Claude Desktop. `desktop`: the desktop app's sign-in. `web`: the web connector. */
+  source: "settings" | "desktop" | "web";
   email: string | null;
 }
 

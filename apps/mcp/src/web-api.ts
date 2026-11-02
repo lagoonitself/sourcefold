@@ -28,7 +28,19 @@ const EXPIRED_MESSAGE = {
     "The desktop app's sign-in is no longer valid. Open the Sourcefold desktop app and sign in again.",
   settings:
     "The access token in Claude Desktop isn't valid any more. Create a new one on the website (Settings → Create token) and paste it in Claude Desktop → Settings → Extensions → Sourcefold.",
+  web: "This web connector's sign-in is no longer valid. Connect Sourcefold again.",
 } as const;
+
+/** One sentence for a bad id, whether the id is malformed or simply missing. */
+export function normalizeApiMessage(message: string): string {
+  const invalid = /^Invalid ([a-z ]+) ID(?: format)?\.?$/i.exec(message.trim());
+  if (invalid?.[1]) {
+    const noun = invalid[1].toLowerCase();
+    return `${noun.charAt(0).toUpperCase()}${noun.slice(1)} not found.`;
+  }
+  if (/ not found$/i.test(message.trim())) return `${message.trim()}.`;
+  return message;
+}
 
 export interface RequestOptions {
   query?: Record<string, string | number | boolean | null | undefined>;
@@ -145,7 +157,11 @@ function errorFrom(status: number, error: unknown): ApiError {
   if (error && typeof error === "object") {
     const { message, code } = error as { message?: unknown; code?: unknown };
     if (typeof message === "string" && message) {
-      return new ApiError(status, message, typeof code === "string" ? code : null);
+      return new ApiError(
+        status,
+        normalizeApiMessage(message),
+        typeof code === "string" ? code : null,
+      );
     }
   }
   return new ApiError(status, `Sourcefold answered with an error (${status}).`);

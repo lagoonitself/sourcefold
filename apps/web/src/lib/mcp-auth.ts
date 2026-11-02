@@ -6,7 +6,7 @@ import { requireApiUser, type ApiUser } from "@/lib/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /** `addedBy`: who to name on links this request queues ("Claude", "ChatGPT"). */
-export type McpUser = ApiUser & { addedBy: string };
+export type McpUser = ApiUser & { addedBy: string; email: string | null };
 export type McpAuthResult = McpUser | { error: { status: number; message: string } };
 
 const DEFAULT_ADDED_BY = "MCP";
@@ -49,7 +49,7 @@ export async function authenticateMcpRequest(request: Request): Promise<McpAuthR
     const result = await requireApiUser(request);
     return "response" in result
       ? apiAuthFailure(result.response)
-      : { ...result, addedBy: DEFAULT_ADDED_BY };
+      : { ...result, addedBy: DEFAULT_ADDED_BY, email: null };
   }
 
   try {
@@ -101,6 +101,7 @@ export async function authenticateMcpRequest(request: Request): Promise<McpAuthR
       userId: data.user.id,
       via: "session",
       addedBy: await oauthClientName(claims.client_id),
+      email: data.user.email ?? null,
     };
   } catch {
     return authorizationFailure(500, "Sourcefold couldn't verify this access token.");

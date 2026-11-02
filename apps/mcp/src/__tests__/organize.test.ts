@@ -257,6 +257,37 @@ describe("move_sources", () => {
     expect(desktop.changed).toHaveBeenCalled();
   });
 
+  it("says when a source is already in the group", async () => {
+    const web = fakeWeb({
+      "GET /folders": foldersRoute,
+      "GET /items/*": ({ path }) => {
+        const id = path.split("/").pop()!;
+        return {
+          json: {
+            data: {
+              id,
+              kind: "web",
+              title: `Title ${id}`,
+              note: null,
+              folder_id: id === "here" ? "g2" : "g1",
+            },
+          },
+        };
+      },
+      "PATCH /items/*": ({ path }) => itemReply(path.split("/").pop()!, "g2"),
+    });
+    const h = await connect(registerOrganizeTools, { web });
+    const { text, isError } = await h.call("move_sources", {
+      source_ids: ["away", "here"],
+      group_id: "g2",
+    });
+    expect(isError).toBe(false);
+    expect(text).toContain("Moved 1 of 2 sources");
+    expect(text).toContain("Already in that group:");
+    expect(text).toContain("[here]");
+    expect(web.calls.filter((c) => c.startsWith("PATCH"))).toEqual(["PATCH /items/away"]);
+  });
+
   it("fails duplicates by default (if_duplicate=fail)", async () => {
     const web = fakeWeb({
       "GET /folders": foldersRoute,

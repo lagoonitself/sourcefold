@@ -59,7 +59,7 @@ const patchItemSchema = z
   );
 
 const ITEM_GET_COLUMNS =
-  "id, kind, title, note, markdown, folder_id, triage, tags, summary, author, author_type" as const;
+  "id, kind, title, note, markdown, folder_id, triage, tags, summary, author, author_type, updated_at" as const;
 
 export async function GET(auth: RouteContext, request: Request, params: { id: string }) {
   const { id } = params;

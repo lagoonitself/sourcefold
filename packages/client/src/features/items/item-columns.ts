@@ -1,7 +1,7 @@
 import type { Tables } from "../../database.types";
 
 export const ITEM_LIST_COLUMNS =
-  "id, folder_id, kind, title, source_url, canonical_url, status, error, meta, position, created_at, note, triage, tags, summary, author, author_type" as const;
+  "id, folder_id, kind, title, source_url, canonical_url, status, error, meta, position, created_at, updated_at, note, triage, tags, summary, author, author_type" as const;
 
 export type ItemListRow = Pick<
   Tables<"items">,
@@ -16,6 +16,7 @@ export type ItemListRow = Pick<
   | "meta"
   | "position"
   | "created_at"
+  | "updated_at"
   | "note"
   | "triage"
   | "tags"

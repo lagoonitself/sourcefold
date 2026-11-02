@@ -117,6 +117,13 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [x] Rust tests no longer write into the real `Documents/Sourcefold`.
   - [ ] Owner checks a real Grokipedia save in Drive and in desktop offline mode.
 
+- **Best reading experience (planned 2026-11-02, `docs/dev/PLAN-reading.md`):**
+  - [ ] Owner answers the plan's three questions (fonts, page colours, Pages mode).
+  - [ ] Reading settings: Aa popover, font, size, line spacing, width in characters, paragraphs, alignment, page colour, presets, Settings → Reading.
+  - [ ] Wide sheets: contents on the left, footnotes beside the text, wide images and tables.
+  - [ ] Reading flow: progress and time left, reopen where you stopped, Focus.
+  - [ ] Pages mode experiment, then build or drop.
+
 - **Reader, highlights and search (planned 2026-10-17, `docs/dev/PLAN-reader-search.md`):**
   - [x] Phase 1 (built 2026-10-17, migration applied; [ ] owner's check): highlights in the desktop reader (select to highlight, notes, copy with source, YouTube timestamps, Grokipedia and Wikipedia references kept), side panel, cited sources saved to a group, next/previous source, group Highlights tab with Copy with sources. `highlights` table in Supabase and SQLite.
   - [x] Phase 2 (built 2026-10-18, contract `docs/dev/handoff-search.md`; [ ] web deploy, [ ] owner's check): keyword search inside every source (SQLite FTS5 over passages from the local copy or offline storage), one index file per project, "This project" / "All projects" on `Tab`, results open the reader at the passage with the words marked, `Mod+F` find in the reader.

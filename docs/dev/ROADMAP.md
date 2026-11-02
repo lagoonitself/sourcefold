@@ -167,7 +167,7 @@ Contract: `docs/dev/handoff-web-mcp.md` (2026-11-01, branch `web-mcp`, merged in
 - [x] Remote `add_links`: cloud first, the rest waits (YouTube and Reddit for the desktop, X for Chrome); `get_add_progress`, `cancel_waiting_links`. Claude Desktop queues refused links too.
 - [x] Desktop app saves waiting links while signed in; extension saves browser links in a background tab while the desktop app is open.
 - [ ] Owner: Supabase OAuth Server on, push `main`, add the connector in claude.ai, test.
-- [x] Fixes from the first web-connector run (2026-11-02): quote cards from a highlight, section removal that includes a footnote-only References section, undo kept in `text_undos`, unplaced cards including ones whose section is gone, summaries in the reply and in get/list, move into the current group, connector status, queue ids, Substack custom domains, Grokipedia LaTeX, arXiv tables and figure copies, web footnote markers, Hacker News link punctuation. Migration `20261102000000_text_undos.sql` still needs applying on the live database before web undo works there.
+- [x] Fixes from the first web-connector run (2026-11-02): quote cards from a highlight, section removal that includes a footnote-only References section, undo kept in `text_undos`, unplaced cards including ones whose section is gone, summaries in the reply and in get/list, move into the current group, connector status, queue ids, Substack custom domains, Grokipedia LaTeX, arXiv tables and figure copies, web footnote markers, Hacker News link punctuation. Migration `20261102000000_text_undos.sql` applied on the live database; merged and pushed (PR #1).
 
 ## Next: desktop first (the website becomes optional)
 

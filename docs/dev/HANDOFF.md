@@ -111,7 +111,7 @@ Lessons worth keeping:
 
 ## Next steps
 
-1. **The best reading experience (built 2026-11-02, branch `reader-experience`, not merged).** Plan, research, the owner's answers and "As built": `docs/dev/PLAN-reading.md`. The owner said yes to both fonts and the page colours, and Pages mode waits for a later plan. Checks: desktop typecheck, 398 desktop tests and the Vite build pass.
+1. **The best reading experience (built 2026-11-02; the owner checked it, merged into `main` and pushed; a local Windows build is on the owner's desktop as `Sourcefold-Windows-Setup.exe`).** Plan, research, the owner's answers and "As built": `docs/dev/PLAN-reading.md`. The owner said yes to both fonts and the page colours, and Pages mode waits for a later plan. Checks: desktop typecheck, 398 desktop tests and the Vite build pass.
    - **Owner tests:** `git checkout reader-experience`, `npm install` (two new font packages), `npm run tauri dev -w @sourcefold/desktop`, open a long Grokipedia article on a wide window:
      - Press `a` (or the Aa button): change the font, size, line spacing, width, paragraphs, alignment and page colour, and watch the article change. Try **Comfortable**, **Dense**, **Book** and **Reset**. Open another source: the settings stayed. Settings → **Reading** has the same controls.
      - Without the popover: `Ctrl+=` / `Ctrl+-` / `Ctrl+0` for the size, `Shift+,` / `Shift+.` for the width (past 120 characters it fills the sheet).

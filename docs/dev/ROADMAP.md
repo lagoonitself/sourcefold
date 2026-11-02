@@ -122,7 +122,7 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [x] Reading settings: Aa popover, font, size, line spacing, width in characters, paragraphs, alignment, page colour, presets, Settings → Reading.
   - [x] Wide sheets: contents on the left, footnotes beside the text, tables that scroll sideways (wide images dropped: they'd run under the margins).
   - [x] Reading flow: progress and time left, reopen where you stopped, Focus.
-  - [ ] Owner tests, then merge into `main`.
+  - [x] Owner tested; merged into `main` (2026-11-02).
   - [ ] Plan Pages mode.
 
 - **Reader, highlights and search (planned 2026-10-17, `docs/dev/PLAN-reader-search.md`):**

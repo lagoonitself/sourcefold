@@ -141,7 +141,7 @@
     },
     {
       "name": "get_add_progress",
-      "description": "In Claude Desktop, checks an add_links job by job_id, can wait for it, or stop it after the current link."
+      "description": "Checks an add_links job."
     },
     {
       "name": "cancel_waiting_links",

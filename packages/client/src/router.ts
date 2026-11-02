@@ -21,6 +21,7 @@ import * as highlight from "./routes/highlights/[id]";
 import * as items from "./routes/items";
 import * as item from "./routes/items/[id]";
 import * as itemContent from "./routes/items/[id]/content";
+import * as itemTextUndos from "./routes/items/[id]/text-undos";
 import * as itemFile from "./routes/items/[id]/file";
 import * as itemMedia from "./routes/items/[id]/media";
 import * as itemMediaFile from "./routes/items/[id]/media/[name]";
@@ -59,6 +60,7 @@ export const LOCAL_ROUTES: ReadonlyArray<readonly [string, RouteModule]> = [
   ["/api/items/check", itemsCheck],
   ["/api/items/[id]", item],
   ["/api/items/[id]/content", itemContent],
+  ["/api/items/[id]/text-undos", itemTextUndos],
   ["/api/items/[id]/file", itemFile],
   ["/api/items/[id]/media", itemMedia],
   ["/api/items/[id]/media/[name]", itemMediaFile],

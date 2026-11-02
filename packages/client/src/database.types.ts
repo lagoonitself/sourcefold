@@ -489,6 +489,44 @@ export type Database = {
           },
         ];
       };
+      text_undos: {
+        Row: {
+          after_hash: string;
+          before_markdown: string;
+          created_at: string;
+          id: string;
+          item_id: string;
+          lost_highlights: Json;
+          user_id: string;
+        };
+        Insert: {
+          after_hash: string;
+          before_markdown: string;
+          created_at?: string;
+          id?: string;
+          item_id: string;
+          lost_highlights?: Json;
+          user_id?: string;
+        };
+        Update: {
+          after_hash?: string;
+          before_markdown?: string;
+          created_at?: string;
+          id?: string;
+          item_id?: string;
+          lost_highlights?: Json;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "text_undos_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       outline_sections: {
         Row: {
           created_at: string;

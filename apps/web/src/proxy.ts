@@ -95,5 +95,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // `.well-known` holds the MCP's OAuth discovery documents, which claude.ai and ChatGPT read
+  // without signing in, so the sign-in redirect must never touch it.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

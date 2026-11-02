@@ -11,6 +11,7 @@ Read `docs/dev/SPEC.md` before starting. For any UI work, also read `docs/dev/DE
 - In `packages/core`, relative imports have no file extension (`./parse`, not `./parse.js`); Next.js transpiles the TypeScript source directly.
 - Never write secrets into tracked files. Real values go in `apps/web/.env.local` (gitignored); placeholders go in `apps/web/.env.example`.
 - Before reporting done, run `npm run lint`, `npm run typecheck` and `npm test` from the repo root and fix what you broke.
+- `npm run build` includes `next build`. Next.js 16.4.0 stops on a TTY, when `CI` is unset, and asks about a security upgrade (16.4.0 to 16.4.3). The build does not finish until that prompt is answered. GitHub Actions sets `CI`, so CI passes. Locally run `CI=true npm run build`, or choose Skip. Do not upgrade Next.js unless the task says to.
 - Your final report must list: files created or changed, commands run and their results, anything left unfinished, and any question for the orchestrator.
 
 ## Stack

@@ -117,12 +117,13 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [x] Rust tests no longer write into the real `Documents/Sourcefold`.
   - [ ] Owner checks a real Grokipedia save in Drive and in desktop offline mode.
 
-- **Best reading experience (planned 2026-11-02, `docs/dev/PLAN-reading.md`):**
-  - [ ] Owner answers the plan's three questions (fonts, page colours, Pages mode).
-  - [ ] Reading settings: Aa popover, font, size, line spacing, width in characters, paragraphs, alignment, page colour, presets, Settings → Reading.
-  - [ ] Wide sheets: contents on the left, footnotes beside the text, wide images and tables.
-  - [ ] Reading flow: progress and time left, reopen where you stopped, Focus.
-  - [ ] Pages mode experiment, then build or drop.
+- **Best reading experience (planned and built 2026-11-02, branch `reader-experience`, `docs/dev/PLAN-reading.md`):**
+  - [x] Owner answered: both fonts, the page colours, Pages mode later.
+  - [x] Reading settings: Aa popover, font, size, line spacing, width in characters, paragraphs, alignment, page colour, presets, Settings → Reading.
+  - [x] Wide sheets: contents on the left, footnotes beside the text, tables that scroll sideways (wide images dropped: they'd run under the margins).
+  - [x] Reading flow: progress and time left, reopen where you stopped, Focus.
+  - [ ] Owner tests, then merge into `main`.
+  - [ ] Plan Pages mode.
 
 - **Reader, highlights and search (planned 2026-10-17, `docs/dev/PLAN-reader-search.md`):**
   - [x] Phase 1 (built 2026-10-17, migration applied; [ ] owner's check): highlights in the desktop reader (select to highlight, notes, copy with source, YouTube timestamps, Grokipedia and Wikipedia references kept), side panel, cited sources saved to a group, next/previous source, group Highlights tab with Copy with sources. `highlights` table in Supabase and SQLite.

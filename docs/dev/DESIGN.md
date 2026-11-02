@@ -84,6 +84,17 @@ desk ─────────────────────────
 - **Rows** (sources, subgroups, highlights, search results): no divider lines and no cards. Each row is a 52–56px rounded (10px) band that bleeds 10px past the text column (`-mx-2.5 px-2.5`); hover `bg-muted`, keyboard focus `bg-accent` plus a 2px ink bar on the left edge, ticked `bg-marker-soft`. Row actions (three dots) appear on hover and focus. Columns, narrowest last to go: tile, title (+ one muted line under it when there's real data: author, site, channel, duration), source name, date, status. Below 560px sheet width hide source name; below 440px hide the date.
 - **Sidebar rows:** 30px, radius 8px, indent 14px per level, chevron 14px. Hover `bg-sidebar-accent`; open group `bg-sidebar-accent shadow-raised` with the group name in `.marker`; count right-aligned, muted, tabular.
 
+## Reader
+
+The reader (`features/reader/`) is the one place the user styles the text. Its settings live in `reader-prefs.ts` and reach the text only as CSS variables (`--reader-font`, `--reader-size`, `--reader-leading`, `--reader-measure`), so nothing re-renders the article.
+
+- **Fonts:** Newsreader (default), Literata (`@fontsource-variable/literata`), Geist, Atkinson Hyperlegible Next (`@fontsource-variable/atkinson-hyperlegible-next`). Headings use the reader's font when it's a serif and Newsreader when it's a sans. These two extra fonts are for the reader's text only; the interface stays Geist and Newsreader.
+- **Size** 14–28px (default 19), **line spacing** 1.45 / 1.65 / 1.85, **width** 50–120 characters (`ch` of the chosen font, default 70) or Fill. Spacing inside the text is in `em`, so it grows with the size.
+- **Layout:** three columns, contents | text | footnotes (`.reader-layout`). The side columns share what the text leaves; the contents show when the left column is at least 180px wide, footnotes when the right one is at least 200px. With Fill, the contents get 220px from a 1100px sheet and footnotes 260px from 1400px.
+- **Page colours:** Match the app, Paper (the light tokens), Sepia, Dark (the dark tokens), Black. They are classes on the reader sheet (`theme-light`, `theme-sepia`, `dark`, `theme-black` in `index.css`) that redefine the tokens for the reader only. Sepia is paper `#F6EFE2` with ink `#3B2F23`; Black is `#000000` with ink `#D6D6D6` for OLED screens. Use them nowhere else.
+- **Progress** is a 2px ink line (60%) along the toolbar's bottom edge; the section you're in has `bg-marker-soft` in the contents (the reader is allowed the highlighter).
+- **Focus** hides the toolbar and margins and makes the window full screen. The toolbar comes back when the mouse reaches the top edge. Nothing in the reader moves on scroll.
+
 ## Shape and depth
 
 - Radius: key hints 5px; small buttons, inputs, sidebar rows 8–9px; list rows and menus' items 8–10px; menus and popovers 12px; the sheet 14px; dialogs and the sliding sidebar 16px. Inner radius = outer radius minus padding.

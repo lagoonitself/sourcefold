@@ -1,6 +1,6 @@
 # Plan: the best reading experience
 
-Status: planned 2026-11-02, not started. Desktop app only (the website has no reader). Every UI step follows `docs/dev/DESIGN.md`; this plan names the places where the owner has to approve something the design guide doesn't allow yet.
+Status: planned 2026-11-02; sections 1–3 built the same day on branch `reader-experience`, waiting for the owner's test. Section 4 (Pages) is left for a later plan. "As built" at the end says what differs. Desktop app only (the website has no reader). Every UI step follows `docs/dev/DESIGN.md`; this plan names the places where the owner has to approve something the design guide doesn't allow yet.
 
 ## What the owner asked for
 
@@ -85,6 +85,12 @@ It is the riskiest part, because find, highlights, `j`/`k` focus, search landing
 2. **Page colours.** Sepia and Black are new colours that the design guide doesn't have. They'd be added to `DESIGN.md` as reader-only tokens (Sepia: paper `#F6EFE2`, ink `#3B2F23`; Black: `#000000` with `#D6D6D6` ink, for OLED screens), checked for 4.5:1 contrast with highlights and find marks on them. OK?
 3. **Pages mode.** Build the experiment after sections 1–3, or leave it out?
 
+## Owner's answers (2026-11-02)
+
+1. Fonts: yes, add both.
+2. Page colours: yes, whatever looks best.
+3. Pages mode: not now; finish sections 1–3 first and plan it later.
+
 ## How it will be built
 
 New files in `apps/desktop/src/features/reader/`, owned one area per agent (`AGENTS.md` rules):
@@ -111,3 +117,16 @@ Order: 1 (settings) and 3 (progress, position, focus) can be built at the same t
 - Read halfway, close, reopen: it opens where you were. The progress line and "N min left" match.
 - `Shift+F`: full screen with nothing but the text; mouse to the top shows the toolbar; `Esc` leaves.
 - Highlights, find (`Mod+F`), Remove text (`e`) and search landings still work with every setting, including Justified and Dense.
+
+## As built (2026-11-02)
+
+Built by the agent itself (it is woven into the highlights, find and Remove text code), on branch `reader-experience`.
+
+- `reader-prefs.ts`: settings, presets, limits, load and save, and a small shared store (`useReaderPrefs`, `setReaderPrefs`) so the Aa popover, Settings → Reading and the reader agree. Tests in `__tests__/reader-prefs.test.ts`.
+- `ReaderSettings.tsx`: the panel (`ReaderSettingsPanel`, also in Settings → **Reading**) and the Aa popover. The page swatches use the page classes themselves, so no colours are written in the component.
+- `use-reading-flow.ts`: the outline (h1–h4 of the rendered body), the current section, progress, minutes left (230 words a minute), and the place you stopped (localStorage `sourcefold:reader:positions`, the latest 400 sources, saved half a second after scrolling stops, by the `data-sf-src` start of the first block on screen). A source opened from a highlight or a search lands there instead; a source with no saved place now opens at the top (before, `[` / `]` could keep the previous source's scroll).
+- `ReaderMargins.tsx`: the contents rail and popover list, footnotes in the margin (placed beside their first reference, pushed down when they would overlap; clicking a `[12]` lights its note instead of jumping), and the hover card for references whose note isn't beside them.
+- `ReaderView.tsx` / `ReaderModal.tsx`: Aa, Contents and Focus in the toolbar (Full width is gone), the progress line, "N min left", "Back to the start", the three-column layout, the keys, and the page class on the reader sheet. Focus uses Tauri's `setFullscreen` (`core:window:allow-set-fullscreen` added to the capability).
+- `index.css`: `theme-light`, `theme-sepia`, `theme-black`; the `dark:` variant skips anything inside `theme-light`, so Paper and Sepia stay light in a dark app.
+- **Changed from the plan:** wide images were dropped. An image wider than the text would run under the contents or the footnotes in the margins, so images keep the text's width. Tables wider than the text scroll sideways instead.
+- **Not checked by the agent** (the owner tests the app): how it looks in the running app, the sidenote placement on a real Grokipedia article, full screen on macOS, and the fonts' rendering.

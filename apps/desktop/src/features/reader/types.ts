@@ -4,6 +4,7 @@ import type { SourceInfoSignals } from "../research/source-info";
 import type { ReaderHighlightsController } from "./useReaderHighlights";
 import type { ReaderCleanupController } from "./use-reader-cleanup";
 import type { InitialSearch, ReaderFindController } from "./use-reader-find";
+import type { ReadingFlow } from "./use-reading-flow";
 
 export type { InitialSearch, ReaderFindController, ReaderCleanupController };
 
@@ -27,7 +28,13 @@ export interface ReaderItem {
   author_type?: AuthorType | null;
 }
 
-export type ReaderTypography = "serif" | "sans";
+/** What the modal's keys can ask the view to do. */
+export interface ReaderUiHandle {
+  toggleSettings: () => void;
+  toggleContents: () => void;
+  /** Closes the Aa or contents popover; false when neither was open. */
+  closePopovers: () => boolean;
+}
 
 /** Where loading the file's text stands. The text is the whole file, front matter included. */
 export type ReaderLoadState =
@@ -43,7 +50,6 @@ export interface ReaderViewProps {
   onClose?: () => void;
   className?: string;
   scrollRef?: React.RefObject<HTMLDivElement | null>;
-  initialTypography?: ReaderTypography;
   /** The rendered body, parsed once by the modal so highlights and the view agree. */
   content?: ReaderContent;
   /** Highlights state and actions; without it the view is a plain reader. */
@@ -57,6 +63,12 @@ export interface ReaderViewProps {
   projectId?: string | null;
   onUpdateResearch?: (patch: ItemResearchPatch) => void;
   researchSignals?: SourceInfoSignals;
+  /** Contents, progress and the place you stopped; without it the view has no margins. */
+  flow?: ReadingFlow;
+  /** Focus: the toolbar and margins hide and the window goes full screen. */
+  focusMode?: boolean;
+  onToggleFocus?: () => void;
+  uiRef?: React.MutableRefObject<ReaderUiHandle | null>;
 }
 
 export interface ReaderContent {
@@ -71,7 +83,6 @@ export interface ReaderModalProps {
   onOpenChange: (open: boolean) => void;
   onClose?: () => void;
   className?: string;
-  initialTypography?: ReaderTypography;
   /** All sources of the open group, in list order (for [ and ]). */
   groupItems?: ReaderItem[];
   onNavigate?: (item: ReaderItem) => void;

@@ -2,21 +2,39 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { registerModalLayer } from "@/components/ui/Dialog";
-import { loadReaderText } from "@/lib/api";
-import { errorMessage, openUrl } from "@/lib/utils";
+import { isTauri, loadReaderText } from "@/lib/api";
+import { cn, errorMessage, openUrl } from "@/lib/utils";
 import { ReaderView } from "./ReaderView";
 import { canEditText } from "./removal";
-import type { ReaderLoadState, ReaderModalProps } from "./types";
+import { pageClass, setReaderPrefs, stepWidth, useReaderPrefs } from "./reader-prefs";
+import type { ReaderLoadState, ReaderModalProps, ReaderUiHandle } from "./types";
 import { useReaderCleanup } from "./use-reader-cleanup";
 import { useReaderContent } from "./use-reader-content";
 import { useReaderFind } from "./use-reader-find";
 import { useReaderHighlights } from "./useReaderHighlights";
+import { useReadingFlow } from "./use-reading-flow";
 import { useItemProjectId, useItemResearch, type SourceInfoSignals } from "../research/source-info";
+
+/** Full screen for Focus; outside the desktop app (tests, the browser) it does nothing. */
+async function setWindowFullscreen(on: boolean) {
+  if (!isTauri()) return;
+  try {
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    await getCurrentWindow().setFullscreen(on);
+  } catch {
+    // Focus still hides the toolbar and margins.
+  }
+}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName.toLowerCase();
-  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (tag === "input") {
+    // Sliders and toggles (the Aa panel) still let Esc and the reader's keys through.
+    const type = (target as HTMLInputElement).type;
+    return !["range", "checkbox", "radio", "button"].includes(type);
+  }
+  if (tag === "textarea" || tag === "select") return true;
   return target.isContentEditable;
 }
 
@@ -32,7 +50,6 @@ export function ReaderModal({
   onOpenChange,
   onClose,
   className,
-  initialTypography = "serif",
   groupItems,
   onNavigate,
   initialHighlightId,
@@ -150,6 +167,40 @@ export function ReaderModal({
     initialSearch,
   });
 
+  // Opened at a highlight or a search match: that source lands there, not where you stopped.
+  const [landingItemId, setLandingItemId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (open && itemId && (initialHighlightId || initialSearch)) setLandingItemId(itemId);
+    if (!open) setLandingItemId(null);
+    // Only the source the reader was opened with; [ and ] move on from it.
+  }, [open, initialHighlightId, initialSearch]);
+
+  const flow = useReadingFlow({
+    open,
+    itemId: state.status === "ready" ? (state.itemId ?? itemId) : null,
+    bodyHtml: content.bodyHtml,
+    bodyText: content.parsed?.body ?? "",
+    bodyRef,
+    scrollRef,
+    landingItemId,
+  });
+
+  const prefs = useReaderPrefs();
+  const uiRef = React.useRef<ReaderUiHandle | null>(null);
+  const [focusMode, setFocusMode] = React.useState(false);
+  const toggleFocus = React.useCallback(() => {
+    setFocusMode((on) => {
+      void setWindowFullscreen(!on);
+      return !on;
+    });
+  }, []);
+  // Leaving the reader leaves Focus too.
+  React.useEffect(() => {
+    if (isShown || !focusMode) return;
+    setFocusMode(false);
+    void setWindowFullscreen(false);
+  }, [isShown, focusMode]);
+
   const handleClose = React.useCallback(() => {
     onClose?.();
     onOpenChange(false);
@@ -162,6 +213,8 @@ export function ReaderModal({
   findRef.current = find;
   const cleanupRef = React.useRef(cleanup);
   cleanupRef.current = cleanup;
+  const focusRef = React.useRef({ on: focusMode, toggle: toggleFocus });
+  focusRef.current = { on: focusMode, toggle: toggleFocus };
 
   // Focus the scroll container when the modal opens so j/k/Space shortcuts work immediately
   React.useEffect(() => {
@@ -181,7 +234,10 @@ export function ReaderModal({
 
   // Keyboard shortcuts (the highlight keys live in useReaderHighlights):
   // - Mod+F: find in this source; Enter / Shift+Enter move between matches while the bar is open
-  // - Escape: close the small menu, then a panel note field, then the find bar, then the reader
+  // - Escape: close the small menu, then a panel note field, then Aa or the contents, then the
+  //   find bar, then Focus, then the reader
+  // - a: reading settings; backslash: contents; Shift+F: Focus
+  // - Mod+= / Mod+- / Mod+0: text size; Shift+, / Shift+.: narrower / wider
   // - e: Remove text mode (select text or press the trash button to take it out of the source)
   // - o / O: open original source URL in browser
   // - 1 / 2 / 3 / 0: Keep, Maybe, Cut, clear status
@@ -207,17 +263,67 @@ export function ReaderModal({
         e.stopPropagation();
         if (cleanupRef.current.handleEscape()) return;
         if (highlightsRef.current.handleEscape()) return;
+        if (uiRef.current?.closePopovers()) return;
         if (findRef.current.barOpen) {
           findRef.current.closeBar();
+          return;
+        }
+        if (focusRef.current.on) {
+          focusRef.current.toggle();
           return;
         }
         handleClose();
         return;
       }
 
+      // A focused slider keeps its own arrow keys.
+      if (e.target instanceof HTMLInputElement) return;
       if (cleanupRef.current.handleKey(e)) return;
       if (highlightsRef.current.handleKey(e)) return;
+
+      // Text size: Mod+= (or Mod++), Mod+-, Mod+0.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        if (e.key === "=" || e.key === "+") {
+          e.preventDefault();
+          setReaderPrefs((prev) => ({ ...prev, size: prev.size + 1 }));
+          return;
+        }
+        if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          setReaderPrefs((prev) => ({ ...prev, size: prev.size - 1 }));
+          return;
+        }
+        if (e.key === "0") {
+          e.preventDefault();
+          setReaderPrefs({ size: 19 });
+          return;
+        }
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.key === "<" || e.key === ">") {
+        e.preventDefault();
+        setReaderPrefs((prev) => ({
+          ...prev,
+          width: stepWidth(prev.width, e.key === ">" ? 1 : -1),
+        }));
+        return;
+      }
+      if (e.key === "a" && !e.shiftKey) {
+        e.preventDefault();
+        uiRef.current?.toggleSettings();
+        return;
+      }
+      if (e.key === "\\") {
+        e.preventDefault();
+        uiRef.current?.toggleContents();
+        return;
+      }
+      if (e.key === "F" && e.shiftKey) {
+        e.preventDefault();
+        focusRef.current.toggle();
+        return;
+      }
 
       // Research shortcuts: 1 Keep, 2 Maybe, 3 Cut, 0 clear, t tags, u summary
       if (e.key === "1") {
@@ -314,7 +420,10 @@ export function ReaderModal({
       {isShown && currentItemWithResearch && (
         <motion.div
           key="reader-desk-backdrop"
-          className="desk-grain fixed inset-0 z-50 flex flex-col p-2 select-none bg-desk"
+          className={cn(
+            "desk-grain fixed inset-0 z-50 flex flex-col select-none bg-desk",
+            focusMode ? "p-0" : "p-2",
+          )}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, transition: { duration: 0.12, ease: [0.16, 1, 0.3, 1] } }}
@@ -329,7 +438,11 @@ export function ReaderModal({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8, transition: { duration: 0.12, ease: [0.16, 1, 0.3, 1] } }}
             transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
-            className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] bg-background text-foreground shadow-sheet"
+            className={cn(
+              pageClass(prefs.page),
+              "relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background text-foreground",
+              focusMode ? "rounded-none" : "rounded-[14px] shadow-sheet",
+            )}
           >
             <ReaderView
               item={currentItemWithResearch}
@@ -338,7 +451,10 @@ export function ReaderModal({
               onClose={handleClose}
               scrollRef={scrollRef}
               className={className}
-              initialTypography={initialTypography}
+              flow={flow}
+              focusMode={focusMode}
+              onToggleFocus={toggleFocus}
+              uiRef={uiRef}
               content={content}
               highlights={highlights}
               bodyRef={bodyRef}

@@ -2,7 +2,8 @@
 
 /* Sourcefold desktop: "ink and highlighter". See docs/dev/DESIGN.md, "Desktop app". */
 
-@custom-variant dark (&:is(.dark *));
+/* A reader page set to Paper or Sepia stays light inside a dark app (see "Reader pages"). */
+@custom-variant dark (&:is(.dark *):not(.theme-light *));
 
 @theme inline {
   --color-background: var(--background);
@@ -122,7 +123,8 @@
   }
 }
 
-:root {
+:root,
+.theme-light {
   /* The window is a desk; the main content is a sheet of paper lying on it. */
   --desk: #e8eaee;
   --background: #fcfcfb;
@@ -250,6 +252,62 @@
   --source-pdf: #d8a887;
   --source-hackernews: #c5d16a;
   --source-bluesky: #8db4f7;
+}
+
+/*
+ * Reader pages: the reader's own page colour (reader-prefs.ts, pageClass). Paper and Dark reuse
+ * the light and dark tokens on the reader sheet; Sepia and Black change only the paper and ink.
+ */
+.theme-light {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+.theme-sepia {
+  --background: #f6efe2;
+  --foreground: #3b2f23;
+  --card: #fbf6ec;
+  --card-foreground: #3b2f23;
+  --popover: #fbf6ec;
+  --popover-foreground: #3b2f23;
+  --primary: #3b2f23;
+  --primary-foreground: #f6efe2;
+  --secondary: #ede3d1;
+  --secondary-foreground: #3b2f23;
+  --muted: #ede3d1;
+  --muted-foreground: #6b5a46;
+  --accent: #e6dac5;
+  --accent-foreground: #3b2f23;
+  --marker: #efd35a;
+  --marker-soft: #f3e2a2;
+  --marker-strong: #ebcb3b;
+  --marker-strong-foreground: #3b2f23;
+  --border: #e2d5be;
+  --border-strong: #d0c0a4;
+  --input: #d6c7ac;
+  --ring: #3b2f23;
+}
+.theme-black {
+  --background: #000000;
+  --foreground: #d6d6d6;
+  --card: #111214;
+  --card-foreground: #d6d6d6;
+  --popover: #141518;
+  --popover-foreground: #d6d6d6;
+  --primary: #d6d6d6;
+  --primary-foreground: #000000;
+  --secondary: #16171a;
+  --secondary-foreground: #d6d6d6;
+  --muted: #16171a;
+  --muted-foreground: #979aa1;
+  --accent: #1d1f23;
+  --accent-foreground: #d6d6d6;
+  --marker-soft: #332f17;
+  --border: #222428;
+  --border-strong: #33363c;
+  --input: #2e3136;
+  --ring: #d6d6d6;
 }
 
 @layer base {

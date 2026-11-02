@@ -117,12 +117,13 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [x] Rust tests no longer write into the real `Documents/Sourcefold`.
   - [ ] Owner checks a real Grokipedia save in Drive and in desktop offline mode.
 
-- **Best reading experience (planned 2026-11-02, `docs/dev/PLAN-reading.md`):**
-  - [ ] Owner answers the plan's three questions (fonts, page colours, Pages mode).
-  - [ ] Reading settings: Aa popover, font, size, line spacing, width in characters, paragraphs, alignment, page colour, presets, Settings → Reading.
-  - [ ] Wide sheets: contents on the left, footnotes beside the text, wide images and tables.
-  - [ ] Reading flow: progress and time left, reopen where you stopped, Focus.
-  - [ ] Pages mode experiment, then build or drop.
+- **Best reading experience (planned and built 2026-11-02, branch `reader-experience`, `docs/dev/PLAN-reading.md`):**
+  - [x] Owner answered: both fonts, the page colours, Pages mode later.
+  - [x] Reading settings: Aa popover, font, size, line spacing, width in characters, paragraphs, alignment, page colour, presets, Settings → Reading.
+  - [x] Wide sheets: contents on the left, footnotes beside the text, tables that scroll sideways (wide images dropped: they'd run under the margins).
+  - [x] Reading flow: progress and time left, reopen where you stopped, Focus.
+  - [ ] Owner tests, then merge into `main`.
+  - [ ] Plan Pages mode.
 
 - **Reader, highlights and search (planned 2026-10-17, `docs/dev/PLAN-reader-search.md`):**
   - [x] Phase 1 (built 2026-10-17, migration applied; [ ] owner's check): highlights in the desktop reader (select to highlight, notes, copy with source, YouTube timestamps, Grokipedia and Wikipedia references kept), side panel, cited sources saved to a group, next/previous source, group Highlights tab with Copy with sources. `highlights` table in Supabase and SQLite.
@@ -145,7 +146,7 @@ Status as of 2026-10-15. The spec is `docs/dev/SPEC.md`; agent rules are `AGENTS
   - [ ] Owner re-tests the moves, deletes and archives Claude's safety check skipped, using the `project` guard.
   - [x] PDFs from Claude Desktop (2026-10-19): every non-arXiv PDF failed with `No "GlobalWorkerOptions.workerSrc" specified`; the MCP now hands pdf.js its worker module. [ ] Owner re-adds a failed PDF.
   - [x] Research tools from the owner's research run (2026-10-19, branch `research-tools`, contract `docs/dev/handoff-research.md`): keep/maybe/cut status and outline tags, a short summary per source, quote cards and an outline, a script view with citations and a reference list, duplicates across groups (refused on save, merged in a Duplicates view), author and author type per source, a b-roll list of video timestamps. Web API, desktop (signed in and offline), file format and nine MCP tools. Migration `20261019000000_research_tools.sql` applied, merged and deployed (2026-10-21). [ ] Owner tests.
-  - [x] Fixes from the 800-source run (2026-10-20, branch `mcp-run-fixes`, `docs/dev/handoff-run-fixes.md`): the server crash (Node's fetch assert; pages now fetched over HTTP/2 with Chrome's headers), add jobs kept on disk and resumed, queue position, per-link time limit, Drive autosave, short ids, compact project tree, `move_sources if_duplicate`, bot-wall detection, main-text fallback, clearer network errors, arXiv HTML without a title. [ ] Owner reinstalls the bundle and re-runs the failed links; merge.
+  - [x] Fixes from the 800-source run (2026-10-20, branch `mcp-run-fixes`): the server crash (Node's fetch assert; pages now fetched over HTTP/2 with Chrome's headers), add jobs kept on disk and resumed, queue position, per-link time limit, Drive autosave, short ids, compact project tree, `move_sources if_duplicate`, bot-wall detection, main-text fallback, clearer network errors, arXiv HTML without a title. [ ] Owner reinstalls the bundle and re-runs the failed links; merge.
   - [x] Photos and GIFs in saved X posts (2026-10-21, branch `x-media`, `docs/dev/handoff-x-media.md`): media from X's embed service or FxTwitter, saved into `<Title>_files/` in Drive and the local copy, GIFs as MP4 (first frame in the Google Doc, playing in the reader), videos linked only. Migration `20261021000000_x_post_media.sql` applied. [ ] Merge, deploy, owner tests.
   - [ ] A real-browser fallback for sites that still refuse (Decrypt, TheStreet, Tesla, OUP, Technical.ly, Bloomberg, Reuters, APA): the desktop app's webview or the Chrome extension.
   - [ ] Dropped by the owner for now (2026-10-19): X posts through Claude (X's public embed data).

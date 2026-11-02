@@ -19,7 +19,7 @@ export async function POST(auth: RouteContext, request: Request, params: { id: s
   const declared = Number(request.headers.get("content-length") ?? 0);
   if (declared > IMPORT_MAX_BODY_BYTES) return tooBig();
   const text = await request.text();
-  if (Buffer.byteLength(text) > IMPORT_MAX_BODY_BYTES) return tooBig();
+  if (new TextEncoder().encode(text).byteLength > IMPORT_MAX_BODY_BYTES) return tooBig();
 
   let body: unknown;
   try {

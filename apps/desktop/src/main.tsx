@@ -6,6 +6,11 @@ import "@fontsource-variable/geist";
 import "@fontsource-variable/geist-mono";
 import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource-variable/newsreader/opsz-italic.css";
+// Reader fonts (Aa in the reader): Literata and Atkinson Hyperlegible Next.
+import "@fontsource-variable/literata/opsz.css";
+import "@fontsource-variable/literata/opsz-italic.css";
+import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
+import "@fontsource-variable/atkinson-hyperlegible-next/wght-italic.css";
 import { App } from "./App";
 import { AuthProvider } from "./features/auth";
 import { isMacPlatform } from "./features/shortcuts/key-utils";

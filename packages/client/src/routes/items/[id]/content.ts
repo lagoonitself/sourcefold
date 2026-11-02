@@ -28,7 +28,8 @@ export async function GET(auth: RouteContext, request: Request, params: { id: st
       }
       return jsonError(content.status, content.message);
     }
-    const body = typeof content.body === "string" ? content.body : Buffer.from(content.body);
+    // Not Buffer: this route also runs in the desktop app, which has no Node globals.
+    const body = typeof content.body === "string" ? content.body : new Uint8Array(content.body);
     return new Response(body, {
       headers: { "Content-Type": content.mimeType, "Cache-Control": "no-store" },
     });

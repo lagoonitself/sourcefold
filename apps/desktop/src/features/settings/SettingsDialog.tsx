@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  BookOpenText,
   Check,
   CircleAlert,
   Laptop,
@@ -38,6 +39,7 @@ import { LocalCopySettings } from "../local-copy/LocalCopySettings";
 import { SearchSettings } from "../search/SearchSettings";
 import { ClaudeSettings } from "../claude/ClaudeSettings";
 import { TldrSettings } from "../tldr/TldrSettings";
+import { ReaderSettingsPanel } from "../reader/ReaderSettings";
 import { OPEN_SETTINGS_EVENT } from "../tldr/tldr-settings-link";
 
 export interface SettingsDialogProps {
@@ -48,7 +50,7 @@ export interface SettingsDialogProps {
 }
 
 type SettingsSection =
-  "general" | "appearance" | "account" | "search" | "tldr" | "claude" | "substack";
+  "general" | "appearance" | "reading" | "account" | "search" | "tldr" | "claude" | "substack";
 
 interface SectionConfig {
   id: SettingsSection;
@@ -59,6 +61,7 @@ interface SectionConfig {
 const SECTIONS: SectionConfig[] = [
   { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "reading", label: "Reading", icon: BookOpenText },
   { id: "account", label: "Account", icon: User },
   { id: "search", label: "Search", icon: Search },
   { id: "tldr", label: "TL;DR", icon: ScrollText },
@@ -278,6 +281,7 @@ export function SettingsDialog({
             <h2 className="font-serif text-[22px] font-medium leading-[28px] tracking-[-0.012em] text-foreground mb-6">
               {activeSection === "general" && "General"}
               {activeSection === "appearance" && "Appearance"}
+              {activeSection === "reading" && "Reading"}
               {activeSection === "account" && "Account"}
               {activeSection === "search" && "Search"}
               {activeSection === "tldr" && "TL;DR"}
@@ -348,6 +352,16 @@ export function SettingsDialog({
                     </Button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {activeSection === "reading" && (
+              <div className="flex flex-col gap-4">
+                <p className="text-[12.5px] leading-[18px] text-muted-foreground">
+                  How the reader shows every source. The same settings are under Aa in the
+                  reader&apos;s toolbar (press a), where you see each change as you make it.
+                </p>
+                <ReaderSettingsPanel className="max-w-[360px]" />
               </div>
             )}
 

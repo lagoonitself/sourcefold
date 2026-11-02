@@ -1,20 +1,40 @@
-/* Reader prose typography. Colors are the tokens from index.css. */
+/*
+ * Reader prose typography. Colors are the tokens from index.css. Font, size, line spacing and
+ * width come from the reader's settings (reader-prefs.ts, prefsStyle) as CSS variables; spacing
+ * is in em so it grows with the text.
+ */
 .reader-prose {
   color: var(--foreground);
   overflow-wrap: break-word;
   user-select: text;
-  font-size: 18px;
-  line-height: 1.65;
+  font-family: var(--reader-font, var(--font-serif));
+  font-size: var(--reader-size, 19px);
+  line-height: var(--reader-leading, 1.65);
+  font-optical-sizing: auto;
 }
 
-.reader-prose-serif {
-  font-family: var(--font-serif);
+.reader-prose p,
+.reader-prose li {
+  text-wrap: pretty;
 }
 
-.reader-prose-sans {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 1.6;
+/* Justified text hyphenates; the article carries a lang attribute for it. */
+.reader-justify .reader-prose p,
+.reader-justify .reader-prose li {
+  text-align: justify;
+  hyphens: auto;
+}
+
+/* Indented paragraphs, like a printed book: no space between paragraphs that follow each other. */
+.reader-indented .reader-prose p {
+  margin-bottom: 0;
+}
+.reader-indented .reader-prose p + p:not(:has(> img:only-child)) {
+  text-indent: 1.5em;
+}
+.reader-indented .reader-prose p:has(+ :not(p)),
+.reader-indented .reader-prose p:last-child {
+  margin-bottom: 1.25em;
 }
 
 /* Headings: Newsreader 500 with tight tracking */
@@ -24,39 +44,40 @@
 .reader-prose h4,
 .reader-prose h5,
 .reader-prose h6 {
-  font-family: var(--font-serif);
+  font-family: var(--reader-heading-font, var(--font-serif));
   color: var(--foreground);
   font-weight: 500;
   line-height: 1.25;
   letter-spacing: -0.02em;
-  margin-top: 2rem;
-  margin-bottom: 0.85rem;
+  margin-top: 1.75em;
+  margin-bottom: 0.6em;
+  scroll-margin-top: 1.5rem;
 }
 
 .reader-prose h1 {
-  font-size: 2rem;
+  font-size: 1.75em;
   letter-spacing: -0.025em;
 }
 
 .reader-prose h2 {
-  font-size: 1.5rem;
+  font-size: 1.35em;
   letter-spacing: -0.02em;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 0.5rem;
-  margin-top: 2.25rem;
+  padding-bottom: 0.35em;
+  margin-top: 1.6em;
 }
 
 .reader-prose h3 {
-  font-size: 1.25rem;
+  font-size: 1.15em;
   letter-spacing: -0.015em;
-  margin-top: 1.75rem;
+  margin-top: 1.5em;
 }
 
 .reader-prose h4,
 .reader-prose h5,
 .reader-prose h6 {
-  font-size: 1.1rem;
-  margin-top: 1.5rem;
+  font-size: 1.05em;
+  margin-top: 1.4em;
 }
 
 .reader-prose > :first-child {
@@ -65,7 +86,7 @@
 
 /* Paragraphs */
 .reader-prose p {
-  margin: 0 0 1.4rem;
+  margin: 0 0 1.2em;
 }
 
 /* Links: ink with a --border-strong underline that turns ink on hover */
@@ -85,8 +106,8 @@
 /* Blockquotes: 2px --border-strong left rule. X threads nest them: one level per reply. */
 .reader-prose blockquote {
   border-left: 2px solid var(--border-strong);
-  padding: 0.15rem 0 0.15rem 1.1rem;
-  margin: 1.5rem 0;
+  padding: 0.1em 0 0.1em 1em;
+  margin: 1.3em 0;
 }
 
 .reader-prose blockquote blockquote {
@@ -126,18 +147,18 @@
 /* Lists */
 .reader-prose ul {
   list-style-type: disc;
-  padding-left: 1.6rem;
-  margin: 0 0 1.4rem;
+  padding-left: 1.5em;
+  margin: 0 0 1.2em;
 }
 
 .reader-prose ol {
   list-style-type: decimal;
-  padding-left: 1.6rem;
-  margin: 0 0 1.4rem;
+  padding-left: 1.5em;
+  margin: 0 0 1.2em;
 }
 
 .reader-prose li {
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.35em;
 }
 
 .reader-prose li > ul,
@@ -148,10 +169,15 @@
 
 /* Tables with hairlines */
 .reader-prose table {
-  width: 100%;
+  display: block;
+  max-width: 100%;
+  width: max-content;
+  min-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
-  margin: 1.5rem 0;
-  font-size: 0.925em;
+  margin: 1.3em 0;
+  font-size: 0.85em;
+  line-height: 1.5;
 }
 
 .reader-prose th,
@@ -245,7 +271,13 @@
   margin-left: 0.25rem;
 }
 
-/* The note block is a quiet box: tighter than the article */
+/* The note block is a quiet box in the interface font: tighter than the article */
+.reader-prose.reader-note {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
 .reader-note p,
 .reader-note li {
   margin-bottom: 0.75rem;
@@ -325,7 +357,7 @@
 }
 
 .reader-prose li.reader-block-focus::before {
-  left: -2.1rem;
+  left: calc(-1.5em - 14px);
 }
 
 .reader-prose img.reader-block-focus {
@@ -378,4 +410,69 @@
   to {
     background-color: transparent;
   }
+}
+
+/*
+ * Layout: contents | text | footnotes. The side tracks share what the text leaves; with "Fill"
+ * the text takes the sheet and the margins get fixed widths when there is room for them.
+ */
+.reader-scroll {
+  container: reader-scroll / inline-size;
+}
+
+/* The layout carries the reader's font and size so `ch` in the width means this font's characters;
+ * its columns go back to the interface font, and .reader-prose takes the reader's again. */
+.reader-layout {
+  font-family: var(--reader-font, var(--font-serif));
+  font-size: var(--reader-size, 19px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--reader-measure, 70ch)) minmax(0, 1fr);
+  column-gap: 48px;
+  padding: 40px 24px 96px;
+}
+
+.reader-layout.is-fill {
+  grid-template-columns: var(--fill-left, 0px) minmax(0, 1fr) var(--fill-right, 0px);
+  column-gap: 40px;
+  padding-inline: 40px;
+}
+
+@container reader-scroll (width >= 1100px) {
+  .reader-layout.is-fill.has-contents {
+    --fill-left: 220px;
+  }
+}
+
+@container reader-scroll (width >= 1400px) {
+  .reader-layout.is-fill.has-notes {
+    --fill-right: 260px;
+  }
+}
+
+@container reader-scroll (width < 720px) {
+  .reader-layout {
+    column-gap: 0;
+    padding-inline: 20px;
+  }
+}
+
+.reader-layout > * {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.reader-margin {
+  min-width: 0;
+}
+
+.reader-sidenote a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 2px;
+}
+
+.reader-sidenote a:hover {
+  text-decoration-color: currentColor;
 }

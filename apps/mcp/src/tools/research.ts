@@ -21,6 +21,7 @@ import {
   positionBetween,
   sameTag,
   scriptSourceFromItem,
+  videoTitleFromNote,
   sortCards,
   sortSections,
   type Card,
@@ -104,6 +105,35 @@ const actionSchema = z.discriminatedUnion("action", [
     card_id: z.string().describe("Id of the card to delete."),
   }),
 ]);
+
+function noteWithVideoTitle(note: string | null, title: string | null): string | null {
+  const parts = [note?.trim(), title ? `Video title: ${title}` : null].filter(
+    (part): part is string => Boolean(part),
+  );
+  return parts.length > 0 ? parts.join("\n\n") : null;
+}
+
+/** YouTube's oEmbed title. Other hosts, and a failed lookup, leave the clip unnamed. */
+async function lookupVideoTitle(url: string): Promise<string | null> {
+  let host = "";
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+  if (host !== "youtube.com" && host !== "youtu.be" && host !== "m.youtube.com") return null;
+  try {
+    const endpoint = new URL("https://www.youtube.com/oembed");
+    endpoint.searchParams.set("url", url);
+    endpoint.searchParams.set("format", "json");
+    const res = await fetch(endpoint, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { title?: unknown };
+    return typeof data.title === "string" && data.title.trim() ? data.title.trim() : null;
+  } catch {
+    return null;
+  }
+}
 
 export function registerResearchTools(server: McpServer, ctx: ToolContext): void {
   defineTool(server, ctx, {
@@ -241,8 +271,20 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
             : "none";
           const currentTags = (updated.tags ?? patch.tags ?? []) as string[];
           const tagsText = currentTags.length > 0 ? currentTags.join(", ") : "(none)";
+          const extras: string[] = [];
+          if (author !== undefined) {
+            extras.push(`author: ${updated.author || patch.author || "(cleared)"}`);
+          }
+          if (author_type !== undefined) {
+            extras.push(`author type: ${updated.author_type || patch.author_type || "(cleared)"}`);
+          }
+          if (summary !== undefined) {
+            const shown = (updated.summary ?? patch.summary) as string | null;
+            extras.push(`summary: ${shown ? truncate(shown, 200) : "(cleared)"}`);
+          }
+          const extraText = extras.length > 0 ? `, ${extras.join(", ")}` : "";
           results.push(
-            `- "${updated.title || item.title}" [${id}]: status: ${statusText}, tags: ${tagsText}`,
+            `- "${updated.title || item.title}" [${id}]: status: ${statusText}, tags: ${tagsText}${extraText}`,
           );
         } else {
           const statusText = item.triage ? (TRIAGE_LABELS[item.triage] ?? item.triage) : "none";
@@ -598,6 +640,7 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
       let proj: Folder | null = null;
       let itemId: string | null = null;
       let clipTitle = "b-roll";
+      let videoTitle: string | null = null;
 
       if (source_id) {
         const item = await api.get<Item>(`/items/${encodeURIComponent(source_id)}`);
@@ -607,6 +650,8 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
         clipTitle = item.title;
       } else if (targetProject) {
         proj = targetProject;
+        videoTitle = url ? await lookupVideoTitle(url) : null;
+        if (videoTitle) clipTitle = videoTitle;
       } else {
         throw new Error("Specify project when adding b-roll by URL.");
       }
@@ -645,7 +690,7 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
         seconds: startSeconds,
         end_seconds: endSeconds,
         url: url ?? null,
-        note: note ? note.trim() : null,
+        note: noteWithVideoTitle(note ? note.trim() : null, videoTitle),
         script_line: description ? description.trim() : null,
         section_id: sectionId,
         position,
@@ -689,13 +734,15 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
 
       const itemMap = new Map(items.map((i) => [i.id, i]));
       const sortedSections = sortSections(sections);
+      const sectionIds = new Set(sections.map((s) => s.id));
+      const unplacedCard = (c: Card) => c.section_id === null || !sectionIds.has(c.section_id);
 
       let filteredCards = cards;
       if (kind) {
         filteredCards = filteredCards.filter((c) => c.kind === kind);
       }
       if (unplaced_only) {
-        filteredCards = filteredCards.filter((c) => c.section_id === null);
+        filteredCards = filteredCards.filter(unplacedCard);
       } else if (section) {
         const target = sections.find((s) => s.id === section || sameTag(s.title, section));
         if (!target) throw new Error(`No section "${section}" in project "${proj.name}".`);
@@ -710,7 +757,14 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
 
       const renderCard = (c: Card): string => {
         const item = c.item_id ? itemMap.get(c.item_id) : null;
-        const sourceName = item ? item.title : c.url ? c.url : "(no source)";
+        const titled = videoTitleFromNote(c.note);
+        const sourceName = item
+          ? item.title
+          : titled.title
+            ? titled.title
+            : c.url
+              ? c.url
+              : "(no source)";
         const time = formatClipTime(c.seconds, c.end_seconds);
         const parts: string[] = [`[${c.id}] ${c.kind}`];
         if (time) parts.push(`at ${time}`);
@@ -722,8 +776,8 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
         if (c.script_line) {
           line += `\n    Script: ${truncate(c.script_line, 120)}`;
         }
-        if (c.note) {
-          line += `\n    Note: ${truncate(c.note, 120)}`;
+        if (titled.note) {
+          line += `\n    Note: ${truncate(titled.note, 120)}`;
         }
         return line;
       };
@@ -739,7 +793,7 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
         }
       }
 
-      const unplaced = sortCards(filteredCards.filter((c) => c.section_id === null));
+      const unplaced = sortCards(filteredCards.filter(unplacedCard));
       if (unplaced.length > 0 && !section) {
         lines.push("", `Unplaced cards (${plural(unplaced.length, "card")}):`);
         for (const card of unplaced) {

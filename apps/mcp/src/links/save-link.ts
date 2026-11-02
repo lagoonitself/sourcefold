@@ -7,6 +7,7 @@ import {
   detectLinkKind,
   detectSource,
   discoverSubstackPosts,
+  looksLikeSubstackPublication,
   isWikipediaArticleUrl,
   normalizeSubstackPostUrl,
   parseYouTubeLink,
@@ -469,6 +470,27 @@ export interface CollectionOptions {
   publishedAfter?: string | null;
   publishedBefore?: string | null;
   signal?: AbortSignal;
+}
+
+/** A playlist, channel, or Substack publication, including one on its own domain. */
+export async function collectionKind(
+  url: string,
+  deps: LinkDeps,
+): Promise<"publication" | "youtube_list" | null> {
+  const kind = classifyLink(url);
+  if (kind === "youtube_list" || kind === "publication") return kind;
+  if (kind === "substack" || kind === "grokipedia" || kind === "wikipedia" || kind === "x") {
+    return null;
+  }
+  let path = "/";
+  try {
+    path = new URL(url).pathname.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+  if (path !== "" && path !== "/archive") return null;
+  const yes = await looksLikeSubstackPublication(url, substackFetchFor(deps, new Map()));
+  return yes ? "publication" : null;
 }
 
 export async function listCollection(

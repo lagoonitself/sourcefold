@@ -53,6 +53,29 @@ describe("substackPublicationRoot", () => {
 });
 
 describe("discoverSubstackPosts", () => {
+  it("follows a custom-domain redirect and keeps those post urls", async () => {
+    const substack = "https://name.substack.com/api/v1/archive?sort=new&offset=0&limit=50";
+    const custom = "https://www.oneusefulthing.org/api/v1/archive?sort=new&offset=0&limit=50";
+    const empty = "https://www.oneusefulthing.org/api/v1/archive?sort=new&offset=1&limit=50";
+    const { fetch } = fakeFetch({
+      [substack]: {
+        status: 200,
+        url: custom,
+        text: JSON.stringify([
+          {
+            canonical_url: "https://www.oneusefulthing.org/p/hello",
+            title: "Hello",
+            post_date: "2026-09-01T00:00:00.000Z",
+            audience: "everyone",
+          },
+        ]),
+      },
+      [empty]: { status: 200, url: empty, text: "[]" },
+    });
+    const posts = await discoverSubstackPosts("https://name.substack.com", fetch);
+    expect(posts.map((post) => post.url)).toEqual(["https://www.oneusefulthing.org/p/hello"]);
+  });
+
   it("pages through the archive API until an empty page", async () => {
     const firstPage = Array.from({ length: 50 }, (_, i) => archivePost(i, "2026-09-01"));
     const { fetch, calls } = fakeFetch({

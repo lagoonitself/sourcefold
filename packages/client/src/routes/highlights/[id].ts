@@ -11,6 +11,24 @@ import type { RouteContext } from "../../context";
 
 type Params = { id: string };
 
+export async function GET(auth: RouteContext, _request: Request, params: Params) {
+  const { id } = params;
+  if (!highlightIdSchema.safeParse(id).success) {
+    return jsonError(404, "Highlight not found.");
+  }
+
+  const { data, error } = await auth.db
+    .from("highlights")
+    .select(HIGHLIGHT_COLUMNS)
+    .eq("id", id)
+    .eq("user_id", auth.userId)
+    .maybeSingle();
+
+  if (error) return jsonError(500, error.message);
+  if (!data) return jsonError(404, "Highlight not found.");
+  return jsonData(rowToHighlight(data));
+}
+
 async function readJson(request: Request): Promise<{ ok: true; body: unknown } | { ok: false }> {
   try {
     return { ok: true, body: await request.json() };
@@ -22,7 +40,7 @@ async function readJson(request: Request): Promise<{ ok: true; body: unknown } |
 export async function PUT(auth: RouteContext, request: Request, params: Params) {
   const { id } = params;
   if (!highlightIdSchema.safeParse(id).success) {
-    return jsonError(400, "Invalid highlight ID");
+    return jsonError(404, "Highlight not found.");
   }
 
   const json = await readJson(request);
@@ -88,7 +106,7 @@ export async function PUT(auth: RouteContext, request: Request, params: Params) 
 export async function PATCH(auth: RouteContext, request: Request, params: Params) {
   const { id } = params;
   if (!highlightIdSchema.safeParse(id).success) {
-    return jsonError(400, "Invalid highlight ID");
+    return jsonError(404, "Highlight not found.");
   }
 
   const json = await readJson(request);
@@ -119,7 +137,7 @@ export async function PATCH(auth: RouteContext, request: Request, params: Params
 export async function DELETE(auth: RouteContext, request: Request, params: Params) {
   const { id } = params;
   if (!highlightIdSchema.safeParse(id).success) {
-    return jsonError(400, "Invalid highlight ID");
+    return jsonError(404, "Highlight not found.");
   }
 
   const { data, error } = await auth.db

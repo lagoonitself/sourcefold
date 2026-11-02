@@ -122,6 +122,15 @@ describe("fetchHackerNewsCapture", () => {
     );
   });
 
+  it("leaves punctuation after a link instead of inside it", () => {
+    const markdown = hackerNewsTextToMarkdown(
+      '<p>See <a href="https://example.com/paper),">https://example.com/paper),</a> for the result.</p>',
+    );
+    expect(markdown).toBe(
+      "See [https://example.com/paper](https://example.com/paper)), for the result.",
+    );
+  });
+
   it("renders a comment item with its own text, links, code and deleted parents", async () => {
     const fetcher = fakeFetch(() => jsonResponse(fixture("comment.json")));
     const result = await fetchHackerNewsCapture(ITEM_URL, { fetch: fetcher });

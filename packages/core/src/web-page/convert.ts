@@ -213,11 +213,17 @@ function createConverter(baseUrl: string, shiftHeadings: boolean): TurndownServi
 }
 
 function tidy(markdown: string): string {
-  return markdown
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+$/gm, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return (
+    markdown
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]+$/gm, "")
+      // Defuddle/Turndown turns a footnote marker into an escaped link, either
+      // `[\[23\]](#f23n)` or `\[[23](#f23n)\]`.
+      .replace(/\[\\\[(\d+)\\\]\]\(#[^)\s]*\)/g, "[^$1]")
+      .replace(/\\\[\[(\d+)\]\(#[^)\s]*\)\\\]/g, "[^$1]")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
 }
 
 function normalizeHeading(text: string): string {

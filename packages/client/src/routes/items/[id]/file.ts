@@ -33,7 +33,7 @@ export async function GET(auth: RouteContext, request: Request, params: { id: st
 
   const { data: signedData, error: signError } = await db.storage
     .from("images")
-    .createSignedUrl(item.storage_path, 300);
+    .createSignedUrl(item.storage_path, 60 * 60 * 24 * 7);
 
   if (signError || !signedData?.signedUrl) {
     return jsonError(404, "Image not found.");

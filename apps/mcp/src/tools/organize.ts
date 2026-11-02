@@ -194,13 +194,14 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
     name: "delete_group",
     title: "Delete a group or project",
     description:
-      "Deletes a group (or a whole project) together with every group inside it and every source in them. This cannot be undone from here. Check with get_project_tree first, and use move_sources to keep sources that should survive. Answers with what was deleted.",
+      "Deletes a group (or a whole project) together with every group inside it and every source in them. This cannot be undone from here. Check with get_project_tree first, and use move_sources to keep sources that should survive. Answers with what was deleted. Pass dry_run=true to report that without deleting.",
     input: {
       group_id: z.string().min(1).describe("Id of the group or project to delete."),
       project: projectGuard,
+      dry_run: z.boolean().optional().describe("Report what would be deleted and change nothing."),
     },
     destructive: true,
-    run: async ({ group_id, project }, { api }) => {
+    run: async ({ group_id, project, dry_run }, { api }) => {
       let summary = `[${group_id}]`;
       let note = "";
       let index: FolderIndex | null = null;
@@ -225,6 +226,7 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
         const sources = inside.reduce((sum, f) => sum + sourcesIn(f), 0);
         note = ` with ${plural(inside.length - 1, "subgroup")} and ${plural(sources, "source")}`;
       }
+      if (dry_run) return `Would delete ${summary}${note}. Nothing was changed.`;
       try {
         await api.delete(`/folders/${encodeURIComponent(group_id)}`);
       } catch (err) {
@@ -324,6 +326,7 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
 
       type MoveOutcome =
         | { status: "moved"; ref: SourceRef }
+        | { status: "already"; ref: SourceRef }
         | { status: "skipped"; ref: SourceRef }
         | { status: "merged"; ref: SourceRef; targetId: string };
 
@@ -332,6 +335,9 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
         try {
           const ref = await loadSourceRef(api, id);
           requireInProject(index, guard, ref.folder_id, `"${ref.title}"`);
+          if (ref.folder_id === group_id) {
+            return { id, outcome: { status: "already", ref } as MoveOutcome };
+          }
           try {
             await api.patch<Item>(`/items/${encodeURIComponent(id)}`, { folder_id: group_id });
             forgetCachedSource(id);
@@ -377,6 +383,7 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
       });
 
       const moved: SourceRef[] = [];
+      const already: SourceRef[] = [];
       const skipped: SourceRef[] = [];
       const merged: Array<{ ref: SourceRef; targetId: string }> = [];
       const failed: Array<{ id: string; message: string }> = [];
@@ -386,23 +393,36 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
           failed.push({ id: res.id, message: res.error });
         } else if ("outcome" in res && res.outcome) {
           if (res.outcome.status === "moved") moved.push(res.outcome.ref);
+          else if (res.outcome.status === "already") already.push(res.outcome.ref);
           else if (res.outcome.status === "skipped") skipped.push(res.outcome.ref);
           else if (res.outcome.status === "merged")
             merged.push({ ref: res.outcome.ref, targetId: res.outcome.targetId });
         }
       }
 
-      const succeededCount = moved.length + skipped.length + merged.length;
+      const succeededCount = moved.length + already.length + skipped.length + merged.length;
       if (succeededCount === 0) {
         throw new Error(["Couldn't move any source:", ...failureLines(failed)].join("\n"));
       }
 
       const total = succeededCount + failed.length;
-      const lines = [
-        `Moved ${moved.length} of ${total} sources to ${index.pathOf(target.id)} [${target.id}]:`,
-      ];
-      if (moved.length > 0) {
+      const whereTo = `${index.pathOf(target.id)} [${target.id}]`;
+      const lines =
+        moved.length === 0 && already.length === total
+          ? [
+              already.length === 1
+                ? `Nothing changed. ${refLine(index, already[0]!).replace(/\(in /, "(already in ")}`
+                : `Nothing changed. ${plural(already.length, "source")} ${already.length === 1 ? "was" : "were"} already in ${whereTo}.`,
+            ]
+          : [`Moved ${moved.length} of ${total} sources to ${whereTo}:`];
+      if (moved.length > 0 && !(moved.length === 0 && already.length === total)) {
         lines.push(...moved.map((ref) => refLine(index, ref).replace(/\(in /, "(from ")));
+      }
+      if (already.length > 0 && moved.length + skipped.length + merged.length + failed.length > 0) {
+        lines.push(
+          "Already in that group:",
+          ...already.map((ref) => refLine(index, ref).replace(/\(in /, "(already in ")),
+        );
       }
       if (skipped.length > 0) {
         lines.push(
@@ -428,7 +448,7 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
     name: "delete_sources",
     title: "Delete sources",
     description:
-      "Deletes sources by id. Each one is handled on its own, and the reply lists each deleted source with its title and group, and which failed with the reason. Fails as a whole only when none could be deleted. Check ids with list_sources or find_sources first; this cannot be undone from here.",
+      "Deletes sources by id. Each one is handled on its own, and the reply lists each deleted source with its title and group, and which failed with the reason. Fails as a whole only when none could be deleted. Check ids with list_sources or find_sources first; this cannot be undone from here. Pass dry_run=true to list them without deleting.",
     input: {
       source_ids: z
         .array(z.string().min(1))
@@ -436,23 +456,26 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
         .max(200)
         .describe("Ids of the sources to delete."),
       project: projectGuard,
+      dry_run: z.boolean().optional().describe("List what would be deleted and change nothing."),
     },
     destructive: true,
-    run: async ({ source_ids, project }, { api }) => {
+    run: async ({ source_ids, project, dry_run }, { api }) => {
       const index = await loadFolderIndex(api);
       const guard = project ? resolveProject(index, project) : null;
       const { done, failed } = await eachId(source_ids, async (id) => {
         const ref = await loadSourceRef(api, id);
         requireInProject(index, guard, ref.folder_id, `"${ref.title}"`);
-        await api.delete(`/items/${encodeURIComponent(id)}`);
-        forgetCachedSource(id);
+        if (!dry_run) {
+          await api.delete(`/items/${encodeURIComponent(id)}`);
+          forgetCachedSource(id);
+        }
         return ref;
       });
       if (done.length === 0) {
         throw new Error(["Couldn't delete any source:", ...failureLines(failed)].join("\n"));
       }
       const lines = [
-        `Deleted ${done.length} of ${done.length + failed.length} sources:`,
+        `${dry_run ? "Would delete" : "Deleted"} ${done.length} of ${done.length + failed.length} sources${dry_run ? " (nothing was changed)" : ""}:`,
         ...done.map(({ value }) => refLine(index, value)),
       ];
       if (failed.length > 0) lines.push("Failed:", ...failureLines(failed));

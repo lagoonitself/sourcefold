@@ -524,9 +524,29 @@ function describe(source: CopySource): string {
   return [source.title, ...source.byline].filter((p) => p).join(", ");
 }
 
-/** A source for a b-roll clip that has only a link: the link's host stands in for the title. */
-function linkOnlySource(url: string): CopySource {
-  return { title: hostOf(url) ?? url, byline: [], url };
+/** Stored on a URL b-roll note so the video title survives without a new column. */
+const VIDEO_TITLE_LINE = /(?:^|\n)Video title: ([^\n]+)/;
+
+/** Splits a looked-up video title out of a b-roll note. The title line is not shown as the note. */
+export function videoTitleFromNote(note: string | null | undefined): {
+  title: string | null;
+  note: string | null;
+} {
+  if (!note) return { title: null, note: null };
+  const match = VIDEO_TITLE_LINE.exec(note);
+  if (!match?.[1]) return { title: null, note };
+  const title = match[1].trim() || null;
+  const rest = note
+    .replace(VIDEO_TITLE_LINE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { title, note: rest || null };
+}
+
+/** A source for a b-roll clip that has only a link. A looked-up title replaces the host name. */
+function linkOnlySource(url: string, title?: string | null): CopySource {
+  const named = title?.trim();
+  return { title: named || (hostOf(url) ?? url), byline: [], url };
 }
 
 /** Numbers sources by first appearance; the same source (or link) keeps its number. */
@@ -542,7 +562,7 @@ class ReferenceNumbers {
       source = sources[card.item_id]!;
     } else if (card.url) {
       key = `url:${card.url}`;
-      source = linkOnlySource(card.url);
+      source = linkOnlySource(card.url, videoTitleFromNote(card.note).title);
     } else {
       return null;
     }
@@ -686,9 +706,10 @@ export function buildBrollList(
   sources: SourceDirectory,
 ): string {
   const lines = clips.map((clip, i) => {
+    const titled = videoTitleFromNote(clip.note);
     const source =
       (clip.item_id ? sources[clip.item_id] : undefined) ??
-      (clip.url ? linkOnlySource(clip.url) : null);
+      (clip.url ? linkOnlySource(clip.url, titled.title) : null);
     const what = collapse(clip.script_line ?? "") || collapse(clip.quote) || "Clip";
     const parts = [`${i + 1}. ${what.replace(/[.]$/, "")}.`];
     const where: string[] = source ? [describe(source)] : [];
@@ -698,7 +719,7 @@ export function buildBrollList(
     else if (time) where.push(time);
     else if (link) where.push(link);
     if (where.length > 0) parts.push(`${where.join(", ")}.`);
-    const note = collapse(clip.note ?? "");
+    const note = collapse(titled.note ?? "");
     if (note) parts.push(`Note: ${note}`);
     return parts.join(" ");
   });

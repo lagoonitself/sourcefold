@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { readerTextOf } from "../reader-text";
-import { clearRemoveUndo, registerRemoveTextTools } from "../tools/remove-text";
+import { clearRemoveUndo, registerRemoveTextTools, removalHash } from "../tools/remove-text";
 import type { Folder, Highlight } from "../types";
 import { connect, fakeDesktop, fakeWeb } from "./harness";
 
@@ -125,6 +125,17 @@ describe("remove_text", () => {
     expect(state.body).toContain("## History");
     // The footnote definitions after the section stay.
     expect(state.body).toContain("[^1]: [How turbos work]");
+    const refs = `${BODY}\n\n## References\n\n[^9]: A long footnote that belongs to the section.\n`;
+    const refLib = library();
+    refLib.state.body = refs;
+    const refTool = await connect(registerRemoveTextTools, { web: refLib.web });
+    const removedRefs = await refTool.call("remove_text", { source_id: "s1", section: 3 });
+    expect(removedRefs.isError).toBe(false);
+    expect(removedRefs.text).toContain('the section "References"');
+    expect(refLib.state.body).not.toContain("## References");
+    expect(refLib.state.body).not.toContain("[^9]:");
+    expect(refLib.state.body).toContain("## Sponsors");
+
     const outside = await h.call("remove_text", { source_id: "s1", section: 5 });
     expect(outside.isError).toBe(true);
     expect(outside.text).toContain("§5 isn't one");
@@ -190,5 +201,41 @@ describe("remove_text", () => {
     expect(guarded.text).toContain('outside the project "AI research"');
     expect(state.body).toBe(BODY);
     expect(web.calls.some((c) => c.startsWith("PATCH"))).toBe(false);
+  });
+
+  it("keeps the removed text on the server so undo works in the web connector", async () => {
+    const { state, web } = library();
+    const undos: Array<{ before: string; after_hash: string; lost: unknown[] }> = [];
+    const inner = web.fetch;
+    web.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input instanceof Request ? input.url : input));
+      if (url.pathname.endsWith("/text-undos")) {
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (method === "POST") {
+          undos.push(JSON.parse(String(init?.body)) as (typeof undos)[number]);
+          return new Response(JSON.stringify({ data: { id: "u1" } }), { status: 200 });
+        }
+        if (method === "GET") {
+          const last = undos[undos.length - 1];
+          return new Response(JSON.stringify({ data: last ?? null }), { status: 200 });
+        }
+        undos.pop();
+        return new Response(JSON.stringify({ data: { id: "u1" } }), { status: 200 });
+      }
+      return inner(input, init);
+    }) as typeof fetch;
+
+    const h = await connect(registerRemoveTextTools, { web, mode: "remote" });
+    const removed = await h.call("remove_text", { source_id: "s1", section: 2 });
+    expect(removed.isError).toBe(false);
+    expect(removed.text).toContain("undo_remove_text");
+    expect(undos).toHaveLength(1);
+    expect(undos[0]?.after_hash).toBe(removalHash(state.body));
+
+    const undo = await h.call("undo_remove_text", { source_id: "s1" });
+    expect(undo.isError).toBe(false);
+    expect(undo.text).toContain("Put the removed text back");
+    expect(state.body).toBe(BODY);
+    expect(undos).toHaveLength(0);
   });
 });

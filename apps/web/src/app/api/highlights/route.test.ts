@@ -183,7 +183,7 @@ describe("PUT /api/highlights/[id]", () => {
     expect(writes(fake)).toHaveLength(0);
   });
 
-  it("400s on limits, a mismatched id, bad JSON or a bad URL id", async () => {
+  it("400s on limits, a mismatched id or bad JSON, and 404s a bad URL id", async () => {
     use({});
     const long = { ...body, quote: "a".repeat(10_001) };
     expect((await PUT(jsonRequest("PUT", long), params())).status).toBe(400);
@@ -192,7 +192,7 @@ describe("PUT /api/highlights/[id]", () => {
     );
     expect((await PUT(jsonRequest("PUT", body), params(ITEM))).status).toBe(400);
     expect((await PUT(jsonRequest("PUT", "{nope"), params())).status).toBe(400);
-    expect((await PUT(jsonRequest("PUT", body), params("bad"))).status).toBe(400);
+    expect((await PUT(jsonRequest("PUT", body), params("bad"))).status).toBe(404);
   });
 });
 

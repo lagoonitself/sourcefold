@@ -141,6 +141,16 @@ describe("webPageToCapture", () => {
   });
 });
 
+describe("footnote markers", () => {
+  it("turns an escaped footnote link into a footnote marker", () => {
+    const html = `<!doctype html><html><body><article><h1>Essay</h1><p>A claim <a href="#f23n">[23]</a> with enough surrounding text to count as an article body for the extractor, repeated so the page is not treated as empty. A claim <a href="#f23n">[23]</a> with enough surrounding text to count as an article body for the extractor.</p></article></body></html>`;
+    const capture = webPageToCapture(html, "https://example.com/essay", parseHtml);
+    expect(capture.markdown).toContain("[^23]");
+    expect(capture.markdown).not.toContain("\\[[23]");
+    expect(capture.markdown).not.toContain("(#f23n)");
+  });
+});
+
 describe("normalizeWebPageDate", () => {
   it("keeps a date, trims a timestamp, and rejects anything else", () => {
     expect(normalizeWebPageDate("2026-03-04T10:30:00Z")).toBe("2026-03-04");

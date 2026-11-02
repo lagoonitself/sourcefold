@@ -160,7 +160,7 @@ const HEADER_FIELDS: Array<[string, string]> = [
   ["saved", "Saved"],
 ];
 
-function stripTitleLine(body: string, title: string): string {
+export function stripTitleLine(body: string, title: string): string {
   const match = /^\s*# (.*)\n?/.exec(body);
   if (match && (match[1]!.trim() === title.trim() || !title.trim())) {
     return body.slice(match[0].length).replace(/^\n+/, "");
@@ -207,8 +207,8 @@ async function loadSource(
     throw err;
   }
 
-  const { fields, body: raw } = splitFrontMatter(file);
-  const body = stripTitleLine(raw, base.title).trimEnd();
+  const { fields } = splitFrontMatter(file);
+  const body = readableBody(file, base.title);
   const headings = findHeadings(body);
   const entry: CachedSource = {
     title: base.title,
@@ -242,11 +242,21 @@ function sectionRange(source: CachedSource, index: number): [number, number] {
   return [heading.offset, next ? next.offset : source.body.length];
 }
 
+/**
+ * The text read_source measures and shows: front matter and the title line removed, the
+ * "Saved from" line and the user's highlights and note kept. remove_text reports this length.
+ */
+export function readableBody(file: string, title: string): string {
+  const { body } = splitFrontMatter(file);
+  return stripTitleLine(body, title).trimEnd();
+}
+
 /** The title, kind, url and (for the first look) the details and summary. */
 function headerLines(source: CachedSource, withDetails: boolean): string[] {
   const lines: string[] = [source.title];
   const url = source.fields.url;
-  lines.push(`${kindLabel(source.kind)}${url ? ` · ${url}` : ""}`);
+  const kindName = source.fields.arxiv && source.kind === "pdf" ? "arXiv" : kindLabel(source.kind);
+  lines.push(`${kindName}${url ? ` · ${url}` : ""}`);
   if (withDetails) {
     const details = HEADER_FIELDS.flatMap(([key, label]) => {
       const value = source.fields[key];
@@ -276,6 +286,22 @@ function headerLines(source: CachedSource, withDetails: boolean): string[] {
     if (summary) lines.push(`Summary: ${truncate(summary, 300)}`);
   }
   return lines;
+}
+
+/** Section numbers for a source that is short enough to return whole. */
+function outlineOf(source: CachedSource): string {
+  const minLevel = Math.min(...source.headings.map((h) => h.level));
+  const lines = ["Outline (section number, heading, size). Read one section with section=N."];
+  source.headings.slice(0, OUTLINE_MAX_LINES).forEach((heading, index) => {
+    const [start, end] = sectionRange(source, index);
+    lines.push(
+      `${"  ".repeat(heading.level - minLevel)}§${index + 1} ${heading.text} · ${sizeOf(end - start)}`,
+    );
+  });
+  if (source.headings.length > OUTLINE_MAX_LINES) {
+    lines.push(`…and ${source.headings.length - OUTLINE_MAX_LINES} more headings.`);
+  }
+  return lines.join("\n");
 }
 
 /** What a long source holds, without its text: size, outline with section numbers. */
@@ -443,7 +469,11 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
 
       if (section !== undefined) return readSection(source, section, part ?? 1);
       if (part === undefined && source.parts.length > 1) return overview(source);
-      return readPart(source, part ?? 1);
+      const text = readPart(source, part ?? 1);
+      if (part === undefined && source.headings.length > 0) {
+        return `${text}\n\n${outlineOf(source)}`;
+      }
+      return text;
     },
   });
 }

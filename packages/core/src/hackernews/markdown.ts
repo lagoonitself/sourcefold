@@ -37,11 +37,35 @@ export function decodeEntities(value: string): string {
   });
 }
 
+/** Sentence punctuation HN's autolinker pulls into the link (`https://example.com),`). */
+function peelTrailingPunctuation(value: string): { value: string; trailing: string } {
+  let trailing = "";
+  while (value.length > 0) {
+    const last = value.at(-1)!;
+    if (!"),.;:".includes(last)) break;
+    if (last === ")") {
+      const opens = value.split("(").length - 1;
+      const closes = value.split(")").length - 1;
+      if (opens >= closes) break;
+    }
+    trailing = last + trailing;
+    value = value.slice(0, -1);
+  }
+  return { value, trailing };
+}
+
 function linkMarkdown(text: string, url: string): string {
-  const label = text.trim();
-  if (!url) return label;
-  if (!label) return url;
-  return `[${label}](${url})`;
+  const peeledUrl = peelTrailingPunctuation(url.trim());
+  const peeledLabel = peelTrailingPunctuation(text.trim());
+  const href = peeledUrl.value;
+  const label = peeledLabel.value;
+  const trailing =
+    peeledLabel.trailing.length >= peeledUrl.trailing.length
+      ? peeledLabel.trailing
+      : peeledUrl.trailing;
+  if (!href) return `${label}${trailing}`;
+  if (!label) return `${href}${trailing}`;
+  return `[${label}](${href})${trailing}`;
 }
 
 function attribute(tag: string, name: string): string {

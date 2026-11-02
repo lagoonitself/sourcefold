@@ -8,7 +8,7 @@ import { defineTool, type ToolContext } from "./define";
 import {
   formatDate,
   formatSeconds,
-  kindLabel,
+  displayKind,
   messageOf,
   plural,
   snippetToMarkdown,
@@ -59,7 +59,9 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         const how =
           creds.source === "desktop"
             ? "using the desktop app's sign-in"
-            : "using the access token from Claude Desktop's settings";
+            : creds.source === "web"
+              ? "through the web connector"
+              : "using the access token from Claude Desktop's settings";
         lines.push(
           `Signed in${creds.email ? ` as ${creds.email}` : ""} at ${creds.webUrl}, ${how}.`,
         );
@@ -297,7 +299,9 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
       details: z
         .boolean()
         .default(false)
-        .describe("Also show each source's url and the first 200 characters of the user's note."),
+        .describe(
+          "Also show each source's url, summary, the first 200 characters of the user's note, and when it was last updated.",
+        ),
       offset: z
         .number()
         .int()
@@ -342,7 +346,10 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         if (!details) continue;
         const url = urlOf(item);
         if (url) lines.push(`  ${url}`);
+        if (item.summary) lines.push(`  Summary: ${truncate(item.summary, 300)}`);
         if (item.note) lines.push(`  Note: ${truncate(item.note, 200)}`);
+        const updated = formatDate(item.updated_at);
+        if (updated) lines.push(`  Updated: ${updated}`);
       }
       if (items.length === 0) {
         lines.push("This group has no sources of its own.");
@@ -463,6 +470,12 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         title: string;
         note: string | null;
         folder_id: string;
+        summary?: string | null;
+        author?: string | null;
+        author_type?: Item["author_type"];
+        triage?: Item["triage"];
+        tags?: string[];
+        updated_at?: string;
       }>(`/items/${encodeURIComponent(source_id)}`);
 
       const [index, siblings] = await Promise.all([
@@ -481,10 +494,16 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         title: base.title,
         folder_id: base.folder_id,
         note: base.note,
+        summary: full?.summary ?? base.summary ?? null,
+        author: full?.author ?? base.author ?? null,
+        author_type: full?.author_type ?? base.author_type ?? null,
+        triage: full?.triage ?? base.triage ?? null,
+        tags: full?.tags ?? base.tags,
+        updated_at: full?.updated_at ?? base.updated_at,
       };
 
       const lines = [sourceLine(item)];
-      lines.push(`Kind: ${kindLabel(item.kind)}`);
+      lines.push(`Kind: ${displayKind(item)}`);
       const url = urlOf(item);
       if (url) lines.push(`URL: ${url}`);
       if (index?.byId.has(item.folder_id)) {
@@ -494,7 +513,10 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
       }
       const saved = formatDate(item.created_at);
       if (saved) lines.push(`Saved: ${saved}`);
+      const updated = formatDate(item.updated_at);
+      if (updated) lines.push(`Updated: ${updated}`);
       lines.push(`Status: ${item.status}${item.error ? ` (${item.error})` : ""}`);
+      if (item.summary) lines.push(`Summary: ${truncate(item.summary, 1000)}`);
       for (const [key, value] of Object.entries(item.meta ?? {}).slice(0, 20)) {
         if (typeof value === "string" && value.trim()) {
           lines.push(`${key}: ${truncate(value, 300)}`);

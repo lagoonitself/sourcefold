@@ -99,10 +99,10 @@ export async function POST(request: Request): Promise<Response> {
   const toolContext: ToolContext = {
     api: createWebApi({
       credentials: () => ({
-        webUrl: "https://sourcefold.invalid",
+        webUrl: new URL(request.url).origin,
         token: "in-process-mcp",
-        source: "settings",
-        email: null,
+        source: "web",
+        email: auth.email,
       }),
       fetch: (input, init) => dispatchRoute(routeContext, pathAndQuery(input), init),
     }),

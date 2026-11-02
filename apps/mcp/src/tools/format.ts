@@ -45,6 +45,13 @@ export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind;
 }
 
+/** arXiv papers are stored as kind `pdf` (the file bucket) and labelled arXiv when they have an id. */
+export function displayKind(item: Pick<Item, "kind" | "meta">): string {
+  const arxiv = item.meta && typeof item.meta.arxiv === "string" && item.meta.arxiv.trim();
+  if (item.kind === "pdf" && arxiv) return "arXiv";
+  return kindLabel(item.kind);
+}
+
 function metaString(meta: Item["meta"], key: string): string | null {
   const value = meta?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -64,7 +71,7 @@ export function bylineOf(item: Pick<Item, "meta"> & { author?: string | null }):
 
 /** `[id] YouTube · Title · Engineering Explained · 2026-10-18` */
 export function sourceLine(item: Item): string {
-  const parts = [kindLabel(item.kind), item.title || "(untitled)"];
+  const parts = [displayKind(item), item.title || "(untitled)"];
   const byline = bylineOf(item);
   if (byline) parts.push(byline);
   if (item.author_type) {

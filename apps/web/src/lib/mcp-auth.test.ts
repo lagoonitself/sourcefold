@@ -59,6 +59,7 @@ describe("authenticateMcpRequest", () => {
     await expect(authenticateMcpRequest(request("sf_existing-token"))).resolves.toEqual({
       ...result,
       addedBy: "MCP",
+      email: null,
     });
     expect(mocks.requireApiUser).toHaveBeenCalledOnce();
     expect(mocks.createSupabaseClient).not.toHaveBeenCalled();
@@ -102,7 +103,13 @@ describe("authenticateMcpRequest", () => {
 
     const result = await authenticateMcpRequest(request("oauth-jwt"));
 
-    expect(result).toEqual({ db: rlsDb, userId: "user-1", via: "session", addedBy: "Claude" });
+    expect(result).toEqual({
+      db: rlsDb,
+      userId: "user-1",
+      via: "session",
+      addedBy: "Claude",
+      email: "reader@example.com",
+    });
     expect(mocks.getOAuthClient).toHaveBeenCalledWith("oauth-client-1");
     expect(mocks.auth.getClaims).toHaveBeenCalledWith("oauth-jwt");
     expect(mocks.auth.getUser).toHaveBeenCalledWith("oauth-jwt");

@@ -56,6 +56,8 @@ describe("set_source_info", () => {
     expect(text).toContain("Updated 1 source:");
     expect(text).toContain("status: Keep");
     expect(text).toContain("tags: Compute, Scale");
+    expect(text).toContain("summary: Analysis of compute trends through 2030.");
+    expect(text).toContain("author: Epoch AI");
     expect(patchReceived).toEqual({
       triage: "keep",
       tags: ["Compute", "Scale"],

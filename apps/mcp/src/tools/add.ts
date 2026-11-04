@@ -4,6 +4,8 @@ import { extractUrls, formatWait } from "@sourcefold/core/capture";
 import { z } from "zod";
 import { createNodeSourceFetch, createPublicFetch } from "../links/public-fetch";
 import {
+  checkDuplicate,
+  checkUrl,
   classifyLink,
   isCloudRefusal,
   collectionKind,
@@ -28,6 +30,7 @@ import {
 import { defineTool, type ToolContext } from "./define";
 import { scheduleDriveSave } from "./drive-autosave";
 import { indexFolders, messageOf, plural } from "./format";
+import { mapLimit } from "./library-data";
 
 export {
   ADD_JOBS_FILE,
@@ -245,6 +248,46 @@ async function queueRemoteLink(
   const result: RemoteResult = { url, status: "waiting", needs, message };
   batch.push({ url, kind, needs, message, result });
   return result;
+}
+
+/** Time kept for writing the queue after the duplicate checks. */
+const QUEUE_CHECK_RESERVE_MS = 5_000;
+
+/**
+ * The link queue doesn't carry allow_duplicates: the desktop app and the extension save with the
+ * usual checks, so a link already saved in another group would only come back later as "already
+ * saved". With allow_duplicates, such links are reported now instead of being queued. Links that
+ * can't be checked in time are queued as usual.
+ */
+async function settleQueuedDuplicates(
+  ctx: ToolContext,
+  groupId: string,
+  batch: QueuedLink[],
+  deadline: number,
+): Promise<void> {
+  const verdicts = await mapLimit(batch, 6, async (link) => {
+    const remaining = deadline + REMOTE_QUEUE_TIMEOUT_MS - QUEUE_CHECK_RESERVE_MS - Date.now();
+    if (remaining <= 0) return null;
+    try {
+      const check = await checkUrl(ctx.api, link.url, groupId, Math.min(5_000, remaining));
+      if (check.exists) return checkDuplicate(check, true).message;
+      if (check.elsewhere) {
+        return `Already saved in ${check.elsewhere.folder_path}. Links that wait for your computer or Chrome can't be saved a second time yet (allow_duplicates only works for links saved straight away)`;
+      }
+    } catch {
+      // Queue it; the computer checks again when it saves.
+    }
+    return null;
+  });
+  for (let i = batch.length - 1; i >= 0; i -= 1) {
+    const message = verdicts[i];
+    const link = batch[i];
+    if (!message || !link) continue;
+    link.result.status = "duplicate";
+    link.result.message = message;
+    delete link.result.needs;
+    batch.splice(i, 1);
+  }
 }
 
 async function flushRemoteQueue(
@@ -548,6 +591,7 @@ async function addLinksRemote(
     link.result.message = `Not queued: one call queues at most ${REMOTE_MAX_LINKS} links. Add it again.`;
     delete link.result.needs;
   }
+  if (args.allow_duplicates) await settleQueuedDuplicates(ctx, group.id, batch, deadline);
   await flushRemoteQueue(ctx, group.id, batch);
   const reply = formatRemoteResults(group, results);
   return left > 0
@@ -660,7 +704,7 @@ export function registerAddTools(
         .boolean()
         .default(false)
         .describe(
-          "Only allows saving a second copy in a different group of the same project. Same-group duplicates are still refused. Default false.",
+          "Only allows saving a second copy in a different group of the same project. Same-group duplicates are still refused (a group holds each link once). Links that wait for the desktop app or Chrome (in the web connector: YouTube, Reddit, X and pages the cloud can't fetch) can't be saved a second time yet; they are reported as already saved. Default false.",
         ),
       limit_per_collection: z
         .number()

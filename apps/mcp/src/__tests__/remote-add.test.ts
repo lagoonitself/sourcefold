@@ -227,6 +227,93 @@ describe("remote add_links", () => {
     ).toBe("desktop");
   });
 
+  // QA 2026-11-04 P1-2: allow_duplicates in the web connector.
+  it("passes allow_duplicates to every cloud save", async () => {
+    const { web } = remoteWeb();
+    vi.spyOn(saveLinkModule, "saveLink").mockResolvedValue({
+      status: "saved",
+      title: "Copy",
+      itemId: "item-copy",
+    });
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx), {
+      web,
+      desktop: closedDesktop(),
+      mode: "remote",
+    });
+
+    const result = await h.call("add_links", {
+      group_id: GROUP.id,
+      links: ["https://example.com/a", "https://grokipedia.com/page/Turbocharger"],
+      allow_duplicates: true,
+    });
+
+    expect(result.text).toContain("2 saved");
+    for (const call of vi.mocked(saveLinkModule.saveLink).mock.calls) {
+      expect(call[5]).toBe(true);
+    }
+  });
+
+  it("with allow_duplicates, reports waiting links already saved instead of queueing them", async () => {
+    const { web, queueBodies } = remoteWeb();
+    const checks: Record<string, unknown> = {
+      "https://www.youtube.com/watch?v=aaaaaaaaaaa": {
+        exists: false,
+        elsewhere: { item_id: "i1", folder_id: "g9", folder_path: "Cars › Engines" },
+      },
+      "https://www.youtube.com/watch?v=bbbbbbbbbbb": {
+        exists: true,
+        item_id: "i2",
+        folder_id: GROUP.id,
+        folder_name: "Turbo",
+        elsewhere: null,
+      },
+      "https://www.youtube.com/watch?v=ccccccccccc": { exists: false, elsewhere: null },
+    };
+    const routes = fakeWeb({
+      "POST /items/check": ({ body }) => ({
+        json: { data: checks[(body as { url: string }).url] },
+      }),
+    });
+    const both: typeof fetch = (input, init) => {
+      const path = new URL(String(input)).pathname;
+      return path === "/api/items/check" ? routes.fetch(input, init) : web.fetch(input, init);
+    };
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx), {
+      web: { ...web, fetch: both },
+      desktop: closedDesktop(),
+      mode: "remote",
+    });
+
+    const result = await h.call("add_links", {
+      group_id: GROUP.id,
+      links: Object.keys(checks),
+      allow_duplicates: true,
+    });
+
+    expect(result.text).toContain("2 already saved");
+    expect(result.text).toContain("1 waiting");
+    expect(result.text).toContain("Already saved in Cars › Engines");
+    expect(result.text).toContain("can't be saved a second time yet");
+    expect(result.text).toContain("allow_duplicates only allows a copy in another group");
+    const queued = queueBodies.flatMap((body) => (body as { links: { url: string }[] }).links);
+    expect(queued.map((link) => link.url)).toEqual(["https://www.youtube.com/watch?v=ccccccccccc"]);
+  });
+
+  it("without allow_duplicates, queues without checking first", async () => {
+    const { web, queueBodies } = remoteWeb();
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx), {
+      web,
+      desktop: closedDesktop(),
+      mode: "remote",
+    });
+    await h.call("add_links", {
+      group_id: GROUP.id,
+      links: ["https://www.youtube.com/watch?v=aaaaaaaaaaa"],
+    });
+    expect(web.calls.some((c) => c.startsWith("POST /items/check"))).toBe(false);
+    expect(queueBodies).toHaveLength(1);
+  });
+
   it("cancels every open queue row in a group", async () => {
     const { web } = remoteWeb();
     const h = await connect((server, ctx) => void registerAddTools(server, ctx), {

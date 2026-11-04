@@ -119,7 +119,13 @@ export function checkDuplicate(
   allowDuplicates = false,
 ): { isDuplicate: boolean; message: string } {
   if (check.exists) {
-    return { isDuplicate: true, message: alreadySaved(check.folder_name) };
+    const message = alreadySaved(check.folder_name);
+    return {
+      isDuplicate: true,
+      message: allowDuplicates
+        ? `${message}. A group holds each link once; allow_duplicates only allows a copy in another group`
+        : message,
+    };
   }
   if (!allowDuplicates && check.elsewhere) {
     return { isDuplicate: true, message: alreadySaved(check.elsewhere.folder_path) };
@@ -127,7 +133,7 @@ export function checkDuplicate(
   return { isDuplicate: false, message: "" };
 }
 
-async function checkUrl(
+export async function checkUrl(
   api: WebApi,
   url: string,
   groupId: string,
@@ -315,6 +321,7 @@ async function saveSource(
           url: result.url,
           title: result.title,
           reason: result.reason,
+          ...(allowDuplicates ? { allow_duplicate: true } : {}),
         },
         timeoutMs,
       );
@@ -415,6 +422,7 @@ async function saveSubstack(
             folder_id: groupId,
             url: parsed.url,
             title: parsed.title,
+            ...(allowDuplicates ? { allow_duplicate: true } : {}),
           },
           timeoutMs,
         );

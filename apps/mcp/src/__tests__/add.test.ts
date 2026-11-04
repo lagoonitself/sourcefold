@@ -36,9 +36,11 @@ describe("checkDuplicate", () => {
       isDuplicate: true,
       message: "Already saved in Turbo",
     });
+    // QA 2026-11-04 P1-2: say why allow_duplicates didn't help.
     expect(checkDuplicate(same, true)).toEqual({
       isDuplicate: true,
-      message: "Already saved in Turbo",
+      message:
+        "Already saved in Turbo. A group holds each link once; allow_duplicates only allows a copy in another group",
     });
   });
 

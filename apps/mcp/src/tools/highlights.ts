@@ -13,7 +13,7 @@ import { z } from "zod";
 import { findQuote, readerTextOf } from "../reader-text";
 import type { Highlight, HighlightInput, Item } from "../types";
 import { defineTool, type ToolContext } from "./define";
-import { formatSeconds, kindLabel, plural, truncate } from "./format";
+import { displayKind, formatSeconds, plural, truncate } from "./format";
 import { loadFolderIndex, loadFolderItems, mapLimit, requireFolder } from "./library-data";
 import { clearReadCache, forgetCachedSource } from "./read";
 
@@ -48,7 +48,7 @@ function formatHighlights(items: Item[], highlights: Highlight[]): string[] {
     const list = byItem.get(item.id);
     if (!list) continue;
     list.sort((a, b) => a.start_offset - b.start_offset);
-    lines.push("", `${item.title} · ${kindLabel(item.kind)} [${item.id}]`);
+    lines.push("", `${item.title} · ${displayKind(item)} [${item.id}]`);
     for (const h of list) lines.push(...highlightLines(h));
   }
   return lines;
@@ -80,8 +80,13 @@ export function registerHighlightsTools(server: McpServer, ctx: ToolContext): vo
         throw new Error("Give exactly one of source_id, group_id or project_id.");
 
       if (args.source_id) {
-        const item = await ctx.api.get<Item>(`/items/${encodeURIComponent(args.source_id)}`);
+        let item = await ctx.api.get<Item>(`/items/${encodeURIComponent(args.source_id)}`);
         const list = await highlightsOf(ctx, { item: item.id });
+        // This route has no meta; a PDF's group list says whether it is an arXiv paper.
+        if (item.kind === "pdf" && !item.meta) {
+          const listed = await loadFolderItems(ctx.api, item.folder_id).catch(() => []);
+          item = { ...item, meta: listed.find((i) => i.id === item.id)?.meta ?? null };
+        }
         if (list.length === 0) return `No highlights in "${item.title}" yet.`;
         return [
           `${plural(list.length, "highlight")} in this source:`,

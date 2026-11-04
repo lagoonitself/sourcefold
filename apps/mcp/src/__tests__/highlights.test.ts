@@ -220,4 +220,52 @@ describe("highlight tools", () => {
     const bad = await h.call("list_highlights", {});
     expect(bad.isError).toBe(true);
   });
+
+  // QA 2026-11-04 P2-3: list_sources said "arXiv", list_highlights said "PDF".
+  it("labels an arXiv paper arXiv, like list_sources", async () => {
+    const paper = {
+      id: "s2",
+      folder_id: "g1",
+      kind: "pdf",
+      title: "Attention Is All You Need",
+      status: "saved",
+      source_url: "https://arxiv.org/abs/1706.03762",
+      meta: { arxiv: "1706.03762" },
+      created_at: "2026-10-18T00:00:00Z",
+    };
+    const mark: Highlight = {
+      id: "h2",
+      item_id: "s2",
+      kind: "text",
+      quote: "attention",
+      prefix: "",
+      suffix: "",
+      start_offset: 0,
+      end_offset: 9,
+      image_src: null,
+      note: null,
+      seconds: null,
+      cited: [],
+      created_at: "",
+      updated_at: "",
+    };
+    const w = fakeWeb({
+      "GET /items/*": () => ({ json: { data: { ...paper, meta: undefined } } }),
+      "GET /items": () => ({ json: { data: [paper] } }),
+      "GET /folders": () => ({
+        json: {
+          data: [
+            { id: "p1", parent_id: null, name: "AI", position: 0 },
+            { id: "g1", parent_id: "p1", name: "Papers", position: 0 },
+          ],
+        },
+      }),
+      "GET /highlights": () => ({ json: { data: [mark] } }),
+    });
+    const h = await connect(registerHighlightsTools, { web: w });
+    const one = await h.call("list_highlights", { source_id: "s2" });
+    expect(one.text).toContain("Attention Is All You Need · arXiv [s2]");
+    const group = await h.call("list_highlights", { group_id: "g1" });
+    expect(group.text).toContain("Attention Is All You Need · arXiv [s2]");
+  });
 });

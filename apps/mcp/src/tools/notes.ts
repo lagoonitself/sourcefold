@@ -1,9 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { ApiError } from "../web-api";
 import type { Item } from "../types";
 import { defineTool, type ToolContext } from "./define";
-import { sourceLine } from "./format";
+import { displayKind, sourceLine } from "./format";
 import { loadFolderIndex, requireFolder, withHint } from "./library-data";
 import { forgetCachedSource } from "./read";
 
@@ -51,15 +50,24 @@ export function registerNotesTools(server: McpServer, ctx: ToolContext): void {
       if (title !== undefined) body.title = title;
       if (text !== undefined) body.markdown = text;
       if (Object.keys(body).length === 0) throw new Error("Nothing to change. Give title or text.");
+      // The API lets any source's text be replaced (remove_text needs that), so the kind is checked
+      // here: edit_note must never overwrite an article, transcript or page.
+      const path = `/items/${encodeURIComponent(note_id)}`;
+      let existing: Pick<Item, "id" | "kind" | "title">;
+      try {
+        existing = await api.get<Pick<Item, "id" | "kind" | "title">>(path);
+      } catch (err) {
+        throw withHint(err, "Use list_sources to find note ids.");
+      }
+      if (existing.kind !== "note") {
+        throw new Error(
+          `[${existing.id}] "${existing.title}" (${displayKind({ kind: existing.kind, meta: null })}) isn't a note, so edit_note left it unchanged. Use update_source to set the user's note on it, or remove_text to cut text out of it.`,
+        );
+      }
       let note: Item;
       try {
-        note = await api.patch<Item>(`/items/${encodeURIComponent(note_id)}`, body);
+        note = await api.patch<Item>(path, body);
       } catch (err) {
-        if (err instanceof ApiError && /only notes/i.test(err.message)) {
-          throw new Error(
-            `${err.message} That source isn't a note. Use update_source to set the user's note on it.`,
-          );
-        }
         throw withHint(err, "Use list_sources to find note ids.");
       }
       forgetCachedSource(note_id);

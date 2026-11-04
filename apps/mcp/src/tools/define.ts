@@ -40,6 +40,7 @@ export interface ToolSpec<S extends Shape> {
 const TARGET_ID_KEYS = new Set([
   "source_id",
   "source_ids",
+  "note_id",
   "group_id",
   "parent_id",
   "project_id",

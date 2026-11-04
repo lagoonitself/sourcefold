@@ -1,5 +1,9 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
+import { createServer, INSTRUCTIONS } from "../index";
 import { registerAppTools } from "../tools/app";
+import { createWebApi } from "../web-api";
 import { closedDesktop, connect, fakeDesktop, fakeWeb } from "./harness";
 
 describe("show_in_app", () => {
@@ -36,5 +40,39 @@ describe("show_in_app", () => {
     expect(lonely.isError).toBe(true);
     expect(lonely.text).toContain("source_id");
     expect(desktop.show).not.toHaveBeenCalled();
+  });
+});
+
+// QA 2026-11-04 P1-3: the web connector runs on the server and can never reach the desktop app.
+describe("web connector (remote mode)", () => {
+  async function connectServer(mode: "local" | "remote") {
+    const server = createServer(
+      { api: createWebApi({ credentials: () => null }), desktop: closedDesktop() },
+      { mode },
+    );
+    const client = new Client({ name: "test-client", version: "0.0.0" });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
+    const { tools } = await client.listTools();
+    return { client, tools };
+  }
+
+  it("doesn't offer show_in_app or promise desktop features", async () => {
+    const remote = await connectServer("remote");
+    const names = remote.tools.map((t) => t.name);
+    expect(names).not.toContain("show_in_app");
+    expect(names).toContain("find_sources");
+    const instructions = remote.client.getInstructions() ?? "";
+    expect(instructions).not.toContain("show_in_app");
+    expect(instructions).toContain("can't search inside sources' text");
+    const find = remote.tools.find((t) => t.name === "find_sources");
+    expect(find?.description).not.toMatch(/desktop app open/);
+  });
+
+  it("keeps them in Claude Desktop", async () => {
+    const local = await connectServer("local");
+    expect(local.tools.map((t) => t.name)).toContain("show_in_app");
+    expect(local.client.getInstructions()).toBe(INSTRUCTIONS);
+    expect(INSTRUCTIONS).toContain("show_in_app opens a group");
   });
 });

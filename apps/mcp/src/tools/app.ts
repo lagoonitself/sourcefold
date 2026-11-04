@@ -4,6 +4,8 @@ import type { ShowTarget } from "../types";
 import { defineTool, type ToolContext } from "./define";
 
 export function registerAppTools(server: McpServer, ctx: ToolContext): void {
+  // The web connector runs on the server and can never reach the user's desktop app.
+  if (ctx.mode === "remote") return;
   defineTool(server, ctx, {
     name: "show_in_app",
     title: "Show in the Sourcefold app",

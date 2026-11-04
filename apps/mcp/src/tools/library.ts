@@ -47,7 +47,9 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     name: "get_status",
     title: "Sourcefold status",
     description:
-      "Shows who Sourcefold is signed in as on this computer, whether the Sourcefold desktop app is open (and its mode), and the Google Drive state (connected, how many changes are not saved yet). Use it first when something fails, or to check which features are available: searching inside sources and show_in_app need the desktop app to be open.",
+      ctx.mode === "remote"
+        ? "Shows who Sourcefold is signed in as and the Google Drive state (connected, how many changes are not saved yet). Use it first when something fails."
+        : "Shows who Sourcefold is signed in as on this computer, whether the Sourcefold desktop app is open (and its mode), and the Google Drive state (connected, how many changes are not saved yet). Use it first when something fails, or to check which features are available: searching inside sources and show_in_app need the desktop app to be open.",
     input: {},
     readOnly: true,
     idempotent: true,
@@ -100,8 +102,12 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         }
       }
 
-      const app = await desktop.status();
-      if (!app) {
+      const app = ctx.mode === "remote" ? null : await desktop.status();
+      if (ctx.mode === "remote") {
+        lines.push(
+          "Desktop app: can't be reached from the web connector (it runs on Sourcefold's server, not on your computer), so searching inside sources and opening things in the app aren't available here. Links that need your computer wait until the Sourcefold desktop app is open (get_add_progress lists them).",
+        );
+      } else if (!app) {
         lines.push(
           "Desktop app: not open. Searching inside sources and show_in_app need it open; everything else works without it.",
         );
@@ -384,7 +390,9 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     name: "find_sources",
     title: "Find sources",
     description:
-      "Searches the library. Always finds sources whose title contains the words. With inside_text (the default) and the Sourcefold desktop app open, it also finds passages inside the sources' text and the user's highlights and notes, each with the source, its group, the heading it is under, a snippet with the matched words in **bold**, and the video time for YouTube. With the desktop app closed only titles are searched, and the reply says so. Pass project_id to stay inside one project. Then use read_source with a source id to read it.",
+      ctx.mode === "remote"
+        ? "Searches the library for sources whose title contains the words, each with its group. Pass project_id to stay inside one project. Then use read_source with a source id to read it. This web connector can't search inside sources' text (that needs Claude Desktop with the Sourcefold extension and the desktop app), so to find a passage, read the likely sources' outlines."
+        : "Searches the library. Always finds sources whose title contains the words. With inside_text (the default) and the Sourcefold desktop app open, it also finds passages inside the sources' text and the user's highlights and notes, each with the source, its group, the heading it is under, a snippet with the matched words in **bold**, and the video time for YouTube. With the desktop app closed only titles are searched, and the reply says so. Pass project_id to stay inside one project. Then use read_source with a source id to read it.",
     input: {
       query: z.string().min(1).describe("Words to look for."),
       project_id: z
@@ -395,7 +403,9 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         .boolean()
         .default(true)
         .describe(
-          "Also search the text inside sources (needs the desktop app to be open). Default true.",
+          ctx.mode === "remote"
+            ? "Not available in the web connector (only titles are searched here)."
+            : "Also search the text inside sources (needs the desktop app to be open). Default true.",
         ),
     },
     readOnly: true,
@@ -426,7 +436,12 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         lines.push(`No source title contains "${query}".`);
       }
 
-      if (inside_text) {
+      if (inside_text && ctx.mode === "remote") {
+        lines.push(
+          "",
+          "Only titles were searched: the web connector can't search inside sources' text.",
+        );
+      } else if (inside_text) {
         try {
           const found = await desktop.search({
             query,

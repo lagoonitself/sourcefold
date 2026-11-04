@@ -135,6 +135,24 @@ describe("get_status", () => {
     expect(text).toContain("Google Drive: couldn't check (Reconnect Google Drive in Settings.)");
   });
 
+  // QA 2026-11-04 P1-3.
+  it("in the web connector, says the desktop app can't be reached instead of 'not open'", async () => {
+    const desktop = fakeDesktop();
+    const h = await connect(registerLibraryTools, {
+      web: web({
+        "GET /drive/status": () => ({ json: { data: { unsaved: 0, connected: true } } }),
+      }),
+      desktop,
+      mode: "remote",
+      credentials: { webUrl: "https://x.test", token: "t", source: "web", email: "a@b.c" },
+    });
+    const { text } = await h.call("get_status");
+    expect(text).toContain("using the web connector's sign-in");
+    expect(text).toContain("Desktop app: can't be reached from the web connector");
+    expect(text).not.toContain("not open");
+    expect(desktop.status).not.toHaveBeenCalled();
+  });
+
   it("says when nobody is signed in", async () => {
     const h = await connect(registerLibraryTools, { web: web(), credentials: null });
     const { text } = await h.call("get_status");
@@ -402,6 +420,18 @@ describe("find_sources", () => {
     expect(text).toContain("[i1] YouTube · Title i1");
     expect(text).toContain("in Cars › Engines");
     expect(text).toContain("needs the Sourcefold desktop app to be open");
+  });
+
+  // QA 2026-11-04 P1-3: "Open the desktop app" was misleading in the web connector.
+  it("in the web connector, searches titles and never asks for the desktop app", async () => {
+    const desktop = fakeDesktop();
+    const h = await connect(registerLibraryTools, { web: web(), desktop, mode: "remote" });
+    const { text, isError } = await h.call("find_sources", { query: "Title i1" });
+    expect(isError).toBe(false);
+    expect(text).toContain("[i1] YouTube · Title i1");
+    expect(text).toContain("Only titles were searched: the web connector can't search inside");
+    expect(text).not.toMatch(/desktop app/);
+    expect(desktop.search).not.toHaveBeenCalled();
   });
 
   it("adds passages from the desktop app", async () => {

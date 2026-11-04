@@ -22,6 +22,9 @@ export class ApiError extends Error {
   }
 }
 
+/** `ApiError.code` when the website refused the sign-in itself (not a route's own 401). */
+export const SIGN_IN_REJECTED = "sign_in_rejected";
+
 export class NotSignedInError extends Error {
   constructor() {
     super(NOT_SIGNED_IN_MESSAGE);
@@ -81,7 +84,9 @@ export function createWebApi(deps: WebApiDeps = {}): WebApi {
   async function send(method: string, path: string, options: RequestOptions = {}) {
     const creds = getCredentials();
     if (!creds) throw new NotSignedInError();
-    if (isExpired(creds)) throw new ApiError(401, DESKTOP_SIGN_IN_EXPIRED_MESSAGE);
+    if (isExpired(creds)) {
+      throw new ApiError(401, DESKTOP_SIGN_IN_EXPIRED_MESSAGE, SIGN_IN_REJECTED);
+    }
 
     const url = new URL(`${creds.webUrl}/api${path.startsWith("/") ? path : `/${path}`}`);
     for (const [key, value] of Object.entries(options.query ?? {})) {
@@ -120,7 +125,17 @@ export function createWebApi(deps: WebApiDeps = {}): WebApi {
         .catch(() => null)) as { error?: { message?: string } } | null;
       const message = payload?.error?.message ?? "";
       if (!message || /access token|sign in to continue/i.test(message)) {
-        throw new ApiError(401, EXPIRED_MESSAGE[creds.source]);
+        throw new ApiError(401, EXPIRED_MESSAGE[creds.source], SIGN_IN_REJECTED);
+      }
+    }
+    if (res.status === 403) {
+      const payload = (await res
+        .clone()
+        .json()
+        .catch(() => null)) as { error?: { message?: string } } | null;
+      const message = payload?.error?.message ?? "";
+      if (/can't use Sourcefold/i.test(message)) {
+        throw new ApiError(403, message, SIGN_IN_REJECTED);
       }
     }
     return res;

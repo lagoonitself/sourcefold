@@ -3,6 +3,7 @@ import { sameTag } from "@sourcefold/core";
 import { z } from "zod";
 import { NOT_SIGNED_IN_MESSAGE } from "../config";
 import { DesktopClosedError } from "../desktop-bridge";
+import { ApiError, SIGN_IN_REJECTED } from "../web-api";
 import type { Folder, Item } from "../types";
 import { defineTool, type ToolContext } from "./define";
 import {
@@ -53,18 +54,50 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
     run: async (_args, { api, desktop }) => {
       const lines: string[] = [];
       const creds = api.credentials();
+
+      // The Drive status call doubles as the sign-in check: a token that exists isn't one the
+      // website still accepts (QA 2026-11-04 P1-1).
+      let driveLine: string | null = null;
+      let rejected: string | null = null;
+      if (creds) {
+        try {
+          const drive = await api.get<{
+            unsaved?: number;
+            last_saved_at?: string | null;
+            connected?: boolean;
+          }>("/drive/status");
+          if (!drive.connected) {
+            driveLine = "Google Drive: not connected. Connect it in the web app's Settings.";
+          } else {
+            const last = formatDate(drive.last_saved_at);
+            const unsaved = drive.unsaved ?? 0;
+            driveLine = `Google Drive: connected, ${unsaved === 0 ? "everything is saved" : `${plural(unsaved, "change")} not saved yet (save_to_drive saves them)`}${last ? `, last saved ${last}` : ""}.`;
+          }
+        } catch (err) {
+          if (err instanceof ApiError && err.code === SIGN_IN_REJECTED) {
+            rejected = messageOf(err);
+          } else {
+            driveLine = `Google Drive: couldn't check (${messageOf(err)})`;
+          }
+        }
+      }
+
       if (!creds) {
         lines.push(`Not signed in. ${NOT_SIGNED_IN_MESSAGE}`);
       } else {
         const how =
           creds.source === "desktop"
-            ? "using the desktop app's sign-in"
+            ? "the desktop app's sign-in"
             : creds.source === "web"
-              ? "through the web connector"
-              : "using the access token from Claude Desktop's settings";
-        lines.push(
-          `Signed in${creds.email ? ` as ${creds.email}` : ""} at ${creds.webUrl}, ${how}.`,
-        );
+              ? "the web connector's sign-in"
+              : "the access token in SOURCEFOLD_TOKEN (Claude Desktop → Settings → Extensions → Sourcefold, or your MCP client's settings)";
+        if (rejected) {
+          lines.push(`Not signed in: ${creds.webUrl} refused ${how}. ${rejected}`);
+        } else {
+          lines.push(
+            `Signed in${creds.email ? ` as ${creds.email}` : ""} at ${creds.webUrl}, using ${how}.`,
+          );
+        }
       }
 
       const app = await desktop.status();
@@ -82,26 +115,7 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
         lines.push(`Desktop app: open, version ${app.version}, ${mode}.`);
       }
 
-      if (creds) {
-        try {
-          const drive = await api.get<{
-            unsaved?: number;
-            last_saved_at?: string | null;
-            connected?: boolean;
-          }>("/drive/status");
-          if (!drive.connected) {
-            lines.push("Google Drive: not connected. Connect it in the web app's Settings.");
-          } else {
-            const last = formatDate(drive.last_saved_at);
-            const unsaved = drive.unsaved ?? 0;
-            lines.push(
-              `Google Drive: connected, ${unsaved === 0 ? "everything is saved" : `${plural(unsaved, "change")} not saved yet (save_to_drive saves them)`}${last ? `, last saved ${last}` : ""}.`,
-            );
-          }
-        } catch (err) {
-          lines.push(`Google Drive: couldn't check (${messageOf(err)})`);
-        }
-      }
+      if (driveLine) lines.push(driveLine);
       return lines.join("\n");
     },
   });

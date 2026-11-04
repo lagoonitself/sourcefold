@@ -77,9 +77,62 @@ describe("get_status", () => {
     });
     const { text, isError } = await h.call("get_status");
     expect(isError).toBe(false);
-    expect(text).toContain("using the access token from Claude Desktop's settings");
+    expect(text).toContain("using the access token in SOURCEFOLD_TOKEN");
     expect(text).toContain("Desktop app: not open");
     expect(text).toContain("Google Drive: couldn't check (Boom)");
+  });
+
+  // QA 2026-11-04 P1-1: "Signed in" was reported for a token the website refused.
+  it("says the sign-in was refused when the website rejects the token", async () => {
+    const h = await connect(registerLibraryTools, {
+      web: web({
+        "GET /drive/status": () => ({
+          status: 401,
+          json: { error: { message: "This access token isn't valid or has expired." } },
+        }),
+      }),
+      credentials: { webUrl: "https://x.test", token: "sf_bad", source: "settings", email: null },
+    });
+    const { text, isError } = await h.call("get_status");
+    expect(isError).toBe(false);
+    expect(text).not.toContain("Signed in");
+    expect(text).toContain(
+      "Not signed in: https://x.test refused the access token in SOURCEFOLD_TOKEN",
+    );
+    expect(text).toContain("isn't valid any more");
+    expect(text).not.toContain("Google Drive");
+  });
+
+  it("says an expired desktop sign-in is expired, without asking the website", async () => {
+    const fake = web();
+    const h = await connect(registerLibraryTools, {
+      web: fake,
+      credentials: {
+        webUrl: "https://x.test",
+        token: "eyJ.stale",
+        source: "desktop",
+        email: "a@b.c",
+        expiresAt: Math.floor(Date.now() / 1000) - 36_000,
+      },
+    });
+    const { text } = await h.call("get_status");
+    expect(text).toContain("Not signed in: https://x.test refused the desktop app's sign-in");
+    expect(text).toContain("has expired");
+    expect(fake.calls).toEqual([]);
+  });
+
+  it("keeps a Drive 401 apart from a refused sign-in", async () => {
+    const h = await connect(registerLibraryTools, {
+      web: web({
+        "GET /drive/status": () => ({
+          status: 401,
+          json: { error: { message: "Reconnect Google Drive in Settings." } },
+        }),
+      }),
+    });
+    const { text } = await h.call("get_status");
+    expect(text).toContain("Signed in as owner@example.com");
+    expect(text).toContain("Google Drive: couldn't check (Reconnect Google Drive in Settings.)");
   });
 
   it("says when nobody is signed in", async () => {

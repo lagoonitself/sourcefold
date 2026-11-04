@@ -141,6 +141,22 @@ describe("loadCredentials", () => {
   });
 });
 
+describe("web API answers", () => {
+  // QA 2026-11-04 P2-2: `{ data: null }` came back as the envelope object, not null.
+  it("unwraps `{ data: null }` to null", async () => {
+    const web = fakeWeb({
+      "GET /items/*/text-undos": () => ({ json: { data: null } }),
+      "GET /folders": () => ({ json: { data: [] } }),
+    });
+    const api = createWebApi({
+      credentials: () => ({ webUrl: "https://app.test", token: "t", source: "web", email: null }),
+      fetch: web.fetch,
+    });
+    expect(await api.get("/items/s1/text-undos")).toBeNull();
+    expect(await api.get("/folders")).toEqual([]);
+  });
+});
+
 describe("web API errors", () => {
   it("passes the web app's message through and marks the reply as an error", async () => {
     const web = fakeWeb({

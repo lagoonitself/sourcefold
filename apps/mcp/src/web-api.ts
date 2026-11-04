@@ -149,7 +149,10 @@ export function createWebApi(deps: WebApiDeps = {}): WebApi {
     } | null;
 
     if (!res.ok) throw errorFrom(res.status, payload?.error);
-    return (payload?.data ?? payload) as T;
+    // `{ data: null }` means "nothing" (no undo entry left, say), not the envelope itself
+    // (QA 2026-11-04 P2-2: the envelope read as an undo entry that "changed since").
+    if (payload && typeof payload === "object" && "data" in payload) return payload.data as T;
+    return payload as T;
   }
 
   return {

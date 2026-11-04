@@ -122,3 +122,67 @@ export function overlappingIds(
 ): string[] {
   return placed.filter((p) => p.start < end && start < p.end).map((p) => p.id);
 }
+
+/**
+ * Where in `before` text was deleted to give `after`, when the edit is exactly one contiguous
+ * deletion (Remove text cuts one passage or section). Null for anything else (several cuts,
+ * insertions), where the caller has to fall back to finding each passage again.
+ *
+ * When the text at the cut's edges repeats ("Sponsored: …" cut just before a "Sponsors" heading),
+ * the same `after` comes from several positions of the cut. The span covers all of them, so it can
+ * be a few characters wider than the real cut, never narrower.
+ */
+export function deletedSpan(before: string, after: string): Placement | null {
+  const removed = before.length - after.length;
+  if (removed <= 0) return null;
+  const max = after.length;
+  let prefix = 0;
+  while (prefix < max && before.charCodeAt(prefix) === after.charCodeAt(prefix)) prefix++;
+  let suffix = 0;
+  while (
+    suffix < max &&
+    before.charCodeAt(before.length - 1 - suffix) === after.charCodeAt(after.length - 1 - suffix)
+  ) {
+    suffix++;
+  }
+  // The cut can start anywhere in [after.length - suffix, prefix]; none fits unless that's non-empty.
+  const earliest = after.length - suffix;
+  if (earliest > prefix) return null;
+  return { start: earliest, end: prefix + removed };
+}
+
+export interface BodyText {
+  text: string;
+  images: ReadonlySet<string>;
+}
+
+export interface RemovableHighlight extends AnchorFields {
+  kind?: string | null;
+  image_src?: string | null;
+}
+
+/**
+ * Highlights whose passage an edit of the body removed. A text highlight is lost when it sat inside
+ * the deleted span, even if the same words appear elsewhere (QA 2026-11-04 P2-1: a highlight on a
+ * phrase that repeats was kept and silently moved to the other copy). When the edit isn't one
+ * deletion, a highlight is lost when its passage can't be found any more. Highlights that were
+ * already orphaned before the edit are left alone.
+ */
+export function highlightsLostByEdit<T extends RemovableHighlight>(
+  highlights: readonly T[],
+  before: BodyText,
+  after: BodyText,
+): T[] {
+  const span = deletedSpan(before.text, after.text);
+  return highlights.filter((h) => {
+    if (h.kind === "image") {
+      return (
+        Boolean(h.image_src) && before.images.has(h.image_src!) && !after.images.has(h.image_src!)
+      );
+    }
+    const placed = locateHighlight(before.text, h);
+    if (!placed) return false;
+    if (span && placed.start < span.end && span.start < placed.end) return true;
+    return locateHighlight(after.text, h) === null;
+  });
+}

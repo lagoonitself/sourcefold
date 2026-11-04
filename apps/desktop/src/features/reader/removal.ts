@@ -1,7 +1,7 @@
 import type { Highlight } from "@sourcefold/core";
 import {
   SOURCE_SPAN_ATTR,
-  locateHighlight,
+  highlightsLostByEdit,
   targetsForSelection,
   type RemoveTarget,
   type RenderedBlock,
@@ -95,14 +95,8 @@ export function lostHighlights(
   before: BodyView,
   after: BodyView,
 ): Highlight[] {
-  return highlights.filter((h) => {
-    if (h.kind === "image") {
-      return (
-        Boolean(h.image_src) && before.images.has(h.image_src!) && !after.images.has(h.image_src!)
-      );
-    }
-    return locateHighlight(before.text, h) !== null && locateHighlight(after.text, h) === null;
-  });
+  // Shared with the MCP server's remove_text, so Claude and the reader drop the same highlights.
+  return highlightsLostByEdit(highlights, before, after);
 }
 
 export function removalMessage(count: number, lostCount: number): string {

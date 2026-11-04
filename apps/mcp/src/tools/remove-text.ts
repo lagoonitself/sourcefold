@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-  locateHighlight,
+  highlightsLostByEdit,
   removeFromBody,
   targetsForSelection,
   trimRange,
@@ -113,7 +113,7 @@ async function takeRemoval(ctx: ToolContext, sourceId: string): Promise<StoredUn
   const row = await ctx.api.get<StoredUndo | null>(
     `/items/${encodeURIComponent(sourceId)}/text-undos`,
   );
-  if (!row) return null;
+  if (!row || typeof row.before !== "string" || typeof row.after_hash !== "string") return null;
   return {
     id: row.id,
     before: row.before,
@@ -278,13 +278,7 @@ export function registerRemoveTextTools(server: McpServer, ctx: ToolContext): vo
       const highlights = await ctx.api.get<Highlight[]>("/highlights", { query: { item: ref.id } });
       const before = { text: reader.text, images: renderedViewOf(reader.body).images };
       const after = renderedViewOf(next);
-      const lost = (Array.isArray(highlights) ? highlights : []).filter((h) =>
-        h.kind === "image"
-          ? Boolean(h.image_src) &&
-            before.images.has(h.image_src!) &&
-            !after.images.has(h.image_src!)
-          : locateHighlight(before.text, h) !== null && locateHighlight(after.text, h) === null,
-      );
+      const lost = highlightsLostByEdit(Array.isArray(highlights) ? highlights : [], before, after);
 
       const shownAfter = shownBefore - (reader.body.length - next.length);
       if (dry_run) {
@@ -353,21 +347,36 @@ export function registerRemoveTextTools(server: McpServer, ctx: ToolContext): vo
       source_id: z.string().min(1).describe("The source remove_text changed."),
     },
     run: async ({ source_id }) => {
-      const last = await takeRemoval(ctx, source_id);
-      if (!last) {
-        throw new Error(
+      const nothingToUndo = () =>
+        new Error(
           ctx.mode === "remote"
             ? "There is no removal to undo for this source."
             : "There is no removal to undo for this source (undo only covers removals made since Claude Desktop started Sourcefold).",
         );
-      }
+      let last = await takeRemoval(ctx, source_id);
+      if (!last) throw nothingToUndo();
       const ref = await loadEditable(ctx, source_id, undefined);
       const current = readerTextOf(
         await ctx.api.text(`/items/${encodeURIComponent(ref.id)}/content`),
       ).body;
-      if (removalHash(current) !== last.after_hash) {
+      const currentHash = removalHash(current);
+
+      // A removal whose text is already back (an undo whose entry couldn't be forgotten, or the
+      // text put back by hand) has nothing left to undo: forget it and look at the one before
+      // (QA 2026-11-04 P2-2: a second undo said the text "changed since").
+      for (let guard = 0; last && currentHash !== last.after_hash; guard++) {
+        if (removalHash(last.before) !== currentHash || guard >= 10) break;
+        try {
+          await dropRemoval(ctx, source_id);
+        } catch {
+          throw nothingToUndo();
+        }
+        last = await takeRemoval(ctx, source_id);
+      }
+      if (!last) throw nothingToUndo();
+      if (currentHash !== last.after_hash) {
         throw new Error(
-          `The text of "${ref.title}" changed since that removal (in the app or by another removal), so it wasn't put back.`,
+          `The text of "${ref.title}" changed since that removal (in the app, with Edit as text, or by a removal made elsewhere), so it wasn't put back. Nothing was changed.`,
         );
       }
 
@@ -376,7 +385,7 @@ export function registerRemoveTextTools(server: McpServer, ctx: ToolContext): vo
       try {
         await dropRemoval(ctx, source_id);
       } catch {
-        // The text is back. A leftover entry no longer matches the text, so undo refuses it.
+        // The text is back. The next undo sees the leftover entry's text is back and skips it.
       }
       let restored = 0;
       for (const h of last.lost) {

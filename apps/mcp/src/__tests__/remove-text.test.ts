@@ -163,6 +163,35 @@ describe("remove_text", () => {
     expect(again.text).toContain("no removal to undo");
   });
 
+  // QA 2026-11-04 P2-1: a highlight on words that also appear elsewhere was kept after its
+  // passage was removed, and moved to the other copy.
+  it("deletes a highlight in the removed text even when its words appear elsewhere", async () => {
+    const onCut = highlight("h-cut", "Sponsor"); // first copy: "Sponsored: buy our turbo kit…"
+    const { state, web } = library("youtube", [onCut]);
+    const h = await connect(registerRemoveTextTools, { web });
+    const removed = await h.call("remove_text", {
+      source_id: "s1",
+      quote: "Sponsored: buy our turbo kit today!",
+    });
+    expect(removed.isError).toBe(false);
+    expect(removed.text).toContain('1 highlight in that text went with it: "Sponsor".');
+    expect(state.highlights).toEqual([]);
+    // The heading "Sponsors" still holds the same word; the highlight must not jump there.
+    expect(state.body).toContain("## Sponsors");
+
+    const undo = await h.call("undo_remove_text", { source_id: "s1" });
+    expect(undo.text).toContain("Restored 1 highlight too.");
+    expect(state.highlights.map((x) => x.id)).toEqual(["h-cut"]);
+  });
+
+  it("keeps highlights outside the removed text, even on the same words", async () => {
+    const elsewhere = highlight("h-kept", "exhaust gas");
+    const { state, web } = library("youtube", [elsewhere]);
+    const h = await connect(registerRemoveTextTools, { web });
+    await h.call("remove_text", { source_id: "s1", quote: "Use code TURBO for 10% off." });
+    expect(state.highlights.map((x) => x.id)).toEqual(["h-kept"]);
+  });
+
   it("won't undo over text that changed since", async () => {
     const { state, web } = library();
     const h = await connect(registerRemoveTextTools, { web });
@@ -237,5 +266,66 @@ describe("remove_text", () => {
     expect(undo.text).toContain("Put the removed text back");
     expect(state.body).toBe(BODY);
     expect(undos).toHaveLength(0);
+  });
+
+  /** The web connector with a text_undos store; `failDelete` makes forgetting an entry fail. */
+  function remoteUndoStore(fetchImpl: typeof fetch, failDelete = false) {
+    const undos: Array<{ before: string; after_hash: string; lost: unknown[] }> = [];
+    const wrapped = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input instanceof Request ? input.url : input));
+      if (!url.pathname.endsWith("/text-undos")) return fetchImpl(input, init);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (method === "POST") {
+        undos.push(JSON.parse(String(init?.body)) as (typeof undos)[number]);
+        return Response.json({ data: { id: `u${undos.length}` } });
+      }
+      if (method === "GET") return Response.json({ data: undos[undos.length - 1] ?? null });
+      if (failDelete) return Response.json({ error: { message: "Boom" } }, { status: 500 });
+      undos.pop();
+      return Response.json({ data: { id: "u" } });
+    }) as typeof fetch;
+    return { undos, fetch: wrapped };
+  }
+
+  // QA 2026-11-04 P2-2: a second undo said the text "changed since that removal".
+  it("a second undo says there is nothing to undo, even if forgetting the first failed", async () => {
+    const { state, web } = library();
+    const store = remoteUndoStore(web.fetch, true);
+    const h = await connect(registerRemoveTextTools, {
+      web: { ...web, fetch: store.fetch },
+      mode: "remote",
+    });
+    await h.call("remove_text", { source_id: "s1", quote: "Use code TURBO for 10% off." });
+    const first = await h.call("undo_remove_text", { source_id: "s1" });
+    expect(first.isError).toBe(false);
+    expect(state.body).toBe(BODY);
+    expect(store.undos).toHaveLength(1); // the DELETE failed, so the entry is still there
+
+    const second = await h.call("undo_remove_text", { source_id: "s1" });
+    expect(second.isError).toBe(true);
+    expect(second.text).toBe("There is no removal to undo for this source.");
+    expect(state.body).toBe(BODY);
+  });
+
+  it("undoes two removals in turn, then says there is nothing left", async () => {
+    const { state, web } = library();
+    const store = remoteUndoStore(web.fetch);
+    const h = await connect(registerRemoveTextTools, {
+      web: { ...web, fetch: store.fetch },
+      mode: "remote",
+    });
+    await h.call("remove_text", { source_id: "s1", quote: "Use code TURBO for 10% off." });
+    const afterFirst = state.body;
+    await h.call("remove_text", {
+      source_id: "s1",
+      quote: "This video is brought to you by Acme.",
+    });
+
+    expect((await h.call("undo_remove_text", { source_id: "s1" })).isError).toBe(false);
+    expect(state.body).toBe(afterFirst);
+    expect((await h.call("undo_remove_text", { source_id: "s1" })).isError).toBe(false);
+    expect(state.body).toBe(BODY);
+    const third = await h.call("undo_remove_text", { source_id: "s1" });
+    expect(third.text).toBe("There is no removal to undo for this source.");
   });
 });

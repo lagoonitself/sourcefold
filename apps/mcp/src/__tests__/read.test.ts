@@ -268,14 +268,48 @@ describe("read_source", () => {
     expect(counters.content).toBe(2);
   });
 
-  it("answers an image with its link and caption", async () => {
-    const counters = { content: 0 };
-    const h = await connect(registerReadTools, { web: web("image", "", counters) });
+  // QA 2026-11-04 P2-4: the signed storage link (with its token) was printed.
+  it("answers an image with its original address and caption, never the signed link", async () => {
+    const fake = fakeWeb({
+      "GET /items/*/file": () => ({
+        json: { data: { url: "https://x.supabase.co/storage/v1/object/sign/a.png?token=secret" } },
+      }),
+      "GET /items/*": () => ({
+        json: { data: { id: "s1", kind: "image", title: "A: title", note: null, folder_id: "g1" } },
+      }),
+      "GET /items": () => ({
+        json: {
+          data: [
+            {
+              id: "s1",
+              folder_id: "g1",
+              kind: "image",
+              title: "A: title",
+              status: "saved",
+              source_url: "https://upload.wikimedia.org/pic.png",
+              meta: {},
+              created_at: "2026-10-18T00:00:00Z",
+            },
+          ],
+        },
+      }),
+    });
+    const h = await connect(registerReadTools, { web: fake });
     const { text, isError } = await h.call("read_source", { source_id: "s1" });
     expect(isError).toBe(false);
-    expect(text).toContain("Image · https://files.test/pic.png");
+    expect(text).toContain("Image · https://upload.wikimedia.org/pic.png");
     expect(text).toContain("Caption: A: title");
     expect(text).toContain("no text to read");
+    expect(text).not.toContain("token=");
+    expect(fake.calls.some((c) => c.includes("/file"))).toBe(false);
+  });
+
+  it("answers an uploaded image without a link", async () => {
+    const counters = { content: 0 };
+    const h = await connect(registerReadTools, { web: web("image", "", counters) });
+    const { text } = await h.call("read_source", { source_id: "s1" });
+    expect(text).toContain("Image (uploaded; open it in the Sourcefold app to see it)");
+    expect(text).not.toContain("files.test");
     expect(counters.content).toBe(0);
   });
 

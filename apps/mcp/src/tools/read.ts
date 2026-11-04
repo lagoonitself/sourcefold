@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ApiError } from "../web-api";
 import { defineTool, type ToolContext } from "./define";
 import { kindLabel, truncate } from "./format";
+import { loadFolderItems } from "./library-data";
 
 // read_source: a source's Markdown file in parts a model can take in one at a time.
 
@@ -171,7 +172,9 @@ export function stripTitleLine(body: string, title: string): string {
 async function loadSource(
   id: string,
   ctx: ToolContext,
-): Promise<CachedSource | { image: true; title: string; note: string | null }> {
+): Promise<
+  CachedSource | { image: true; title: string; note: string | null; folderId: string | null }
+> {
   // The web server runs every user's requests in one process, and the cache is keyed by item id
   // alone: a hit would skip the API call that checks the source is the caller's. Only the
   // stdio server (one user, one process) keeps sources in memory.
@@ -187,13 +190,16 @@ async function loadSource(
     kind: string;
     title: string;
     note: string | null;
+    folder_id?: string;
     triage?: string | null;
     tags?: string[];
     summary?: string | null;
     author?: string | null;
     author_type?: string | null;
   }>(`/items/${encodeURIComponent(id)}`);
-  if (base.kind === "image") return { image: true, title: base.title, note: base.note };
+  if (base.kind === "image") {
+    return { image: true, title: base.title, note: base.note, folderId: base.folder_id ?? null };
+  }
 
   let file: string;
   try {
@@ -448,19 +454,18 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
       const source = await loadSource(source_id, ctx);
 
       if ("image" in source) {
+        // The image's own address on the web, if it came from one. Never the signed storage link:
+        // it carries an access token (QA 2026-11-04 P2-4).
         let link: string | null = null;
-        try {
-          link = (
-            await ctx.api.get<{ url: string }>(`/items/${encodeURIComponent(source_id)}/file`, {
-              query: { format: "json" },
-            })
-          ).url;
-        } catch {
-          // The caption is still worth answering with.
+        if (source.folderId) {
+          const listed = await loadFolderItems(ctx.api, source.folderId).catch(() => []);
+          const found = listed.find((item) => item.id === source_id);
+          const original = found?.source_url || found?.canonical_url || null;
+          if (original && /^https?:\/\//i.test(original)) link = original;
         }
         return [
           `${source.title}`,
-          `Image${link ? ` · ${link}` : ""}`,
+          `Image${link ? ` · ${link}` : " (uploaded; open it in the Sourcefold app to see it)"}`,
           `Caption: ${source.title}`,
           ...(source.note ? [`Note: ${truncate(source.note, 1000)}`] : []),
           "Images have no text to read.",

@@ -29,7 +29,7 @@ import {
 } from "./add-jobs";
 import { defineTool, type ToolContext } from "./define";
 import { scheduleDriveSave } from "./drive-autosave";
-import { indexFolders, messageOf, plural } from "./format";
+import { indexFolders, messageOf, plural, queuedForDesktopMessage } from "./format";
 import { mapLimit } from "./library-data";
 
 export {
@@ -324,8 +324,7 @@ async function flushRemoteQueue(
 }
 
 function desktopQueueMessage(reason: string): string {
-  const detail = reason.trim().replace(/[.]+$/, "");
-  return `The cloud could not fetch this link: ${detail}. Waiting for the Sourcefold desktop app.`;
+  return queuedForDesktopMessage("The cloud couldn't fetch this link", reason);
 }
 
 async function saveRemoteCloudLink(
@@ -445,7 +444,7 @@ function formatRemoteResults(group: { id: string; path: string }, results: Remot
   }
   if (waiting.length > 0) {
     lines.push(
-      `${waiting.length} links are waiting for your computer. They'll be saved the next time the Sourcefold desktop app is open (X posts also need Chrome with the Sourcefold extension). Check with get_add_progress.`,
+      `${plural(waiting.length, "link")} ${waiting.length === 1 ? "is" : "are"} waiting for your computer. ${waiting.length === 1 ? "It'll" : "They'll"} be saved the next time the Sourcefold desktop app is open (X posts also need Chrome with the Sourcefold extension). Check with get_add_progress.`,
     );
   } else {
     lines.push("Finished.");
@@ -618,7 +617,12 @@ function formatQueueRows(rows: LinkQueueRow[]): string {
               : row.status === "duplicate"
                 ? "already saved"
                 : row.status;
-      const saved = row.item_id ? ` saved as [${row.item_id}]` : "";
+      // "saved as [id]", never "saved saved as [id]" (QA 2026-11-04 P2-4).
+      const saved = !row.item_id
+        ? ""
+        : row.status === "saved"
+          ? ` as [${row.item_id}]`
+          : ` [${row.item_id}]`;
       return `- [${row.id}] ${state}${saved}: ${title}${row.message ? ` (${row.message})` : ""} — added by ${row.added_by}`;
     })
     .join("\n");

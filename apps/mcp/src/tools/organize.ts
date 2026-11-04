@@ -156,7 +156,7 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
       requireInProject(index, guard, group_id, label);
       if (archived !== undefined && !isProject(folder)) {
         throw new Error(
-          `Only projects can be archived, and "${folder.name}" is a group in ${index.pathOf(group_id)}.`,
+          `Only projects can be archived, and "${folder.name}" is a group in ${index.pathOf(folder.parent_id!)}.`,
         );
       }
       if (parent_id) {

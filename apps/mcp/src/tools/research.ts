@@ -786,7 +786,7 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
         for (const sec of sortedSections) {
           const inSec = sortCards(filteredCards.filter((c) => c.section_id === sec.id));
           if (inSec.length === 0) continue;
-          lines.push("", `Section § ${sec.title} (${plural(inSec.length, "card")}):`);
+          lines.push("", `Section "${sec.title}" (${plural(inSec.length, "card")}):`);
           for (const card of inSec) {
             lines.push(`  ${renderCard(card)}`);
           }

@@ -10,6 +10,20 @@ export function messageOf(err: unknown): string {
   return "Something went wrong.";
 }
 
+/**
+ * Why a link waits in the queue for the desktop app. Fetch errors can end with advice to use the
+ * extension, which contradicts "waiting for the desktop app"; the desktop hands a page it can't
+ * fetch on to Chrome by itself, so the advice is dropped and the message says so instead.
+ */
+export function queuedForDesktopMessage(lead: string, reason: string): string {
+  const detail = reason
+    .replace(/\s*Try saving it with the Sourcefold extension[^.]*\.?/gi, "")
+    .trim()
+    .replace(/[\s.]+$/, "")
+    .slice(0, 700);
+  return `${lead}${detail ? `: ${detail}` : ""}. Waiting for the Sourcefold desktop app; if the site refuses it too, Chrome with the Sourcefold extension can save it.`;
+}
+
 /** `2026-10-18`, or an empty string for a missing or bad date. */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return "";

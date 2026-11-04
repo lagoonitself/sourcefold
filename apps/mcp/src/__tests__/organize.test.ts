@@ -130,6 +130,11 @@ describe("update_group", () => {
     const archive = await h.call("update_group", { group_id: "g1", archived: true });
     expect(archive.isError).toBe(true);
     expect(archive.text).toContain("Only projects can be archived");
+    // QA 2026-11-04 P2-4: the path named the group itself, not where it is.
+    const nested = await h.call("update_group", { group_id: "g2", archived: true });
+    expect(nested.text).toBe(
+      'Only projects can be archived, and "Turbo" is a group in Cars › Engines.',
+    );
     const nothing = await h.call("update_group", { group_id: "g1" });
     expect(nothing.text).toContain("Nothing to change");
     const unknown = await h.call("update_group", { group_id: "zz", name: "A" });

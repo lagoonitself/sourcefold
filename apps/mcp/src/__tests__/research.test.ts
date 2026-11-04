@@ -528,7 +528,8 @@ describe("list_cards", () => {
     const h = await connect(registerResearchTools, { web: fake });
     const all = await h.call("list_cards", { project: "AI Research" });
     expect(all.isError).toBe(false);
-    expect(all.text).toContain("Section § Intro (1 card):");
+    expect(all.text).toContain('Section "Intro" (1 card):');
+    expect(all.text).not.toContain("Section §");
     expect(all.text).toContain("[c1] quote");
     expect(all.text).toContain("Unplaced cards (1 card):");
     expect(all.text).toContain("[c2] broll");

@@ -15,7 +15,7 @@ import {
   type LinkDeps,
   type LinkKind,
 } from "../links/save-link";
-import { messageOf } from "./format";
+import { messageOf, queuedForDesktopMessage } from "./format";
 
 // Background jobs for add_links. A Claude tool call is cut off after a minute or so, and a
 // playlist takes far longer (YouTube is paced like the desktop's Add links: 2–5 s between videos,
@@ -458,8 +458,7 @@ export class AddJobs {
     const reason =
       row.kind === "x"
         ? "Needs Chrome with the Sourcefold extension."
-        : `The server couldn't fetch this link: ${messageOf(err)}`.slice(0, 850) +
-          ". Waiting for the Sourcefold desktop app.";
+        : queuedForDesktopMessage("Claude Desktop couldn't fetch this link", messageOf(err));
     try {
       await deps.api.post("/link-queue", {
         folder_id: job.groupId,

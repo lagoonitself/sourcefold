@@ -227,6 +227,37 @@ describe("remote add_links", () => {
     ).toBe("desktop");
   });
 
+  // QA 2026-11-04 P2-4: "1 links are waiting", "saved saved as", and a queue message with ".."
+  // that sent the user to the extension while waiting for the desktop app.
+  it("words waiting links and queue rows properly", async () => {
+    const { web, queueBodies, queueRows } = remoteWeb();
+    vi.spyOn(saveLinkModule, "saveLink").mockRejectedValue(
+      new SourceError(
+        "blocked",
+        "The site refused the request. Try saving it with the Sourcefold extension while you have the page open.",
+      ),
+    );
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx), {
+      web,
+      desktop: closedDesktop(),
+      mode: "remote",
+    });
+    const one = await h.call("add_links", {
+      group_id: GROUP.id,
+      links: ["https://example.com/refused"],
+    });
+    expect(one.text).toContain("1 link is waiting for your computer. It'll be saved");
+    const message = (queueBodies[0] as { links: { message: string }[] }).links[0]!.message;
+    expect(message).toBe(
+      "The cloud couldn't fetch this link: The site refused the request. Waiting for the Sourcefold desktop app; if the site refuses it too, Chrome with the Sourcefold extension can save it.",
+    );
+    expect(message).not.toContain("..");
+
+    const recent = await h.call("get_add_progress", { recent: true });
+    expect(recent.text).toContain("saved as [00000000-0000-4000-8000-000000000098]");
+    expect(recent.text).not.toContain("saved saved");
+  });
+
   // QA 2026-11-04 P1-2: allow_duplicates in the web connector.
   it("passes allow_duplicates to every cloud save", async () => {
     const { web } = remoteWeb();

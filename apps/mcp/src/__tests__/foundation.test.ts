@@ -3,38 +3,130 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { appDataDir, loadCredentials } from "../config";
+import { appDataDir, DESKTOP_SIGN_IN_EXPIRED_MESSAGE, isExpired, loadCredentials } from "../config";
 import { createDesktopBridge } from "../desktop-bridge";
 import { defineTool } from "../tools/define";
 import { indexFolders } from "../tools/format";
+import { createWebApi } from "../web-api";
 import { connect, fakeDesktop, fakeWeb } from "./harness";
 
+/** A temp app-data folder with `session` written as session.json (null on macOS, see below). */
+function withSession(session: unknown): NodeJS.ProcessEnv | null {
+  const root = mkdtempSync(join(tmpdir(), "sourcefold-mcp-"));
+  const env = { LOCALAPPDATA: root, XDG_DATA_HOME: root, HOME: root } as NodeJS.ProcessEnv;
+  // macOS reads ~/Library, which these tests can't redirect.
+  if (process.platform === "darwin") return null;
+  const dir = appDataDir(env);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "session.json"), JSON.stringify(session));
+  return env;
+}
+
+/** What `apps/desktop/src-tauri/src/session.rs` writes since 2026-10-23. */
+const desktopSession = (expiresAt: number) => ({
+  supabase_url: "https://project.supabase.co",
+  publishable_key: "sb_publishable_test",
+  access_token: "eyJ.desktop.jwt",
+  expires_at: expiresAt,
+  user_id: "00000000-0000-4000-8000-000000000001",
+  email: "a@b.c",
+  signed_in_at: "2026-11-04T00:00:00Z",
+});
+
 describe("loadCredentials", () => {
-  it("prefers a pasted token, then the desktop app's sign-in", () => {
+  it("is null with nothing on this computer", () => {
     const root = mkdtempSync(join(tmpdir(), "sourcefold-mcp-"));
     const env = { LOCALAPPDATA: root, XDG_DATA_HOME: root, HOME: root } as NodeJS.ProcessEnv;
-    const dir = appDataDir(env);
     expect(loadCredentials(env)).toBeNull();
+  });
 
-    if (process.platform !== "darwin") {
-      // macOS reads ~/Library, which this test can't redirect.
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(
-        join(dir, "session.json"),
-        JSON.stringify({ web_url: "https://app.test/", token: "desk", email: "a@b.c" }),
-      );
-      expect(loadCredentials(env)).toEqual({
+  // QA 2026-11-04 P0-2: the desktop app's current session.json was never read.
+  it("reads the desktop app's current session.json", () => {
+    const env = withSession(desktopSession(4_102_444_800));
+    if (!env) return;
+    expect(loadCredentials({ ...env, SOURCEFOLD_WEB_URL: "https://app.test/" })).toEqual({
+      webUrl: "https://app.test",
+      token: "eyJ.desktop.jwt",
+      source: "desktop",
+      email: "a@b.c",
+      expiresAt: 4_102_444_800,
+    });
+  });
+
+  it("prefers a pasted token over the desktop app's sign-in", () => {
+    const env = withSession(desktopSession(4_102_444_800));
+    if (!env) return;
+    const creds = loadCredentials({
+      ...env,
+      SOURCEFOLD_WEB_URL: "https://app.test",
+      SOURCEFOLD_TOKEN: "sf_pasted",
+    });
+    expect(creds).toEqual({
+      webUrl: "https://app.test",
+      token: "sf_pasted",
+      source: "settings",
+      email: null,
+    });
+  });
+
+  it("still reads a session.json from before 2026-10-23", () => {
+    const env = withSession({ web_url: "https://old.test/", token: "sf_desk", email: "a@b.c" });
+    if (!env) return;
+    expect(loadCredentials(env)).toEqual({
+      webUrl: "https://old.test",
+      token: "sf_desk",
+      source: "desktop",
+      email: "a@b.c",
+    });
+  });
+
+  it("marks a desktop sign-in that ran out as expired", () => {
+    const now = Date.UTC(2026, 10, 4, 12);
+    const creds = {
+      webUrl: "https://app.test",
+      token: "t",
+      source: "desktop" as const,
+      email: null,
+    };
+    expect(isExpired({ ...creds, expiresAt: now / 1000 - 36_000 }, now)).toBe(true);
+    expect(isExpired({ ...creds, expiresAt: now / 1000 + 10 }, now)).toBe(true);
+    expect(isExpired({ ...creds, expiresAt: now / 1000 + 3_000 }, now)).toBe(false);
+    expect(isExpired(creds, now)).toBe(false);
+  });
+
+  it("answers an expired desktop sign-in without calling the website", async () => {
+    const web = fakeWeb({ "GET /folders": () => ({ json: { data: [] } }) });
+    const api = createWebApi({
+      credentials: () => ({
         webUrl: "https://app.test",
-        token: "desk",
+        token: "eyJ.stale",
         source: "desktop",
-        email: "a@b.c",
-      });
-      expect(loadCredentials({ ...env, SOURCEFOLD_TOKEN: "pasted" })).toMatchObject({
+        email: null,
+        expiresAt: Math.floor(Date.now() / 1000) - 36_000,
+      }),
+      fetch: web.fetch,
+    });
+    await expect(api.get("/folders")).rejects.toThrow(DESKTOP_SIGN_IN_EXPIRED_MESSAGE);
+    expect(web.calls).toEqual([]);
+  });
+
+  it("sends the desktop app's access token as the Bearer token", async () => {
+    let auth: string | null = null;
+    const api = createWebApi({
+      credentials: () => ({
         webUrl: "https://app.test",
-        token: "pasted",
-        source: "settings",
-      });
-    }
+        token: "eyJ.fresh",
+        source: "desktop",
+        email: null,
+        expiresAt: Math.floor(Date.now() / 1000) + 3_000,
+      }),
+      fetch: (async (_url: string | URL | Request, init?: RequestInit) => {
+        auth = new Headers(init?.headers).get("authorization");
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }) as typeof fetch,
+    });
+    await api.get("/folders");
+    expect(auth).toBe("Bearer eyJ.fresh");
   });
 
   it("ignores unfilled bundle settings", () => {

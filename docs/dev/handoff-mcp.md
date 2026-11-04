@@ -27,7 +27,7 @@ Every web API route already accepts `Authorization: Bearer <token>` (`requireApi
 In this order, read fresh on every call (signing in later works without restarting Claude):
 
 1. `SOURCEFOLD_TOKEN` (and `SOURCEFOLD_WEB_URL`) from the bundle's settings, when non-empty. For people without the desktop app: web Settings → Create token.
-2. The desktop app's sign-in: `session.json` in the app data folder (`{ web_url, token, email, signed_in_at }`). App data folder: Windows `%LOCALAPPDATA%\Sourcefold`, macOS `~/Library/Application Support/Sourcefold`, Linux `$XDG_DATA_HOME/Sourcefold` or `~/.local/share/Sourcefold` (Rust `dirs::data_local_dir()`).
+2. The desktop app's sign-in: `session.json` in the app data folder. Since 2026-10-23 it holds the Supabase access token (`{ supabase_url, publishable_key, access_token, expires_at, user_id, email, signed_in_at }`, written by `session.rs`), which the web API accepts like the session cookie (`requireApiUser`, fixed 2026-11-04). It lasts about an hour and only the running app renews it, so with the app closed for longer every tool answers "open the desktop app once, or paste an access token" without calling the website. The old shape (`{ web_url, token, … }` with an `sf_` token) is still read. App data folder: Windows `%LOCALAPPDATA%\Sourcefold`, macOS `~/Library/Application Support/Sourcefold`, Linux `$XDG_DATA_HOME/Sourcefold` or `~/.local/share/Sourcefold` (Rust `dirs::data_local_dir()`).
 3. Neither: every tool answers "Sign in to the Sourcefold desktop app on this computer, or paste an access token in Claude Desktop → Settings → Extensions → Sourcefold."
 
 The web URL falls back to the build-time default (`SOURCEFOLD_DEFAULT_WEB_URL`, injected by the build from the repository variable `SOURCEFOLD_WEB_URL`).

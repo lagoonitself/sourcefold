@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
-import { isEmailAllowed } from "@/lib/env";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { getPublicEnv, isEmailAllowed } from "@/lib/env";
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { hashApiToken } from "@/lib/api-tokens";
+import { API_TOKEN_PREFIX, hashApiToken } from "@/lib/api-tokens";
 
 export function jsonData<T>(data: T, status = 200) {
   return NextResponse.json({ data }, { status });
@@ -56,7 +56,47 @@ export type ApiUser = {
 
 export type ApiAuthResult = ApiUser | AuthFailure;
 
-// Accepts either the web session cookie or an extension token (Authorization: Bearer sf_...).
+export const INVALID_SIGN_IN_MESSAGE = "This access token isn't valid or has expired.";
+
+// A Supabase access token, as the desktop app signs in (and lends to Claude Desktop through
+// session.json). It runs under RLS as that user, exactly like the session cookie.
+async function requireSupabaseTokenUser(token: string): Promise<ApiAuthResult> {
+  try {
+    const env = getPublicEnv();
+    const options = { auth: { persistSession: false, autoRefreshToken: false } };
+    const verifier = createSupabaseClient<Database>(
+      env.NEXT_PUBLIC_SUPABASE_URL,
+      env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      options,
+    );
+    const { data, error } = await verifier.auth.getUser(token);
+    if (error || !data.user) {
+      return { response: jsonError(401, INVALID_SIGN_IN_MESSAGE) };
+    }
+
+    let allowed = false;
+    try {
+      allowed = isEmailAllowed(data.user.email);
+    } catch {
+      allowed = false;
+    }
+    if (!allowed) {
+      return { response: jsonError(403, "This account can't use Sourcefold.") };
+    }
+
+    const db = createSupabaseClient<Database>(
+      env.NEXT_PUBLIC_SUPABASE_URL,
+      env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      { ...options, global: { headers: { Authorization: `Bearer ${token}` } } },
+    );
+    return { db, userId: data.user.id, via: "session" };
+  } catch {
+    return { response: jsonError(500, "Sourcefold couldn't verify this access token.") };
+  }
+}
+
+// Accepts the web session cookie, an access token made in Settings (Authorization: Bearer sf_...),
+// or a Supabase access token (the desktop app's sign-in).
 export async function requireApiUser(request: Request): Promise<ApiAuthResult> {
   const header = request.headers.get("authorization");
   const match = header?.match(/^Bearer\s+(\S+)$/i);
@@ -65,6 +105,10 @@ export async function requireApiUser(request: Request): Promise<ApiAuthResult> {
     const auth = await requireUser();
     if ("response" in auth) return auth;
     return { db: auth.supabase, userId: auth.user.id, via: "session" };
+  }
+
+  if (!match[1].startsWith(API_TOKEN_PREFIX)) {
+    return requireSupabaseTokenUser(match[1]);
   }
 
   let admin: SupabaseClient<Database>;

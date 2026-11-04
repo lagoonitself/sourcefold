@@ -17,10 +17,23 @@ export interface Credentials {
   /** `settings`: the token pasted in Claude Desktop. `desktop`: the desktop app's sign-in. `web`: the web connector. */
   source: "settings" | "desktop" | "web";
   email: string | null;
+  /** Unix seconds when the token stops working; only the desktop app's sign-in has one. */
+  expiresAt?: number | null;
 }
 
 export const NOT_SIGNED_IN_MESSAGE =
   "Sourcefold isn't signed in on this computer. Sign in to the Sourcefold desktop app, or create an access token on the website (Settings → Create token) and paste it in Claude Desktop → Settings → Extensions → Sourcefold.";
+
+export const DESKTOP_SIGN_IN_EXPIRED_MESSAGE =
+  "The desktop app's sign-in on this computer has expired: it lasts about an hour, and only the running app renews it. Open the Sourcefold desktop app once (it renews the sign-in within a few seconds), or create an access token on the website (Settings → Create token) and paste it in Claude Desktop → Settings → Extensions → Sourcefold, which keeps working while the app is closed.";
+
+/** Seconds of margin, so a token isn't used moments before it runs out. */
+const EXPIRY_MARGIN_S = 30;
+
+/** True when a desktop sign-in has run out (or is about to). */
+export function isExpired(creds: Credentials, nowMs = Date.now()): boolean {
+  return typeof creds.expiresAt === "number" && creds.expiresAt - EXPIRY_MARGIN_S <= nowMs / 1000;
+}
 
 /** The desktop app's data folder, the same as Rust's `dirs::data_local_dir()/Sourcefold`. */
 export function appDataDir(env: NodeJS.ProcessEnv = process.env, platform = process.platform) {
@@ -48,26 +61,45 @@ export function readJsonFile<T>(path: string): T | null {
   }
 }
 
+/**
+ * The desktop app's `session.json` (`apps/desktop/src-tauri/src/session.rs`). Since 2026-10-23 it
+ * holds a Supabase access token (`access_token`, `expires_at`, …) and no web address; files from
+ * before that hold `web_url` and an `sf_` `token`.
+ */
 interface DesktopSession {
-  web_url?: string;
-  token?: string;
-  email?: string | null;
+  access_token?: unknown;
+  expires_at?: unknown;
+  email?: unknown;
+  web_url?: unknown;
+  token?: unknown;
+}
+
+function text(value: unknown): string | null {
+  return typeof value === "string" ? setting(value) : null;
 }
 
 export function loadCredentials(env: NodeJS.ProcessEnv = process.env): Credentials | null {
   const session = readJsonFile<DesktopSession>(join(appDataDir(env), "session.json"));
-  const token = setting(env.SOURCEFOLD_TOKEN);
-  if (token) {
-    const webUrl = setting(env.SOURCEFOLD_WEB_URL) ?? setting(session?.web_url) ?? DEFAULT_WEB_URL;
-    if (webUrl) return { webUrl: trimSlash(webUrl), token, source: "settings", email: null };
+  const webUrl = setting(env.SOURCEFOLD_WEB_URL) ?? text(session?.web_url) ?? DEFAULT_WEB_URL;
+  const email = text(session?.email);
+
+  const pasted = setting(env.SOURCEFOLD_TOKEN);
+  if (pasted) {
+    return webUrl
+      ? { webUrl: trimSlash(webUrl), token: pasted, source: "settings", email: null }
+      : null;
   }
-  if (session?.token && session.web_url) {
-    return {
-      webUrl: trimSlash(session.web_url),
-      token: session.token,
-      source: "desktop",
-      email: session.email ?? null,
-    };
+
+  const accessToken = text(session?.access_token);
+  if (accessToken && webUrl) {
+    const expiresAt = typeof session?.expires_at === "number" ? session.expires_at : null;
+    return { webUrl: trimSlash(webUrl), token: accessToken, source: "desktop", email, expiresAt };
+  }
+
+  const legacyToken = text(session?.token);
+  const legacyUrl = text(session?.web_url);
+  if (legacyToken && legacyUrl) {
+    return { webUrl: trimSlash(legacyUrl), token: legacyToken, source: "desktop", email };
   }
   return null;
 }

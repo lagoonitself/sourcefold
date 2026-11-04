@@ -1,4 +1,10 @@
-import { loadCredentials, NOT_SIGNED_IN_MESSAGE, type Credentials } from "./config";
+import {
+  DESKTOP_SIGN_IN_EXPIRED_MESSAGE,
+  isExpired,
+  loadCredentials,
+  NOT_SIGNED_IN_MESSAGE,
+  type Credentials,
+} from "./config";
 
 // The web app's API, as the signed-in user. Every route answers `{ data }` or
 // `{ error: { message, code? } }`; this unwraps the first and throws the second as an
@@ -25,9 +31,9 @@ export class NotSignedInError extends Error {
 
 const EXPIRED_MESSAGE = {
   desktop:
-    "The desktop app's sign-in is no longer valid. Open the Sourcefold desktop app and sign in again.",
+    "The website didn't accept the desktop app's sign-in. Open the Sourcefold desktop app (it renews the sign-in within a few seconds, or asks you to sign in again), or create an access token on the website (Settings → Create token) and paste it in Claude Desktop → Settings → Extensions → Sourcefold. If the app is open and signed in, the website may be older than this extension and need updating.",
   settings:
-    "The access token in Claude Desktop isn't valid any more. Create a new one on the website (Settings → Create token) and paste it in Claude Desktop → Settings → Extensions → Sourcefold.",
+    "The access token in SOURCEFOLD_TOKEN (Claude Desktop → Settings → Extensions → Sourcefold) isn't valid any more. Create a new one on the website (Settings → Create token) and paste it there.",
   web: "This web connector's sign-in is no longer valid. Connect Sourcefold again.",
 } as const;
 
@@ -75,6 +81,7 @@ export function createWebApi(deps: WebApiDeps = {}): WebApi {
   async function send(method: string, path: string, options: RequestOptions = {}) {
     const creds = getCredentials();
     if (!creds) throw new NotSignedInError();
+    if (isExpired(creds)) throw new ApiError(401, DESKTOP_SIGN_IN_EXPIRED_MESSAGE);
 
     const url = new URL(`${creds.webUrl}/api${path.startsWith("/") ? path : `/${path}`}`);
     for (const [key, value] of Object.entries(options.query ?? {})) {

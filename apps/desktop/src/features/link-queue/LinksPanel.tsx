@@ -74,14 +74,10 @@ export function LinksPanel({
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Links from Claude</DialogTitle>
-          {nextStep && (
-            <p className="text-[13px] leading-[19px] text-foreground">{nextStep}</p>
-          )}
+          {nextStep && <p className="text-[13px] leading-[19px] text-foreground">{nextStep}</p>}
         </DialogHeader>
         {sorted.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
-            No links from the last 7 days.
-          </p>
+          <p className="text-[13px] text-muted-foreground">No links from the last 7 days.</p>
         ) : (
           <ul className="-mx-1 flex max-h-[60vh] flex-col overflow-y-auto">
             {sorted.map((row) => {
@@ -104,9 +100,7 @@ export function LinksPanel({
                     </div>
                     <div className="mt-0.5 text-[12.5px] text-foreground">
                       {info.label}
-                      {info.hint && (
-                        <span className="text-muted-foreground"> {info.hint}</span>
-                      )}
+                      {info.hint && <span className="text-muted-foreground"> {info.hint}</span>}
                     </div>
                   </div>
                   {actions.length > 0 && (

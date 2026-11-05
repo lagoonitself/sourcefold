@@ -205,7 +205,9 @@ export function describeQueuedLink(
   if (!alive.desktop) {
     return {
       state: alive.chromeIdle ? "waiting_desktop" : "waiting_both",
-      label: alive.chromeIdle ? "Waiting for the desktop app" : "Waiting for the desktop app and Chrome",
+      label: alive.chromeIdle
+        ? "Waiting for the desktop app"
+        : "Waiting for the desktop app and Chrome",
       hint: alive.chromeIdle
         ? `Chrome is ready. Open ${DESKTOP} too: Chrome saves these only while it's open.`
         : `Open ${DESKTOP} and ${CHROME} to save it.`,

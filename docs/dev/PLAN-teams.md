@@ -34,21 +34,21 @@ New tables: `project_members (project_id, user_id, role 'editor'|'viewer')`, `pr
 
 Functions (all `rpc`):
 
-| Function | Args | Returns | Notes |
-| --- | --- | --- | --- |
-| `content_access` | `p_item_id` | `{can_read, can_edit, kind, used_bytes}` or null | used by the Worker |
-| `content_waiting_items` | `p_limit`, `p_user_id` | items rows | text (or image) that still has to go to R2, that this user may write |
-| `content_drive_only_items` | `p_limit`, `p_user_id` | items rows | owner's old sources whose only copy is in Drive |
-| `mark_item_content_stored` | `p_id, p_seen_updated_at, p_sha256, p_bytes, p_user_id?` | boolean | true = cleared the Supabase copy (for an image: delete the Storage file now) |
-| `mark_item_saved_to_drive` | `p_id, p_drive_file_id, p_seen_updated_at, p_r2` | boolean | replaces `mark_item_stored_in_drive`; `p_r2` false only when no Worker is configured |
-| `set_drive_backup` | `p_enabled` | boolean | signed-in user only |
-| `get_project_invite` / `reset_project_invite` / `revoke_project_invite` | `p_project_id, p_role` | code / code / – | owner only |
-| `preview_project_invite` | `p_code` | `{project_id, project_name, role, owner:{user_id,email,name,avatar_url}, member_count, your_role}` or null | |
-| `accept_project_invite` | `p_code` | project id | idempotent; error `P0002` with a readable message for a bad code |
-| `get_project_sharing` | `p_project_id` | `{project_id, project_name, your_role, owner, members:[person + role + joined_at], invites:[{role, code}] (owner only)}` | |
-| `set_project_member_role` | `p_project_id, p_user_id, p_role` | – | owner only |
-| `remove_project_member` | `p_project_id, p_user_id` | – | owner removes anyone; anyone removes themself (leave) |
-| `project_access` | `p_user_id?` | rows `{project_id, your_role, owner_id, owner_name, owner_email, member_count}` | every project that involves someone else |
+| Function                                                                | Args                                                     | Returns                                                                                                                  | Notes                                                                                |
+| ----------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `content_access`                                                        | `p_item_id`                                              | `{can_read, can_edit, kind, used_bytes}` or null                                                                         | used by the Worker                                                                   |
+| `content_waiting_items`                                                 | `p_limit`, `p_user_id`                                   | items rows                                                                                                               | text (or image) that still has to go to R2, that this user may write                 |
+| `content_drive_only_items`                                              | `p_limit`, `p_user_id`                                   | items rows                                                                                                               | owner's old sources whose only copy is in Drive                                      |
+| `mark_item_content_stored`                                              | `p_id, p_seen_updated_at, p_sha256, p_bytes, p_user_id?` | boolean                                                                                                                  | true = cleared the Supabase copy (for an image: delete the Storage file now)         |
+| `mark_item_saved_to_drive`                                              | `p_id, p_drive_file_id, p_seen_updated_at, p_r2`         | boolean                                                                                                                  | replaces `mark_item_stored_in_drive`; `p_r2` false only when no Worker is configured |
+| `set_drive_backup`                                                      | `p_enabled`                                              | boolean                                                                                                                  | signed-in user only                                                                  |
+| `get_project_invite` / `reset_project_invite` / `revoke_project_invite` | `p_project_id, p_role`                                   | code / code / –                                                                                                          | owner only                                                                           |
+| `preview_project_invite`                                                | `p_code`                                                 | `{project_id, project_name, role, owner:{user_id,email,name,avatar_url}, member_count, your_role}` or null               |                                                                                      |
+| `accept_project_invite`                                                 | `p_code`                                                 | project id                                                                                                               | idempotent; error `P0002` with a readable message for a bad code                     |
+| `get_project_sharing`                                                   | `p_project_id`                                           | `{project_id, project_name, your_role, owner, members:[person + role + joined_at], invites:[{role, code}] (owner only)}` |                                                                                      |
+| `set_project_member_role`                                               | `p_project_id, p_user_id, p_role`                        | –                                                                                                                        | owner only                                                                           |
+| `remove_project_member`                                                 | `p_project_id, p_user_id`                                | –                                                                                                                        | owner removes anyone; anyone removes themself (leave)                                |
+| `project_access`                                                        | `p_user_id?`                                             | rows `{project_id, your_role, owner_id, owner_name, owner_email, member_count}`                                          | every project that involves someone else                                             |
 
 `p_user_id` rule: a signed-in client may pass only its own id (or nothing); the server's admin client (`sf_` tokens) must pass the user it acts for.
 Changed: `drive_dirty_*` and `drive_unsaved_count` return nothing while the backup is off or Drive isn't connected; `folder_item_counts` counts shared projects; `soft_delete_folder` lets editors delete groups (only the owner deletes a project); the old `mark_item_stored_in_drive` never clears text.
@@ -59,12 +59,12 @@ Checks: `supabase/tests/teams_and_content_test.sql` (owner, editor, viewer, stra
 
 Base URL: `https://sourcefold-content.writey.workers.dev` (config: `SOURCEFOLD_CONTENT_URL`).
 
-| Request | Answer |
-| --- | --- |
-| `GET /health` | `200 {"data":{"status":"ok"}}` |
-| `GET /v1/items/{id}/text` | `200` body as `text/markdown; charset=utf-8`, `ETag: "<sha256>"`; `404` when R2 has none |
-| `PUT /v1/items/{id}/text` | body = UTF-8 Markdown, at most 10 MiB → `200 {"data":{"sha256","bytes"}}` |
-| `GET /v1/items/{id}/file` | `200` bytes with the stored `Content-Type` (uploaded images) |
+| Request                   | Answer                                                                                    |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| `GET /health`             | `200 {"data":{"status":"ok"}}`                                                            |
+| `GET /v1/items/{id}/text` | `200` body as `text/markdown; charset=utf-8`, `ETag: "<sha256>"`; `404` when R2 has none  |
+| `PUT /v1/items/{id}/text` | body = UTF-8 Markdown, at most 10 MiB → `200 {"data":{"sha256","bytes"}}`                 |
+| `GET /v1/items/{id}/file` | `200` bytes with the stored `Content-Type` (uploaded images)                              |
 | `PUT /v1/items/{id}/file` | body = bytes, `Content-Type: image/*`, at most 25 MiB → `200 {"data":{"sha256","bytes"}}` |
 
 - Auth: `Authorization: Bearer <Supabase access token>` → the Worker calls `POST {SUPABASE_URL}/rest/v1/rpc/content_access` with that token. Null → `404`; PUT without `can_edit` → `403`; token refused by Supabase → `401`. Or `Authorization: Service <SERVICE_SECRET>` (constant-time compare) → full access; only the website's server holds it.
@@ -95,18 +95,18 @@ Base URL: `https://sourcefold-content.writey.workers.dev` (config: `SOURCEFOLD_C
 
 ### New API routes (same on the website and in the apps)
 
-| Route | Body | Answer |
-| --- | --- | --- |
-| `GET /api/projects/{id}/sharing` | | `{data: Sharing}` (shape of `get_project_sharing`) |
-| `POST /api/projects/{id}/invite` | `{role}` | `{data:{code, role}}` |
-| `POST /api/projects/{id}/invite/reset` | `{role}` | `{data:{code, role}}` |
-| `DELETE /api/projects/{id}/invite?role=editor` | | `{data:{ok:true}}` |
-| `PATCH /api/projects/{id}/members/{userId}` | `{role}` | `{data:{ok:true}}` |
-| `DELETE /api/projects/{id}/members/{userId}` | | `{data:{ok:true}}` (remove, or leave when it's you) |
-| `GET /api/invites/{code}` | | `{data: Preview}` or `404` |
-| `POST /api/invites/{code}/accept` | | `{data:{project_id}}` |
-| `GET /api/settings/backup` | | `{data:{enabled, connected}}` |
-| `PUT /api/settings/backup` | `{enabled}` | `{data:{enabled}}` |
+| Route                                          | Body        | Answer                                              |
+| ---------------------------------------------- | ----------- | --------------------------------------------------- |
+| `GET /api/projects/{id}/sharing`               |             | `{data: Sharing}` (shape of `get_project_sharing`)  |
+| `POST /api/projects/{id}/invite`               | `{role}`    | `{data:{code, role}}`                               |
+| `POST /api/projects/{id}/invite/reset`         | `{role}`    | `{data:{code, role}}`                               |
+| `DELETE /api/projects/{id}/invite?role=editor` |             | `{data:{ok:true}}`                                  |
+| `PATCH /api/projects/{id}/members/{userId}`    | `{role}`    | `{data:{ok:true}}`                                  |
+| `DELETE /api/projects/{id}/members/{userId}`   |             | `{data:{ok:true}}` (remove, or leave when it's you) |
+| `GET /api/invites/{code}`                      |             | `{data: Preview}` or `404`                          |
+| `POST /api/invites/{code}/accept`              |             | `{data:{project_id}}`                               |
+| `GET /api/settings/backup`                     |             | `{data:{enabled, connected}}`                       |
+| `PUT /api/settings/backup`                     | `{enabled}` | `{data:{enabled}}`                                  |
 
 Sharing routes answer `403` for `sf_` tokens ("Sharing needs the Sourcefold app or website."). `GET /api/drive/status` adds `backup_enabled`. `GET /api/folders` (and `loadFolders`) adds, on a project that involves someone else, `sharing: { role: "owner"|"editor"|"viewer", owner_name, owner_email, member_count }`. The mirror manifest (local copy) includes shared projects; a shared project whose name clashes with another visible project gets ` (shared)` appended in its folder path.
 
@@ -123,14 +123,14 @@ Invite links: `https://<website>/join/<CODE>`. Apps accept either the link or th
 
 ## Config
 
-| Where | Name | Value |
-| --- | --- | --- |
-| Worker vars | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the live project |
-| Worker secret | `SERVICE_SECRET` | random, also in Vercel |
-| Vercel | `SOURCEFOLD_CONTENT_URL`, `SOURCEFOLD_CONTENT_SECRET` | Worker URL, the same secret |
-| Desktop build | `VITE_SOURCEFOLD_CONTENT_URL` | Worker URL (`.env.local`, GitHub variable `SOURCEFOLD_CONTENT_URL` in the release workflow) |
-| Extension build | `WXT_SOURCEFOLD_CONTENT_URL` | same |
-| MCP | `content_url` in the desktop's `session.json` | same |
+| Where           | Name                                                  | Value                                                                                       |
+| --------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Worker vars     | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`            | the live project                                                                            |
+| Worker secret   | `SERVICE_SECRET`                                      | random, also in Vercel                                                                      |
+| Vercel          | `SOURCEFOLD_CONTENT_URL`, `SOURCEFOLD_CONTENT_SECRET` | Worker URL, the same secret                                                                 |
+| Desktop build   | `VITE_SOURCEFOLD_CONTENT_URL`                         | Worker URL (`.env.local`, GitHub variable `SOURCEFOLD_CONTENT_URL` in the release workflow) |
+| Extension build | `WXT_SOURCEFOLD_CONTENT_URL`                          | same                                                                                        |
+| MCP             | `content_url` in the desktop's `session.json`         | same                                                                                        |
 
 Without the Worker URL an app keeps the old behaviour (text to Drive), so self-hosters who skip R2 lose nothing.
 

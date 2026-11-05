@@ -67,13 +67,21 @@ describe("describeQueuedLink", () => {
   it("reads the extension's Allow and sign-in messages", () => {
     expect(
       describeQueuedLink(
-        row({ needs: "browser", status: "failed", message: "Allow Sourcefold to open x.com in Chrome" }),
+        row({
+          needs: "browser",
+          status: "failed",
+          message: "Allow Sourcefold to open x.com in Chrome",
+        }),
         null,
         NOW,
       ),
     ).toMatchObject({ state: "needs_allow", needsYou: true, done: false });
     const signIn = describeQueuedLink(
-      row({ needs: "browser", status: "failed", message: "Sign in to x.com in Chrome, then press Retry" }),
+      row({
+        needs: "browser",
+        status: "failed",
+        message: "Sign in to x.com in Chrome, then press Retry",
+      }),
       null,
       NOW,
     );
@@ -88,7 +96,9 @@ describe("describeQueuedLink", () => {
         needsYou: false,
       });
     }
-    expect(describeQueuedLink(row({ status: "failed", message: "Gone." }), null, NOW)).toMatchObject({
+    expect(
+      describeQueuedLink(row({ status: "failed", message: "Gone." }), null, NOW),
+    ).toMatchObject({
       state: "failed",
       hint: "Gone. Retry to try again.",
     });
@@ -120,6 +130,8 @@ describe("summarizeLinks", () => {
     );
     expect(summary).toMatchObject({ total: 5, saved: 1, done: 2, moving: 1, needsYou: 2 });
     expect(summary.nextStep).toMatch(/Chrome/);
-    expect(summarizeLinks([row({ status: "saved" })], seen(recent, recent), NOW).nextStep).toBeNull();
+    expect(
+      summarizeLinks([row({ status: "saved" })], seen(recent, recent), NOW).nextStep,
+    ).toBeNull();
   });
 });

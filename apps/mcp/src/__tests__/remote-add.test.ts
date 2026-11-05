@@ -48,9 +48,7 @@ function remoteWeb(workers?: unknown) {
       queueRows.push(...rows);
       return { status: 201, json: { data: rows } };
     },
-    ...(workers
-      ? { "GET /link-queue/workers": () => ({ json: { data: workers } }) }
-      : {}),
+    ...(workers ? { "GET /link-queue/workers": () => ({ json: { data: workers } }) } : {}),
     "GET /link-queue": ({ query }) => ({
       json: {
         data:

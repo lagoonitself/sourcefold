@@ -167,9 +167,9 @@ describe("row text and actions", () => {
 
   it("offers Open, Retry and Dismiss, or Cancel, by status", () => {
     const info = (r: LinkQueueRow) => ({ state: "x" }) as never as Parameters<typeof rowActions>[1];
-    expect(rowActions(row({ id: "a", status: "saved", item_id: "i" }), info(row({ id: "a" })))).toEqual(
-      ["open"],
-    );
+    expect(
+      rowActions(row({ id: "a", status: "saved", item_id: "i" }), info(row({ id: "a" }))),
+    ).toEqual(["open"]);
     expect(rowActions(row({ id: "a", status: "saved" }), info(row({ id: "a" })))).toEqual([]);
     expect(rowActions(row({ id: "a", status: "failed" }), info(row({ id: "a" })))).toEqual([
       "retry",

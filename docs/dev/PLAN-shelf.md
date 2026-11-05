@@ -37,10 +37,22 @@ export interface ShelfLink {
   created_at: string;
   updated_at: string;
 }
-export interface ShelfLinkInput { url: string; title?: string; note?: string; tags?: string[]; pinned?: boolean }
-export interface ShelfLinkPatch { url?: string; title?: string; note?: string; tags?: string[]; pinned?: boolean }
+export interface ShelfLinkInput {
+  url: string;
+  title?: string;
+  note?: string;
+  tags?: string[];
+  pinned?: boolean;
+}
+export interface ShelfLinkPatch {
+  url?: string;
+  title?: string;
+  note?: string;
+  tags?: string[];
+  pinned?: boolean;
+}
 export const SHELF_LIMITS = { url: 2048, title: 300, note: 8000, tags: 20, tag: 40, batch: 500 };
-export function shelfKey(url: string): string | null;   // http(s) only; lowercase host minus www., no hash, no trailing slash, query kept
+export function shelfKey(url: string): string | null; // http(s) only; lowercase host minus www., no hash, no trailing slash, query kept
 export function shelfTitleFallback(url: string): string; // the host minus www.
 export function normalizeShelfTags(tags: unknown): string[]; // trim, drop "#", collapse spaces, dedupe case-insensitively, limits
 export function shelfScore(link: ShelfLink, now?: Date): number;
@@ -73,13 +85,13 @@ Errors: `{ error: { message } }`, 400 for bad input, 404 unknown id.
 
 ## Work split
 
-| Part | Who | Files |
-| --- | --- | --- |
-| Core types and helpers, tests | orchestrator | `packages/core/src/shelf.ts`, test |
-| Migration, client routes, web route wrappers | orchestrator | `supabase/migrations/…`, `packages/client/src/routes/shelf*`, `packages/client/src/features/shelf/`, `apps/web/src/app/api/shelf/**` |
-| SQLite store, Tauri commands, loopback routes | orchestrator | `apps/desktop/src-tauri/src/shelf_store.rs`, `commands/shelf.rs`, `server.rs`, `db.rs`, `lib.rs` |
-| Desktop shelf API and UI | Haiku agent A | `apps/desktop/src/features/shelf/**`, wiring lines in `App.tsx`, `AppSidebar.tsx`, `CommandPalette.tsx` |
-| Extension Shelve button and badge | Haiku agent B | `apps/extension/entrypoints/popup/ShelfPanel.tsx`, `apps/extension/lib/shelf.ts`, wiring in `popup/App.tsx`, `background.ts` |
+| Part                                          | Who           | Files                                                                                                                                |
+| --------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Core types and helpers, tests                 | orchestrator  | `packages/core/src/shelf.ts`, test                                                                                                   |
+| Migration, client routes, web route wrappers  | orchestrator  | `supabase/migrations/…`, `packages/client/src/routes/shelf*`, `packages/client/src/features/shelf/`, `apps/web/src/app/api/shelf/**` |
+| SQLite store, Tauri commands, loopback routes | orchestrator  | `apps/desktop/src-tauri/src/shelf_store.rs`, `commands/shelf.rs`, `server.rs`, `db.rs`, `lib.rs`                                     |
+| Desktop shelf API and UI                      | Haiku agent A | `apps/desktop/src/features/shelf/**`, wiring lines in `App.tsx`, `AppSidebar.tsx`, `CommandPalette.tsx`                              |
+| Extension Shelve button and badge             | Haiku agent B | `apps/extension/entrypoints/popup/ShelfPanel.tsx`, `apps/extension/lib/shelf.ts`, wiring in `popup/App.tsx`, `background.ts`         |
 
 ## Later
 

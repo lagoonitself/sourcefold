@@ -251,6 +251,8 @@ impl Database {
         Self::add_local_copy_search_columns(&conn)?;
         Self::migrate_research_tools(&conn)?;
         Self::migrate_x_posts_media(&conn)?;
+        // The Link Shelf (docs/dev/PLAN-shelf.md, shelf_store.rs).
+        conn.execute_batch(crate::shelf_store::CREATE_TABLE_SQL)?;
 
         Ok(())
     }

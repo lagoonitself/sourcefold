@@ -16,6 +16,7 @@ export { markdownImageUrls, postImageFileNames, postImagesFolderName } from "./p
 export * from "./highlights";
 export * from "./research";
 export * from "./tldr";
+export * from "./shelf";
 export { SOURCE_CAPTURE_KINDS, isSourceCaptureKind } from "./capture-types";
 export type {
   CaptureRequest,

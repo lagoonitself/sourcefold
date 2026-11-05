@@ -186,6 +186,81 @@ fn install_native_host(ids: &[String]) -> Result<String, String> {
     native_installer::install_native_host(ids)
 }
 
+/// `/api/shelf` on the loopback server, for the extension while the desktop is offline.
+fn shelf_route(
+    db_arc: &Arc<Mutex<Database>>,
+    method: &Method,
+    path: &str,
+    body: &[u8],
+    origin: Option<&str>,
+) -> Response<Cursor<Vec<u8>>> {
+    use crate::shelf_store::{ShelfError, ShelfLinkInput, ShelfLinkPatch};
+
+    fn fail(e: ShelfError, origin: Option<&str>) -> Response<Cursor<Vec<u8>>> {
+        let code = match e {
+            ShelfError::Invalid(_) => "invalid_request",
+            ShelfError::NotFound => "not_found",
+            ShelfError::Conflict => "conflict",
+            ShelfError::Db(_) => "database_error",
+        };
+        error_response(e.status(), &e.message(), code, origin)
+    }
+    fn invalid_json(e: serde_json::Error, origin: Option<&str>) -> Response<Cursor<Vec<u8>>> {
+        error_response(400, &format!("Invalid JSON: {}", e), "invalid_json", origin)
+    }
+
+    let rest = path.strip_prefix("/api/shelf").unwrap_or("");
+    let parts: Vec<&str> = rest.split('/').filter(|s| !s.is_empty()).collect();
+    let db = match db_arc.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    match (method, parts.as_slice()) {
+        (Method::Get, []) => match db.list_shelf() {
+            Ok(list) => json_response(200, json!({ "data": list }), origin),
+            Err(e) => fail(e, origin),
+        },
+        (Method::Post, []) => {
+            // One link, or `{ links: [...] }`.
+            let value: Value = match serde_json::from_slice(body) {
+                Ok(v) => v,
+                Err(e) => return invalid_json(e, origin),
+            };
+            let links: Result<Vec<ShelfLinkInput>, serde_json::Error> = match value.get("links") {
+                Some(list) => serde_json::from_value(list.clone()),
+                None => serde_json::from_value(value).map(|one| vec![one]),
+            };
+            let links = match links {
+                Ok(l) => l,
+                Err(e) => return invalid_json(e, origin),
+            };
+            match db.add_shelf_links(&links) {
+                Ok(result) => json_response(200, json!({ "data": result }), origin),
+                Err(e) => fail(e, origin),
+            }
+        }
+        (Method::Patch, [id]) => {
+            let patch: ShelfLinkPatch = match serde_json::from_slice(body) {
+                Ok(p) => p,
+                Err(e) => return invalid_json(e, origin),
+            };
+            match db.update_shelf_link(id, &patch) {
+                Ok(link) => json_response(200, json!({ "data": link }), origin),
+                Err(e) => fail(e, origin),
+            }
+        }
+        (Method::Delete, [id]) => match db.delete_shelf_link(id) {
+            Ok(()) => json_response(200, json!({ "data": { "id": id } }), origin),
+            Err(e) => fail(e, origin),
+        },
+        (Method::Post, [id, "open"]) => match db.open_shelf_link(id) {
+            Ok(link) => json_response(200, json!({ "data": link }), origin),
+            Err(e) => fail(e, origin),
+        },
+        _ => error_response(404, "Not found", "not_found", origin),
+    }
+}
+
 #[cfg(test)]
 fn install_native_host(_ids: &[String]) -> Result<String, String> {
     Ok("test install skipped".to_string())
@@ -722,6 +797,12 @@ pub fn handle_request_with_agent(
             }
         }
 
+        // The Link Shelf (docs/dev/PLAN-shelf.md): /api/shelf, /api/shelf/:id, /api/shelf/:id/open.
+        // Answers `{ data }` like the account API, so the extension reads both the same way.
+        (m, p) if p == "/api/shelf" || p.starts_with("/api/shelf/") => {
+            shelf_route(db_arc, m, p, body, allowed_origin)
+        }
+
         // Add Post to Existing X Thread (supports both /api/x/post?item_id=... and /api/x/:itemId/posts)
         (Method::Post, p) if p == "/api/x/post" || (p.starts_with("/api/x/") && p.ends_with("/posts")) => {
             let item_id = if p == "/api/x/post" {
@@ -1011,6 +1092,35 @@ mod tests {
 
     fn create_test_db() -> Arc<Mutex<Database>> {
         Arc::new(Mutex::new(Database::open_in_memory().unwrap()))
+    }
+
+    #[test]
+    fn shelf_routes_answer_like_the_account_api() {
+        let db = create_test_db();
+        let h = standard_headers();
+        let body = serde_json::to_vec(&json!({ "links": [{ "url": "vercel.com", "note": "deploys" }, { "url": "nope" }] })).unwrap();
+        let resp = handle_request(&db, &Method::Post, "/api/shelf", "", &body, &h);
+        assert_eq!(resp.status_code().0, 400);
+
+        let body = serde_json::to_vec(&json!({ "url": "https://vercel.com/", "note": "deploys" })).unwrap();
+        let resp = handle_request(&db, &Method::Post, "/api/shelf", "", &body, &h);
+        assert_eq!(resp.status_code().0, 200);
+        let added = read_json_response(resp);
+        let id = added["data"]["added"][0]["id"].as_str().unwrap().to_string();
+
+        let list = read_json_response(handle_request(&db, &Method::Get, "/api/shelf", "", &[], &h));
+        assert_eq!(list["data"][0]["note"], "deploys");
+
+        let patch = serde_json::to_vec(&json!({ "pinned": true })).unwrap();
+        let path = format!("/api/shelf/{}", id);
+        let patched = read_json_response(handle_request(&db, &Method::Patch, &path, "", &patch, &h));
+        assert_eq!(patched["data"]["pinned"], true);
+
+        let opened = read_json_response(handle_request(&db, &Method::Post, &format!("{}/open", path), "", &[], &h));
+        assert_eq!(opened["data"]["open_count"], 1);
+
+        assert_eq!(handle_request(&db, &Method::Delete, &path, "", &[], &h).status_code().0, 200);
+        assert_eq!(handle_request(&db, &Method::Delete, &path, "", &[], &h).status_code().0, 404);
     }
 
     fn read_json_response(resp: Response<Cursor<Vec<u8>>>) -> Value {

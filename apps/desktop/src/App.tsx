@@ -68,6 +68,10 @@ import { TOGGLE_PANE_EVENT } from "@/features/tldr/tldr-store";
 import { OPEN_SETTINGS_EVENT } from "@/features/tldr/tldr-settings-link";
 import { updateTldrPrefs, useTldrPrefs, getTldrPrefs } from "@/features/tldr/tldr-prefs";
 import { onGroupAction } from "@/features/items/group-actions";
+import { ShelfView } from "@/features/shelf/ShelfView";
+import { ShelfDialogs, type ShelfDialogState } from "@/features/shelf/ShelfDialogs";
+import { useShelf } from "@/features/shelf/use-shelf";
+import type { ShelfLink } from "@sourcefold/core";
 
 /** The TL;DR pane sits beside the list from this group-view width; below it, it floats. */
 const TLDR_PANE_MIN_WIDTH = 960;
@@ -144,6 +148,28 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
   const [projectSwitcherOpen, setProjectSwitcherOpen] = React.useState(false);
+  const shelf = useShelf();
+  const [shelfDialog, setShelfDialog] = React.useState<ShelfDialogState>(null);
+  // The shelf is open over one group, project and view; choosing another one leaves it.
+  const [shelfOpenedOver, setShelfOpenedOver] = React.useState<{
+    folderId: string | null;
+    projectId: string | null;
+    view: ProjectViewState;
+  } | null>(null);
+  const shelfOpen =
+    shelfOpenedOver !== null &&
+    shelfOpenedOver.folderId === activeFolderId &&
+    shelfOpenedOver.projectId === activeProjectId &&
+    shelfOpenedOver.view === projectViewState;
+  const openShelf = React.useCallback(
+    () =>
+      setShelfOpenedOver({
+        folderId: activeFolderId,
+        projectId: activeProjectId,
+        view: projectViewState,
+      }),
+    [activeFolderId, activeProjectId, projectViewState],
+  );
   const [readerItem, setReaderItem] = React.useState<Item | null>(null);
   // Set when the reader is opened from the Highlights tab; cleared by any other way of opening it.
   const [readerHighlightId, setReaderHighlightId] = React.useState<string | null>(null);
@@ -156,6 +182,16 @@ export function App() {
   // Links the reader asked to save (one per line), and the group they go to.
   const [addLinksText, setAddLinksText] = React.useState("");
   const [addLinksFolderId, setAddLinksFolderId] = React.useState<string | null>(null);
+  // The group the user last had open, for Add links opened from the shelf with no group showing.
+  const lastGroupIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (activeFolderId) lastGroupIdRef.current = activeFolderId;
+  }, [activeFolderId]);
+  const saveShelfLinkAsSource = (link: ShelfLink) => {
+    setAddLinksText(link.url);
+    setAddLinksFolderId(activeFolderId ?? lastGroupIdRef.current);
+    setAddLinksOpen(true);
+  };
   // The group view's tab; another group always opens on Sources.
   const [chosenTab, setChosenTab] = React.useState<{ folderId: string | null; tab: GroupTab }>({
     folderId: null,
@@ -489,6 +525,12 @@ export function App() {
         case "app.search":
           setSearchOpen(true);
           break;
+        case "app.shelf":
+          openShelf();
+          break;
+        case "app.add-to-shelf":
+          setShelfDialog({ kind: "add" });
+          break;
         case "app.add-links":
           if (activeFolderId && !isProjectWithNoGroups) setAddLinksOpen(true);
           else toast.info("Select a group first to add links");
@@ -557,6 +599,7 @@ export function App() {
       handlePreviousGroup,
       handleNextGroup,
       sidebar.toggle,
+      openShelf,
     ],
   );
 
@@ -623,6 +666,8 @@ export function App() {
     },
     onSettings: () => setSettingsOpen(true),
     onToggleSidebar: sidebar.toggle,
+    onShelf: openShelf,
+    onAddToShelf: () => setShelfDialog({ kind: "add" }),
     onProjectSwitcher: () => {
       setProjectSwitcherOpen((prev) => !prev);
     },
@@ -713,6 +758,14 @@ export function App() {
       onOpenCommandPalette={() => setCommandPaletteOpen(true)}
       onOpenShortcuts={() => setShortcutsOpen(true)}
       onOpenSettings={() => setSettingsOpen(true)}
+      shelfOpen={shelfOpen}
+      shelfCount={
+        shelf.status === "loading" && shelf.links.length === 0 ? null : shelf.links.length
+      }
+      onOpenShelf={() => {
+        openShelf();
+        closeDrawer();
+      }}
       onHide={sidebar.drawerOpen ? closeDrawer : sidebar.toggle}
       projectSwitcher={
         <ProjectSwitcher
@@ -749,6 +802,7 @@ export function App() {
               // The tree reports the project itself when its last group is deleted; sources
               // can only be shown and saved in groups.
               const groupId = id === activeProjectId ? null : id;
+              setShelfOpenedOver(null);
               setProjectViewState(NO_PROJECT_VIEW);
               setActiveFolderId(groupId);
               setFocusedFolderId(groupId);
@@ -826,9 +880,16 @@ export function App() {
             onAddLinks={() => setAddLinksOpen(true)}
             canAddLinks={canAddLinks}
             projectView={projectView}
+            shelfOpen={shelfOpen}
           />
 
-          {activeFolderId ? (
+          {shelfOpen ? (
+            <ShelfView
+              shelf={shelf}
+              onDialog={setShelfDialog}
+              onSaveAsSource={saveShelfLinkAsSource}
+            />
+          ) : activeFolderId ? (
             <div
               ref={setGroupViewEl}
               className="@container/view flex min-h-0 flex-1 flex-col px-5 pt-7 @[720px]/view:px-9 @[720px]/view:pt-9"
@@ -1013,6 +1074,8 @@ export function App() {
           );
         }}
         onExecuteCommand={handleExecuteCommand}
+        shelfLinks={shelf.links}
+        onOpenShelfLink={shelf.open}
       />
 
       <SearchDialog
@@ -1034,7 +1097,7 @@ export function App() {
         }}
       />
 
-      {activeFolderId && (
+      {(activeFolderId || addLinksOpen) && (
         <>
           <AddLinksDialog
             open={addLinksOpen}
@@ -1054,15 +1117,17 @@ export function App() {
             }}
           />
 
-          <NoteDialog
-            open={newNoteOpen}
-            onOpenChange={setNewNoteOpen}
-            folderId={activeFolderId}
-            onSaved={async () => {
-              await refreshItems();
-              await refreshFolders();
-            }}
-          />
+          {activeFolderId && (
+            <NoteDialog
+              open={newNoteOpen}
+              onOpenChange={setNewNoteOpen}
+              folderId={activeFolderId}
+              onSaved={async () => {
+                await refreshItems();
+                await refreshFolders();
+              }}
+            />
+          )}
         </>
       )}
 
@@ -1100,6 +1165,8 @@ export function App() {
       <TldrProvider projectId={activeProjectId} folders={folders} />
 
       <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+
+      <ShelfDialogs shelf={shelf} state={shelfDialog} onStateChange={setShelfDialog} />
 
       <UpdateWatcher />
 

@@ -47,6 +47,7 @@ import { ThreadPicker } from "./ThreadPicker";
 import { enrichXPostsMedia } from "../../lib/x/media";
 import { CANNOT_SAVE_MESSAGE } from "../../lib/link-queue/copy";
 import { LinkQueueBanner } from "./LinkQueueBanner";
+import { ShelfNote, ShelfSaveRow } from "./ShelfPanel";
 
 const GROUP_FILTER_FROM = 7;
 const NO_PLACES: LastPlaces = { groupId: null, projectId: null, groupByProject: {} };
@@ -770,31 +771,41 @@ export default function App() {
           <div className="skeleton-bar" />
         </div>
       ) : sections.length === 0 ? (
-        <div className="notice">
-          <p>Create your first project to start collecting sources.</p>
-          <form
-            className="inline-create"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const name = newProjectName.trim();
-              if (name) void createProject(name).then((ok) => ok && setNewProjectName(""));
-            }}
-          >
-            <input
-              type="text"
-              className="input-field input-sm"
-              placeholder="Project name, for example the video title"
-              aria-label="Project name"
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              onKeyDown={(e) => e.stopPropagation()}
-            />
-            <button type="submit" className="btn-primary btn-sm" disabled={!newProjectName.trim()}>
-              New project
-            </button>
-          </form>
-          {result && <p className="result result-error">{result.text}</p>}
-        </div>
+        <>
+          <div className="notice">
+            <p>Create your first project to start collecting sources.</p>
+            <form
+              className="inline-create"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const name = newProjectName.trim();
+                if (name) void createProject(name).then((ok) => ok && setNewProjectName(""));
+              }}
+            >
+              <input
+                type="text"
+                className="input-field input-sm"
+                placeholder="Project name, for example the video title"
+                aria-label="Project name"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+              />
+              <button
+                type="submit"
+                className="btn-primary btn-sm"
+                disabled={!newProjectName.trim()}
+              >
+                New project
+              </button>
+            </form>
+            {result && <p className="result result-error">{result.text}</p>}
+          </div>
+          <footer className="popup-footer">
+            <ShelfSaveRow url={page?.url ?? ""} title={page?.title ?? ""} />
+            <ShelfNote url={page?.url ?? ""} />
+          </footer>
+        </>
       ) : (
         <>
           <section className="destination">
@@ -829,14 +840,20 @@ export default function App() {
           </section>
 
           <footer className="popup-footer">
-            <button
-              type="button"
-              className={`btn-primary btn-save${isAlreadySaved ? " is-saved" : ""}`}
-              onClick={() => void handleSave()}
-              disabled={saving || isAlreadySaved || unsupported || !selectedGroup}
-            >
-              {saveLabel()}
-            </button>
+            <ShelfSaveRow
+              url={page?.url ?? ""}
+              title={page?.title ?? ""}
+              save={
+                <button
+                  type="button"
+                  className={`btn-primary btn-save${isAlreadySaved ? " is-saved" : ""}`}
+                  onClick={() => void handleSave()}
+                  disabled={saving || isAlreadySaved || unsupported || !selectedGroup}
+                >
+                  {saveLabel()}
+                </button>
+              }
+            />
 
             {result && (
               <p className={`result result-${result.tone}`}>
@@ -844,6 +861,8 @@ export default function App() {
                 <span>{result.text}</span>
               </p>
             )}
+
+            <ShelfNote url={page?.url ?? ""} />
 
             {page?.kind === "x" && !unsupported && section && (
               <ThreadPicker

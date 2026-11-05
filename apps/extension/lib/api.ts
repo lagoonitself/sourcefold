@@ -195,6 +195,19 @@ async function executeWithTarget<T>(
   throw new ApiError("Unknown target", 0);
 }
 
+/**
+ * One request through the same target routing as the functions below: the account, the desktop
+ * app offline (native messaging, then loopback HTTP). Used by features that add their own routes,
+ * such as the shelf.
+ */
+export function sourcefoldRequest<T>(
+  nativePayload: any,
+  httpPath: string,
+  httpInit?: RequestInit,
+): Promise<T> {
+  return executeWithTarget<T>(nativePayload, httpPath, httpInit);
+}
+
 export async function listFolders(): Promise<Folder[]> {
   return executeWithTarget<Folder[]>({ type: "list_folders" }, "/api/folders");
 }

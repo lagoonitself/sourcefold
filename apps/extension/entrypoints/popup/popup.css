@@ -755,3 +755,92 @@
 .queue-banner .btn-sm {
   flex-shrink: 0;
 }
+
+/* Shelf: Shelve sits beside Save; the note panel shows once the page is on the shelf */
+.save-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.save-row .btn-save {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+.save-row-solo .btn-shelve {
+  flex: 1;
+}
+
+.btn-shelve {
+  flex-shrink: 0;
+  height: 40px;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.btn-shelve svg {
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn-shelve {
+    transition:
+      transform 160ms ease-out,
+      background-color 120ms ease;
+  }
+
+  .btn-shelve:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+.shelf-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.shelf-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 18px;
+}
+
+.shelf-panel-title {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.shelf-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+
+.shelf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shelf-note {
+  min-height: 52px;
+  max-height: 140px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 18px;
+}

@@ -21,6 +21,8 @@ export interface TopBarProps {
   onAddLinks: () => void;
   canAddLinks: boolean;
   projectView?: ProjectView | null;
+  /** The shelf is in the sheet: the breadcrumb reads just "Shelf". */
+  shelfOpen?: boolean;
 }
 
 /** Where you are, search, Drive status and the main action. It also drags the window on macOS. */
@@ -35,6 +37,7 @@ export function TopBar({
   onAddLinks,
   canAddLinks,
   projectView,
+  shelfOpen = false,
 }: TopBarProps) {
   const mod = isMac ? "⌘" : "Ctrl+";
 
@@ -65,12 +68,12 @@ export function TopBar({
         data-tauri-drag-region
         className="flex min-w-0 flex-1 items-center gap-1 pl-1 text-[13px] leading-[18px] text-muted-foreground"
       >
-        {project && (
+        {project && !shelfOpen && (
           <span className="hidden max-w-[16ch] shrink-0 truncate @[560px]/topbar:inline">
             {project.name}
           </span>
         )}
-        {projectView && (
+        {projectView && !shelfOpen && (
           <>
             <span aria-hidden="true" className="shrink-0 text-border-strong">
               /
@@ -80,35 +83,44 @@ export function TopBar({
             </span>
           </>
         )}
-        {trail.map((folder, index) => {
-          const last = index === trail.length - 1;
-          return (
-            <React.Fragment key={folder.id}>
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "shrink-0 text-border-strong",
-                  index === 0 && "hidden @[560px]/topbar:inline",
-                )}
-              >
-                /
-              </span>
-              {last ? (
-                <span aria-current="page" className="min-w-0 truncate font-medium text-foreground">
-                  {folder.name}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => onSelectGroup(folder.id)}
-                  className="hidden min-w-0 max-w-[18ch] cursor-pointer truncate rounded-[5px] px-0.5 transition-colors hover:text-foreground @[640px]/topbar:inline"
+        {!shelfOpen &&
+          trail.map((folder, index) => {
+            const last = index === trail.length - 1;
+            return (
+              <React.Fragment key={folder.id}>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "shrink-0 text-border-strong",
+                    index === 0 && "hidden @[560px]/topbar:inline",
+                  )}
                 >
-                  {folder.name}
-                </button>
-              )}
-            </React.Fragment>
-          );
-        })}
+                  /
+                </span>
+                {last ? (
+                  <span
+                    aria-current="page"
+                    className="min-w-0 truncate font-medium text-foreground"
+                  >
+                    {folder.name}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onSelectGroup(folder.id)}
+                    className="hidden min-w-0 max-w-[18ch] cursor-pointer truncate rounded-[5px] px-0.5 transition-colors hover:text-foreground @[640px]/topbar:inline"
+                  >
+                    {folder.name}
+                  </button>
+                )}
+              </React.Fragment>
+            );
+          })}
+        {shelfOpen && (
+          <span aria-current="page" className="min-w-0 truncate font-medium text-foreground">
+            Shelf
+          </span>
+        )}
       </nav>
 
       <button

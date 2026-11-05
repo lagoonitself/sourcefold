@@ -38,6 +38,22 @@ export const SHORTCUT_COMMANDS: ReadonlyArray<ShortcutCommand> = [
     when: "global",
   },
   {
+    id: "app.add-to-shelf",
+    title: "Add to shelf",
+    description: "Keep a site, with a note, on your shelf",
+    group: "App",
+    combos: ["Mod+L"],
+    when: "global",
+  },
+  {
+    id: "app.shelf",
+    title: "Open shelf",
+    description: "Show the sites you keep, with notes",
+    group: "App",
+    combos: ["Mod+Shift+L"],
+    when: "global",
+  },
+  {
     id: "app.new-note",
     title: "New standalone note",
     description: "Create a new note in current group",

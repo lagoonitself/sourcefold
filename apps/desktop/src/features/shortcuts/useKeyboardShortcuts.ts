@@ -15,6 +15,10 @@ export interface KeyboardShortcutHandlers {
   onSaveToGoogleDrive?: () => void;
   /** Show or hide the sidebar ('Mod+B') */
   onToggleSidebar?: () => void;
+  /** Open the Link Shelf ('Mod+Shift+L') */
+  onShelf?: () => void;
+  /** Open Add to shelf ('Mod+L') */
+  onAddToShelf?: () => void;
   /** Open Settings ('Mod+,') */
   onSettings?: () => void;
   /** Open Project switcher ('p' or 'Mod+P') */
@@ -103,6 +107,18 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions): void
       if (matchesKeyCombo(e, "Mod+B")) {
         e.preventDefault();
         currentHandlers.onToggleSidebar?.();
+        return;
+      }
+
+      // Link Shelf: Mod+Shift+L opens it, Mod+L adds a link to it (available everywhere)
+      if (matchesKeyCombo(e, "Mod+Shift+L")) {
+        e.preventDefault();
+        currentHandlers.onShelf?.();
+        return;
+      }
+      if (matchesKeyCombo(e, "Mod+L")) {
+        e.preventDefault();
+        currentHandlers.onAddToShelf?.();
         return;
       }
 

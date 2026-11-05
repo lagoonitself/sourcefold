@@ -11,6 +11,7 @@ pub mod research;
 pub mod search;
 pub mod settings;
 pub mod substack;
+pub mod shelf;
 pub mod tldrs;
 pub mod web_fetch;
 
@@ -27,5 +28,6 @@ pub use research::*;
 pub use search::*;
 pub use settings::*;
 pub use substack::*;
+pub use shelf::*;
 pub use tldrs::*;
 pub use web_fetch::*;

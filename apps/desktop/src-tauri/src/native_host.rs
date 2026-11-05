@@ -86,6 +86,47 @@ pub fn handle_native_request(db_mutex: &Arc<Mutex<Database>>, req: Value) -> Val
 
         "get_session" => crate::session::session_json(crate::session::load_session().as_ref()),
 
+        // The Link Shelf (docs/dev/PLAN-shelf.md): the same answers as /api/shelf on the loopback.
+        "list_shelf" | "add_shelf_links" | "update_shelf_link" => {
+            use crate::shelf_store::{ShelfLinkInput, ShelfLinkPatch};
+            let db = match db_mutex.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            let shelf_error = |e: crate::shelf_store::ShelfError| {
+                error_response(&e.message(), if e.status() == 404 { "not_found" } else { "invalid_request" })
+            };
+            match action {
+                "list_shelf" => match db.list_shelf() {
+                    Ok(list) => json!({ "data": list }),
+                    Err(e) => shelf_error(e),
+                },
+                "add_shelf_links" => {
+                    let links: Vec<ShelfLinkInput> =
+                        match serde_json::from_value(req.get("links").cloned().unwrap_or(Value::Null)) {
+                            Ok(l) => l,
+                            Err(e) => return error_response(&format!("Invalid links: {}", e), "invalid_request"),
+                        };
+                    match db.add_shelf_links(&links) {
+                        Ok(result) => json!({ "data": result }),
+                        Err(e) => shelf_error(e),
+                    }
+                }
+                _ => {
+                    let id = req.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+                    let patch: ShelfLinkPatch =
+                        match serde_json::from_value(req.get("patch").cloned().unwrap_or(Value::Null)) {
+                            Ok(p) => p,
+                            Err(e) => return error_response(&format!("Invalid change: {}", e), "invalid_request"),
+                        };
+                    match db.update_shelf_link(&id, &patch) {
+                        Ok(link) => json!({ "data": link }),
+                        Err(e) => shelf_error(e),
+                    }
+                }
+            }
+        }
+
         "list_folders" => {
             let db = match db_mutex.lock() {
                 Ok(g) => g,
@@ -618,6 +659,19 @@ mod tests {
         let res = handle_native_request(&db, json!({ "type": "unsupported_command" }));
         assert_eq!(res["error"]["code"], "unknown_action");
         assert!(res["error"]["message"].as_str().unwrap().contains("Unknown native request type"));
+    }
+
+    #[test]
+    fn native_shelf_requests() {
+        let db = Arc::new(Mutex::new(Database::open_in_memory().unwrap()));
+        let added = handle_native_request(&db, json!({ "type": "add_shelf_links", "links": [{ "url": "vercel.com" }] }));
+        let id = added["data"]["added"][0]["id"].as_str().unwrap().to_string();
+        let listed = handle_native_request(&db, json!({ "type": "list_shelf" }));
+        assert_eq!(listed["data"][0]["title"], "vercel.com");
+        let patched = handle_native_request(&db, json!({ "type": "update_shelf_link", "id": id, "patch": { "note": "deploys" } }));
+        assert_eq!(patched["data"]["note"], "deploys");
+        let bad = handle_native_request(&db, json!({ "type": "add_shelf_links", "links": [{ "url": "nope" }] }));
+        assert_eq!(bad["error"]["code"], "invalid_request");
     }
 
     #[test]

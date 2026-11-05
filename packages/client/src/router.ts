@@ -37,6 +37,9 @@ import * as outlineSections from "./routes/outline-sections";
 import * as outlineSection from "./routes/outline-sections/[id]";
 import * as tldrs from "./routes/tldrs";
 import * as tldr from "./routes/tldrs/[itemId]";
+import * as shelf from "./routes/shelf";
+import * as shelfLink from "./routes/shelf/[id]";
+import * as shelfLinkOpen from "./routes/shelf/[id]/open";
 import * as projectExport from "./routes/projects/[id]/export";
 import * as projectImport from "./routes/projects/[id]/import";
 import * as uploads from "./routes/uploads";
@@ -73,6 +76,9 @@ export const LOCAL_ROUTES: ReadonlyArray<readonly [string, RouteModule]> = [
   ["/api/notes", notes],
   ["/api/outline-sections", outlineSections],
   ["/api/outline-sections/[id]", outlineSection],
+  ["/api/shelf", shelf],
+  ["/api/shelf/[id]", shelfLink],
+  ["/api/shelf/[id]/open", shelfLinkOpen],
   ["/api/tldrs", tldrs],
   ["/api/tldrs/[itemId]", tldr],
   ["/api/projects/[id]/export", projectExport],

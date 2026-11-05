@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Command, Folder as FolderIcon, Layers, Search } from "lucide-react";
+import { BookMarked, Command, Folder as FolderIcon, Layers, Search } from "lucide-react";
+import { shelfHost, sortShelf, type ShelfLink } from "@sourcefold/core";
 import { Dialog, DialogContent } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Kbd } from "@/components/ui/Kbd";
@@ -18,7 +19,10 @@ import { cn } from "@/lib/utils";
 
 const RECENT_COMMANDS_KEY = "sourcefold:recent-commands";
 
-export type PaletteActionType = "command" | "project" | "group" | "source";
+export type PaletteActionType = "command" | "shelf" | "project" | "group" | "source";
+
+/** With no filter text, the palette lists this many shelf links (most used first). */
+const EMPTY_QUERY_SHELF_LIMIT = 5;
 
 export interface PaletteEntry {
   id: string;
@@ -44,11 +48,15 @@ export interface CommandPaletteProps {
   onSelectFolder: (folderId: string) => void;
   onOpenItem: (item: Item, options?: { forceExternal?: boolean }) => void;
   onExecuteCommand: (commandId: string) => void;
+  shelfLinks: ShelfLink[];
+  /** Opens a shelf link and counts the open. */
+  onOpenShelfLink: (link: ShelfLink) => void;
 }
 
 const SECTION_TITLES: Record<string, string> = {
   recent: "Recently used",
   command: "Commands",
+  shelf: "Shelf",
   project: "Projects",
   group: "Groups",
   source: "Sources",
@@ -74,7 +82,14 @@ function PaletteTile({ entry }: { entry: PaletteEntry }) {
   if (entry.type === "source") {
     return <SourceTile kind={entry.kind || "web"} className="shrink-0" />;
   }
-  const Icon = entry.type === "command" ? Command : entry.type === "project" ? Layers : FolderIcon;
+  const Icon =
+    entry.type === "command"
+      ? Command
+      : entry.type === "shelf"
+        ? BookMarked
+        : entry.type === "project"
+          ? Layers
+          : FolderIcon;
   return (
     <span
       aria-hidden="true"
@@ -116,6 +131,8 @@ export function CommandPalette({
   onSelectFolder,
   onOpenItem,
   onExecuteCommand,
+  shelfLinks,
+  onOpenShelfLink,
 }: CommandPaletteProps) {
   const [query, setQuery] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -201,6 +218,18 @@ export function CommandPalette({
       });
     }
 
+    // Shelf links, most used first; they open in the browser.
+    for (const link of sortShelf(shelfLinks)) {
+      list.push({
+        id: `shelf:${link.id}`,
+        type: "shelf",
+        title: link.title,
+        subtitle: shelfHost(link.url),
+        keywords: `shelf open link ${link.url} ${link.note} ${link.tags.join(" ")}`,
+        run: () => onOpenShelfLink(link),
+      });
+    }
+
     // 4. Sources in current project / view
     for (const item of items) {
       const groupName = names.groupName(item.folder_id);
@@ -225,9 +254,11 @@ export function CommandPalette({
     activeProjectId,
     onExecuteCommand,
     onOpenItem,
+    onOpenShelfLink,
     onSelectFolder,
     onSelectProject,
     projects,
+    shelfLinks,
   ]);
 
   // Filter, group and rank entries
@@ -241,7 +272,12 @@ export function CommandPalette({
       const recents: PaletteEntry[] = [];
       const others: PaletteEntry[] = [];
 
+      let shelfSeen = 0;
       for (const entry of allEntries) {
+        if (entry.type === "shelf") {
+          shelfSeen += 1;
+          if (shelfSeen > EMPTY_QUERY_SHELF_LIMIT && !recentSet.has(entry.id)) continue;
+        }
         if (recentSet.has(entry.id)) {
           recents.push({ ...entry, section: "recent" });
         } else {
@@ -252,7 +288,7 @@ export function CommandPalette({
       recents.sort((a, b) => recentIds.indexOf(a.id) - recentIds.indexOf(b.id));
 
       // Group others in order: Commands, Projects, Groups, Sources
-      const sectionOrder: PaletteActionType[] = ["command", "project", "group", "source"];
+      const sectionOrder: PaletteActionType[] = ["command", "shelf", "project", "group", "source"];
       const groupedOthers: PaletteEntry[] = [];
       for (const type of sectionOrder) {
         for (const entry of others) {
@@ -273,7 +309,7 @@ export function CommandPalette({
     );
 
     // Group matching results in order: Commands, Projects, Groups, Sources
-    const sectionOrder: PaletteActionType[] = ["command", "project", "group", "source"];
+    const sectionOrder: PaletteActionType[] = ["command", "shelf", "project", "group", "source"];
     const grouped: PaletteEntry[] = [];
     for (const type of sectionOrder) {
       for (const entry of matches) {

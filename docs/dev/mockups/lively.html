@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en" data-motion="lively" data-pet="fold" data-view="group">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sourcefold Lively Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+/* Tokens: copied from apps/desktop/src/index.css (ink and highlighter). */
+:root {
+  --desk: #E8EAEE; --background: #FCFCFB; --card: #FFFFFF; --foreground: #15181E;
+  --primary: #15181E; --primary-foreground: #FCFCFB; --muted: #F1F2F5; --accent: #EAECF0;
+  --muted-foreground: #5E6573; --border: #E1E4EA; --border-strong: #CDD2DA; --input: #D9DDE4;
+  --marker: #F7E35A; --marker-soft: #FBF1B0; --marker-strong: #F5DC3C; --marker-strong-foreground: #15181E;
+  --success: #2F8A57; --destructive: #C2362B;
+  --sidebar-accent: rgb(255 255 255 / 0.72); --overlay: rgb(21 24 30 / 0.32);
+  --src-grok: #4B4FA8; --src-wiki: #3F4A5A; --src-substack: #C2610C; --src-youtube: #B4235A; --src-web: #4D5B6B; --src-reddit: #A33B12;
+  --shadow-raised: 0 0 0 1px rgb(21 24 30 / 0.06), 0 1px 2px rgb(21 24 30 / 0.06);
+  --shadow-sheet: 0 0 0 1px rgb(21 24 30 / 0.05), 0 2px 6px rgb(21 24 30 / 0.05), 0 12px 32px -12px rgb(21 24 30 / 0.12);
+  --shadow-float: 0 0 0 1px rgb(21 24 30 / 0.07), 0 12px 40px -8px rgb(21 24 30 / 0.22);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --page: #DDE0E6; --page-ink: #15181E;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk: #0E0F13; --background: #17191E; --card: #1C1E24; --foreground: #ECEDEF;
+    --primary: #ECEDEF; --primary-foreground: #17191E; --muted: #22252C; --accent: #272A32;
+    --muted-foreground: #979EAA; --border: #2A2E36; --border-strong: #3A3F49; --input: #343842;
+    --marker: #B9A332; --marker-soft: #3A361D; --marker-strong: #EAD34B; --marker-strong-foreground: #15181E;
+    --success: #6CC794; --destructive: #F0857A;
+    --sidebar-accent: rgb(255 255 255 / 0.06); --overlay: rgb(0 0 0 / 0.56);
+    --src-grok: #9FA3F0; --src-wiki: #C3CAD4; --src-substack: #F2A65A; --src-youtube: #F08AB0; --src-web: #B4BFCC; --src-reddit: #F59E7A;
+    --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.06); --shadow-sheet: 0 0 0 1px rgb(255 255 255 / 0.05), 0 12px 32px -12px rgb(0 0 0 / 0.6);
+    --shadow-float: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 48px -8px rgb(0 0 0 / 0.7);
+    --page: #08090B; --page-ink: #ECEDEF; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --desk: #0E0F13; --background: #17191E; --card: #1C1E24; --foreground: #ECEDEF;
+  --primary: #ECEDEF; --primary-foreground: #17191E; --muted: #22252C; --accent: #272A32;
+  --muted-foreground: #979EAA; --border: #2A2E36; --border-strong: #3A3F49; --input: #343842;
+  --marker: #B9A332; --marker-soft: #3A361D; --marker-strong: #EAD34B; --marker-strong-foreground: #15181E;
+  --success: #6CC794; --destructive: #F0857A;
+  --sidebar-accent: rgb(255 255 255 / 0.06); --overlay: rgb(0 0 0 / 0.56);
+  --src-grok: #9FA3F0; --src-wiki: #C3CAD4; --src-substack: #F2A65A; --src-youtube: #F08AB0; --src-web: #B4BFCC; --src-reddit: #F59E7A;
+  --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.06); --shadow-sheet: 0 0 0 1px rgb(255 255 255 / 0.05), 0 12px 32px -12px rgb(0 0 0 / 0.6);
+  --shadow-float: 0 0 0 1px rgb(255 255 255 / 0.08), 0 16px 48px -8px rgb(0 0 0 / 0.7);
+  --page: #08090B; --page-ink: #ECEDEF; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page); color: var(--page-ink);
+  font: 400 14px/20px "Geist", -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased; min-height: 100vh;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+.serif { font-family: "Newsreader", Georgia, serif; }
+.mono { font-family: "Geist Mono", ui-monospace, monospace; }
+svg.i { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.75; fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* ---------- Page chrome (not part of the product) ---------- */
+.intro { max-width: 1280px; margin: 0 auto; padding: 28px 24px 8px; }
+.intro h1 { font: 500 30px/36px "Newsreader", Georgia, serif; letter-spacing: -0.02em; margin: 0 0 6px; }
+.intro p { margin: 0; color: var(--muted-foreground); max-width: 720px; }
+.controls {
+  max-width: 1280px; margin: 0 auto; padding: 16px 24px; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center;
+}
+.ctl { display: flex; align-items: center; gap: 8px; }
+.ctl > span { font-size: 12.5px; color: var(--muted-foreground); font-weight: 500; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--muted); box-shadow: inset 0 0 0 1px var(--border); position: relative; }
+.seg button { border: 0; background: transparent; padding: 5px 11px; border-radius: 7px; font-size: 13px; font-weight: 500; color: var(--muted-foreground); position: relative; z-index: 1; transition: color 160ms var(--ease-out); }
+.seg button[aria-pressed="true"] { color: var(--foreground); }
+.seg .thumb { position: absolute; top: 3px; bottom: 3px; border-radius: 7px; background: var(--card); box-shadow: var(--shadow-raised); transition: left 260ms var(--ease-spring), width 260ms var(--ease-spring); }
+[data-motion="lively"] .seg .thumb { transition: left 420ms var(--ease-bounce), width 420ms var(--ease-bounce); }
+.hint { font-size: 12.5px; color: var(--muted-foreground); }
+
+.stage { max-width: 1280px; margin: 0 auto; padding: 8px 24px 48px; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+@media (max-width: 1040px) { .stage { grid-template-columns: minmax(0, 1fr); } .popup-wrap { justify-self: center; } }
+.label { font-size: 12px; color: var(--muted-foreground); font-weight: 500; margin: 0 0 8px 4px; }
+
+/* ---------- Desktop window ---------- */
+.window { background: var(--desk); border-radius: 14px; box-shadow: 0 30px 80px -30px rgb(0 0 0 / 0.35), 0 0 0 1px rgb(0 0 0 / 0.08); display: grid; grid-template-columns: 248px minmax(0, 1fr); height: 640px; overflow: hidden; position: relative; }
+@media (max-width: 760px) { .window { grid-template-columns: minmax(0, 1fr); } .sidebar { display: none !important; } }
+.sidebar { display: flex; flex-direction: column; padding: 10px 8px 8px 10px; color: var(--foreground); min-height: 0; }
+.brand { display: flex; align-items: center; gap: 9px; padding: 6px 6px 12px; font-weight: 600; font-size: 14px; }
+.logo { width: 26px; height: 26px; border-radius: 7px; background: var(--foreground); display: grid; place-items: center; }
+.logo svg { width: 16px; height: 16px; }
+.kbd { font: 500 11px/1 "Geist Mono", monospace; padding: 3px 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--muted-foreground); }
+.brand .kbd { margin-left: auto; }
+.srow { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 8px; font-size: 13.5px; position: relative; border: 0; background: transparent; width: 100%; text-align: left; }
+.srow:hover { background: var(--sidebar-accent); }
+.srow .count { margin-left: auto; color: var(--muted-foreground); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.srow.on { background: var(--sidebar-accent); box-shadow: var(--shadow-raised); }
+.srow .ic { color: var(--muted-foreground); }
+.picker { margin: 8px 0 6px; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 9px; background: var(--sidebar-accent); box-shadow: var(--shadow-raised); font-weight: 500; font-size: 13.5px; }
+.picker .chev { margin-left: auto; color: var(--muted-foreground); }
+.sect { display: flex; align-items: center; justify-content: space-between; padding: 12px 8px 4px; font-size: 12px; color: var(--muted-foreground); font-weight: 500; }
+.tree { display: flex; flex-direction: column; gap: 1px; }
+.tree .srow.sub { padding-left: 30px; }
+.mk { background-image: linear-gradient(transparent 58%, var(--marker) 58%, var(--marker) 92%, transparent 92%); background-repeat: no-repeat; background-size: 100% 100%; padding: 0 2px; margin: 0 -2px; }
+.mk.sweep { animation: sweep 640ms var(--ease-out) 80ms both; }
+@keyframes sweep { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
+.side-foot { margin-top: auto; display: flex; align-items: flex-end; gap: 8px; padding: 6px 4px 2px; }
+.avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--foreground); color: var(--background); display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+.who { font-size: 12.5px; line-height: 16px; } .who small { display: block; color: var(--muted-foreground); font-size: 12px; }
+
+.sheet { margin: 8px 8px 8px 0; background: var(--background); border-radius: 14px; box-shadow: var(--shadow-sheet); display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; container-type: inline-size; position: relative; }
+@media (max-width: 760px) { .sheet { margin: 8px; } }
+.topbar { height: 52px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 18px; border-bottom: 1px solid var(--border); }
+.crumb { font-size: 13.5px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crumb b { color: var(--foreground); font-weight: 500; }
+.search { margin-left: auto; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px 0 10px; border-radius: 9px; background: var(--muted); color: var(--muted-foreground); font-size: 13px; min-width: 150px; }
+.search .kbd { margin-left: auto; }
+@container (max-width: 560px) { .search { display: none; } }
+.btn { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 9px; border: 0; font-size: 13px; font-weight: 500; white-space: nowrap; position: relative; overflow: hidden; transition: transform 120ms var(--ease-out), background-color 160ms var(--ease-out); }
+.btn:active { transform: scale(0.97); }
+[data-motion="lively"] .btn:active { transform: scale(0.94); }
+.btn-ink { background: var(--primary); color: var(--primary-foreground); }
+.btn-ink .kbd { box-shadow: inset 0 0 0 1px rgb(127 127 127 / 0.45); color: inherit; opacity: 0.7; }
+.btn-outline { background: transparent; box-shadow: inset 0 0 0 1px var(--border-strong); color: var(--foreground); }
+.btn-outline:hover { background: var(--muted); }
+.btn-ghost { background: transparent; color: var(--foreground); }
+.btn-ghost:hover { background: var(--muted); }
+
+.view { padding: 30px 32px 24px; overflow: auto; flex: 1; min-height: 0; }
+@container (max-width: 560px) { .view { padding: 20px; } }
+.heading { font: 500 40px/44px "Newsreader", Georgia, serif; letter-spacing: -0.02em; margin: 0; }
+@container (max-width: 560px) { .heading { font-size: 30px; line-height: 36px; } }
+.meta { display: flex; align-items: center; gap: 8px; margin: 10px 0 18px; flex-wrap: wrap; }
+.meta .txt { color: var(--muted-foreground); font-size: 13px; margin-right: auto; font-variant-numeric: tabular-nums; }
+.tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--border); margin-bottom: 8px; position: relative; }
+.tab { border: 0; background: none; padding: 8px 0 10px; font-size: 13.5px; font-weight: 500; color: var(--muted-foreground); display: flex; gap: 6px; align-items: center; }
+.tab[aria-selected="true"] { color: var(--foreground); }
+.tab .n { font-size: 12px; padding: 0 6px; border-radius: 6px; background: var(--muted); font-variant-numeric: tabular-nums; }
+.tab-line { position: absolute; bottom: -1px; height: 2px; background: var(--foreground); border-radius: 2px; transition: left 260ms var(--ease-spring), width 260ms var(--ease-spring); }
+[data-motion="lively"] .tab-line { height: 6px; bottom: 2px; background: var(--marker); z-index: -1; border-radius: 3px; transition: left 460ms var(--ease-bounce), width 460ms var(--ease-bounce); }
+.tabs { isolation: isolate; }
+
+.rows { display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 10px; margin: 0 -10px; border-radius: 10px; position: relative; overflow: hidden; cursor: default; outline: none; }
+.row:hover { background: var(--muted); }
+.row:focus-visible, .row.focus { background: var(--accent); }
+.row:focus-visible::before, .row.focus::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 2px; border-radius: 2px; background: var(--foreground); }
+[data-motion="lively"] .row.focus::before { animation: bar-grow 300ms var(--ease-bounce) both; }
+@keyframes bar-grow { from { transform: scaleY(0); } to { transform: none; } }
+.tile { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; flex: none; color: var(--c); background: color-mix(in oklab, var(--c) 12%, transparent); font-weight: 600; font-size: 13px; }
+.row .main { min-width: 0; flex: 1; }
+.row .title { font: 500 16px/22px "Newsreader", Georgia, serif; letter-spacing: -0.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .title span { background-image: linear-gradient(var(--marker), var(--marker)); background-repeat: no-repeat; background-position: 0 92%; background-size: 0% 3px; }
+[data-motion="lively"] .row:hover .title span { background-size: 100% 3px; transition: background-size 420ms var(--ease-out); }
+.row .sub { font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .col { font-size: 12.5px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.row .col.kind { width: 84px; }
+.row .col.date { width: 92px; text-align: right; }
+@container (max-width: 560px) { .row .col.kind { display: none; } }
+@container (max-width: 440px) { .row .col.date { display: none; } }
+.chip { font-size: 12px; padding: 1px 7px; border-radius: 6px; background: var(--muted); color: var(--muted-foreground); }
+.pin { color: var(--foreground); }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+.tag { border: 0; height: 28px; padding: 0 10px; border-radius: 8px; background: var(--muted); font-size: 12.5px; color: var(--muted-foreground); display: inline-flex; gap: 6px; align-items: center; transition: background-color 160ms var(--ease-out), transform 160ms var(--ease-out); }
+.tag b { font-weight: 500; color: var(--foreground); }
+.tag[aria-pressed="true"] { background: var(--marker-soft); }
+[data-motion="lively"] .tag:active { transform: scale(0.92); }
+.filter { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border-radius: 9px; box-shadow: inset 0 0 0 1px var(--input); color: var(--muted-foreground); margin-bottom: 10px; max-width: 360px; }
+.filter input { border: 0; outline: 0; background: transparent; flex: 1; font: inherit; color: var(--foreground); min-width: 0; }
+
+/* Ripple (Lively) */
+.ripple { position: absolute; border-radius: 50%; pointer-events: none; background: var(--marker-soft); transform: scale(0); opacity: 0.9; mix-blend-mode: multiply; }
+:root[data-theme="dark"] .ripple { mix-blend-mode: screen; }
+.btn-ink .ripple { background: var(--marker); mix-blend-mode: normal; opacity: 0.35; }
+
+/* Paper scraps (Lively save) */
+.scrap { position: fixed; width: 8px; height: 10px; border-radius: 2px; pointer-events: none; z-index: 60; }
+
+/* Toast */
+.toasts { position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 20; }
+.toast { display: flex; align-items: center; gap: 9px; background: var(--card); color: var(--foreground); box-shadow: var(--shadow-float); border-radius: 12px; padding: 10px 14px 10px 12px; font-size: 13px; font-weight: 500; }
+.toast .ok { color: var(--success); }
+
+/* Empty-ish card stack illustration in the shelf header */
+.stack { position: relative; width: 44px; height: 34px; flex: none; }
+.stack i { position: absolute; inset: 0; border-radius: 7px; background: var(--card); box-shadow: var(--shadow-raised); transition: transform 380ms var(--ease-bounce); }
+.stack i:nth-child(1) { transform: rotate(-6deg); } .stack i:nth-child(2) { transform: rotate(3deg); }
+[data-motion="lively"] .stack:hover i:nth-child(1) { transform: rotate(-16deg) translate(-6px, -2px); }
+[data-motion="lively"] .stack:hover i:nth-child(2) { transform: rotate(12deg) translate(6px, -2px); }
+
+/* Dialog */
+.scrim { position: absolute; inset: 0; background: var(--overlay); z-index: 30; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease-out); }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.dialog { width: min(440px, calc(100% - 32px)); background: var(--card); border-radius: 16px; box-shadow: var(--shadow-float); padding: 20px; transform: translateY(10px) scale(0.97); opacity: 0; transition: transform 240ms var(--ease-spring), opacity 180ms var(--ease-out); }
+.scrim.open .dialog { transform: none; opacity: 1; }
+[data-motion="lively"] .dialog { transition: transform 520ms var(--ease-bounce), opacity 200ms var(--ease-out); transform: translateY(24px) scale(0.9); }
+[data-motion="lively"] .scrim.open .dialog { transform: none; }
+.dialog h3 { font: 500 22px/28px "Newsreader", Georgia, serif; letter-spacing: -0.012em; margin: 0 0 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; font-size: 12.5px; font-weight: 500; color: var(--muted-foreground); }
+.field input, .field textarea { height: 36px; border-radius: 9px; border: 0; box-shadow: inset 0 0 0 1px var(--input); background: transparent; padding: 0 11px; font: 400 13.5px/20px "Geist", sans-serif; color: var(--foreground); }
+.field textarea { height: auto; padding: 8px 11px; resize: none; }
+.field input:focus, .field textarea:focus { outline: 2px solid var(--foreground); outline-offset: 1px; }
+.dialog .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+
+/* ---------- Extension popup ---------- */
+.popup { width: 360px; max-width: 100%; background: var(--background); border-radius: 14px; box-shadow: var(--shadow-sheet), 0 30px 60px -30px rgb(0 0 0 / 0.35); overflow: hidden; position: relative; color: var(--foreground); }
+.p-head { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 13.5px; }
+.p-head .mode { margin-left: auto; font-size: 12px; color: var(--muted-foreground); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.dot-ok { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+.p-page { padding: 14px 14px 10px; display: flex; gap: 11px; align-items: center; }
+.p-page .t { font: 500 16px/21px "Newsreader", Georgia, serif; }
+.p-page .h { font-size: 12.5px; color: var(--muted-foreground); }
+.p-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 0 14px 12px; }
+.p-actions .btn { height: 36px; justify-content: center; }
+.p-groups { border-top: 1px solid var(--border); padding: 8px 8px 6px; }
+.p-groups .srow { height: 32px; }
+.p-groups .srow.on .mk { }
+.p-shelf { margin: 0 14px 12px; border-radius: 10px; background: var(--marker-soft); padding: 10px 12px; font-size: 12.5px; display: none; }
+.p-shelf.show { display: block; }
+[data-motion="lively"] .p-shelf.show { animation: drop 520ms var(--ease-bounce) both; }
+@keyframes drop { from { opacity: 0; transform: translateY(-10px) scale(0.96); } to { opacity: 1; transform: none; } }
+.p-shelf b { font-weight: 600; }
+.p-shelf textarea { width: 100%; margin-top: 8px; border: 0; border-radius: 8px; background: var(--background); box-shadow: inset 0 0 0 1px var(--input); padding: 7px 9px; font: 400 13px/19px "Geist", sans-serif; color: var(--foreground); resize: none; }
+.p-foot { display: flex; align-items: flex-end; gap: 8px; padding: 6px 12px 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+.p-foot .say { margin-bottom: 8px; }
+
+/* ---------- Pets ---------- */
+.pet { width: 44px; height: 44px; flex: none; position: relative; cursor: pointer; border: 0; background: transparent; padding: 0; }
+.pet svg { width: 100%; height: 100%; overflow: visible; display: block; }
+[data-pet="none"] .pet, [data-motion="calm"] .pet { display: none; }
+.pet .body { transform-origin: 22px 40px; transform-box: view-box; }
+.pet .eyes { transition: transform 140ms var(--ease-out); }
+.pet .lid { transform-origin: center; transform-box: fill-box; transform: scaleY(0); }
+.pet.blink .lid { animation: blink 180ms var(--ease-out); }
+@keyframes blink { 50% { transform: scaleY(1); } }
+.pet .zz { opacity: 0; font: 600 9px "Geist", sans-serif; fill: var(--muted-foreground); }
+.pet.sleep .zz { animation: zz 2.4s var(--ease-out) infinite; }
+.pet.sleep .lid { transform: scaleY(1); }
+.pet.sleep .body { animation: breathe 3.2s ease-in-out infinite; }
+@keyframes zz { 0% { opacity: 0; transform: translate(0, 0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(6px, -10px); } }
+@keyframes breathe { 50% { transform: scale(1.04, 0.97); } }
+.pet:not(.sleep) .body { animation: idle 4s ease-in-out infinite; }
+@keyframes idle { 50% { transform: translateY(-1px); } }
+.pet.cheer .body { animation: hop 760ms var(--ease-bounce); }
+@keyframes hop { 0% { transform: none; } 25% { transform: translateY(2px) scale(1.08, 0.9); } 55% { transform: translateY(-12px) scale(0.94, 1.08) rotate(-6deg); } 80% { transform: translateY(0) scale(1.06, 0.94); } 100% { transform: none; } }
+.pet.trick .body { animation: spin 820ms var(--ease-bounce); }
+@keyframes spin { 0% { transform: none; } 40% { transform: translateY(-10px) rotate(-200deg); } 100% { transform: rotate(-360deg); } }
+.pet .cheek { opacity: 0; transition: opacity 200ms; }
+.pet.cheer .cheek, .pet.trick .cheek { opacity: 0.9; }
+.say { font-size: 12px; color: var(--muted-foreground); opacity: 0; transform: translateY(4px); transition: opacity 200ms var(--ease-out), transform 300ms var(--ease-bounce); white-space: nowrap; }
+.say.show { opacity: 1; transform: none; }
+[data-motion="calm"] .say { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}
+
+.notes { max-width: 1280px; margin: 0 auto; padding: 0 24px 56px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.note { background: var(--card); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow-raised); color: var(--foreground); }
+.note h4 { font: 500 17px/22px "Newsreader", Georgia, serif; margin: 0 0 6px; }
+.note p { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="intro">
+  <h1>Sourcefold, Calm and Lively</h1>
+  <p>A clickable mockup. The colours, fonts and layout are the real ones. Switch between Calm (today's app) and Lively (opt-in) to compare. Try clicking rows, switching tabs and groups, Save or Shelve in the extension, opening Shelf, and clicking the pet.</p>
+</header>
+
+<div class="controls">
+  <div class="ctl"><span>Motion</span><div class="seg" data-ctl="motion"><i class="thumb"></i><button data-v="calm">Calm</button><button data-v="lively">Lively</button></div></div>
+  <div class="ctl"><span>Theme</span><div class="seg" data-ctl="theme"><i class="thumb"></i><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+  <div class="ctl"><span>Pet</span><div class="seg" data-ctl="pet"><i class="thumb"></i><button data-v="fold">Fold</button><button data-v="nib">Nib</button><button data-v="dot">Dot</button><button data-v="none">None</button></div></div>
+  <div class="ctl"><span>Screen</span><div class="seg" data-ctl="view"><i class="thumb"></i><button data-v="group">Group</button><button data-v="shelf">Shelf</button></div></div>
+</div>
+
+<main class="stage">
+  <div>
+    <p class="label">Desktop app</p>
+    <div class="window" id="win">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo"><svg viewBox="0 0 16 16"><path d="M4 3h8l-4 5h4l-8 5 2-5H4z" fill="var(--background)"/><path d="M6 8h4" stroke="var(--marker-strong)" stroke-width="2"/></svg></div>
+          Sourcefold <span class="kbd">Ctrl K</span>
+        </div>
+        <button class="srow" id="shelf-row" data-go="shelf"><svg class="i ic" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/><path d="m8 7 2 2 4-4"/></svg><span class="nm">Shelf</span><span class="count" data-count="shelf">6</span></button>
+        <div class="picker"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>Cars<svg class="i chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+        <div class="sect">Groups <svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+        <div class="tree" id="tree"></div>
+        <div class="side-foot">
+          <div class="avatar">AK</div>
+          <div class="who">anil<small>Synced</small></div>
+          <span class="say" id="say-app" style="margin-left:auto;align-self:center"></span>
+          <button class="pet" id="pet-app" aria-label="Your pet" title="Click for a trick"></button>
+        </div>
+      </aside>
+
+      <section class="sheet">
+        <div class="topbar">
+          <div class="crumb" id="crumb"></div>
+          <div class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search <span class="kbd">/</span></div>
+          <button class="btn btn-ink" id="primary-btn"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Add links</span> <span class="kbd">A</span></button>
+        </div>
+        <div class="view" id="view"></div>
+        <div class="toasts" id="toasts"></div>
+        <div class="scrim" id="scrim">
+          <form class="dialog" id="dialog">
+            <h3>Add to shelf</h3>
+            <label class="field">URL<input id="f-url" value="excalidraw.com" autocomplete="off"></label>
+            <label class="field">Title<input id="f-title" placeholder="excalidraw.com"></label>
+            <label class="field">Note<textarea id="f-note" rows="3">Quick diagrams for the outline.</textarea></label>
+            <label class="field">Tags<input id="f-tags" value="design, tools" placeholder="Comma separated"></label>
+            <div class="foot"><button type="button" class="btn btn-ghost" id="d-cancel">Cancel</button><button class="btn btn-ink" id="d-add">Add to shelf</button></div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="popup-wrap">
+    <p class="label">Chrome extension</p>
+    <div class="popup" id="popup">
+      <div class="p-head">
+        <div class="logo"><svg viewBox="0 0 16 16"><path d="M4 3h8l-4 5h4l-8 5 2-5H4z" fill="var(--background)"/><path d="M6 8h4" stroke="var(--marker-strong)" stroke-width="2"/></svg></div>
+        Sourcefold
+        <span class="mode"><i class="dot-ok"></i>Signed in</span>
+      </div>
+      <div class="p-page">
+        <div class="tile" style="--c: var(--src-web)"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
+        <div><div class="t">How variable-geometry turbos work</div><div class="h">Web page, garrettmotion.com</div></div>
+      </div>
+      <div class="p-actions">
+        <button class="btn btn-ink" id="p-save"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg><span>Save to Turbocharging</span></button>
+        <button class="btn btn-outline" id="p-shelve" title="Keep this site on your shelf"><svg class="i" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></svg><span>Shelve</span></button>
+      </div>
+      <div class="p-shelf" id="p-shelf"><b>On your shelf.</b> Add a note for next time:<textarea rows="2">Good diagrams of the vane ring.</textarea></div>
+      <div class="p-groups">
+        <button class="srow"><svg class="i ic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Engines<span class="count">14</span></button>
+        <button class="srow on"><svg class="i ic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="mk">Turbocharging</span><span class="count" data-count="turbo">6</span></button>
+        <button class="srow"><svg class="i ic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Suspension<span class="count">9</span></button>
+      </div>
+      <div class="p-foot">
+        <span>Saving to Cars</span>
+        <span class="say" id="say-ext" style="margin-left:auto"></span>
+        <button class="pet" id="pet-ext" aria-label="Your pet" title="Click for a trick"></button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<section class="notes">
+  <div class="note"><h4>Calm stays the default</h4><p>Calm is today's app, unchanged. Lively is a switch in Settings, Appearance, Motion. Reduced-motion settings on your computer always win.</p></div>
+  <div class="note"><h4>Same look, app and extension</h4><p>The extension moves to the app's ink-and-highlighter colours and fonts in both modes, and gets the same springs, ripples and pet in Lively.</p></div>
+  <div class="note"><h4>What Lively adds</h4><p>Springy dialogs and tabs, the highlighter drawing under hovered titles, a soft press ripple, rows that bounce in, paper scraps on save, rolling counts, and a pet that blinks, follows your pointer, dozes and cheers.</p></div>
+</section>
+
+<script>
+(function () {
+  const root = document.documentElement;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+  const lively = () => root.dataset.motion === "lively" && !reduce.matches;
+
+  /* ---------- Data ---------- */
+  const groups = [
+    { id: "engines", name: "Engines", count: 14, depth: 0 },
+    { id: "turbo", name: "Turbocharging", count: 6, depth: 1 },
+    { id: "lag", name: "Lag and boost", count: 3, depth: 2 },
+    { id: "susp", name: "Suspension", count: 9, depth: 0 },
+  ];
+  const sources = {
+    turbo: [
+      ["wiki", "Turbocharger", "Wikipedia, 38 min", "Wikipedia", "Oct 17"],
+      ["youtube", "How twin-scroll turbos actually work", "Engineering Explained, 14:02", "YouTube", "Oct 18"],
+      ["substack", "Why turbo lag is mostly gone", "Jason Fenske", "Substack", "Oct 21"],
+      ["grok", "Turbocharging", "Grokipedia, 52 min", "Grokipedia", "Oct 22"],
+      ["reddit", "Is boost lag still a thing in 2026?", "r/cars, 212 comments", "Reddit", "Oct 30"],
+      ["web", "Anti-lag systems explained", "garrettmotion.com", "Web page", "Nov 2"],
+    ],
+    engines: [
+      ["grok", "Internal combustion engine", "Grokipedia, 61 min", "Grokipedia", "Oct 12"],
+      ["wiki", "Variable valve timing", "Wikipedia, 22 min", "Wikipedia", "Oct 13"],
+      ["youtube", "Why straight sixes are so smooth", "Driving 4 Answers, 11:40", "YouTube", "Oct 14"],
+      ["web", "Direct injection, the good and the bad", "caranddriver.com", "Web page", "Oct 15"],
+    ],
+    lag: [
+      ["substack", "Boost threshold vs lag", "Jason Fenske", "Substack", "Oct 25"],
+      ["reddit", "Anti-lag on a street car?", "r/turbo, 88 comments", "Reddit", "Oct 26"],
+      ["wiki", "Turbo lag", "Wikipedia, 6 min", "Wikipedia", "Oct 26"],
+    ],
+    susp: [
+      ["wiki", "Double wishbone suspension", "Wikipedia, 12 min", "Wikipedia", "Oct 3"],
+      ["youtube", "Coilovers vs air suspension", "Donut, 16:20", "YouTube", "Oct 4"],
+      ["grok", "Active suspension", "Grokipedia, 31 min", "Grokipedia", "Oct 6"],
+    ],
+  };
+  let shelf = [
+    { t: "Supabase dashboard", h: "supabase.com", note: "Billing is under Org, then Usage", tags: ["infra"], pin: true, when: "Opened today" },
+    { t: "Vercel", h: "vercel.com", note: "Deploys for sourcefold-eight", tags: ["infra"], pin: false, when: "Opened yesterday" },
+    { t: "Figma files", h: "figma.com", note: "Logo work is in the Brand file", tags: ["design"], pin: false, when: "Opened 3 days ago" },
+    { t: "Hacker News", h: "news.ycombinator.com", note: "", tags: ["reading"], pin: false, when: "Opened 4 days ago" },
+    { t: "Linear", h: "linear.app", note: "My issues view, not the team one", tags: ["work"], pin: false, when: "Opened last week" },
+    { t: "Coolors", h: "coolors.co", note: "", tags: ["design", "tools"], pin: false, when: "Never opened" },
+  ];
+  const kindColor = { wiki: "--src-wiki", youtube: "--src-youtube", substack: "--src-substack", grok: "--src-grok", reddit: "--src-reddit", web: "--src-web" };
+  const kindIcon = {
+    wiki: '<path d="M2 5l4 14 4-10 4 10 4-14"/>',
+    youtube: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3z"/>',
+    substack: '<path d="M5 4h14M5 8h14M5 12h14v8l-7-4-7 4z"/>',
+    grok: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>',
+    reddit: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  };
+  let activeGroup = "turbo";
+  let activeTab = "sources";
+  let tagFilter = null;
+
+  /* ---------- Segmented controls ---------- */
+  function placeThumb(seg) {
+    const on = seg.querySelector('[aria-pressed="true"]');
+    const thumb = seg.querySelector(".thumb");
+    if (!on || !thumb) return;
+    thumb.style.left = on.offsetLeft + "px";
+    thumb.style.width = on.offsetWidth + "px";
+  }
+  function setCtl(name, value) {
+    const seg = document.querySelector('[data-ctl="' + name + '"]');
+    seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === value)));
+    placeThumb(seg);
+  }
+  document.querySelectorAll(".seg").forEach(seg => {
+    seg.addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      const name = seg.dataset.ctl, v = b.dataset.v;
+      setCtl(name, v);
+      if (name === "theme") root.dataset.theme = v;
+      if (name === "motion") { root.dataset.motion = v; render(true); }
+      if (name === "pet") { root.dataset.pet = v; drawPets(); }
+      if (name === "view") { root.dataset.view = v; render(true); }
+    });
+  });
+  const initialTheme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  root.dataset.theme = initialTheme;
+  setCtl("theme", initialTheme); setCtl("motion", "lively"); setCtl("pet", "fold"); setCtl("view", "group");
+  addEventListener("resize", () => document.querySelectorAll(".seg").forEach(placeThumb));
+  document.fonts && document.fonts.ready.then(() => document.querySelectorAll(".seg").forEach(placeThumb));
+
+  /* ---------- Rendering ---------- */
+  const view = document.getElementById("view");
+  const tree = document.getElementById("tree");
+  const crumb = document.getElementById("crumb");
+  const primary = document.getElementById("primary-btn");
+
+  function drawTree(sweep) {
+    const onShelf = root.dataset.view === "shelf";
+    document.getElementById("shelf-row").classList.toggle("on", onShelf);
+    document.querySelector("#shelf-row .nm").className = "nm" + (onShelf ? " mk" + (sweep ? " sweep" : "") : "");
+    tree.innerHTML = groups.map(g => {
+      const on = !onShelf && g.id === activeGroup;
+      return '<button class="srow' + (on ? " on" : "") + '" data-group="' + g.id + '" style="padding-left:' + (8 + g.depth * 14) + 'px">' +
+        '<svg class="i ic" viewBox="0 0 24 24"><path d="' + (g.depth < 2 && g.id !== "susp" && g.id !== "lag" ? "m6 9 6 6 6-6" : "m9 6 6 6-6 6") + '"/></svg>' +
+        '<span class="' + (on ? "mk" + (sweep ? " sweep" : "") : "") + '">' + g.name + '</span><span class="count">' + g.count + '</span></button>';
+    }).join("");
+  }
+
+  function rowsHtml(list) {
+    return list.map((s, i) => {
+      const [k, title, sub, kind, date] = s;
+      return '<div class="row" tabindex="0" data-i="' + i + '"><div class="tile" style="--c: var(' + kindColor[k] + ')"><svg class="i" viewBox="0 0 24 24">' + kindIcon[k] + '</svg></div>' +
+        '<div class="main"><div class="title"><span>' + title + '</span></div><div class="sub">' + sub + '</div></div>' +
+        '<div class="col kind">' + kind + '</div><div class="col date">' + date + '</div></div>';
+    }).join("");
+  }
+
+  function shelfRowsHtml(list) {
+    return list.map((l, i) => '<div class="row" tabindex="0" data-i="' + i + '">' +
+      '<div class="tile" style="--c: var(--foreground)">' + l.h[0].toUpperCase() + '</div>' +
+      '<div class="main"><div class="title"><span>' + l.t + '</span></div><div class="sub">' + l.h + (l.note ? ", " + l.note : "") + '</div></div>' +
+      l.tags.map(t => '<span class="chip">' + t + '</span>').join(" ") +
+      (l.pin ? '<svg class="i pin" viewBox="0 0 24 24" aria-label="Pinned"><path d="M12 17v5M9 10.8V5h6v5.8l2 2.2v2H7v-2z"/></svg>' : "") +
+      '<div class="col date">' + l.when + '</div></div>').join("");
+  }
+
+  function render(animate) {
+    const onShelf = root.dataset.view === "shelf";
+    drawTree(animate);
+    if (onShelf) {
+      crumb.innerHTML = "<b>Shelf</b>";
+      primary.querySelector("span").textContent = "Add to shelf";
+      primary.querySelector(".kbd").textContent = "Ctrl L";
+      const tags = {};
+      shelf.forEach(l => l.tags.forEach(t => tags[t] = (tags[t] || 0) + 1));
+      const list = shelf.filter(l => !tagFilter || l.tags.includes(tagFilter));
+      view.innerHTML =
+        '<div style="display:flex;align-items:center;gap:16px"><h2 class="heading"><span class="mk' + (animate ? " sweep" : "") + '">Shelf</span></h2><div class="stack" title="Your shelf"><i></i><i></i><i></i></div></div>' +
+        '<div class="meta"><span class="txt"><span data-roll>' + shelf.length + '</span> links, nothing downloaded</span>' +
+        '<button class="btn btn-outline"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Import bookmarks</button></div>' +
+        '<label class="filter"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="Filter by title, site, note or tag"></label>' +
+        '<div class="chips">' + Object.entries(tags).map(([t, n]) => '<button class="tag" data-tag="' + t + '" aria-pressed="' + (tagFilter === t) + '"><b>' + t + '</b>' + n + '</button>').join("") + '</div>' +
+        '<div class="rows" id="rows">' + shelfRowsHtml(list) + '</div>';
+    } else {
+      const g = groups.find(x => x.id === activeGroup);
+      const list = sources[activeGroup];
+      crumb.innerHTML = "Cars / " + (g.depth ? "Engines / " : "") + "<b>" + g.name + "</b>";
+      primary.querySelector("span").textContent = "Add links";
+      primary.querySelector(".kbd").textContent = "A";
+      view.innerHTML =
+        '<h2 class="heading"><span class="mk' + (animate ? " sweep" : "") + '">' + g.name + '</span></h2>' +
+        '<div class="meta"><span class="txt">' + (activeGroup === "engines" ? "2 subgroups, " : "") + '<span data-roll>' + list.length + '</span> sources</span>' +
+        '<button class="btn btn-outline">New subgroup</button><button class="btn btn-outline">New note</button></div>' +
+        '<div class="tabs" role="tablist"><button class="tab" role="tab" data-tab="sources" aria-selected="' + (activeTab === "sources") + '">Sources <span class="n">' + list.length + '</span></button>' +
+        '<button class="tab" role="tab" data-tab="highlights" aria-selected="' + (activeTab === "highlights") + '">Highlights <span class="n">14</span></button>' +
+        '<button class="tab" role="tab" data-tab="outline" aria-selected="' + (activeTab === "outline") + '">Outline</button><i class="tab-line"></i></div>' +
+        '<div class="rows" id="rows">' + rowsHtml(list) + '</div>';
+      placeTabLine(false);
+    }
+    if (animate) enterRows();
+    if (animate) rollCounts();
+  }
+
+  function placeTabLine(anim) {
+    const line = view.querySelector(".tab-line"); if (!line) return;
+    const on = view.querySelector('.tab[aria-selected="true"]');
+    if (!anim) { line.style.transition = "none"; }
+    line.style.left = on.offsetLeft + "px"; line.style.width = on.offsetWidth + "px";
+    if (!anim) { line.offsetWidth; line.style.transition = ""; }
+  }
+
+  function enterRows() {
+    const rows = [...view.querySelectorAll(".row")].slice(0, 12);
+    rows.forEach((r, i) => {
+      if (reduce.matches) return;
+      if (lively()) {
+        r.animate([{ opacity: 0, transform: "translateY(14px) scale(0.98)" }, { opacity: 1, transform: "none" }],
+          { duration: 560, delay: i * 35, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)", fill: "both" });
+      } else {
+        r.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }],
+          { duration: 320, delay: i * 20, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "both" });
+      }
+    });
+  }
+
+  function rollCounts() {
+    if (!lively()) return;
+    view.querySelectorAll("[data-roll]").forEach(el => {
+      const to = Number(el.textContent); const start = performance.now(); const dur = 700;
+      const tick = now => { const p = Math.min(1, (now - start) / dur); const e = 1 - Math.pow(1 - p, 3); el.textContent = String(Math.round(to * e)); if (p < 1) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  /* ---------- Interactions ---------- */
+  tree.addEventListener("click", e => {
+    const b = e.target.closest("[data-group]"); if (!b) return;
+    activeGroup = b.dataset.group; root.dataset.view = "group"; setCtl("view", "group"); activeTab = "sources";
+    render(true);
+  });
+  document.getElementById("shelf-row").addEventListener("click", () => { root.dataset.view = "shelf"; setCtl("view", "shelf"); render(true); });
+
+  view.addEventListener("click", e => {
+    const tab = e.target.closest(".tab");
+    if (tab) {
+      view.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", String(t === tab)));
+      activeTab = tab.dataset.tab; placeTabLine(true); return;
+    }
+    const tag = e.target.closest(".tag");
+    if (tag) { tagFilter = tagFilter === tag.dataset.tag ? null : tag.dataset.tag; render(false); enterRows(); return; }
+    const row = e.target.closest(".row");
+    if (row) {
+      view.querySelectorAll(".row.focus").forEach(r => r.classList.remove("focus"));
+      row.classList.add("focus");
+    }
+  });
+
+  // Ripple on press (Lively).
+  document.addEventListener("pointerdown", e => {
+    if (!lively()) return;
+    const host = e.target.closest(".row, .btn, .srow, .tag"); if (!host) return;
+    const r = host.getBoundingClientRect(); const size = Math.max(r.width, r.height) * 2.2;
+    const dot = document.createElement("span"); dot.className = "ripple";
+    dot.style.width = dot.style.height = size + "px";
+    dot.style.left = (e.clientX - r.left - size / 2) + "px"; dot.style.top = (e.clientY - r.top - size / 2) + "px";
+    if (getComputedStyle(host).position === "static") host.style.position = "relative";
+    host.appendChild(dot);
+    dot.animate([{ transform: "scale(0)", opacity: 0.9 }, { transform: "scale(1)", opacity: 0 }], { duration: 650, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }).onfinish = () => dot.remove();
+  });
+
+  // Toasts.
+  const toasts = document.getElementById("toasts");
+  function toast(text) {
+    const t = document.createElement("div"); t.className = "toast";
+    t.innerHTML = '<svg class="i ok" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>' + text;
+    toasts.appendChild(t);
+    const enter = lively()
+      ? [{ opacity: 0, transform: "translateY(24px) scale(0.9)" }, { opacity: 1, transform: "none" }]
+      : [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }];
+    if (!reduce.matches) t.animate(enter, { duration: lively() ? 520 : 220, easing: lively() ? "cubic-bezier(0.34, 1.56, 0.64, 1)" : "cubic-bezier(0.16, 1, 0.3, 1)", fill: "both" });
+    setTimeout(() => {
+      const a = t.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(6px)" }], { duration: 180, fill: "forwards" });
+      a.onfinish = () => t.remove();
+    }, 2400);
+  }
+
+  // Paper scraps from a button (Lively).
+  function celebrate(el, colors) {
+    if (!lively()) return;
+    const r = el.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    for (let i = 0; i < 18; i++) {
+      const s = document.createElement("span"); s.className = "scrap";
+      s.style.background = colors[i % colors.length]; s.style.left = cx + "px"; s.style.top = cy + "px";
+      document.body.appendChild(s);
+      const a = (Math.PI * 2 * i) / 18 + Math.random() * 0.4; const d = 50 + Math.random() * 60;
+      const x = Math.cos(a) * d, y = Math.sin(a) * d - 40;
+      s.animate([
+        { transform: "translate(-50%, -50%) rotate(0) scale(0.4)", opacity: 1 },
+        { transform: "translate(" + x + "px," + y + "px) rotate(" + (Math.random() * 540 - 270) + "deg) scale(1)", opacity: 1, offset: 0.55 },
+        { transform: "translate(" + x * 1.15 + "px," + (y + 70) + "px) rotate(" + (Math.random() * 720) + "deg) scale(0.8)", opacity: 0 },
+      ], { duration: 1100 + Math.random() * 300, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }).onfinish = () => s.remove();
+    }
+  }
+  const css = v => getComputedStyle(root).getPropertyValue(v).trim();
+
+  // Extension: Save.
+  const pSave = document.getElementById("p-save");
+  pSave.addEventListener("click", () => {
+    const label = pSave.querySelector("span");
+    label.textContent = "Saved to Turbocharging";
+    celebrate(pSave, [css("--marker"), css("--src-web"), css("--foreground"), css("--marker-strong")]);
+    petReact("cheer", "Saved!");
+    const c = document.querySelector('[data-count="turbo"]'); c.textContent = "7";
+    if (lively()) c.animate([{ transform: "translateY(-6px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 420, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" });
+    setTimeout(() => { label.textContent = "Save to Turbocharging"; c.textContent = "6"; }, 3000);
+  });
+
+  // Extension: Shelve.
+  const pShelve = document.getElementById("p-shelve");
+  pShelve.addEventListener("click", () => {
+    const panel = document.getElementById("p-shelf");
+    const already = panel.classList.contains("show");
+    panel.classList.remove("show"); panel.offsetWidth; panel.classList.add("show");
+    pShelve.querySelector("span").textContent = "Shelved";
+    if (!already) {
+      shelf = [{ t: "How variable-geometry turbos work", h: "garrettmotion.com", note: "Good diagrams of the vane ring", tags: ["cars"], pin: false, when: "Just now" }, ...shelf];
+      document.querySelector('[data-count="shelf"]').textContent = String(shelf.length);
+      if (root.dataset.view === "shelf") { render(false); dropFirst(); }
+      celebrate(pShelve, [css("--marker"), css("--foreground")]);
+      petReact("cheer", "On your shelf");
+    }
+  });
+
+  function dropFirst() {
+    const first = view.querySelector(".row"); if (!first || reduce.matches) return;
+    first.animate(lively()
+      ? [{ opacity: 0, transform: "translateY(-28px) scale(0.96)" }, { opacity: 1, transform: "none" }]
+      : [{ opacity: 0 }, { opacity: 1 }],
+      { duration: lively() ? 620 : 200, easing: lively() ? "cubic-bezier(0.34, 1.56, 0.64, 1)" : "ease-out", fill: "both" });
+    if (lively()) first.animate([{ background: "var(--marker-soft)" }, { background: "transparent" }], { duration: 1600, easing: "ease-out" });
+  }
+
+  // Desktop: primary button.
+  const scrim = document.getElementById("scrim");
+  primary.addEventListener("click", () => {
+    if (root.dataset.view === "shelf") { scrim.classList.add("open"); setTimeout(() => document.getElementById("f-url").focus(), 60); }
+    else { toast("Pasting links is in the real app"); }
+  });
+  document.getElementById("d-cancel").addEventListener("click", () => scrim.classList.remove("open"));
+  scrim.addEventListener("click", e => { if (e.target === scrim) scrim.classList.remove("open"); });
+  document.getElementById("dialog").addEventListener("submit", e => {
+    e.preventDefault();
+    const url = document.getElementById("f-url").value.trim() || "excalidraw.com";
+    const host = url.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+    const title = document.getElementById("f-title").value.trim() || host;
+    const note = document.getElementById("f-note").value.trim();
+    const tags = document.getElementById("f-tags").value.split(",").map(s => s.trim()).filter(Boolean);
+    shelf = [{ t: title, h: host, note, tags, pin: false, when: "Just now" }, ...shelf];
+    document.querySelector('[data-count="shelf"]').textContent = String(shelf.length);
+    scrim.classList.remove("open");
+    render(false); dropFirst();
+    celebrate(primary, [css("--marker"), css("--foreground")]);
+    toast("Added to shelf"); petReact("cheer", "Got it");
+  });
+  addEventListener("keydown", e => { if (e.key === "Escape") scrim.classList.remove("open"); });
+
+  /* ---------- Pets ---------- */
+  const PETS = {
+    fold: '<svg viewBox="0 0 44 44"><g class="body">' +
+      '<path d="M6 30 L20 12 L38 26 L30 38 L12 38 Z" fill="var(--card)" stroke="var(--foreground)" stroke-width="1.6" stroke-linejoin="round"/>' +
+      '<path d="M20 12 L22 30 L6 30" fill="none" stroke="var(--foreground)" stroke-width="1.2" stroke-linejoin="round" opacity="0.55"/>' +
+      '<path d="M22 30 L38 26" fill="none" stroke="var(--foreground)" stroke-width="1.2" opacity="0.55"/>' +
+      '<path d="M38 26 L43 24.5 L39.5 29 Z" fill="var(--marker-strong)" stroke="var(--foreground)" stroke-width="1.2" stroke-linejoin="round"/>' +
+      '<g class="eyes"><circle cx="27" cy="23" r="2" fill="var(--foreground)"/><circle cx="32.5" cy="24.5" r="2" fill="var(--foreground)"/>' +
+      '<rect class="lid" x="24.5" y="20.6" width="10.8" height="6.2" fill="var(--card)"/></g>' +
+      '<circle class="cheek" cx="25" cy="28" r="1.8" fill="var(--marker)"/>' +
+      '<path d="M14 38 L13 42 M24 38 L25 42" stroke="var(--foreground)" stroke-width="1.6" stroke-linecap="round"/>' +
+      '</g><text class="zz" x="34" y="12">z</text></svg>',
+    nib: '<svg viewBox="0 0 44 44"><g class="body">' +
+      '<path d="M22 8 C22 8 9 22 9 30 a13 11 0 0 0 26 0 C35 22 22 8 22 8 Z" fill="var(--foreground)"/>' +
+      '<path d="M17 9 L22 2 L27 9 Z" fill="var(--marker-strong)" stroke="var(--foreground)" stroke-width="1.2" stroke-linejoin="round"/>' +
+      '<path d="M22 4 V8" stroke="var(--foreground)" stroke-width="1"/>' +
+      '<g class="eyes"><circle cx="18" cy="28" r="2.4" fill="var(--background)"/><circle cx="26" cy="28" r="2.4" fill="var(--background)"/>' +
+      '<circle cx="18.5" cy="28.3" r="1.1" fill="var(--foreground)"/><circle cx="26.5" cy="28.3" r="1.1" fill="var(--foreground)"/>' +
+      '<rect class="lid" x="15" y="25.2" width="14.2" height="5.6" fill="var(--foreground)"/></g>' +
+      '<circle class="cheek" cx="14.5" cy="33" r="1.8" fill="var(--marker)"/><circle class="cheek" cx="29.5" cy="33" r="1.8" fill="var(--marker)"/>' +
+      '</g><text class="zz" x="33" y="12">z</text></svg>',
+    dot: '<svg viewBox="0 0 44 44"><g class="body">' +
+      '<rect x="10" y="12" width="24" height="28" rx="7" fill="var(--marker-strong)" stroke="var(--foreground)" stroke-width="1.6"/>' +
+      '<path d="M10 20 H34" stroke="var(--foreground)" stroke-width="1.4"/>' +
+      '<rect x="31" y="20" width="4" height="12" rx="2" fill="var(--foreground)"/>' +
+      '<path d="M15 12 V8 a2 2 0 0 1 2 -2 h10 a2 2 0 0 1 2 2 V12" fill="var(--foreground)"/>' +
+      '<g class="eyes"><circle cx="18" cy="28" r="2" fill="var(--foreground)"/><circle cx="25" cy="28" r="2" fill="var(--foreground)"/>' +
+      '<rect class="lid" x="15.5" y="25.6" width="12" height="5" fill="var(--marker-strong)"/></g>' +
+      '<path d="M19 33 q2.5 2 5 0" fill="none" stroke="var(--foreground)" stroke-width="1.3" stroke-linecap="round"/>' +
+      '</g><text class="zz" x="34" y="10">z</text></svg>',
+  };
+  const pets = [document.getElementById("pet-app"), document.getElementById("pet-ext")];
+  const says = [document.getElementById("say-app"), document.getElementById("say-ext")];
+  function drawPets() {
+    const kind = root.dataset.pet;
+    pets.forEach(p => { p.innerHTML = PETS[kind] || ""; });
+  }
+  drawPets();
+
+  let lastActive = Date.now();
+  function wake() { lastActive = Date.now(); pets.forEach(p => p.classList.remove("sleep")); }
+  ["pointermove", "keydown", "pointerdown"].forEach(t => addEventListener(t, wake, { passive: true }));
+  setInterval(() => {
+    if (!lively()) return;
+    if (Date.now() - lastActive > 20000) pets.forEach(p => p.classList.add("sleep"));
+    else if (Math.random() < 0.55) pets.forEach(p => { p.classList.remove("blink"); p.offsetWidth; p.classList.add("blink"); });
+  }, 2600);
+
+  addEventListener("pointermove", e => {
+    if (!lively()) return;
+    pets.forEach(p => {
+      const eyes = p.querySelector(".eyes"); if (!eyes) return;
+      const r = p.getBoundingClientRect(); const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      const dist = Math.hypot(dx, dy); const k = Math.min(1, 260 / Math.max(dist, 1));
+      const near = dist < 520;
+      eyes.style.transform = near ? "translate(" + (dx / Math.max(dist, 1)) * 1.6 * k + "px," + (dy / Math.max(dist, 1)) * 1.4 * k + "px)" : "";
+    });
+  }, { passive: true });
+
+  let sayTimer;
+  function petReact(kind, words) {
+    if (!lively()) return;
+    pets.forEach(p => { p.classList.remove("sleep", "cheer", "trick"); p.offsetWidth; p.classList.add(kind); setTimeout(() => p.classList.remove(kind), 900); });
+    says.forEach(s => { s.textContent = words; s.classList.add("show"); });
+    clearTimeout(sayTimer); sayTimer = setTimeout(() => says.forEach(s => s.classList.remove("show")), 1800);
+  }
+  pets.forEach(p => p.addEventListener("click", () => petReact("trick", ["Wheee", "Ta-da", "Hi!"][Math.floor(Math.random() * 3)])));
+
+  render(true);
+})();
+</script>
+</body>
+</html>

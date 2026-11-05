@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Command, HardDrive, Keyboard, PanelLeftClose, Settings2 } from "lucide-react";
+import { BookMarked, Command, HardDrive, Keyboard, PanelLeftClose, Settings2 } from "lucide-react";
 import { Kbd } from "@/components/ui/Kbd";
 import { Logo } from "@/components/ui/Logo";
 import { useAuth } from "@/features/auth";
@@ -16,9 +16,13 @@ export interface AppSidebarProps {
   onOpenSettings: () => void;
   onHide: () => void;
   onActivate: () => void;
+  shelfOpen: boolean;
+  /** The number on the Shelf row; null while the shelf is still loading. */
+  shelfCount: number | null;
+  onOpenShelf: () => void;
 }
 
-/** Brand row, project switcher, the open project's groups, and the account footer. */
+/** Brand row, the Shelf, project switcher, the open project's groups, and the account footer. */
 export function AppSidebar({
   isMac,
   isFocusedRegion,
@@ -29,6 +33,9 @@ export function AppSidebar({
   onOpenSettings,
   onHide,
   onActivate,
+  shelfOpen,
+  shelfCount,
+  onOpenShelf,
 }: AppSidebarProps) {
   const mod = isMac ? "⌘" : "Ctrl+";
 
@@ -74,6 +81,27 @@ export function AppSidebar({
             <PanelLeftClose className="size-4" aria-hidden="true" />
           </button>
         </div>
+      </div>
+
+      <div className="shrink-0 px-3 pb-1">
+        <button
+          type="button"
+          onClick={onOpenShelf}
+          aria-current={shelfOpen ? "page" : undefined}
+          title={`Shelf (${mod}Shift+L)`}
+          className={cn(
+            "flex h-[30px] w-full cursor-pointer items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[13px] font-medium text-foreground transition-[background-color,box-shadow] duration-100",
+            shelfOpen ? "bg-sidebar-accent shadow-raised" : "hover:bg-sidebar-accent",
+          )}
+        >
+          <BookMarked className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">Shelf</span>
+          {shelfCount !== null && (
+            <span className="shrink-0 font-sans text-[12.5px] text-muted-foreground tabular-nums">
+              {shelfCount}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="shrink-0 px-3 pb-2">{projectSwitcher}</div>

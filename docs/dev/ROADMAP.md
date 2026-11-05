@@ -229,6 +229,22 @@ Plan: `docs/dev/PLAN-sharing.md` (2026-10-22).
 - [x] Notes kept as written (TypeScript and Rust builders, golden `note-headings`); `set_source_info` all-or-nothing; `move_sources` merge; position bounds; one-line titles; smaller messages.
 - [ ] Owner re-runs the desktop and web MCP checks after v0.6.0.
 
+## Built: Link Shelf (2026-11-05, branch `shelf`)
+
+Plan and contract: `docs/dev/PLAN-shelf.md`. Sites kept with a note, tags and a pin, nothing downloaded.
+
+- [x] Core types and helpers (`packages/core/src/shelf.ts`): keys, tags, "most used" order, pasted URLs, `bookmarks.html` import.
+- [x] Account API `/api/shelf` (`packages/client`), web route wrappers, Supabase migration `20261105000000_shelf_links.sql` (written, **not applied yet**).
+- [x] Offline: SQLite `shelf_links`, Tauri commands, loopback routes and native-messaging requests.
+- [x] Desktop: Shelf in the sidebar, shelf view, Add to shelf (`Mod+L`, several URLs at once), edit, pin, delete with undo, import bookmarks, palette section.
+- [x] Extension: Shelve button, note and tags on the popup, toolbar dot when a shelved site has a note.
+- [ ] Owner applies the migration and tests.
+- [ ] Later: dead-link check, Obsidian `Links.md`, shelf in Claude's MCP tools.
+
+## Planned: Lively mode (opt-in animated look, pets)
+
+Plan: `docs/dev/PLAN-lively.md`; mockup `docs/dev/mockups/lively.html`. Waiting for the owner's yes on the mockup before agents build it.
+
 ## Later
 
 - [ ] Chrome Web Store listing for the extension ($5 one-time fee; the store build must drop the manifest `key`, and the desktop native host must also allow the store's extension ID).

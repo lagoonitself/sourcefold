@@ -12,6 +12,7 @@ pub mod search;
 pub mod server;
 pub mod service;
 pub mod session;
+pub mod shelf_store;
 pub mod substack;
 pub mod tldr_store;
 pub mod web_fetch;

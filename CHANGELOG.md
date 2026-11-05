@@ -2,6 +2,13 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
+## 0.6.1 (2026-11-05)
+
+### New
+
+- **The Shelf: sites you visit often, with a note.** Keep a site without downloading it or bookmarking it in Chrome. **Shelf** is at the top of the sidebar (`Ctrl+Shift+L`). **Add to shelf** (`Ctrl+L`) takes a link with a title, a note and tags, or several links pasted one per line. Pin the ones you want first; the rest are ordered by how often you open them. Edit, copy, delete (with Undo), or **Save as a source** when you want the page itself. **Import bookmarks** reads the `bookmarks.html` Chrome, Edge or Firefox exports, with folders as tags. `Ctrl+K` lists your shelf too. Works signed in and offline.
+- **Shelve in the extension.** A **Shelve** button next to Save keeps the current page on your shelf, with a note and tags. When you're on a shelved site that has a note, the extension's icon shows a dot. The extension updates by hand: reload it in `chrome://extensions`.
+
 ## 0.6.0 (2026-11-05)
 
 ### New

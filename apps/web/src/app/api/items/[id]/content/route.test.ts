@@ -8,6 +8,8 @@ const downloadFileText = vi.fn();
 const getFile = vi.fn();
 const listChildren = vi.fn();
 const exportFile = vi.fn();
+const contentGetText = vi.fn();
+let contentStore: { getText: typeof contentGetText } | null = null;
 
 vi.mock("@/lib/api", () => ({
   requireApiUser: (request: Request) => requireApiUser(request),
@@ -17,6 +19,10 @@ vi.mock("@/lib/google/oauth", () => ({
   getGoogleAccessToken: async () => "google-token",
   DriveAuthError: class extends Error {},
   DriveClientMismatchError: class extends Error {},
+}));
+vi.mock("@/lib/web-drive", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/web-drive")>()),
+  webContentStore: () => contentStore,
 }));
 vi.mock("@sourcefold/client/google/drive", () => ({
   downloadFileText: (...args: unknown[]) => downloadFileText(...args),
@@ -49,6 +55,8 @@ function setup(item: Record<string, unknown>) {
       note: null,
       storage_path: null,
       drive_file_id: null,
+      content_sha256: null,
+      user_id: USER_ID,
       ...item,
     },
     folders,
@@ -62,6 +70,8 @@ describe("GET /api/items/[id]/content", () => {
     getFile.mockReset();
     listChildren.mockReset();
     exportFile.mockReset();
+    contentGetText.mockReset();
+    contentStore = null;
   });
 
   it("builds the file from text still in Supabase, with the current folder path", async () => {
@@ -89,6 +99,37 @@ describe("GET /api/items/[id]/content", () => {
     expect(text).toContain("folder: Cars/Engines\n");
     expect(text).toContain("From Drive.\n");
     expect(text).not.toContain("Old/Path");
+  });
+
+  it("reads the body from R2 once the text moved there, without touching Drive", async () => {
+    contentStore = { getText: contentGetText };
+    contentGetText.mockResolvedValue("From R2.");
+    setup({
+      kind: "grokipedia",
+      title: "Turbo",
+      markdown: null,
+      content_sha256: "abc",
+      drive_file_id: "d1",
+    });
+    const res = await GET(new Request("http://localhost/x"), params);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("From R2.");
+    expect(contentGetText).toHaveBeenCalledWith(ITEM_ID);
+    expect(downloadFileText).not.toHaveBeenCalled();
+  });
+
+  it("answers 409 not_ready for a Drive-only source of another member (only the owner reads Drive)", async () => {
+    setup({
+      kind: "grokipedia",
+      title: "Turbo",
+      markdown: null,
+      drive_file_id: "d1",
+      user_id: "00000000-0000-4000-8000-000000000002",
+    });
+    const res = await GET(new Request("http://localhost/x"), params);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("not_ready");
+    expect(downloadFileText).not.toHaveBeenCalled();
   });
 
   it("answers 409 when Drive held the only copy and it's gone", async () => {

@@ -16,10 +16,10 @@ vi.mock("@/lib/api", () => ({
 import { POST } from "./route";
 
 const USER = "00000000-0000-4000-8000-000000000001";
-const OTHER = "00000000-0000-4000-8000-000000000002";
 const POST_ITEM = "00000000-0000-4000-8000-0000000000aa";
 const IMAGE_ITEM = "00000000-0000-4000-8000-0000000000bb";
 const DELETED = "00000000-0000-4000-8000-0000000000cc";
+// An item in a project the user can't see: row-level security leaves it out, so it is never in the db.
 const THEIRS = "00000000-0000-4000-8000-0000000000dd";
 
 const params = (id = POST_ITEM) => ({ params: Promise.resolve({ id }) });
@@ -44,7 +44,6 @@ describe("POST /api/items/[id]/media-upload", () => {
         item(POST_ITEM),
         item(IMAGE_ITEM, { kind: "image" }),
         item(DELETED, { deleted_at: "2026-10-03T00:00:00Z" }),
-        item(THEIRS, { user_id: OTHER }),
       ],
     });
     createSignedUploadUrl.mockReset().mockResolvedValue({
@@ -96,7 +95,7 @@ describe("POST /api/items/[id]/media-upload", () => {
     expect(res.status).toBe(413);
   });
 
-  it("answers 404 for another user's, a deleted or an image source, and 400 for a bad id", async () => {
+  it("answers 404 for a source the user can't see, a deleted or an image source, and 400 for a bad id", async () => {
     expect((await POST(request(good), params(THEIRS))).status).toBe(404);
     expect((await POST(request(good), params(DELETED))).status).toBe(404);
     expect((await POST(request(good), params(IMAGE_ITEM))).status).toBe(404);

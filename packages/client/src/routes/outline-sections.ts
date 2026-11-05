@@ -21,8 +21,7 @@ export async function GET(auth: RouteContext, request: Request) {
   const { data: sections, error } = await auth.db
     .from("outline_sections")
     .select(OUTLINE_SECTION_COLUMNS)
-    .eq("project_id", project)
-    .eq("user_id", auth.userId);
+    .eq("project_id", project);
 
   if (error) return jsonError(500, error.message);
 

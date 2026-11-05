@@ -57,7 +57,6 @@ export async function PATCH(auth: RouteContext, request: Request, params: { id: 
         .from("folders")
         .select("id, updated_at, drive_synced_at, parent_id")
         .eq("id", id)
-        .eq("user_id", auth.userId)
         .is("deleted_at", null)
         .maybeSingle();
 
@@ -80,8 +79,7 @@ export async function PATCH(auth: RouteContext, request: Request, params: { id: 
           archived_at: parsed.data.archived ? now : null,
           ...(shouldKeepSynced ? { drive_synced_at: now } : {}),
         })
-        .eq("id", id)
-        .eq("user_id", auth.userId);
+        .eq("id", id);
 
       if (archiveError) {
         console.error("Failed to archive project:", archiveError);
@@ -108,7 +106,6 @@ export async function PATCH(auth: RouteContext, request: Request, params: { id: 
     .from("folders")
     .select("id, parent_id")
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -154,7 +151,6 @@ export async function PATCH(auth: RouteContext, request: Request, params: { id: 
     .from("folders")
     .update(updateData)
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .select()
     .maybeSingle();
@@ -200,7 +196,6 @@ export async function DELETE(auth: RouteContext, request: Request, params: { id:
     .from("folders")
     .select("id")
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
 

@@ -108,11 +108,21 @@ describe("media routes", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("answers 404 for another user's, a deleted or a missing source, and 400 for a bad id", async () => {
-    setup([item({ user_id: OTHER }), item({ id: DELETED, deleted_at: "2026-10-03T00:00:00Z" })]);
+  it("answers 404 for a deleted or a missing source, and 400 for a bad id", async () => {
+    // A source in a project the user can't see is simply not returned by the database.
+    setup([item({ id: DELETED, deleted_at: "2026-10-03T00:00:00Z" })]);
     expect((await GET(request(), params())).status).toBe(404);
     expect((await GET(request(), params(DELETED))).status).toBe(404);
     expect((await GET(request(), params("nope"))).status).toBe(400);
+  });
+
+  it("lists nothing for a shared source whose files sit in the owner's Drive", async () => {
+    setup([item({ user_id: OTHER })]);
+    const res = await GET(request(), params());
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.files).toEqual([]);
+    expect(getFile).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("returns a file's bytes with its content type", async () => {
@@ -146,8 +156,14 @@ describe("media routes", () => {
     expect(downloadFileBytes).not.toHaveBeenCalled();
   });
 
-  it("answers 404 for another user's source", async () => {
+  it("answers 404 for a file of a shared source (the owner's Drive isn't reachable)", async () => {
     setup([item({ user_id: OTHER })]);
+    expect((await GET_FILE(request(), fileParams("a.png"))).status).toBe(404);
+    expect(downloadFileBytes).not.toHaveBeenCalled();
+  });
+
+  it("answers 404 for a source the database doesn't return", async () => {
+    setup([]);
     expect((await GET_FILE(request(), fileParams("a.png"))).status).toBe(404);
   });
 });

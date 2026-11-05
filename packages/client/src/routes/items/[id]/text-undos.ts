@@ -33,7 +33,6 @@ async function liveItem(
     .from("items")
     .select("id")
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) return { ok: false, error: jsonError(500, error.message) };
@@ -62,7 +61,6 @@ export async function GET(auth: RouteContext, _request: Request, params: { id: s
     .from("text_undos")
     .select(COLUMNS)
     .eq("item_id", item.id)
-    .eq("user_id", auth.userId)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(1)
@@ -106,12 +104,11 @@ export async function POST(auth: RouteContext, request: Request, params: { id: s
     .from("text_undos")
     .select("id")
     .eq("item_id", item.id)
-    .eq("user_id", auth.userId)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
   if (!listError && older && older.length > MAX_PER_ITEM) {
     const drop = older.slice(MAX_PER_ITEM).map((row) => row.id);
-    await auth.db.from("text_undos").delete().in("id", drop).eq("user_id", auth.userId);
+    await auth.db.from("text_undos").delete().in("id", drop);
   }
 
   return jsonData(toPayload(data));
@@ -127,7 +124,6 @@ export async function DELETE(auth: RouteContext, _request: Request, params: { id
     .from("text_undos")
     .select("id")
     .eq("item_id", item.id)
-    .eq("user_id", auth.userId)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(1)
@@ -135,11 +131,7 @@ export async function DELETE(auth: RouteContext, _request: Request, params: { id
   if (findError) return jsonError(500, findError.message);
   if (!newest) return jsonData(null);
 
-  const { error } = await auth.db
-    .from("text_undos")
-    .delete()
-    .eq("id", newest.id)
-    .eq("user_id", auth.userId);
+  const { error } = await auth.db.from("text_undos").delete().eq("id", newest.id);
   if (error) return jsonError(500, error.message);
   return jsonData({ id: newest.id });
 }

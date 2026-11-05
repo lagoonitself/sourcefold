@@ -4,6 +4,7 @@
 // Save to Drive out while it runs; a push that finds the lock taken waits for the next change.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import { runContentBatch } from "../features/content/run-content-batch";
 import { runSaveBatch } from "../features/drive/run-save-batch";
 import type { Host } from "../host";
 
@@ -20,7 +21,7 @@ export interface DrivePusher {
 
 export function createDrivePusher(
   db: SupabaseClient<Database>,
-  host: Pick<Host, "drive" | "fetchUrl">,
+  host: Pick<Host, "drive" | "fetchUrl" | "content">,
   options: { delayMs?: number; onPushed?(): void } = {},
 ): DrivePusher {
   const delayMs = options.delayMs ?? DRIVE_PUSH_DELAY_MS;
@@ -29,7 +30,40 @@ export function createDrivePusher(
   let running: Promise<void> | null = null;
   let again: string | null = null;
 
+  async function pushToContentStore(userId: string): Promise<void> {
+    if (!host.content) return;
+    try {
+      const result = await runContentBatch(db, userId, host, PUSH_BUDGET);
+      for (const item of result.failed) {
+        console.error(`Couldn't move "${item.title}" to the content store: ${item.message}`);
+      }
+      if (result.storageFull) console.error("The content store is full.");
+      if (result.moved > 0) options.onPushed?.();
+    } catch (err) {
+      console.error("Automatic content save failed:", err);
+    }
+  }
+
+  /** The Drive backup is on unless the person switched it off (no row yet counts as on). */
+  async function backupIsOn(userId: string): Promise<boolean> {
+    const { data } = await db
+      .from("drive_state")
+      .select("backup_enabled")
+      .eq("user_id", userId)
+      .maybeSingle();
+    return data?.backup_enabled ?? true;
+  }
+
   async function push(userId: string): Promise<void> {
+    await pushToContentStore(userId);
+
+    try {
+      if (!(await backupIsOn(userId)) || !(await host.drive.isConnected(userId))) return;
+    } catch (err) {
+      console.error("Automatic Drive save failed:", err);
+      return;
+    }
+
     const { data: locked } = await db.rpc("acquire_drive_sync_lock", { p_user_id: userId });
     if (!locked) return;
     try {

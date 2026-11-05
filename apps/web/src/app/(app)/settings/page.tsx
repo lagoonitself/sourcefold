@@ -4,6 +4,7 @@ import { Separator } from "@/components/ui/separator";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isEmailAllowed } from "@/lib/env";
+import { BackupSetting } from "@/features/settings/backup-setting";
 import { ReconnectDriveButton } from "@/features/settings/reconnect-drive-button";
 import { TokenManager } from "@/features/settings/token-manager";
 import { McpConnector } from "@/features/settings/mcp-connector";
@@ -80,6 +81,8 @@ export default async function SettingsPage() {
         <h2 className="font-sans text-[15px] leading-[20px] font-semibold text-foreground">
           Google Drive
         </h2>
+
+        <BackupSetting />
 
         {adminKeyMissing ? (
           <p className="text-sm text-muted-foreground">

@@ -101,6 +101,10 @@ export const BUILD_SUPABASE_CONFIG: ClientConfig = {
   supabasePublishableKey: env.WXT_SUPABASE_PUBLISHABLE_KEY ?? "",
 };
 
+/** The Content Worker (source text in R2), set by release builds as WXT_SOURCEFOLD_CONTENT_URL. Empty = unset. */
+export const BUILD_CONTENT_URL: string | undefined =
+  (env.WXT_SOURCEFOLD_CONTENT_URL ?? "").trim().replace(/\/+$/, "") || undefined;
+
 function cleanConfig(config: ClientConfig): ClientConfig {
   return {
     supabaseUrl: config.supabaseUrl.trim().replace(/\/+$/, ""),

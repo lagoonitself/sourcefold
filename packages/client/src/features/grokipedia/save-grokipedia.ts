@@ -66,7 +66,6 @@ export async function findExistingItemByCanonicalUrl(
   const { data: item, error } = await db
     .from("items")
     .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
-    .eq("user_id", userId)
     .eq("canonical_url", canonicalUrl)
     .eq("folder_id", folderId)
     .is("deleted_at", null)

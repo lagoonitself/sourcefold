@@ -19,6 +19,57 @@ export interface Folder {
   created_at?: string;
   updated_at?: string;
   item_count?: number | null;
+  /** Set on a project that involves someone else (a shared project). */
+  sharing?: FolderSharing;
+}
+
+/** What `GET /api/folders` adds to a project that involves someone else. */
+export interface FolderSharing {
+  role: "owner" | "editor" | "viewer";
+  owner_name: string;
+  owner_email: string;
+  member_count: number;
+}
+
+export type ShareRole = FolderSharing["role"];
+export type InviteRole = "editor" | "viewer";
+
+export interface SharePerson {
+  user_id: string;
+  email: string;
+  name: string;
+  avatar_url: string | null;
+}
+
+export interface ShareMember extends SharePerson {
+  role: InviteRole;
+  joined_at: string;
+}
+
+/** `GET /api/projects/{id}/sharing`: who is in a project and which invite links are on. */
+export interface Sharing {
+  project_id: string;
+  project_name: string;
+  your_role: ShareRole;
+  owner: SharePerson;
+  members: ShareMember[];
+  invites: { role: InviteRole; code: string }[];
+}
+
+/** `GET /api/invites/{code}`: what a link or code would join. */
+export interface InvitePreview {
+  project_id: string;
+  project_name: string;
+  role: InviteRole;
+  owner: SharePerson;
+  member_count: number;
+  your_role: string | null;
+}
+
+/** `GET /api/settings/backup`. */
+export interface BackupSetting {
+  enabled: boolean;
+  connected: boolean;
 }
 
 export type Project = Folder;

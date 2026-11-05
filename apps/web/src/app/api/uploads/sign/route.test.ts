@@ -59,17 +59,12 @@ describe("POST /api/uploads/sign", () => {
     expect(createSignedUploadUrl).toHaveBeenCalledWith(data.storage_path);
   });
 
-  it("only looks at the signed-in user's live folders", async () => {
+  it("only looks at live folders, leaving access to row-level security", async () => {
     await post(validBody);
 
     const [query] = fake.queries;
     expect(query!.table).toBe("folders");
-    expect(callsOf(query!, "eq")).toEqual(
-      expect.arrayContaining([
-        ["id", FOLDER_ID],
-        ["user_id", USER_ID],
-      ]),
-    );
+    expect(callsOf(query!, "eq")).toEqual([["id", FOLDER_ID]]);
     expect(callsOf(query!, "is")).toContainEqual(["deleted_at", null]);
   });
 

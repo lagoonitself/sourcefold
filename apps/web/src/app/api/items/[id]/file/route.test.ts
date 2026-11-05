@@ -56,7 +56,14 @@ describe("GET /api/items/[id]/file", () => {
   });
 
   it("returns the Drive view URL as JSON once the image has moved to Drive", async () => {
-    setup({ id: "item-1", kind: "image", storage_path: null, drive_file_id: "drive 1" });
+    setup({
+      id: "item-1",
+      kind: "image",
+      storage_path: null,
+      drive_file_id: "drive 1",
+      content_sha256: null,
+      user_id: USER_ID,
+    });
     const response = await GET(
       new Request("http://localhost/api/items/item-1/file", {
         headers: { accept: "application/json" },
@@ -69,7 +76,23 @@ describe("GET /api/items/[id]/file", () => {
     });
   });
 
-  it("answers 404 for anything that isn't an image of the user's", async () => {
+  it("answers 404 for a Drive-only image of another member (only the owner has the Drive copy)", async () => {
+    setup({
+      id: "item-1",
+      kind: "image",
+      storage_path: null,
+      drive_file_id: "drive 1",
+      content_sha256: null,
+      user_id: "00000000-0000-4000-8000-000000000002",
+    });
+    const response = await GET(
+      new Request("http://localhost/api/items/item-1/file?format=json"),
+      params,
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("answers 404 for anything that isn't an image the session can see", async () => {
     setup(null);
     const response = await GET(
       new Request("http://localhost/api/items/item-1/file?format=json"),

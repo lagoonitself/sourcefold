@@ -41,13 +41,13 @@ describe("POST /api/x/:itemId/posts", () => {
     requireApiUser.mockResolvedValue({ db: fake.db, userId: USER_ID, via: "token" });
   });
 
-  it("scopes every lookup to the signed-in user (the admin client bypasses RLS)", async () => {
+  it("leaves every lookup to row-level security (token requests get a scopeToUser client)", async () => {
     const response = await POST(request(), { params: Promise.resolve({ itemId: ITEM_ID }) });
 
     expect(response.status).toBe(409);
     expect(fake.queries.map((q) => q.table)).toEqual(["items", "x_posts"]);
     for (const query of fake.queries) {
-      expect(callsOf(query, "eq")).toContainEqual(["user_id", USER_ID]);
+      expect(callsOf(query, "eq")).not.toContainEqual(["user_id", USER_ID]);
     }
   });
 

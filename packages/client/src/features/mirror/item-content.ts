@@ -1,14 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { bodyFromDriveFile } from "@sourcefold/core";
 import type { Database } from "../../database.types";
+import { exportFile, getFile, listChildren } from "../../google/drive";
+import type { DriveAccess, Host } from "../../host";
 import {
-  downloadFileBytes,
-  downloadFileText,
-  exportFile,
-  getFile,
-  listChildren,
-} from "../../google/drive";
-import type { DriveAccess } from "../../host";
+  ContentGoneError,
+  ContentNotReadyError,
+  loadItemBody,
+  loadItemFile,
+} from "../content/body";
 import { buildItemFile, folderPathOf, type FolderRef } from "../drive/build-file";
 import { loadHighlightsForItems } from "../highlights/load";
 import { GOOGLE_DOC_MIME, googleDocName } from "../drive/google-doc-sync";
@@ -18,6 +17,12 @@ export type ItemContent =
   | { ok: false; status: 404 | 409; message: string; code?: "not_ready" };
 
 const NOT_FOUND: ItemContent = { ok: false, status: 404, message: "Item not found." };
+const NOT_READY = (err: Error): ItemContent => ({
+  ok: false,
+  status: 409,
+  message: err.message,
+  code: "not_ready",
+});
 const DRIVE_COPY_GONE: ItemContent = {
   ok: false,
   status: 409,
@@ -26,21 +31,21 @@ const DRIVE_COPY_GONE: ItemContent = {
 
 /**
  * The item's file exactly as Drive holds it (docs/FILE-FORMAT.md), built fresh from the current
- * title, note and folder path. Text that already moved to Drive is read back from Drive.
+ * title, note and folder path. Text that already moved out of the database is read back from
+ * R2 (or, for older sources, the owner's Drive).
  */
 export async function getItemContent(
   db: SupabaseClient<Database>,
   userId: string,
   itemId: string,
-  drive: DriveAccess,
+  host: Pick<Host, "drive" | "content">,
 ): Promise<ItemContent> {
   const { data: item, error } = await db
     .from("items")
     .select(
-      "id, folder_id, kind, title, status, source_url, canonical_url, created_at, markdown, meta, note, storage_path, drive_file_id",
+      "id, folder_id, kind, title, status, source_url, canonical_url, created_at, markdown, meta, note, storage_path, drive_file_id, content_sha256, user_id",
     )
     .eq("id", itemId)
-    .eq("user_id", userId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -50,35 +55,27 @@ export async function getItemContent(
     const meta = (item.meta ?? {}) as Record<string, unknown>;
     const mimeType =
       typeof meta.mime_type === "string" ? meta.mime_type : "application/octet-stream";
-    if (item.storage_path) {
-      const { data: blob, error: downloadError } = await db.storage
-        .from("images")
-        .download(item.storage_path);
-      if (downloadError || !blob)
-        throw new Error(downloadError?.message || "Image download failed.");
-      return { ok: true, body: new Uint8Array(await blob.arrayBuffer()), mimeType };
+    try {
+      const file = await loadItemFile(db, host, userId, item);
+      return file ? { ok: true, body: file.bytes, mimeType } : DRIVE_COPY_GONE;
+    } catch (err) {
+      if (err instanceof ContentNotReadyError) return NOT_READY(err);
+      throw err;
     }
-    if (!item.drive_file_id) return DRIVE_COPY_GONE;
-    const bytes = await downloadFileBytes(await drive.getAccessToken(userId), item.drive_file_id);
-    return bytes ? { ok: true, body: bytes, mimeType } : DRIVE_COPY_GONE;
   }
 
-  let markdown = item.markdown;
-  if (markdown === null && item.kind !== "note") {
-    // Text is only cleared once Drive has the file, so no Drive file means it never had text.
-    if (item.drive_file_id) {
-      const text = await downloadFileText(await drive.getAccessToken(userId), item.drive_file_id);
-      if (text === null) return DRIVE_COPY_GONE;
-      markdown = bodyFromDriveFile(text);
-    } else {
-      markdown = "";
-    }
+  let markdown: string;
+  try {
+    markdown = await loadItemBody(db, host, userId, item);
+  } catch (err) {
+    if (err instanceof ContentGoneError) return DRIVE_COPY_GONE;
+    if (err instanceof ContentNotReadyError) return NOT_READY(err);
+    throw err;
   }
 
   const { data: folders, error: foldersError } = await db
     .from("folders")
     .select("id, parent_id, name")
-    .eq("user_id", userId)
     .is("deleted_at", null);
   if (foldersError) throw new Error(foldersError.message);
   const foldersById = new Map<string, FolderRef>((folders ?? []).map((f) => [f.id, f]));
@@ -116,14 +113,14 @@ export async function getItemDocx(
 ): Promise<ItemContent> {
   const { data: item, error } = await db
     .from("items")
-    .select("id, kind, status, drive_file_id")
+    .select("id, kind, status, drive_file_id, user_id")
     .eq("id", itemId)
-    .eq("user_id", userId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!item || item.status !== "saved" || item.kind === "image") return NOT_FOUND;
-  if (!item.drive_file_id) return DOCX_NOT_READY;
+  // The Google Doc sits in the owner's Drive; other members can't reach it.
+  if (!item.drive_file_id || item.user_id !== userId) return DOCX_NOT_READY;
 
   const token = await drive.getAccessToken(userId);
   // The Doc sits next to the Markdown file and has its name without `.md`.

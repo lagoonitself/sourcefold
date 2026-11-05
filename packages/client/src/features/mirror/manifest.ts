@@ -11,6 +11,8 @@ import {
 
 export interface MirrorFolder extends FolderRef {
   updated_at: string;
+  /** Whose project this is (the owner's id); needed to tell shared projects apart. */
+  user_id?: string | null;
 }
 
 export interface MirrorItem {
@@ -57,7 +59,56 @@ function projectIdOf(folderId: string, foldersById: Map<string, FolderRef>): str
   return current?.id ?? folderId;
 }
 
-export function buildMirrorManifest(folders: MirrorFolder[], items: MirrorItem[]): MirrorEntry[] {
+/**
+ * Two visible projects can share a name (yours and one shared with you). The one you don't own
+ * gets " (shared)" appended, then " (shared 2)" and so on if that clashes too. Ties between
+ * projects nobody owns go by project id, so a path is the same on every run.
+ */
+export function nameSharedProjects<T extends FolderRef & { user_id?: string | null }>(
+  folders: T[],
+  userId: string,
+): T[] {
+  const keyOf = (name: string) =>
+    folderPathOf("k", new Map([["k", { id: "k", parent_id: null, name }]])).toLowerCase();
+  const projects = folders.filter((f) => f.parent_id === null);
+  const byKey = new Map<string, T[]>();
+  for (const p of projects) {
+    const list = byKey.get(keyOf(p.name)) ?? [];
+    list.push(p);
+    byKey.set(keyOf(p.name), list);
+  }
+  const taken = new Set<string>();
+  const renamed = new Map<string, string>();
+  const toRename: T[] = [];
+  for (const [key, list] of byKey) {
+    if (list.length === 1) {
+      taken.add(key);
+      continue;
+    }
+    const sorted = [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const owned = sorted.filter((p) => p.user_id === userId);
+    const keep = owned.length > 0 ? owned : [sorted[0]!];
+    taken.add(key);
+    for (const p of sorted) if (!keep.includes(p)) toRename.push(p);
+  }
+  toRename.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const p of toRename) {
+    let name = `${p.name} (shared)`;
+    for (let n = 2; taken.has(keyOf(name)); n++) name = `${p.name} (shared ${n})`;
+    taken.add(keyOf(name));
+    renamed.set(p.id, name);
+  }
+  return renamed.size === 0
+    ? folders
+    : folders.map((f) => (renamed.has(f.id) ? { ...f, name: renamed.get(f.id)! } : f));
+}
+
+export function buildMirrorManifest(
+  allFolders: MirrorFolder[],
+  items: MirrorItem[],
+  options: { userId?: string } = {},
+): MirrorEntry[] {
+  const folders = options.userId ? nameSharedProjects(allFolders, options.userId) : allFolders;
   const foldersById = new Map<string, FolderRef>(folders.map((f) => [f.id, f]));
 
   const siblingsByFolder = new Map<string, SiblingItem[]>();

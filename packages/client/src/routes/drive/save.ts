@@ -1,11 +1,38 @@
 import { ZodError } from "zod";
 import { jsonData } from "../../http";
 import { DriveAuthError, DriveClientMismatchError } from "../../google/errors";
+import { runContentBatch } from "../../features/content/run-content-batch";
 import { runSaveBatch } from "../../features/drive/run-save-batch";
 import type { RouteContext } from "../../context";
 
 export async function POST(auth: RouteContext, request: Request) {
   const { db, userId } = auth;
+
+  const { data: driveState } = await db
+    .from("drive_state")
+    .select("backup_enabled")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (driveState?.backup_enabled === false) {
+    return Response.json(
+      {
+        error: {
+          message: "Google Drive backup is off. Turn it on in Settings.",
+          code: "backup_off",
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  // Text still in Supabase goes to R2 first, so the Drive save below starts from a clean state.
+  if (auth.host.content) {
+    try {
+      await runContentBatch(db, userId, auth.host);
+    } catch (err) {
+      console.error("Content save failed:", err);
+    }
+  }
 
   const { data: lockAcquired, error: lockError } = await db.rpc("acquire_drive_sync_lock", {
     p_user_id: userId,

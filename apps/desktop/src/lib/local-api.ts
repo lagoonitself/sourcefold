@@ -1,4 +1,5 @@
 import { createLocalApi, type LocalApiWithDrive } from "@sourcefold/client";
+import { CONTENT_URL } from "./build-env";
 import { getSupabase } from "./supabase";
 import { desktopFetchUrl } from "./web-fetch";
 
@@ -32,6 +33,7 @@ export function getLocalApi(): LocalApiWithDrive {
       fetchUrl: desktopFetchUrl,
       parseHtml,
       onItemsChanged: itemsChanged,
+      ...(CONTENT_URL ? { contentUrl: CONTENT_URL } : {}),
     });
     apiFor = supabase;
   }

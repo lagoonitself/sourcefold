@@ -28,7 +28,6 @@ export async function PUT(auth: RouteContext, request: Request, params: Params) 
     .from("items")
     .select("id")
     .eq("id", itemId)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
   if (itemError) return jsonError(500, itemError.message);
@@ -66,11 +65,7 @@ export async function DELETE(auth: RouteContext, _request: Request, params: Para
   const { itemId } = params;
   if (!idSchema.safeParse(itemId).success) return jsonError(400, "Invalid item ID");
 
-  const { error } = await auth.db
-    .from("item_tldrs")
-    .delete()
-    .eq("item_id", itemId)
-    .eq("user_id", auth.userId);
+  const { error } = await auth.db.from("item_tldrs").delete().eq("item_id", itemId);
   if (error) return jsonError(500, error.message);
   return jsonData({ item_id: itemId });
 }

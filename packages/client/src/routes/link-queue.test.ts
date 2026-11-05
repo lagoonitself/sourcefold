@@ -88,7 +88,8 @@ describe("link queue routes", () => {
     const payload = (await response.json()) as { data: { id: string }[] };
     expect(payload.data.map((row) => row.id)).toEqual([existing.id, inserted.id]);
     const folderQuery = fake.queries.find((query) => query.table === "folders")!;
-    expect(callsOf(folderQuery, "eq")).toContainEqual(["user_id", USER_ID]);
+    // The folder is project data: row-level security decides, no user_id filter.
+    expect(callsOf(folderQuery, "eq")).not.toContainEqual(["user_id", USER_ID]);
     const queueQueries = fake.queries.filter((query) => query.table === "link_queue");
     for (const query of queueQueries) {
       if (callsOf(query, "insert").length > 0) {

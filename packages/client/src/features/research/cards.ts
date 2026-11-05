@@ -102,7 +102,6 @@ export async function filterLiveCards<T extends { item_id: string | null; projec
       .from("items")
       .select("id, folder_id")
       .in("id", chunk)
-      .eq("user_id", userId)
       .is("deleted_at", null);
 
     if (error) throw new Error(error.message);
@@ -149,7 +148,6 @@ export async function isLiveItem(
     .from("items")
     .select("id, folder_id")
     .eq("id", itemId)
-    .eq("user_id", userId)
     .is("deleted_at", null)
     .maybeSingle();
 

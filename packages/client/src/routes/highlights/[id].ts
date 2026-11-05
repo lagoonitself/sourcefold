@@ -21,7 +21,6 @@ export async function GET(auth: RouteContext, _request: Request, params: Params)
     .from("highlights")
     .select(HIGHLIGHT_COLUMNS)
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .maybeSingle();
 
   if (error) return jsonError(500, error.message);
@@ -54,22 +53,19 @@ export async function PUT(auth: RouteContext, request: Request, params: Params) 
     return jsonError(400, "The highlight id in the body must match the URL.");
   }
 
-  // An id owned by someone else looks exactly like an id that doesn't exist.
+  // An id the caller can't reach (someone else's, outside their projects) looks exactly like an
+  // id that doesn't exist.
   const { data: existing, error: existingError } = await auth.db
     .from("highlights")
-    .select("id, user_id")
+    .select("id")
     .eq("id", id)
     .maybeSingle();
   if (existingError) return jsonError(500, existingError.message);
-  if (existing && existing.user_id !== auth.userId) {
-    return jsonError(404, "Highlight not found.");
-  }
 
   const { data: item, error: itemError } = await auth.db
     .from("items")
     .select("id")
     .eq("id", parsed.data.item_id)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
   if (itemError) return jsonError(500, itemError.message);
@@ -81,7 +77,6 @@ export async function PUT(auth: RouteContext, request: Request, params: Params) 
         .from("highlights")
         .update(row)
         .eq("id", id)
-        .eq("user_id", auth.userId)
         .select(HIGHLIGHT_COLUMNS)
         .maybeSingle()
     : await auth.db
@@ -121,7 +116,6 @@ export async function PATCH(auth: RouteContext, request: Request, params: Params
     .from("highlights")
     .update({ note: parsed.data.note })
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .select(HIGHLIGHT_COLUMNS)
     .maybeSingle();
 
@@ -144,7 +138,6 @@ export async function DELETE(auth: RouteContext, request: Request, params: Param
     .from("highlights")
     .delete()
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .select("id")
     .maybeSingle();
 

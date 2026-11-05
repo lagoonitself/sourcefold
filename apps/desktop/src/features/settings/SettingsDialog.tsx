@@ -36,6 +36,7 @@ import { getSupabaseConfig, setSupabaseConfig, supabaseConfigProblem } from "@/l
 import { cn } from "@/lib/utils";
 import { SubstackCookieSettings } from "../substack/SubstackCookieSettings";
 import { LocalCopySettings } from "../local-copy/LocalCopySettings";
+import { BackupSetting } from "./BackupSetting";
 import { SearchSettings } from "../search/SearchSettings";
 import { ClaudeSettings } from "../claude/ClaudeSettings";
 import { TldrSettings } from "../tldr/TldrSettings";
@@ -315,6 +316,8 @@ export function SettingsDialog({
                 </div>
 
                 <LocalCopySettings open={open} signedIn={Boolean(session) && !isOffline} />
+
+                <BackupSetting open={open} signedIn={Boolean(session) && !isOffline} />
 
                 {/* Chrome Extension Native Messaging */}
                 <div className="flex flex-col gap-2">

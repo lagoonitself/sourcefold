@@ -14,8 +14,9 @@ import type { ImportRequest } from "./import-schema";
 
 // Adds one batch of a project file to the user's new project (docs/PROJECT-FILE.md, "Over the
 // web API"). Rows come with their final ids; every reference must point at this project, which
-// is checked here against the database and the same request. Every query filters by user_id
-// because token requests use the admin client, which skips RLS.
+// is checked here against the database and the same request. Reads aren't filtered by user_id:
+// sessions run under RLS and token requests use a scopeToUser client. A new project's name is
+// made unique among the caller's own projects.
 
 type Db = SupabaseClient<Database>;
 type Row = Record<string, unknown>;
@@ -231,10 +232,7 @@ export async function importBatch(
   const requireSources = async (ids: string[], message: string) => {
     const missing = [...new Set(ids)].filter((id) => !sourceIds.has(id));
     if (missing.length === 0) return;
-    const found = await fetchByIds(db, "items", "id, folder_id", missing, {
-      eq: { user_id: userId },
-      live: true,
-    });
+    const found = await fetchByIds(db, "items", "id, folder_id", missing, { live: true });
     for (const row of found) {
       if (groupIds.has(String(row.folder_id))) sourceIds.add(String(row.id));
     }
@@ -325,9 +323,7 @@ export async function importBatch(
         .filter((id): id is string => id !== null && !postSource.has(id)),
     ),
   ];
-  for (const row of await fetchByIds(db, "x_posts", "id, item_id", outsideParents, {
-    eq: { user_id: userId },
-  })) {
+  for (const row of await fetchByIds(db, "x_posts", "id, item_id", outsideParents)) {
     postSource.set(String(row.id), String(row.item_id));
   }
   for (const post of xPosts) {
@@ -381,9 +377,7 @@ export async function importBatch(
         .filter((id): id is string => id !== null && !highlightSource.has(id)),
     ),
   ];
-  for (const row of await fetchByIds(db, "highlights", "id, item_id", outsideHighlights, {
-    eq: { user_id: userId },
-  })) {
+  for (const row of await fetchByIds(db, "highlights", "id, item_id", outsideHighlights)) {
     highlightSource.set(String(row.id), String(row.item_id));
   }
   await requireSources(
@@ -398,7 +392,7 @@ export async function importBatch(
     ),
   ];
   for (const row of await fetchByIds(db, "outline_sections", "id", outsideSections, {
-    eq: { user_id: userId, project_id: projectId },
+    eq: { project_id: projectId },
   })) {
     sectionIds.add(String(row.id));
   }

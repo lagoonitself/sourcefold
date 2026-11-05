@@ -14,10 +14,15 @@ import type {
   CaptureRequest,
   CheckUrlResult,
   Folder,
+  FolderSharing,
+  InvitePreview,
+  InviteRole,
   Item,
   MergeResult,
   NativeHostStatus,
   Settings,
+  BackupSetting,
+  Sharing,
 } from "./types";
 
 export function isTauri(): boolean {
@@ -81,6 +86,7 @@ export async function getFolders(includeArchived = true): Promise<Folder[]> {
       archived_at?: string | null;
       created_at?: string;
       updated_at?: string;
+      sharing?: FolderSharing;
     }>
   >("/folders");
 
@@ -95,6 +101,7 @@ export async function getFolders(includeArchived = true): Promise<Folder[]> {
     created_at: f.created_at || now,
     updated_at: f.updated_at || now,
     item_count: f.item_count ?? 0,
+    ...(f.sharing ? { sharing: f.sharing } : {}),
   }));
 
   if (!includeArchived) {
@@ -701,4 +708,67 @@ export async function getNativeHostStatus(): Promise<NativeHostStatus> {
     installed: false,
     message: "Native messaging is only available in the desktop app",
   };
+}
+
+// ----------------- SHARING AND BACKUP (signed in only) -----------------
+
+export async function getProjectSharing(projectId: string): Promise<Sharing> {
+  return httpFetch<Sharing>(`/projects/${projectId}/sharing`);
+}
+
+export async function createInvite(
+  projectId: string,
+  role: InviteRole,
+): Promise<{ code: string; role: InviteRole }> {
+  return httpFetch(`/projects/${projectId}/invite`, {
+    method: "POST",
+    body: JSON.stringify({ role }),
+  });
+}
+
+/** A new code; the old link stops working. */
+export async function resetInvite(
+  projectId: string,
+  role: InviteRole,
+): Promise<{ code: string; role: InviteRole }> {
+  return httpFetch(`/projects/${projectId}/invite/reset`, {
+    method: "POST",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function deleteInvite(projectId: string, role: InviteRole): Promise<void> {
+  await httpFetch(`/projects/${projectId}/invite?role=${role}`, { method: "DELETE" });
+}
+
+export async function setMemberRole(
+  projectId: string,
+  userId: string,
+  role: InviteRole,
+): Promise<void> {
+  await httpFetch(`/projects/${projectId}/members/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+}
+
+/** Removes a member, or leaves the project when `userId` is you. */
+export async function removeMember(projectId: string, userId: string): Promise<void> {
+  await httpFetch(`/projects/${projectId}/members/${userId}`, { method: "DELETE" });
+}
+
+export async function getInvitePreview(code: string): Promise<InvitePreview> {
+  return httpFetch<InvitePreview>(`/invites/${encodeURIComponent(code)}`);
+}
+
+export async function acceptInvite(code: string): Promise<{ project_id: string }> {
+  return httpFetch(`/invites/${encodeURIComponent(code)}/accept`, { method: "POST" });
+}
+
+export async function getBackupSetting(): Promise<BackupSetting> {
+  return httpFetch<BackupSetting>("/settings/backup");
+}
+
+export async function setBackupSetting(enabled: boolean): Promise<{ enabled: boolean }> {
+  return httpFetch("/settings/backup", { method: "PUT", body: JSON.stringify({ enabled }) });
 }

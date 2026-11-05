@@ -39,7 +39,6 @@ export async function POST(auth: RouteContext, request: Request) {
     .from("folders")
     .select("id, parent_id")
     .eq("id", folder_id)
-    .eq("user_id", userId)
     .is("deleted_at", null)
     .maybeSingle();
 

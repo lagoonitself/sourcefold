@@ -10,6 +10,8 @@ import {
   Pencil,
   Trash2,
   Upload,
+  UserPlus,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
@@ -33,6 +35,10 @@ import {
 import type { Folder } from "@/lib/types";
 import { archiveProject, createFolder, deleteFolder, renameFolder } from "@/lib/api";
 import { isMacPlatform } from "../shortcuts/key-utils";
+import { useAuth } from "../auth";
+import { sharedLabel } from "../sharing/helpers";
+import { JoinDialog } from "../sharing/JoinDialog";
+import { ShareDialog } from "../sharing/ShareDialog";
 import { cn } from "@/lib/utils";
 import {
   ExportProjectDialog,
@@ -74,7 +80,12 @@ export function ProjectSwitcher({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [exportRequest, setExportRequest] = React.useState<ExportRequest | null>(null);
   const [importFile, setImportFile] = React.useState<OpenedProjectFile | null>(null);
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [joinOpen, setJoinOpen] = React.useState(false);
   const isMac = React.useMemo(() => isMacPlatform(), []);
+  // Sharing needs an account; offline mode has none.
+  const { signedIn, offlineMode, session } = useAuth();
+  const canShare = signedIn && !offlineMode;
 
   const activeProjects = projects.filter((p) => !p.archived_at);
   const archivedProjects = projects.filter((p) => Boolean(p.archived_at));
@@ -162,6 +173,17 @@ export function ProjectSwitcher({
     }
   };
 
+  const handleOpenSharedProject = async (projectId: string) => {
+    await onRefresh();
+    onSelectProject(projectId);
+  };
+
+  const handleLeftProject = async (projectId: string) => {
+    await onRefresh();
+    const next = activeProjects.find((p) => p.id !== projectId);
+    if (next) onSelectProject(next.id);
+  };
+
   const handleExportProject = async () => {
     if (!currentProject) return;
     const project = { id: currentProject.id, name: currentProject.name };
@@ -237,6 +259,15 @@ export function ProjectSwitcher({
                     {(project.name.trim()[0] || "P").toUpperCase()}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                  {canShare && project.sharing && (
+                    <span
+                      className="flex min-w-0 max-w-[6.5rem] shrink items-center gap-1 text-[11.5px] text-muted-foreground"
+                      title={sharedLabel(project.sharing)}
+                    >
+                      <Users className="size-3 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{sharedLabel(project.sharing)}</span>
+                    </span>
+                  )}
                   <div className="ml-auto flex shrink-0 items-center gap-1.5">
                     {idx < 9 && <Kbd>Alt+{idx + 1}</Kbd>}
                     {isSelected && <Check className="size-4 shrink-0 !text-foreground" />}
@@ -325,8 +356,22 @@ export function ProjectSwitcher({
             <span>Import project file</span>
           </DropdownMenuItem>
 
+          {canShare && (
+            <DropdownMenuItem onClick={() => setJoinOpen(true)}>
+              <UserPlus className="size-4" />
+              <span>Join a shared project…</span>
+            </DropdownMenuItem>
+          )}
+
           {currentProject && (
             <>
+              {canShare && (
+                <DropdownMenuItem onClick={() => setShareOpen(true)}>
+                  <Users className="size-4" />
+                  <span>Share project…</span>
+                </DropdownMenuItem>
+              )}
+
               <DropdownMenuItem
                 onClick={() => {
                   setRenameProjectName(currentProject.name);
@@ -367,6 +412,23 @@ export function ProjectSwitcher({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {canShare && (
+        <>
+          <ShareDialog
+            open={shareOpen}
+            onOpenChange={setShareOpen}
+            project={currentProject ? { id: currentProject.id, name: currentProject.name } : null}
+            yourUserId={session?.user_id ?? null}
+            onLeft={(projectId) => void handleLeftProject(projectId)}
+          />
+          <JoinDialog
+            open={joinOpen}
+            onOpenChange={setJoinOpen}
+            onOpenProject={handleOpenSharedProject}
+          />
+        </>
+      )}
 
       <ExportProjectDialog request={exportRequest} onClose={() => setExportRequest(null)} />
       <ImportProjectDialog

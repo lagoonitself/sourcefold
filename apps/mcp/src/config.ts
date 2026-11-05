@@ -23,7 +23,7 @@ export interface Credentials {
    * Set for the desktop app's Supabase sign-in (since 2026-10-23): the server then runs the
    * website's API itself against Supabase (`@sourcefold/client`), so no website is needed.
    */
-  supabase?: { url: string; publishableKey: string; userId: string };
+  supabase?: { url: string; publishableKey: string; userId: string; contentUrl?: string };
 }
 
 export const NOT_SIGNED_IN_MESSAGE =
@@ -75,6 +75,7 @@ interface DesktopSession {
   supabase_url?: unknown;
   publishable_key?: unknown;
   user_id?: unknown;
+  content_url?: unknown;
   access_token?: unknown;
   expires_at?: unknown;
   email?: unknown;
@@ -84,6 +85,20 @@ interface DesktopSession {
 
 function text(value: unknown): string | null {
   return typeof value === "string" ? setting(value) : null;
+}
+
+/** The Content Worker's address from `content_url`: https, or http on this computer. Anything else is ignored. */
+export function contentUrlFrom(value: unknown): string | undefined {
+  const raw = text(value);
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if (url.protocol === "https:" || (url.protocol === "http:" && local)) return trimSlash(raw);
+  } catch {
+    // not a URL
+  }
+  return undefined;
 }
 
 export function loadCredentials(env: NodeJS.ProcessEnv = process.env): Credentials | null {
@@ -103,6 +118,7 @@ export function loadCredentials(env: NodeJS.ProcessEnv = process.env): Credentia
   const supabaseUrl = text(session?.supabase_url);
   const publishableKey = text(session?.publishable_key);
   const userId = text(session?.user_id);
+  const contentUrl = contentUrlFrom(session?.content_url);
   // The desktop's Supabase sign-in works without any website (QA 2026-11-05: the session file
   // has no web address, so the old path read it as "not signed in" while the app was signed in).
   if (accessToken && supabaseUrl && publishableKey && userId) {
@@ -112,7 +128,12 @@ export function loadCredentials(env: NodeJS.ProcessEnv = process.env): Credentia
       source: "desktop",
       email,
       expiresAt,
-      supabase: { url: trimSlash(supabaseUrl), publishableKey, userId },
+      supabase: {
+        url: trimSlash(supabaseUrl),
+        publishableKey,
+        userId,
+        ...(contentUrl ? { contentUrl } : {}),
+      },
     };
   }
   if (accessToken && webUrl) {

@@ -8,14 +8,14 @@ import type { RouteContext } from "../context";
 
 const PAGE = 1000;
 
-// Every file in the library with its path in Drive, so the desktop app can keep a copy on disk.
+// Every file in the library (shared projects too) with its path in Drive, so the desktop app can
+// keep a copy on disk.
 export async function GET(auth: RouteContext) {
   const { db, userId } = auth;
 
   const { data: folders, error: foldersError } = await db
     .from("folders")
-    .select("id, parent_id, name, updated_at")
-    .eq("user_id", userId)
+    .select("id, parent_id, name, updated_at, user_id")
     .is("deleted_at", null);
   if (foldersError) return jsonError(500, foldersError.message);
 
@@ -27,7 +27,6 @@ export async function GET(auth: RouteContext) {
       .select(
         "id, folder_id, kind, title, status, meta, created_at, updated_at, drive_file_id, drive_synced_at",
       )
-      .eq("user_id", userId)
       .is("deleted_at", null)
       .order("created_at")
       .order("id")
@@ -37,5 +36,7 @@ export async function GET(auth: RouteContext) {
     if (!data || data.length < PAGE) break;
   }
 
-  return jsonData({ files: buildMirrorManifest((folders ?? []) as MirrorFolder[], items) });
+  return jsonData({
+    files: buildMirrorManifest((folders ?? []) as MirrorFolder[], items, { userId }),
+  });
 }

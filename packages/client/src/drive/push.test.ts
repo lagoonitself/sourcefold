@@ -5,22 +5,45 @@ vi.mock("../features/drive/run-save-batch", () => ({
   runSaveBatch: (...args: unknown[]) => runSaveBatch(...args),
 }));
 
+const runContentBatch = vi.fn();
+vi.mock("../features/content/run-content-batch", () => ({
+  runContentBatch: (...args: unknown[]) => runContentBatch(...args),
+}));
+
 import { createDrivePusher } from "./push";
 
 const USER_ID = "u1";
 
-function setup(locked = true) {
+function setup(
+  locked = true,
+  options: { backupEnabled?: boolean | null; connected?: boolean; content?: boolean } = {},
+) {
+  const { backupEnabled = true, connected = true, content = false } = options;
   const rpc = vi.fn(async (fn: string) => ({
     data: fn === "acquire_drive_sync_lock" ? locked : null,
     error: null,
   }));
-  const db = { rpc } as never;
+  const from = vi.fn(() => ({
+    select: () => ({
+      eq: () => ({
+        maybeSingle: async () => ({
+          data: backupEnabled === null ? null : { backup_enabled: backupEnabled },
+          error: null,
+        }),
+      }),
+    }),
+  }));
+  const db = { rpc, from } as never;
   const drive = {
     getAccessToken: vi.fn(async () => "token"),
     clearAccessToken: vi.fn(),
-    isConnected: vi.fn(async () => true),
+    isConnected: vi.fn(async () => connected),
   };
-  const host = { drive, fetchUrl: vi.fn() };
+  const host = {
+    drive,
+    fetchUrl: vi.fn(),
+    content: content ? ({ putText: vi.fn() } as never) : null,
+  };
   const onPushed = vi.fn();
   const pusher = createDrivePusher(db, host, { delayMs: 3000, onPushed });
   return { rpc, drive, host, pusher, onPushed };
@@ -31,6 +54,8 @@ describe("createDrivePusher", () => {
     vi.useFakeTimers();
     runSaveBatch.mockReset();
     runSaveBatch.mockResolvedValue({ processed: 1, failed: [] });
+    runContentBatch.mockReset();
+    runContentBatch.mockResolvedValue({ moved: 0, failed: [], storageFull: false });
   });
   afterEach(() => vi.useRealTimers());
 
@@ -98,5 +123,46 @@ describe("createDrivePusher", () => {
     pusher.cancel();
     await vi.advanceTimersByTimeAsync(10_000);
     expect(runSaveBatch).not.toHaveBeenCalled();
+  });
+
+  it("does not touch Drive when the backup is off", async () => {
+    const { rpc, drive, pusher } = setup(true, { backupEnabled: false });
+    pusher.schedule(USER_ID);
+    await pusher.flush();
+    expect(runSaveBatch).not.toHaveBeenCalled();
+    expect(drive.getAccessToken).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("counts a missing drive_state row as backup on", async () => {
+    const { pusher } = setup(true, { backupEnabled: null });
+    pusher.schedule(USER_ID);
+    await pusher.flush();
+    expect(runSaveBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not touch Drive when it is not connected", async () => {
+    const { pusher } = setup(true, { connected: false });
+    pusher.schedule(USER_ID);
+    await pusher.flush();
+    expect(runSaveBatch).not.toHaveBeenCalled();
+  });
+
+  it("moves text to the content store first, even with the backup off", async () => {
+    runContentBatch.mockResolvedValue({ moved: 2, failed: [], storageFull: false });
+    const { pusher, host, onPushed } = setup(true, { backupEnabled: false, content: true });
+    pusher.schedule(USER_ID);
+    await pusher.flush();
+    expect(runContentBatch).toHaveBeenCalledWith(expect.anything(), USER_ID, host, 10);
+    expect(runSaveBatch).not.toHaveBeenCalled();
+    expect(onPushed).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the content store when none is configured", async () => {
+    const { pusher } = setup();
+    pusher.schedule(USER_ID);
+    await pusher.flush();
+    expect(runContentBatch).not.toHaveBeenCalled();
+    expect(runSaveBatch).toHaveBeenCalledTimes(1);
   });
 });

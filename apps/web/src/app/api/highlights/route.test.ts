@@ -14,7 +14,6 @@ import { GET } from "./route";
 import { DELETE, PATCH, PUT } from "./[id]/route";
 
 const USER = "00000000-0000-4000-8000-000000000001";
-const OTHER = "00000000-0000-4000-8000-000000000002";
 const ID = "00000000-0000-4000-8000-0000000000a1";
 const ITEM = "00000000-0000-4000-8000-0000000000b1";
 const ITEM2 = "00000000-0000-4000-8000-0000000000b2";
@@ -73,7 +72,7 @@ const writes = (fake: ReturnType<typeof createScriptedDb>) =>
 beforeEach(() => requireApiUser.mockReset());
 
 describe("GET /api/highlights", () => {
-  it("lists one item's highlights, scoped to the user", async () => {
+  it("lists one item's highlights, leaving access to row-level security", async () => {
     const fake = use({
       items: [{ data: { id: ITEM } }],
       highlights: [{ data: [hrow("h1", ITEM, 1), hrow("h2", ITEM, 5)] }],
@@ -83,8 +82,8 @@ describe("GET /api/highlights", () => {
 
     expect(res.status).toBe(200);
     expect(json.data.map((h: { id: string }) => h.id)).toEqual(["h1", "h2"]);
-    expect(callsOf(fake.queries[0]!, "eq")).toContainEqual(["user_id", USER]);
-    expect(callsOf(fake.queries[1]!, "eq")).toContainEqual(["user_id", USER]);
+    expect(callsOf(fake.queries[0]!, "eq")).not.toContainEqual(["user_id", USER]);
+    expect(callsOf(fake.queries[1]!, "eq")).not.toContainEqual(["user_id", USER]);
   });
 
   it("404s for an item that isn't the user's", async () => {
@@ -105,12 +104,7 @@ describe("GET /api/highlights", () => {
     expect(res.status).toBe(200);
     expect(json.data.map((h: { id: string }) => h.id)).toEqual(["h1", "h2"]);
     const itemsQuery = fake.queries.find((q) => q.table === "items")!;
-    expect(callsOf(itemsQuery, "eq")).toEqual(
-      expect.arrayContaining([
-        ["folder_id", FOLDER],
-        ["user_id", USER],
-      ]),
-    );
+    expect(callsOf(itemsQuery, "eq")).toEqual([["folder_id", FOLDER]]);
     expect(callsOf(itemsQuery, "is")).toContainEqual(["deleted_at", null]);
   });
 
@@ -147,7 +141,7 @@ describe("PUT /api/highlights/[id]", () => {
     });
   });
 
-  it("replaces an existing highlight the user owns", async () => {
+  it("replaces an existing highlight the session can reach", async () => {
     const fake = use({
       highlights: [{ data: { id: ID, user_id: USER } }, { data: hrow(ID, ITEM, 3) }],
       items: [{ data: { id: ITEM } }],
@@ -157,23 +151,22 @@ describe("PUT /api/highlights/[id]", () => {
     expect(res.status).toBe(200);
     const update = fake.queries.find((q) => callsOf(q, "update").length > 0)!;
     expect(callsOf(update, "update")[0]![0]).toMatchObject({ note: "hi" });
-    expect(callsOf(update, "eq")).toEqual(
-      expect.arrayContaining([
-        ["id", ID],
-        ["user_id", USER],
-      ]),
-    );
+    expect(callsOf(update, "eq")).toEqual([["id", ID]]);
   });
 
-  it("404s when the id belongs to another user, without writing", async () => {
+  it("404s when the id belongs to a project the user can't see, without updating", async () => {
+    // Row-level security hides the row (select finds nothing); the insert hits the taken id.
     const fake = use({
-      highlights: [{ data: { id: ID, user_id: OTHER } }],
+      highlights: [
+        { data: null },
+        { data: null, error: { message: "duplicate key", code: "23505" } },
+      ],
       items: [{ data: { id: ITEM } }],
     });
     const res = await PUT(jsonRequest("PUT", body), params());
 
     expect(res.status).toBe(404);
-    expect(writes(fake)).toHaveLength(0);
+    expect(fake.queries.filter((q) => callsOf(q, "update").length > 0)).toHaveLength(0);
   });
 
   it("404s when the item isn't the user's", async () => {
@@ -197,7 +190,7 @@ describe("PUT /api/highlights/[id]", () => {
 });
 
 describe("PATCH /api/highlights/[id]", () => {
-  it("sets the note, filtered by user", async () => {
+  it("sets the note, leaving access to row-level security", async () => {
     const fake = use({ highlights: [{ data: { ...hrow(ID, ITEM), note: "Check" } }] });
     const res = await PATCH(jsonRequest("PATCH", { note: "Check" }), params());
     const json = await res.json();
@@ -205,7 +198,7 @@ describe("PATCH /api/highlights/[id]", () => {
     expect(res.status).toBe(200);
     expect(json.data.note).toBe("Check");
     expect(callsOf(fake.queries[0]!, "update")[0]![0]).toEqual({ note: "Check" });
-    expect(callsOf(fake.queries[0]!, "eq")).toContainEqual(["user_id", USER]);
+    expect(callsOf(fake.queries[0]!, "eq")).toEqual([["id", ID]]);
   });
 
   it("404s when nothing matches (not the user's)", async () => {
@@ -229,7 +222,7 @@ describe("DELETE /api/highlights/[id]", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).data).toEqual({ id: ID });
     expect(callsOf(fake.queries[0]!, "delete")).toHaveLength(1);
-    expect(callsOf(fake.queries[0]!, "eq")).toContainEqual(["user_id", USER]);
+    expect(callsOf(fake.queries[0]!, "eq")).toEqual([["id", ID]]);
   });
 
   it("404s for a highlight that isn't there or isn't the user's", async () => {

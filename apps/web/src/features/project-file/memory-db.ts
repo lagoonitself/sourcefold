@@ -1,6 +1,8 @@
 // A small in-memory stand-in for the Supabase client, for the project file route tests. Unlike
 // the recording fakes in src/test it applies the filters, so ownership and "not deleted" rules
-// are really exercised. Only what the routes use is supported.
+// are really exercised. Only what the routes use is supported. `isHidden` stands in for
+// row-level security: rows it returns true for are invisible to select, update and delete (an
+// insert still collides with their ids, as a unique key does).
 
 export type Row = Record<string, unknown>;
 type Result = { data: unknown; error: { message: string; code?: string } | null };
@@ -23,6 +25,7 @@ class MemoryQuery implements PromiseLike<Result> {
     private readonly tables: Record<string, Row[]>,
     private readonly table: string,
     private readonly log: { table: string; op: string }[],
+    private readonly isHidden: (table: string, row: Row) => boolean = () => false,
   ) {}
 
   select(columns?: string) {
@@ -90,7 +93,9 @@ class MemoryQuery implements PromiseLike<Result> {
       rows.push(...this.payload.map((r) => ({ ...r })));
       return { data: this.payload, error: null };
     }
-    const matched = rows.filter((r) => this.filters.every((f) => f.test(r)));
+    const matched = rows.filter(
+      (r) => !this.isHidden(this.table, r) && this.filters.every((f) => f.test(r)),
+    );
     if (this.mode === "update") {
       for (const r of matched) Object.assign(r, this.payload[0]);
       return { data: matched, error: null };
@@ -129,10 +134,11 @@ class MemoryQuery implements PromiseLike<Result> {
 export function createMemoryDb(
   tables: Record<string, Row[]> = {},
   storage: Record<string, string[]> = {},
+  isHidden?: (table: string, row: Row) => boolean,
 ) {
   const log: { table: string; op: string }[] = [];
   const db = {
-    from: (table: string) => new MemoryQuery(tables, table, log),
+    from: (table: string) => new MemoryQuery(tables, table, log, isHidden),
     storage: {
       from: () => ({
         list: async (path: string) => ({

@@ -61,7 +61,7 @@ async function listFolderFiles(token: string, folderId: string): Promise<MediaFi
 
 /**
  * The files in the item's `_files` folder in the user's Drive. An item that isn't in Drive yet,
- * or has no such folder, has none. A missing item (or another user's) is a 404.
+ * or has no such folder, has none. A missing item (or one the user can't see) is a 404.
  */
 export async function loadItemMedia(
   db: SupabaseClient<Database>,
@@ -71,14 +71,14 @@ export async function loadItemMedia(
 ): Promise<ItemMedia> {
   const { data: item, error } = await db
     .from("items")
-    .select("id, drive_file_id")
+    .select("id, drive_file_id, user_id")
     .eq("id", itemId)
-    .eq("user_id", userId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!item) return { ok: false, status: 404, message: "Item not found." };
-  if (!item.drive_file_id) return { ok: true, token: "", files: [] };
+  // The `_files` folder sits in the owner's Drive; other members of a shared project have none.
+  if (!item.drive_file_id || item.user_id !== userId) return { ok: true, token: "", files: [] };
 
   const token = await drive.getAccessToken(userId);
   const file = await getFile(token, item.drive_file_id);

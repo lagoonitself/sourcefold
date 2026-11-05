@@ -143,7 +143,7 @@ describe("row mapping", () => {
 });
 
 describe("loadHighlightsForItems", () => {
-  it("groups by item with one query and filters by user", async () => {
+  it("groups by item with one query and leaves access to row-level security", async () => {
     const fake = createFakeDb({
       highlights: [
         row({ id: "h1", item_id: ITEM }),
@@ -158,7 +158,7 @@ describe("loadHighlightsForItems", () => {
     );
 
     expect(fake.queries).toHaveLength(1);
-    expect(callsOf(fake.queries[0]!, "eq")).toContainEqual(["user_id", "user-1"]);
+    expect(callsOf(fake.queries[0]!, "eq")).not.toContainEqual(["user_id", "user-1"]);
     expect(callsOf(fake.queries[0]!, "in")).toEqual([["item_id", [ITEM, ITEM2]]]);
     expect(map.get(ITEM)?.map((h) => h.id)).toEqual(["h1", "h2"]);
     expect(map.get(ITEM2)?.map((h) => h.id)).toEqual(["h3"]);

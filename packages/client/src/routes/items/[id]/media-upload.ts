@@ -49,7 +49,6 @@ export async function POST(auth: RouteContext, request: Request, params: { id: s
     .from("items")
     .select("id, kind")
     .eq("id", id)
-    .eq("user_id", userId)
     .is("deleted_at", null)
     .maybeSingle();
   if (error) {

@@ -10,7 +10,8 @@ import { projectFolderIds } from "../projects/project";
 import { loadItemsInGroups, selectAllPages } from "../research/projects";
 
 // The pages `GET /api/projects/{id}/export` returns (docs/PROJECT-FILE.md, "Over the web API").
-// Every query filters by user_id because token requests use the admin client, which skips RLS.
+// Queries don't filter by user_id: the database decides (RLS), so members of a shared project
+// reach it too. Token requests use a client that adds the filter itself.
 
 export const EXPORT_PAGE_SIZE = 500;
 
@@ -32,7 +33,7 @@ function byAge<T extends { created_at: string; id: string }>(rows: T[]): T[] {
   return rows.sort((a, b) => cmp(a.created_at, b.created_at) || cmp(a.id, b.id));
 }
 
-/** The user's live top-level folder with this id, or null (not a project, not theirs, deleted). */
+/** The live top-level folder with this id, or null (not a project, not visible, deleted). */
 export async function loadProject(
   db: Db,
   userId: string,
@@ -42,7 +43,6 @@ export async function loadProject(
     .from("folders")
     .select("id, name, created_at")
     .eq("id", projectId)
-    .eq("user_id", userId)
     .is("parent_id", null)
     .is("deleted_at", null)
     .maybeSingle();
@@ -63,7 +63,6 @@ export async function loadGroups(db: Db, userId: string, projectId: string): Pro
     db
       .from("folders")
       .select("id, parent_id, name, position, created_at")
-      .eq("user_id", userId)
       .is("deleted_at", null)
       .order("id", { ascending: true })
       .range(from, to),
@@ -86,7 +85,7 @@ async function inChunks<T>(
 }
 
 const SOURCE_COLUMNS =
-  "id, folder_id, kind, title, source_url, canonical_url, meta, note, position, created_at, updated_at, triage, tags, summary, author, author_type, status, storage_path, drive_file_id";
+  "id, folder_id, kind, title, source_url, canonical_url, meta, note, position, created_at, updated_at, triage, tags, summary, author, author_type, status, storage_path, drive_file_id, content_sha256";
 
 interface ItemRow {
   id: string;
@@ -108,6 +107,7 @@ interface ItemRow {
   status: string;
   storage_path: string | null;
   drive_file_id: string | null;
+  content_sha256: string | null;
 }
 
 const MIME_EXTENSIONS: Record<string, string> = {
@@ -151,7 +151,6 @@ async function idsWithMarkdown(db: Db, userId: string, ids: string[]): Promise<S
     const { data, error } = await db
       .from("items")
       .select("id")
-      .eq("user_id", userId)
       .in("id", ids.slice(i, i + 100))
       .not("markdown", "is", null);
     if (error) throw new Error(error.message);
@@ -166,8 +165,8 @@ function toExportSource(item: ItemRow, hasMarkdown: boolean): ProjectExportSourc
   const hasFile =
     item.status === "saved" &&
     (isImage
-      ? Boolean(item.storage_path || item.drive_file_id)
-      : hasMarkdown || Boolean(item.drive_file_id));
+      ? Boolean(item.storage_path || item.drive_file_id || item.content_sha256)
+      : hasMarkdown || Boolean(item.drive_file_id || item.content_sha256));
   return {
     id: item.id,
     group_id: item.folder_id,
@@ -231,7 +230,6 @@ export async function exportPage<T extends ProjectExportTable>(
       db
         .from("outline_sections")
         .select("id, title, position, created_at")
-        .eq("user_id", userId)
         .eq("project_id", projectId)
         .order("id", { ascending: true })
         .range(a, b),
@@ -283,7 +281,6 @@ export async function exportPage<T extends ProjectExportTable>(
           .select(
             "id, item_id, parent_id, post_url, canonical_url, author_name, handle, author_url, posted_at, text, media, position, created_at",
           )
-          .eq("user_id", userId)
           .in("item_id", chunk)
           .order("id", { ascending: true })
           .range(a, b),
@@ -314,7 +311,6 @@ export async function exportPage<T extends ProjectExportTable>(
           .select(
             "id, item_id, kind, quote, prefix, suffix, start_offset, end_offset, image_src, note, seconds, cited, created_at",
           )
-          .eq("user_id", userId)
           .in("item_id", chunk)
           .order("id", { ascending: true })
           .range(a, b),
@@ -345,7 +341,6 @@ export async function exportPage<T extends ProjectExportTable>(
           .select(
             "id, kind, item_id, highlight_id, quote, seconds, end_seconds, url, note, script_line, section_id, position, created_at",
           )
-          .eq("user_id", userId)
           .eq("project_id", projectId)
           .order("id", { ascending: true })
           .range(a, b),
@@ -359,7 +354,6 @@ export async function exportPage<T extends ProjectExportTable>(
         const { data, error } = await db
           .from("highlights")
           .select("id")
-          .eq("user_id", userId)
           .in("id", linked.slice(i, i + 100));
         if (error) throw new Error(error.message);
         for (const row of data ?? []) highlightIds.add(row.id);

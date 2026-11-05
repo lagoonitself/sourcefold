@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { isMacPlatform } from "../shortcuts/key-utils";
 import { isRemoteConfigured } from "@/lib/remote-client";
+import { setBackupEnabledState, useBackupEnabled } from "./backup-store";
 import { fetchDriveStatus, triggerDriveSave } from "./drive-api";
 import type { DriveSaveResult, DriveStatus } from "./types";
 
@@ -38,6 +39,7 @@ export function DriveSyncStatus({ className, onSaved }: DriveSyncStatusProps) {
   const [configured, setConfigured] = React.useState(isRemoteConfigured());
   const [status, setStatus] = React.useState<DriveStatus | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
+  const backupEnabled = useBackupEnabled();
 
   const loadStatus = React.useCallback(async () => {
     if (!isRemoteConfigured()) {
@@ -47,6 +49,7 @@ export function DriveSyncStatus({ className, onSaved }: DriveSyncStatusProps) {
     try {
       const data = await fetchDriveStatus();
       setStatus(data);
+      if (typeof data.backup_enabled === "boolean") setBackupEnabledState(data.backup_enabled);
       return data;
     } catch {
       return null;
@@ -93,7 +96,7 @@ export function DriveSyncStatus({ className, onSaved }: DriveSyncStatusProps) {
   }, [configured, loadStatus]);
 
   const handleSave = React.useCallback(async () => {
-    if (isSaving || !configured) return;
+    if (isSaving || !configured || !backupEnabled) return;
     setIsSaving(true);
     try {
       const result = await triggerDriveSave();
@@ -118,7 +121,7 @@ export function DriveSyncStatus({ className, onSaved }: DriveSyncStatusProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [configured, isSaving, loadStatus, onSaved]);
+  }, [configured, backupEnabled, isSaving, loadStatus, onSaved]);
 
   // Mod+S and the command palette ask for a save through this event (see App.tsx).
   React.useEffect(() => {
@@ -129,6 +132,9 @@ export function DriveSyncStatus({ className, onSaved }: DriveSyncStatusProps) {
 
   const pill =
     "inline-flex h-8 shrink-0 select-none items-center gap-2 rounded-[9px] px-2.5 text-[13px] font-medium transition-colors duration-150";
+
+  // Backup to Google Drive turned off: no button, no unsaved count.
+  if (configured && !backupEnabled) return null;
 
   // Offline mode: everything is already on this computer.
   if (!configured) {

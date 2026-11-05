@@ -1,0 +1,13 @@
+{
+  // Self-hosting: create the bucket (`wrangler r2 bucket create sourcefold-content`),
+  // fill in the two vars below, set the secret with `wrangler secret put SERVICE_SECRET`,
+  // then run `npx wrangler deploy`.
+  "name": "sourcefold-content",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "r2_buckets": [{ "binding": "CONTENT", "bucket_name": "sourcefold-content" }],
+  "vars": {
+    "SUPABASE_URL": "https://<project>.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "<publishable key>",
+  },
+}

@@ -54,7 +54,6 @@ export async function POST(auth: RouteContext, request: Request) {
     const { data: existingNodes } = await auth.db
       .from("x_posts")
       .select("item_id")
-      .eq("user_id", auth.userId)
       .eq("canonical_url", canonical);
 
     if (existingNodes && existingNodes.length > 0) {
@@ -62,7 +61,6 @@ export async function POST(auth: RouteContext, request: Request) {
       const { data: liveItem } = await auth.db
         .from("items")
         .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
-        .eq("user_id", auth.userId)
         .in("id", candidateItemIds)
         .eq("folder_id", parsed.data.folder_id)
         .is("deleted_at", null)

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { callsOf, createFakeDb } from "@/test/fake-db";
+import { createScriptedDb } from "@/test/scripted-db";
 
 const requireApiUser = vi.fn();
 
@@ -13,7 +14,6 @@ import { GET } from "./route";
 import { DELETE, PUT } from "./[id]/route";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
-const OTHER_USER = "00000000-0000-4000-8000-000000000002";
 const PROJECT_ID = "00000000-0000-4000-8000-0000000000aa";
 const GROUP_ID = "00000000-0000-4000-8000-0000000000bb";
 const SECTION_ID = "00000000-0000-4000-8000-0000000000cc";
@@ -176,11 +176,16 @@ describe("PUT /api/outline-sections/[id]", () => {
     expect(updateArg.tags).toEqual(["New Title", "Keep Tag"]);
   });
 
-  it("404s when section belongs to another user", async () => {
+  it("404s when the section id belongs to a project the user can't see", async () => {
+    // Row-level security hides the section (the select finds nothing), and the insert then runs
+    // into the id that is already taken.
     const folders = [{ id: PROJECT_ID, parent_id: null, name: "Project" }];
-    const fake = createFakeDb({
-      folders,
-      outline_sections: { id: SECTION_ID, user_id: OTHER_USER },
+    const fake = createScriptedDb({
+      folders: [{ data: folders }],
+      outline_sections: [
+        { data: null },
+        { data: null, error: { message: "duplicate key", code: "23505" } },
+      ],
     });
     requireApiUser.mockResolvedValue({ db: fake.db, userId: USER_ID, via: "token" });
 

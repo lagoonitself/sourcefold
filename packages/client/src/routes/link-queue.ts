@@ -157,7 +157,6 @@ export async function POST(ctx: RouteContext, request: Request) {
     .from("folders")
     .select("id, parent_id")
     .eq("id", parsed.data.folder_id)
-    .eq("user_id", ctx.userId)
     .is("deleted_at", null)
     .maybeSingle();
   if (folderError) {

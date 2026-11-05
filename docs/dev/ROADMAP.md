@@ -206,8 +206,8 @@ Plan: `docs/dev/PLAN-tldr.md` (2026-10-24). Desktop only. Built 2026-10-24, test
 Plan: `docs/dev/PLAN-sharing.md` (2026-10-22).
 
 - [x] Phase 1: project file. Download and import a `.sourcefold` file on the website and the desktop app (signed in and offline); manifest builder in `packages/core` with golden files. Built 2026-10-23 on `project-files`; waiting for the owner's test, then merge and deploy.
-- [ ] Phase 2: sharing foundation. Members and invites, `project_id` on rows, new database rules, every token route and database function checked for membership, R2 storage for shared projects with a 9.5 GB stop, Share dialog, "Shared" in the website, desktop, extension and Claude.
-- [ ] Phase 3: live updates (Supabase Realtime on the website, the desktop's choice after a test), "changed while you were editing" checks, who added each source.
+- [x] Phase 2: sharing foundation, built 2026-11-05/06 on `live-sync` as 0.7.0 (`docs/dev/PLAN-teams.md`): members and invite links/codes, `project_id` on rows, database rules (tested with owner/editor/viewer/stranger), `sf_` tokens scoped to their own rows, R2 for every project's text through the content Worker with a 9.5 GB stop, Drive as an optional backup, Share and Join dialogs on the website and desktop. Not yet: "Shared" in the extension and Claude, removing a deleted source's text from R2.
+- [x] Phase 3 (part): live updates reach every member through the live-sync broadcast. Still to do: "changed while you were editing" checks, who added each source in the UI.
 - [ ] Phase 4: history panel, Undo per change, source versions in the reader.
 - [ ] Phase 5: shared projects in each member's own Drive.
 

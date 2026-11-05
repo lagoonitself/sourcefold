@@ -56,14 +56,11 @@ export async function PUT(auth: RouteContext, request: Request, params: Params) 
   // Check if section exists
   const { data: existing, error: existingError } = await auth.db
     .from("outline_sections")
-    .select("id, title, project_id, user_id")
+    .select("id, title, project_id")
     .eq("id", id)
     .maybeSingle();
 
   if (existingError) return jsonError(500, existingError.message);
-  if (existing && existing.user_id !== auth.userId) {
-    return jsonError(404, "Outline section not found.");
-  }
 
   const newTitle = parsed.data.title.trim();
 
@@ -85,11 +82,7 @@ export async function PUT(auth: RouteContext, request: Request, params: Params) 
               item.tags.map((t) => (sameTag(t, oldTitle) ? newTitle : t)),
             ).slice(0, 20);
 
-            await auth.db
-              .from("items")
-              .update({ tags: updatedTags })
-              .eq("id", item.id)
-              .eq("user_id", auth.userId);
+            await auth.db.from("items").update({ tags: updatedTags }).eq("id", item.id);
           }
         }
       } catch (err) {
@@ -106,7 +99,6 @@ export async function PUT(auth: RouteContext, request: Request, params: Params) 
           position: parsed.data.position,
         })
         .eq("id", id)
-        .eq("user_id", auth.userId)
         .select(OUTLINE_SECTION_COLUMNS)
         .maybeSingle()
     : await auth.db
@@ -137,17 +129,12 @@ export async function DELETE(auth: RouteContext, request: Request, params: Param
   }
 
   // Disassociate cards in this section (set section_id = null)
-  await auth.db
-    .from("cards")
-    .update({ section_id: null })
-    .eq("section_id", id)
-    .eq("user_id", auth.userId);
+  await auth.db.from("cards").update({ section_id: null }).eq("section_id", id);
 
   const { data, error } = await auth.db
     .from("outline_sections")
     .delete()
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .select("id")
     .maybeSingle();
 

@@ -57,7 +57,8 @@ The apps aren't from a paid publisher, so Windows and macOS warn you the first t
 **Your files, your Drive**
 
 - Every source is a tidy `.md` file with a small header (link, author, dates) and references as footnotes. See [FILE-FORMAT.md](docs/FILE-FORMAT.md).
-- **Save to Drive** (`Ctrl+S`) mirrors your folders into a `Sourcefold` folder in your own Google Drive, with a Google Doc copy of each source. Sourcefold can only see files it created there.
+- **Share a project** with a link or a code: people who join with their own Google account see it all and, as editors, change it with you, live.
+- **Back up to Drive** (optional, on by default; `Ctrl+S` saves now) mirrors your folders into a `Sourcefold` folder in your own Google Drive, with a Google Doc copy of each source. Sourcefold can only see files it created there.
 - The desktop app keeps a copy in `Documents/Sourcefold`, with a Word `.docx` beside each file, so Obsidian, VS Code or any AI tool can read them.
 - Or skip the cloud: the desktop app works offline with no account at all.
 
@@ -98,7 +99,7 @@ Some sites (Reddit, DeepMind, Meta AI, paywalled news) refuse pasted links. Save
 
 ## Run your own copy
 
-Sourcefold is free and open source, and runs entirely on free tiers (Vercel, Supabase, Google Cloud). [SELF-HOSTING.md](docs/SELF-HOSTING.md) walks through setting up your own website, choosing who can sign in, and building installers that point at it.
+Sourcefold is free and open source, and runs entirely on free tiers (Vercel, Supabase, Cloudflare, Google Cloud). [SELF-HOSTING.md](docs/SELF-HOSTING.md) walks through setting up your own website, choosing who can sign in, and building installers that point at it.
 
 ## Help and contributing
 

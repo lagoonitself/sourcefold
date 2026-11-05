@@ -3,6 +3,8 @@ export interface DriveStatus {
   last_saved_at: string | null;
   root_folder_id: string | null;
   connected: boolean;
+  /** False when the person turned the Google Drive backup off in Settings. */
+  backup_enabled?: boolean;
   is_syncing?: boolean;
   error?: string | null;
 }

@@ -6,7 +6,7 @@
  * 2. Google Drive mirror with Google Docs for NotebookLM & Gemini
  * 3. Desktop local Documents/Sourcefold copy with Word (.docx) beside each file.
  * Interactive "Save to Drive" button + Ctrl/Cmd+S keyboard shortcut + Offline/Signed-in toggle.
- * Accuracy: Supabase keeps links, titles, folders and notes; article text is pushed to Drive and cleared.
+ * Accuracy: the library lives in the Sourcefold account (list in Supabase, text in R2) and syncs to computers and teams; Drive is an optional backup.
  */
 import {
   Cloud,
@@ -16,6 +16,7 @@ import {
   Lock,
   RefreshCw,
   Database,
+  Users,
 } from "@lucide/astro";
 import SectionHeader from "../SectionHeader.astro";
 import SourceTile from "../SourceTile.astro";
@@ -24,10 +25,10 @@ import SourceTile from "../SourceTile.astro";
 <section id="files" class="section" data-files-section>
   <div class="container">
     <SectionHeader
-      label="Your files, your Drive"
-      title="Clean Markdown on disk, mirrored to "
-      marked="your Google Drive"
-      lede="Every source is a tidy .md file with a small header and footnotes. Save to Drive mirrors your folders with Google Doc copies ready for NotebookLM, Gemini, Obsidian or VS Code. Sourcefold can only see files it created in your Drive (drive.file); Supabase keeps only links, titles, folders and notes."
+      label="Your library, your files"
+      title="Clean Markdown on your computers, with "
+      marked="an optional Drive backup"
+      lede="Every source is a tidy .md file with a small header and footnotes. Your library lives in your Sourcefold account and syncs across your computers and your team. Switch on the Google Drive backup and Sourcefold also mirrors your folders with Google Doc copies, ready for NotebookLM, Gemini, Obsidian or VS Code."
     />
 
     <!-- Interactive Diagram Card -->
@@ -255,7 +256,13 @@ import SourceTile from "../SourceTile.astro";
         <div class="privacy-pill">
           <Database size={15} class="privacy-icon" aria-hidden="true" />
           <div class="privacy-text">
-            <strong>What Sourcefold's database keeps</strong>: Supabase keeps only links, titles, metadata, folders and notes; article text and images are pushed to your Drive right after saving and then cleared from Supabase.
+            <strong>Where your library lives</strong>: in your Sourcefold account. The list (links, titles, folders and notes) sits in the database, and article text and images are stored separately and copied to each of your computers. The Google Drive backup is optional and off whenever you want.
+          </div>
+        </div>
+        <div class="privacy-pill">
+          <Users size={15} class="privacy-icon" aria-hidden="true" />
+          <div class="privacy-text">
+            <strong>Work together</strong>: share a project with a link or a code. Everyone you invite sees the same groups and sources, live, and you choose who can edit and who can only view.
           </div>
         </div>
       </div>

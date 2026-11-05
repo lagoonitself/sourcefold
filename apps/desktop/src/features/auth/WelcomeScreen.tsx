@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Kbd } from "@/components/ui/Kbd";
 import { Logo } from "@/components/ui/Logo";
-import { isTauri } from "@/lib/api";
+import { isTauri, setBackupSetting } from "@/lib/api";
 import {
   cancelSignIn,
   clearExpiredSessionMessage,
@@ -101,6 +101,8 @@ function SampleStack() {
 export function WelcomeScreen() {
   const [isSigningIn, setIsSigningIn] = React.useState(false);
   const [authError, setAuthError] = React.useState<string | null>(null);
+  // Also copy the library into Google Drive; sent to the account right after sign-in.
+  const [backupToDrive, setBackupToDrive] = React.useState(true);
   const isMac = React.useMemo(() => isMacPlatform(), []);
   // Advanced: the Supabase project to sign in to. Prefilled from the build; open when the build
   // has none (a self-hosted copy built without them).
@@ -160,6 +162,15 @@ export function WelcomeScreen() {
     try {
       const session = await startSignIn();
       toast.success(`Signed in as ${session.email || "your account"}`);
+      // Only an unticked box is sent: the backup is on until someone turns it off, and sending
+      // "on" here would switch it back on for a returning user who had turned it off.
+      if (!backupToDrive) {
+        try {
+          await setBackupSetting(false);
+        } catch {
+          toast.warning("Couldn't save your backup choice. You can change it in Settings.");
+        }
+      }
     } catch (err: any) {
       if (!isSignInCancelledError(err)) {
         const message = err?.message || String(err);
@@ -169,7 +180,7 @@ export function WelcomeScreen() {
     } finally {
       setIsSigningIn(false);
     }
-  }, [isSigningIn, supabaseUrl, publishableKey]);
+  }, [isSigningIn, supabaseUrl, publishableKey, backupToDrive]);
 
   const handleCancelSignIn = React.useCallback(async () => {
     await cancelSignIn();
@@ -316,6 +327,17 @@ export function WelcomeScreen() {
                   Sign in with Google
                 </Button>
               )}
+
+              <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-foreground">
+                <input
+                  type="checkbox"
+                  checked={backupToDrive}
+                  onChange={(e) => setBackupToDrive(e.target.checked)}
+                  disabled={isSigningIn}
+                  className="size-4 cursor-pointer accent-primary"
+                />
+                Also back up my library to Google Drive
+              </label>
 
               <div className="flex flex-col gap-3">
                 <button

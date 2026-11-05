@@ -18,9 +18,29 @@ export interface DriveAccess {
  */
 export type FetchUrl = (url: string, init?: RequestInit) => Promise<Response>;
 
+export interface StoredContent {
+  sha256: string;
+  bytes: number;
+}
+
+/** Where article text and uploaded images live (Cloudflare R2, through the content Worker). */
+export interface ContentStore {
+  /** The text, or null when the store has none. */
+  getText(itemId: string): Promise<string | null>;
+  putText(itemId: string, body: string): Promise<StoredContent>;
+  /** The uploaded image, or null when the store has none. */
+  getFile(itemId: string): Promise<{ bytes: Uint8Array; mimeType: string } | null>;
+  putFile(itemId: string, bytes: Uint8Array, mimeType: string): Promise<StoredContent>;
+}
+
 export interface Host {
   drive: DriveAccess;
-  /** Pushes changes to Drive a few seconds from now; never two pushes at once. */
+  /** The content store; null when no Worker is configured (Drive stays the store). */
+  content: ContentStore | null;
+  /**
+   * Moves new text to R2 and, if the Drive backup is on, to Drive, a few seconds from now; never
+   * two pushes at once.
+   */
   scheduleDrivePush(userId: string): void;
   fetchUrl: FetchUrl;
   /** Parses an HTML page (website: linkedom; desktop and extension: DOMParser). */

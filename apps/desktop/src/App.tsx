@@ -25,7 +25,7 @@ import {
 import { AppSidebar } from "@/features/shell/AppSidebar";
 import { TopBar } from "@/features/shell/TopBar";
 import { useSidebar } from "@/features/shell/use-sidebar";
-import { SAVE_TO_DRIVE_EVENT } from "@/features/drive";
+import { getBackupEnabled, SAVE_TO_DRIVE_EVENT } from "@/features/drive";
 import { AddLinksDialog } from "@/features/grokipedia/AddLinksDialog";
 import { SearchDialog } from "@/features/search/SearchDialog";
 import { MeaningIndexer } from "@/features/search/embedding";
@@ -459,6 +459,8 @@ export function App() {
       toast.info("Sign in to save to Google Drive. Offline sources are already on this computer.");
       return;
     }
+    // Backup to Google Drive is off: the shortcut does nothing.
+    if (!getBackupEnabled()) return;
     window.dispatchEvent(new Event(SAVE_TO_DRIVE_EVENT));
   }, []);
 

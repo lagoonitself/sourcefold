@@ -85,6 +85,16 @@ describe("remote-client against the local API", () => {
     await expect(remoteFetch("/api/folders")).rejects.toThrow("That folder no longer exists.");
   });
 
+  it("shows a viewer's refused write as the route's own message, and keeps the sign-in", async () => {
+    localFetch.mockResolvedValue(
+      json({ error: { message: "You can view this project but not change it." } }, 403),
+    );
+    await expect(
+      remoteFetch("/api/folders", { method: "POST", body: JSON.stringify({ name: "x" }) }),
+    ).rejects.toThrow("You can view this project but not change it.");
+    expect(isRemoteConfigured()).toBe(true);
+  });
+
   it("keeps the sign-in on Drive's own 401 and shows its message", async () => {
     localFetch.mockResolvedValue(
       json(

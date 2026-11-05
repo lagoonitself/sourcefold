@@ -4,6 +4,7 @@
 import type { RouteContext, RouteModule } from "./context";
 import { createDriveAccess } from "./drive/token";
 import { createDrivePusher, type DrivePusher } from "./drive/push";
+import { createWorkerContentStore } from "./features/content/worker-store";
 import type { Host } from "./host";
 import { jsonData, jsonError } from "./http";
 import type { LocalApi, LocalApiDeps } from "./types";
@@ -42,6 +43,13 @@ import * as shelfLink from "./routes/shelf/[id]";
 import * as shelfLinkOpen from "./routes/shelf/[id]/open";
 import * as projectExport from "./routes/projects/[id]/export";
 import * as projectImport from "./routes/projects/[id]/import";
+import * as projectInvite from "./routes/projects/[id]/invite";
+import * as projectInviteReset from "./routes/projects/[id]/invite/reset";
+import * as projectMember from "./routes/projects/[id]/members/[userId]";
+import * as projectSharing from "./routes/projects/[id]/sharing";
+import * as invite from "./routes/invites/[code]";
+import * as inviteAccept from "./routes/invites/[code]/accept";
+import * as settingsBackup from "./routes/settings/backup";
 import * as uploads from "./routes/uploads";
 import * as uploadsSign from "./routes/uploads/sign";
 import * as xPosts from "./routes/x/[itemId]/posts";
@@ -83,11 +91,31 @@ export const LOCAL_ROUTES: ReadonlyArray<readonly [string, RouteModule]> = [
   ["/api/tldrs/[itemId]", tldr],
   ["/api/projects/[id]/export", projectExport],
   ["/api/projects/[id]/import", projectImport],
+  ["/api/projects/[id]/invite", projectInvite],
+  ["/api/projects/[id]/invite/reset", projectInviteReset],
+  ["/api/projects/[id]/members/[userId]", projectMember],
+  ["/api/projects/[id]/sharing", projectSharing],
+  ["/api/invites/[code]", invite],
+  ["/api/invites/[code]/accept", inviteAccept],
+  ["/api/settings/backup", settingsBackup],
   ["/api/uploads", uploads],
   ["/api/uploads/sign", uploadsSign],
   ["/api/x/[itemId]/posts", xPosts],
   ["/api/x/recent", xRecent],
 ];
+
+/** A write the database refused (row-level security): a viewer of a shared project. */
+const READ_ONLY_PATTERN = /row-level security|not allowed|permission denied|42501/i;
+const READ_ONLY_MESSAGE = "You can view this project but not change it.";
+
+function failureResponse(err: unknown): Response {
+  const message = err instanceof Error ? err.message : "";
+  const code = (err as { code?: unknown } | null)?.code;
+  if (READ_ONLY_PATTERN.test(message) || code === "42501") {
+    return jsonError(403, READ_ONLY_MESSAGE);
+  }
+  return jsonError(500, "Something went wrong. Try again.");
+}
 
 /** A fixed origin for the Request objects handlers read their query from. */
 const LOCAL_ORIGIN = "http://sourcefold.local";
@@ -157,6 +185,17 @@ export function createLocalApi(
   let pusher: DrivePusher | null = null;
   const host: Host = {
     drive,
+    content: deps.contentUrl
+      ? createWorkerContentStore({
+          baseUrl: deps.contentUrl,
+          authorization: async () => {
+            const token = deps.accessToken
+              ? await deps.accessToken()
+              : ((await supabase.auth.getSession()).data.session?.access_token ?? null);
+            return token ? `Bearer ${token}` : null;
+          },
+        })
+      : null,
     fetchUrl: deps.fetchUrl,
     parseHtml: deps.parseHtml,
     scheduleDrivePush: (userId) => pusher?.schedule(userId),
@@ -192,7 +231,13 @@ export function createLocalApi(
     if (!userId) return jsonError(401, "Sign in to continue.");
 
     const ctx: RouteContext = { db: supabase, userId, via: "session", host };
-    const response = await dispatchRoute(ctx, url.toString(), init);
+    let response: Response;
+    try {
+      response = await dispatchRoute(ctx, url.toString(), init);
+    } catch (err) {
+      console.error(`${method} ${url.pathname} failed:`, err);
+      return failureResponse(err);
+    }
     if (method !== "GET" && response.ok) deps.onItemsChanged?.();
     return response;
   }
@@ -233,6 +278,6 @@ export async function dispatchRoute(
     return await handler(ctx, new Request(url, init), match.params as never);
   } catch (err) {
     console.error(`${method} ${url.pathname} failed:`, err);
-    return jsonError(500, "Something went wrong. Try again.");
+    return failureResponse(err);
   }
 }

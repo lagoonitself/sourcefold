@@ -11,7 +11,7 @@ import {
   type SourcefoldSupabase,
 } from "@sourcefold/client";
 import { parseHtmlOnServer } from "@sourcefold/core/server";
-import { getSupabaseConfig, isSupabaseConfigured } from "./settings";
+import { BUILD_CONTENT_URL, getSupabaseConfig, isSupabaseConfigured } from "./settings";
 import {
   invalidateTargetCache,
   isBorrowable,
@@ -103,6 +103,7 @@ function rememberDesktopSession(session: DesktopSessionSignedIn): void {
     fetchUrl: (url, init) => fetch(url, init),
     parseHtml: parseHtmlOnServer,
     currentUserId: async () => holder.session.userId,
+    contentUrl: BUILD_CONTENT_URL,
   });
   borrowed = holder;
 }
@@ -124,6 +125,7 @@ async function ownApi(): Promise<LocalApiWithDrive> {
       supabase,
       fetchUrl: (url, init) => fetch(url, init),
       parseHtml: parseHtmlOnServer,
+      contentUrl: BUILD_CONTENT_URL,
     });
   }
   return own!.api;

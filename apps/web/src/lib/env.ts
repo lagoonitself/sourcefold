@@ -36,3 +36,11 @@ export function isEmailAllowed(email: string | null | undefined): boolean {
   if (!normalized) return false;
   return allowed.includes("*") || allowed.includes(normalized);
 }
+
+// Server-only: the content Worker (Cloudflare R2) where article text lives. Both values are
+// optional; without either, the website keeps the old behaviour (text goes to Drive).
+export function getContentEnv(): { url: string; secret: string } | null {
+  const url = process.env.SOURCEFOLD_CONTENT_URL?.trim();
+  const secret = process.env.SOURCEFOLD_CONTENT_SECRET?.trim();
+  return url && secret ? { url, secret } : null;
+}

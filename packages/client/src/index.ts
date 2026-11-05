@@ -81,3 +81,8 @@ export function withDeviceHeader(
     return baseFetch(input, { ...init, headers });
   };
 }
+
+export type { ContentStore, StoredContent } from "./host";
+export { createWorkerContentStore, ContentStoreError } from "./features/content/worker-store";
+export { loadItemBody, loadItemFile, ContentNotReadyError } from "./features/content/body";
+export { runContentBatch, type ContentBatchResult } from "./features/content/run-content-batch";

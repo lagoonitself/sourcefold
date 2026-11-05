@@ -12,7 +12,6 @@ export async function GET(auth: RouteContext, request: Request) {
   const { data: folders, error: foldersError } = await auth.db
     .from("folders")
     .select("id, parent_id")
-    .eq("user_id", auth.userId)
     .is("deleted_at", null);
   if (foldersError) {
     return jsonError(500, foldersError.message);
@@ -26,7 +25,6 @@ export async function GET(auth: RouteContext, request: Request) {
   const { data: items, error } = await auth.db
     .from("items")
     .select("id, title, folder_id, created_at")
-    .eq("user_id", auth.userId)
     .eq("kind", "x")
     .in("folder_id", projectFolderIds(folders ?? [], projectId))
     .is("deleted_at", null)

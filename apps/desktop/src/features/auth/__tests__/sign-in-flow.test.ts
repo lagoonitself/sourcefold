@@ -155,6 +155,7 @@ describe("sign-in flow", () => {
         expiresAt: 1_900_000_000,
         userId: "user-1",
         email: "me@example.com",
+        contentUrl: null,
       },
     });
     expect(JSON.stringify(sessionSet)).not.toContain("supabase-refresh");

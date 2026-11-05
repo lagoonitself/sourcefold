@@ -59,7 +59,6 @@ export async function POST(auth: RouteContext, request: Request, params: { itemI
     .from("items")
     .select("id")
     .eq("id", itemId)
-    .eq("user_id", auth.userId)
     .eq("kind", "x")
     .is("deleted_at", null)
     .maybeSingle();
@@ -86,7 +85,6 @@ export async function POST(auth: RouteContext, request: Request, params: { itemI
     .from("x_posts")
     .select("id")
     .eq("item_id", itemId)
-    .eq("user_id", auth.userId)
     .eq("canonical_url", postCanonical)
     .maybeSingle();
 
@@ -106,8 +104,7 @@ export async function POST(auth: RouteContext, request: Request, params: { itemI
   const { data: existingPosts, error: postsError } = await auth.db
     .from("x_posts")
     .select("id, parent_id, canonical_url, position")
-    .eq("item_id", itemId)
-    .eq("user_id", auth.userId);
+    .eq("item_id", itemId);
 
   if (postsError) {
     return Response.json(

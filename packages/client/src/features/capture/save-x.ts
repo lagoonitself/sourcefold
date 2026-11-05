@@ -67,8 +67,7 @@ export async function rerenderXItem(
     .select(
       "id, parent_id, position, post_url, author_name, handle, author_url, posted_at, text, media",
     )
-    .eq("item_id", itemId)
-    .eq("user_id", userId);
+    .eq("item_id", itemId);
 
   if (postsError) {
     throw new Error(postsError.message);
@@ -93,7 +92,6 @@ export async function rerenderXItem(
     .from("items")
     .select("title")
     .eq("id", itemId)
-    .eq("user_id", userId)
     .single();
 
   if (itemError || !item) {
@@ -116,11 +114,7 @@ export async function rerenderXItem(
     updatePayload.title = currentTitle;
   }
 
-  const { error: updateError } = await db
-    .from("items")
-    .update(updatePayload)
-    .eq("id", itemId)
-    .eq("user_id", userId);
+  const { error: updateError } = await db.from("items").update(updatePayload).eq("id", itemId);
 
   if (updateError) {
     throw new Error(updateError.message);
@@ -185,7 +179,6 @@ export async function saveXThread(
   const { data: existingNodes } = await db
     .from("x_posts")
     .select("item_id, canonical_url")
-    .eq("user_id", userId)
     .in("canonical_url", canonicalUrls);
 
   if (existingNodes && existingNodes.length > 0) {
@@ -193,7 +186,6 @@ export async function saveXThread(
     const { data: liveItem } = await db
       .from("items")
       .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
-      .eq("user_id", userId)
       .in("id", candidateItemIds)
       .eq("folder_id", folderId)
       .is("deleted_at", null)
@@ -339,22 +331,14 @@ export async function saveXThread(
     }
   } catch {
     // On failure after the item was inserted, clean up:
-    // delete the x_posts for that item (filter user_id) as well as removing the item
+    // delete the x_posts for that item as well as removing the item
     // (hard delete the item row if nothing else references it; otherwise soft-delete as now).
-    await db.from("x_posts").delete().eq("item_id", item.id).eq("user_id", userId);
+    await db.from("x_posts").delete().eq("item_id", item.id);
 
-    const { error: hardDeleteError } = await db
-      .from("items")
-      .delete()
-      .eq("id", item.id)
-      .eq("user_id", userId);
+    const { error: hardDeleteError } = await db.from("items").delete().eq("id", item.id);
 
     if (hardDeleteError) {
-      await db
-        .from("items")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", item.id)
-        .eq("user_id", userId);
+      await db.from("items").update({ deleted_at: new Date().toISOString() }).eq("id", item.id);
     }
 
     return {

@@ -61,7 +61,8 @@ Sourcefold library.
 
 1. On the welcome screen, click **Sign in with Google**.
 2. Your browser opens Google. Pick your account and allow access; the page then says "Signed in".
-3. Back in the app, your projects appear. The app works on its own and doesn't need the website open; the website shows the same library.
+3. The welcome screen asks whether to also back up your library to Google Drive (on unless you untick it; you can change it later in **Settings**).
+4. Back in the app, your projects appear. The app works on its own and doesn't need the website open; the website shows the same library.
 
 Prefer not to sign in? Click **Use offline on this computer**. Everything stays in `Documents/Sourcefold` on this computer.
 

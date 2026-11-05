@@ -13,7 +13,7 @@ export async function GET(auth: RouteContext) {
 
   const { data: driveState } = await db
     .from("drive_state")
-    .select("last_saved_at, root_folder_id")
+    .select("last_saved_at, root_folder_id, backup_enabled")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -22,5 +22,6 @@ export async function GET(auth: RouteContext) {
     last_saved_at: driveState?.last_saved_at ?? null,
     root_folder_id: driveState?.root_folder_id ?? null,
     connected,
+    backup_enabled: driveState?.backup_enabled ?? true,
   });
 }

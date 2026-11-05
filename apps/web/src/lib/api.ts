@@ -4,6 +4,7 @@ import { getPublicEnv, isEmailAllowed } from "@/lib/env";
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { scopeToUser } from "@sourcefold/client/features/access/scope-to-user";
 import { API_TOKEN_PREFIX, hashApiToken } from "@/lib/api-tokens";
 
 export function jsonData<T>(data: T, status = 200) {
@@ -148,5 +149,7 @@ export async function requireApiUser(request: Request): Promise<ApiAuthResult> {
     .update({ last_used_at: new Date().toISOString() })
     .eq("id", token.id);
 
-  return { db: admin, userId: token.user_id, via: "token" };
+  // The admin client skips row level security; scoping it keeps a token to its own account's rows
+  // (shared projects need a signed-in app).
+  return { db: scopeToUser(admin, token.user_id), userId: token.user_id, via: "token" };
 }

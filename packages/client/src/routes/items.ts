@@ -33,7 +33,6 @@ export async function GET(auth: RouteContext, request: Request) {
     const { data: items, error } = await auth.db
       .from("items")
       .select(ITEM_COLUMNS)
-      .eq("user_id", auth.userId)
       .eq("folder_id", folder)
       .is("deleted_at", null)
       .order("position", { ascending: true })
@@ -75,7 +74,6 @@ export async function GET(auth: RouteContext, request: Request) {
     const { data: items, error } = await auth.db
       .from("items")
       .select(ITEM_COLUMNS)
-      .eq("user_id", auth.userId)
       .is("deleted_at", null)
       .ilike("title", `%${escaped}%`)
       .order("title", { ascending: true })

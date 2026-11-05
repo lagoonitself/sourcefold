@@ -55,14 +55,14 @@ describe("rowToTldr", () => {
 });
 
 describe("GET /api/tldrs", () => {
-  it("lists a group's TL;DRs, filtered by user", async () => {
+  it("lists a group's TL;DRs, left to row-level security", async () => {
     const { auth, fake } = ctx({ items: [{ id: ITEM }], item_tldrs: [ROW] });
     const res = await tldrs.GET(auth, new Request(`http://x/api/tldrs?folder=${FOLDER}`));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { data: unknown[] };
     expect(body.data).toHaveLength(1);
     const tldrQuery = fake.queries.find((q) => q.table === "item_tldrs")!;
-    expect(callsOf(tldrQuery, "eq")).toContainEqual(["user_id", USER]);
+    expect(callsOf(tldrQuery, "eq")).not.toContainEqual(["user_id", USER]);
     expect(callsOf(tldrQuery, "in")).toEqual([["item_id", [ITEM]]]);
   });
 
@@ -111,15 +111,12 @@ describe("PUT and DELETE /api/tldrs/[itemId]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("deletes only the user's row", async () => {
+  it("deletes by item and leaves access to row-level security", async () => {
     const { auth, fake } = ctx({ item_tldrs: null });
     const res = await tldr.DELETE(auth, new Request("http://x", { method: "DELETE" }), {
       itemId: ITEM,
     });
     expect(res.status).toBe(200);
-    expect(callsOf(fake.queries[0]!, "eq")).toEqual([
-      ["item_id", ITEM],
-      ["user_id", USER],
-    ]);
+    expect(callsOf(fake.queries[0]!, "eq")).toEqual([["item_id", ITEM]]);
   });
 });

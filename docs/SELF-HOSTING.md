@@ -8,13 +8,14 @@ You don't need it to use Sourcefold. If someone already runs a Sourcefold websit
 
 - Web app: Next.js (TypeScript) on Vercel
 - Desktop app: Tauri v2 (React 19 + Rust + SQLite)
-- Database and login: Supabase (Postgres, Auth with Google). It keeps links, titles and folders; article text and images move to Drive
+- Database and login: Supabase (Postgres, Auth with Google). It keeps links, titles, folders, notes and highlights, and who can see which project
 - Browser extension: Chrome (Manifest V3), built with WXT and React
-- Content storage: Google Drive API (`drive.file` scope only)
+- Content storage: Cloudflare R2 behind a small Worker (`apps/content-worker`) that asks Supabase who may read or write each source
+- Optional backup: Google Drive API (`drive.file` scope only)
 
 ## What you need
 
-- Free accounts: GitHub, Supabase, Google Cloud, and Vercel
+- Free accounts: GitHub, Supabase, Google Cloud, Vercel and Cloudflare (Cloudflare is optional: without it, text is kept in each person's Drive as in versions before 0.7)
 - Node.js 24
 - Google Chrome
 
@@ -106,6 +107,30 @@ website is available, add its `/api/mcp` URL in Claude or ChatGPT as described i
    gh variable set APP_URL --body https://<app>.vercel.app
    ```
 
+## 4b. Text storage on Cloudflare R2 (optional, recommended)
+
+Without this step article text lives only in each person's Google Drive, and shared projects can't show their text to other people.
+
+1. In `apps/content-worker/wrangler.jsonc`, fill in `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
+2. Create the bucket and deploy (from `apps/content-worker`):
+   ```bash
+   npx wrangler r2 bucket create sourcefold-content
+   ```
+   ```bash
+   npx wrangler secret put SERVICE_SECRET
+   ```
+   ```bash
+   npx wrangler deploy
+   ```
+   Use a long random value for the secret. Note the Worker's address (`https://sourcefold-content.<you>.workers.dev`).
+3. In Vercel, add `SOURCEFOLD_CONTENT_URL` (the Worker's address) and `SOURCEFOLD_CONTENT_SECRET` (the same secret), and redeploy.
+4. Set the GitHub repository variable so the apps you build use it too:
+   ```bash
+   gh variable set SOURCEFOLD_CONTENT_URL --body https://sourcefold-content.<you>.workers.dev
+   ```
+
+R2's free plan holds 10 GB; the Worker refuses new text a little before that.
+
 ## 5. Build your own installers (optional)
 
 GitHub can build the Windows and Mac apps and the Chrome extension for you, already pointed at your website.
@@ -176,7 +201,9 @@ See [apps/desktop/README.md](../apps/desktop/README.md) for full details, archit
 2. The desktop app (Tauri v2) connects to the web app's API with an access token, or works offline using local SQLite and local files on disk.
 3. Grokipedia, Wikipedia, Reddit, Hacker News, Bluesky, PDF and web page links are fetched and converted to Markdown on the server or in the desktop app. YouTube is fetched by the extension or the desktop app on your own connection, since YouTube blocks servers. Substack and X pages are read by the extension in your own browser (so paid posts you subscribe to work) and sent to `/api/capture`.
 4. The extension communicates with the desktop app via Chrome Native Messaging or local HTTP (`127.0.0.1:23456`), or directly with the web app using a personal access token.
-5. Save to Drive runs in small batches: it creates the folder tree, uploads changed `.md` files and images, and moves deleted ones to Drive's trash.
+5. Article text and images go to R2 through the content Worker a few seconds after they're saved; Supabase holds them only until then.
+6. Shared projects: every row of a project carries its owner's id, members are listed in `project_members`, and the database's row-level security lets members read (and editors change) the project's rows. Changes reach every member through Supabase Realtime.
+7. Save to Drive (when the backup is on) runs in small batches: it creates the folder tree, uploads changed `.md` files and images, and moves deleted ones to Drive's trash.
 
 ## Troubleshooting
 

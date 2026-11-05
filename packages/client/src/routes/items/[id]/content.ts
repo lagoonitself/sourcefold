@@ -17,7 +17,7 @@ export async function GET(auth: RouteContext, request: Request, params: { id: st
   try {
     const content = wantsDocx
       ? await getItemDocx(auth.db, auth.userId, id, auth.host.drive)
-      : await getItemContent(auth.db, auth.userId, id, auth.host.drive);
+      : await getItemContent(auth.db, auth.userId, id, auth.host);
     if (!content.ok) {
       // The desktop tells "try again later" from a real failure by the code.
       if (content.code) {

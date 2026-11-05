@@ -48,7 +48,7 @@ describe("GET /api/items", () => {
       ]),
     );
     expect(selectedColumns()).not.toContain("markdown");
-    expect(callsOf(fake.queries[0]!, "eq")).toContainEqual(["user_id", USER_ID]);
+    expect(callsOf(fake.queries[0]!, "eq")).not.toContainEqual(["user_id", USER_ID]);
   });
 
   it("returns note, canonical_url and research fields from title search too", async () => {
@@ -67,7 +67,7 @@ describe("GET /api/items", () => {
       ]),
     );
     expect(selectedColumns()).not.toContain("markdown");
-    expect(callsOf(fake.queries[0]!, "eq")).toContainEqual(["user_id", USER_ID]);
+    expect(callsOf(fake.queries[0]!, "eq")).not.toContainEqual(["user_id", USER_ID]);
   });
 
   it("lists every live item across all groups of a project", async () => {
@@ -89,9 +89,9 @@ describe("GET /api/items", () => {
     const json = await response.json();
     expect(json.data.map((item: { id: string }) => item.id)).toEqual(["i1", "i2"]);
 
-    // Items query checked user_id and group ids
+    // Items query filters by group ids; access is left to row-level security
     const itemsQuery = fake.queries.find((q) => q.table === "items")!;
-    expect(callsOf(itemsQuery, "eq")).toContainEqual(["user_id", USER_ID]);
+    expect(callsOf(itemsQuery, "eq")).not.toContainEqual(["user_id", USER_ID]);
     expect(callsOf(itemsQuery, "in")).toContainEqual(["folder_id", [GROUP_ID_1, GROUP_ID_2]]);
   });
 

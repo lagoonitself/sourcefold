@@ -24,6 +24,10 @@ pub struct Session {
     pub user_id: String,
     pub email: Option<String>,
     pub signed_in_at: String,
+    /// The Content Worker's address (where source text is kept in R2), for Claude's connector;
+    /// absent when the build has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_url: Option<String>,
 }
 
 /// What the extension gets from `/api/session` and the native host's `get_session`.
@@ -126,6 +130,7 @@ pub fn test_session() -> Session {
         user_id: "00000000-0000-4000-8000-000000000001".to_string(),
         email: Some("user@example.com".to_string()),
         signed_in_at: "2026-10-23T00:00:00Z".to_string(),
+        content_url: Some("https://content.example.workers.dev".to_string()),
     }
 }
 
@@ -151,6 +156,27 @@ mod tests {
 
         // Clearing an already removed session should succeed
         assert!(clear_session_from(&session_file).is_ok());
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn content_url_is_optional_in_the_file() {
+        let temp_dir = std::env::temp_dir().join(format!("sf_test_content_url_{}", uuid::Uuid::new_v4()));
+        let session_file = temp_dir.join("session.json");
+
+        // Files written before the Content Worker have no `content_url` and still read.
+        let mut without = test_session();
+        without.content_url = None;
+        save_session_to(&session_file, &without).unwrap();
+        let text = fs::read_to_string(&session_file).unwrap();
+        assert!(!text.contains("content_url"));
+        assert_eq!(load_session_from(&session_file), Some(without));
+
+        save_session_to(&session_file, &test_session()).unwrap();
+        let text = fs::read_to_string(&session_file).unwrap();
+        assert!(text.contains("\"content_url\": \"https://content.example.workers.dev\""));
+        assert_eq!(load_session_from(&session_file), Some(test_session()));
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

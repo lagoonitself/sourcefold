@@ -28,7 +28,6 @@ export async function GET(auth: RouteContext, request: Request) {
       .from("items")
       .select("id")
       .eq("id", item)
-      .eq("user_id", auth.userId)
       .is("deleted_at", null)
       .maybeSingle();
     if (error) return jsonError(500, error.message);
@@ -42,7 +41,6 @@ export async function GET(auth: RouteContext, request: Request) {
       .from("folders")
       .select("id")
       .eq("id", folder!)
-      .eq("user_id", auth.userId)
       .is("deleted_at", null)
       .maybeSingle();
     if (error) return jsonError(500, error.message);
@@ -52,7 +50,6 @@ export async function GET(auth: RouteContext, request: Request) {
       .from("items")
       .select("id")
       .eq("folder_id", found.id)
-      .eq("user_id", auth.userId)
       .is("deleted_at", null);
     if (itemsError) return jsonError(500, itemsError.message);
     itemIds = (items ?? []).map((row) => row.id);

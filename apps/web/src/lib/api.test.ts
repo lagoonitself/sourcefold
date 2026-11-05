@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   tokenLookup: vi.fn(),
   getUserById: vi.fn(),
   getSessionUser: vi.fn(),
+  adminEq: vi.fn(),
 }));
 
 vi.mock("@/lib/env", () => ({
@@ -25,7 +26,10 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => {
     const chain = {
       select: () => chain,
-      eq: () => chain,
+      eq: (...args: unknown[]) => {
+        mocks.adminEq(...args);
+        return chain;
+      },
       is: () => chain,
       update: () => chain,
       maybeSingle: mocks.tokenLookup,
@@ -100,6 +104,19 @@ describe("requireApiUser", () => {
     const result = await requireApiUser(request("sf_abc"));
     expect(result).toMatchObject({ userId: "user-2", via: "token" });
     expect(mocks.getUser).not.toHaveBeenCalled();
+  });
+
+  // The admin client skips row level security, and session routes no longer filter by user_id
+  // (shared projects), so a token's client must add `user_id = <its user>` itself.
+  it("scopes an sf_ token's admin client to its own user", async () => {
+    mocks.tokenLookup.mockResolvedValue({ data: { id: "t1", user_id: "user-2" }, error: null });
+    mocks.getUserById.mockResolvedValue({ data: { user: { email: "a@b.c" } }, error: null });
+    const result = await requireApiUser(request("sf_abc"));
+    if (!("db" in result) || !result.db) throw new Error("expected an authorized result");
+
+    mocks.adminEq.mockClear();
+    (result.db.from("items") as unknown as { select: () => unknown }).select();
+    expect(mocks.adminEq).toHaveBeenCalledWith("user_id", "user-2");
   });
 
   it("refuses an unknown sf_ token", async () => {

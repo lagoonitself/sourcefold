@@ -39,6 +39,8 @@ export function createLocalFetch(deps: LocalFetchDeps = {}) {
       parseHtml: parseHtmlOnServer,
       currentUserId: async () => sb.userId,
       onItemsChanged: deps.onChanged,
+      // Source text lives in R2 behind the Content Worker; the session's access token authorises it.
+      contentUrl: sb.contentUrl,
     });
     current = { key, api };
     return api;

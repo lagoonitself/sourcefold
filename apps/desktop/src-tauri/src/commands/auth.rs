@@ -36,6 +36,9 @@ pub struct SessionInput {
     pub expires_at: i64,
     pub user_id: String,
     pub email: Option<String>,
+    /// The Content Worker's address from the build (`VITE_SOURCEFOLD_CONTENT_URL`); optional.
+    #[serde(default)]
+    pub content_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -95,6 +98,22 @@ pub fn parse_query_param(query: &str, key: &str) -> Option<String> {
     None
 }
 
+/// The Content Worker's address, kept only when it is https (or a local address) and parses.
+fn clean_content_url(raw: Option<&str>) -> Option<String> {
+    let trimmed = raw?.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return None;
+    }
+    let parsed = reqwest::Url::parse(trimmed).ok()?;
+    let host = parsed.host_str().unwrap_or("");
+    let is_local = host == "localhost" || host == "127.0.0.1";
+    if parsed.scheme() == "https" || (parsed.scheme() == "http" && is_local) {
+        Some(trimmed.to_string())
+    } else {
+        None
+    }
+}
+
 /// Checks what the webview reports before it is written for the extension and Claude.
 pub fn session_from_input(input: SessionInput, previous: Option<&Session>) -> Result<Session, String> {
     let supabase_url = input.supabase_url.trim().trim_end_matches('/').to_string();
@@ -120,6 +139,7 @@ pub fn session_from_input(input: SessionInput, previous: Option<&Session>) -> Re
         user_id: input.user_id.trim().to_string(),
         email: input.email.filter(|e| !e.trim().is_empty()),
         signed_in_at,
+        content_url: clean_content_url(input.content_url.as_deref()),
     })
 }
 
@@ -366,7 +386,30 @@ mod tests {
             expires_at: 1_800_000_000,
             user_id: user_id.into(),
             email: Some("me@example.com".into()),
+            content_url: Some("https://content.example.workers.dev/".into()),
         }
+    }
+
+    #[test]
+    fn the_content_address_is_kept_only_when_it_is_safe() {
+        let kept = session_from_input(input("u1"), None).unwrap();
+        assert_eq!(kept.content_url.as_deref(), Some("https://content.example.workers.dev"));
+
+        for raw in ["", "  ", "http://evil.example", "not a url"] {
+            let mut i = input("u1");
+            i.content_url = Some(raw.into());
+            assert_eq!(session_from_input(i, None).unwrap().content_url, None, "{raw:?}");
+        }
+        let mut none = input("u1");
+        none.content_url = None;
+        assert_eq!(session_from_input(none, None).unwrap().content_url, None);
+
+        let mut local = input("u1");
+        local.content_url = Some("http://127.0.0.1:8787".into());
+        assert_eq!(
+            session_from_input(local, None).unwrap().content_url.as_deref(),
+            Some("http://127.0.0.1:8787")
+        );
     }
 
     #[test]

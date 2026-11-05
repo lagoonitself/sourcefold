@@ -100,7 +100,8 @@ describe("createLocalApi", () => {
 
     expect((await borrowed(USER_ID).fetch("/api/folders")).status).toBe(200);
     const folderQuery = fake.queries.find((q) => q.table === "folders")!;
-    expect(callsOf(folderQuery, "eq")).toContainEqual(["user_id", USER_ID]);
+    // Session clients leave project data to row-level security: no user_id filter.
+    expect(callsOf(folderQuery, "eq")).not.toContainEqual(["user_id", USER_ID]);
     expect((await borrowed(null).fetch("/api/folders")).status).toBe(401);
   });
 
@@ -133,7 +134,8 @@ describe("createLocalApi", () => {
     ]);
 
     const folderQuery = fake.queries.find((q) => q.table === "folders")!;
-    expect(callsOf(folderQuery, "eq")).toContainEqual(["user_id", USER_ID]);
+    // Session clients leave project data to row-level security: no user_id filter.
+    expect(callsOf(folderQuery, "eq")).not.toContainEqual(["user_id", USER_ID]);
   });
 
   it("tells the app when something changed", async () => {

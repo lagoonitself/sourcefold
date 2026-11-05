@@ -67,19 +67,30 @@ function get(table: string | null, from?: number, id = PROJECT) {
   return GET(new Request(`http://localhost/api/projects/${id}/export?${query}`), params(id));
 }
 
+// What row-level security hides from USER: the other account's project and everything in it.
+const THEIR_FOLDERS = new Set([OTHER_PROJECT, OTHER_GROUP]);
+const hiddenFromUser = (_table: string, row: Row) =>
+  THEIR_FOLDERS.has(row.id as string) ||
+  THEIR_FOLDERS.has(row.folder_id as string) ||
+  THEIR_FOLDERS.has(row.project_id as string);
+
 function setup(tables: Record<string, Row[]> = {}) {
-  const memory = createMemoryDb({
-    folders: [
-      folder(PROJECT, null, { name: "Cars" }),
-      folder(GROUP, PROJECT, { name: "Engines", position: 2 }),
-      folder(SUBGROUP, GROUP, { name: "Diesel", position: 1 }),
-      folder(DELETED_GROUP, PROJECT, { deleted_at: "2026-10-03T00:00:00Z" }),
-      folder(OTHER_PROJECT, null, { user_id: OTHER }),
-      folder(OTHER_GROUP, OTHER_PROJECT, { user_id: OTHER }),
-    ],
-    items: [],
-    ...tables,
-  });
+  const memory = createMemoryDb(
+    {
+      folders: [
+        folder(PROJECT, null, { name: "Cars" }),
+        folder(GROUP, PROJECT, { name: "Engines", position: 2 }),
+        folder(SUBGROUP, GROUP, { name: "Diesel", position: 1 }),
+        folder(DELETED_GROUP, PROJECT, { deleted_at: "2026-10-03T00:00:00Z" }),
+        folder(OTHER_PROJECT, null, { user_id: OTHER }),
+        folder(OTHER_GROUP, OTHER_PROJECT, { user_id: OTHER }),
+      ],
+      items: [],
+      ...tables,
+    },
+    {},
+    hiddenFromUser,
+  );
   requireApiUser.mockResolvedValue({ db: memory.db, userId: USER, via: "token" });
   return memory;
 }
@@ -147,7 +158,7 @@ describe("GET /api/projects/[id]/export", () => {
     expect((await get("groups")).status).toBe(401);
   });
 
-  it("answers 404 for another user's project, a group, or a missing id", async () => {
+  it("answers 404 for a project the user can't see, a group, or a missing id", async () => {
     setup();
     expect((await get("groups", 0, OTHER_PROJECT)).status).toBe(404);
     expect((await get("groups", 0, GROUP)).status).toBe(404);
@@ -178,7 +189,7 @@ describe("GET /api/projects/[id]/export", () => {
     ]);
   });
 
-  it("maps sources to the manifest shape and leaves out deleted and other users' items", async () => {
+  it("maps sources to the manifest shape, keeps other members' sources and leaves out deleted ones", async () => {
     setup({
       items: [
         item(1, { kind: "image", storage_path: `${USER}/${uuid(1)}/photo.JPG`, markdown: null }),
@@ -193,7 +204,8 @@ describe("GET /api/projects/[id]/export", () => {
     });
     const { data } = await (await get("sources")).json();
     const byId = new Map<string, Row>(data.rows.map((r: Row) => [r.id as string, r]));
-    expect([...byId.keys()].sort()).toEqual([1, 2, 3, 7, 8].map(uuid));
+    // Source 5 was saved by another member of the project; 6 sits in a project the user can't see.
+    expect([...byId.keys()].sort()).toEqual([1, 2, 3, 5, 7, 8].map(uuid));
 
     expect(byId.get(uuid(1))).toMatchObject({ group_id: GROUP, extension: "jpg", has_file: true });
     expect(byId.get(uuid(2))).toMatchObject({
@@ -251,7 +263,7 @@ describe("GET /api/projects/[id]/export", () => {
     expect(highlights.map((h: Row) => [h.id, h.source_id])).toEqual([[uuid(21), live]]);
   });
 
-  it("lists this project's outline sections and cards, dropping cards of deleted sources", async () => {
+  it("lists this project's outline sections and cards (any member's), dropping cards of deleted sources", async () => {
     const live = uuid(1);
     const gone = uuid(2);
     setup({
@@ -290,6 +302,7 @@ describe("GET /api/projects/[id]/export", () => {
     expect(cards.map((c: Row) => [c.id, c.source_id, c.highlight_id])).toEqual([
       [uuid(41), live, uuid(21)],
       [uuid(43), null, null],
+      [uuid(45), null, null],
     ]);
   });
 });

@@ -136,6 +136,8 @@ function setup(tables: Record<string, Row[]> = {}, storage: Record<string, strin
       ...tables,
     },
     storage,
+    // Row-level security: the other account's rows are invisible to USER.
+    (_table, row) => row.user_id === OTHER,
   );
   requireApiUser.mockResolvedValue({ db: memory.db, userId: USER, via: "token" });
   return memory;
@@ -206,12 +208,13 @@ describe("POST /api/projects/[id]/import", () => {
     setup({
       folders: [{ id: PROJECT, user_id: OTHER, parent_id: null, name: "X", deleted_at: null }],
     });
-    // The id exists (even if it's someone else's): refused without touching it.
+    // The id exists (even if it's someone else's and hidden by row-level security): the insert
+    // collides with it and is refused without touching it.
     expect((await create()).status).toBe(409);
 
     setup();
     expect((await post({ sources: [] }, uuid(77))).status).toBe(404);
-    // Another user's project is a 404 too.
+    // A project the user can't see is a 404 too.
     expect((await post({ groups: [] }, OTHER_PROJECT)).status).toBe(404);
   });
 

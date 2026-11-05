@@ -33,6 +33,29 @@ const desktopSession = (expiresAt: number) => ({
   signed_in_at: "2026-11-04T00:00:00Z",
 });
 
+describe("loadCredentials content_url", () => {
+  it.each([
+    ["https://content.example.workers.dev/", "https://content.example.workers.dev"],
+    ["http://localhost:8787", "http://localhost:8787"],
+    ["http://127.0.0.1:8787/", "http://127.0.0.1:8787"],
+    ["http://content.example.com", undefined],
+    ["ftp://localhost", undefined],
+    ["not a url", undefined],
+    ["", undefined],
+    [42, undefined],
+  ])("reads %j as %j", (content_url, expected) => {
+    const env = withSession({ ...desktopSession(4_102_444_800), content_url });
+    if (!env) return;
+    expect(loadCredentials(env)?.supabase?.contentUrl).toBe(expected);
+  });
+
+  it("leaves contentUrl off when session.json has none", () => {
+    const env = withSession(desktopSession(4_102_444_800));
+    if (!env) return;
+    expect(loadCredentials(env)?.supabase).not.toHaveProperty("contentUrl");
+  });
+});
+
 describe("loadCredentials", () => {
   it("is null with nothing on this computer", () => {
     const root = mkdtempSync(join(tmpdir(), "sourcefold-mcp-"));

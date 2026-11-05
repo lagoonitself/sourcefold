@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type AuthorType, isSourceCaptureKind } from "@sourcefold/core";
 import { jsonData, jsonError } from "../../http";
+import { ContentGoneError, ContentNotReadyError, loadItemBody } from "../../features/content/body";
 import { ITEM_LIST_COLUMNS } from "../../features/items/item-columns";
 import { invalidFolderMessage, nextPosition } from "../../features/capture/find-duplicate";
 import { researchPatchShape } from "../../features/research/item-fields";
@@ -64,7 +65,7 @@ const patchItemSchema = z
   );
 
 const ITEM_GET_COLUMNS =
-  "id, kind, title, note, markdown, folder_id, triage, tags, summary, author, author_type, updated_at" as const;
+  "id, kind, title, note, markdown, folder_id, triage, tags, summary, author, author_type, updated_at, content_sha256, drive_file_id, user_id" as const;
 
 export async function GET(auth: RouteContext, request: Request, params: { id: string }) {
   const { id } = params;
@@ -77,7 +78,6 @@ export async function GET(auth: RouteContext, request: Request, params: { id: st
     .from("items")
     .select(ITEM_GET_COLUMNS)
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -89,7 +89,21 @@ export async function GET(auth: RouteContext, request: Request, params: { id: st
     return jsonError(404, "Item not found.");
   }
 
-  return jsonData(item);
+  // Text that moved to R2 (or Drive) is read back from there.
+  try {
+    const markdown = await loadItemBody(auth.db, auth.host, auth.userId, item);
+    const fields: Record<string, unknown> = { ...item, markdown };
+    delete fields.content_sha256;
+    delete fields.drive_file_id;
+    delete fields.user_id;
+    return jsonData(fields);
+  } catch (err) {
+    if (err instanceof ContentNotReadyError) {
+      return Response.json({ error: { message: err.message, code: "not_ready" } }, { status: 409 });
+    }
+    if (err instanceof ContentGoneError) return jsonError(409, err.message);
+    throw err;
+  }
 }
 
 export async function PATCH(auth: RouteContext, request: Request, params: { id: string }) {
@@ -115,7 +129,6 @@ export async function PATCH(auth: RouteContext, request: Request, params: { id: 
     .from("items")
     .select("id, kind, folder_id")
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -186,7 +199,6 @@ export async function PATCH(auth: RouteContext, request: Request, params: { id: 
     .from("items")
     .update(updateData)
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .select(ITEM_LIST_COLUMNS)
     .maybeSingle();
@@ -234,7 +246,6 @@ export async function DELETE(auth: RouteContext, request: Request, params: { id:
     .from("items")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .select("id")
     .maybeSingle();

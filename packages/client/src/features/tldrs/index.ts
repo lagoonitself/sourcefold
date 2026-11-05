@@ -59,7 +59,7 @@ export function rowToTldr(row: TldrRow): ItemTldr | null {
 
 const ID_CHUNK = 100;
 
-/** The user's TL;DRs for these items, in the order of `itemIds`. */
+/** The TL;DRs the user can see for these items, in the order of `itemIds`. */
 export async function loadTldrsForItems(
   db: SupabaseClient<Database>,
   userId: string,
@@ -68,11 +68,7 @@ export async function loadTldrsForItems(
   const byId = new Map<string, ItemTldr>();
   for (let i = 0; i < itemIds.length; i += ID_CHUNK) {
     const chunk = itemIds.slice(i, i + ID_CHUNK);
-    const { data, error } = await db
-      .from("item_tldrs")
-      .select(TLDR_COLUMNS)
-      .eq("user_id", userId)
-      .in("item_id", chunk);
+    const { data, error } = await db.from("item_tldrs").select(TLDR_COLUMNS).in("item_id", chunk);
     if (error) throw new Error(error.message);
     for (const row of (data ?? []) as TldrRow[]) {
       const tldr = rowToTldr(row);

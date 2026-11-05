@@ -19,7 +19,9 @@ name: Release
 #
 # Set the repository variables SOURCEFOLD_SUPABASE_URL and SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY so
 # the desktop app and the extension sign in to your Supabase project out of the box (they need no
-# website). The optional SOURCEFOLD_WEB_URL points the release notes at the website.
+# website). The optional SOURCEFOLD_WEB_URL points the release notes at the website. The optional
+# SOURCEFOLD_CONTENT_URL is the Content Worker's address (where source text is kept in R2); without
+# it the apps keep text in Google Drive as before.
 
 on:
   push:
@@ -131,6 +133,7 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.SOURCEFOLD_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
+          VITE_SOURCEFOLD_CONTENT_URL: ${{ vars.SOURCEFOLD_CONTENT_URL }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: >-
@@ -191,6 +194,7 @@ jobs:
         env:
           WXT_SUPABASE_URL: ${{ vars.SOURCEFOLD_SUPABASE_URL }}
           WXT_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY }}
+          WXT_SOURCEFOLD_CONTENT_URL: ${{ vars.SOURCEFOLD_CONTENT_URL }}
         run: npm run build -w @sourcefold/extension
 
       - name: Zip and upload

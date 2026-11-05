@@ -34,7 +34,6 @@ export async function GET(auth: RouteContext, request: Request) {
       const { data, error } = await auth.db
         .from("items")
         .select("id")
-        .eq("user_id", auth.userId)
         .eq("folder_id", folder)
         .is("deleted_at", null);
       if (error) return jsonError(500, error.message);

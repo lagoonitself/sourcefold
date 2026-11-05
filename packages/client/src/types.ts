@@ -26,6 +26,16 @@ export interface LocalApiDeps {
    * borrowing the desktop app's token), whose `auth` can't be used. Default: the client's session.
    */
   currentUserId?(): Promise<string | null>;
+  /**
+   * The Sourcefold content Worker (R2), e.g. `https://sourcefold-content.writey.workers.dev`.
+   * Without it text stays on the old path (Drive is the store).
+   */
+  contentUrl?: string;
+  /**
+   * The signed-in access token the content Worker checks, for a client whose `auth` can't be
+   * used (same case as `currentUserId`). Default: the client's session token.
+   */
+  accessToken?(): Promise<string | null>;
 }
 
 export interface LocalApi {

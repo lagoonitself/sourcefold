@@ -52,7 +52,6 @@ export async function POST(auth: RouteContext, request: Request, params: Params)
     .from("items")
     .select("id, folder_id, tags, triage, summary, author, author_type, note")
     .eq("id", keepId)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -67,7 +66,6 @@ export async function POST(auth: RouteContext, request: Request, params: Params)
     .from("items")
     .select("id, folder_id, tags, triage, summary, author, author_type, note, created_at")
     .in("id", uniqueOtherIds)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null);
 
   if (othersError) return jsonError(500, othersError.message);
@@ -92,7 +90,6 @@ export async function POST(auth: RouteContext, request: Request, params: Params)
     .from("highlights")
     .update({ item_id: keepId })
     .in("item_id", uniqueOtherIds)
-    .eq("user_id", auth.userId)
     .select("id");
 
   if (moveHError) {
@@ -105,7 +102,6 @@ export async function POST(auth: RouteContext, request: Request, params: Params)
     .from("cards")
     .update({ item_id: keepId })
     .in("item_id", uniqueOtherIds)
-    .eq("user_id", auth.userId)
     .select("id");
 
   if (moveCError) {
@@ -148,7 +144,6 @@ export async function POST(auth: RouteContext, request: Request, params: Params)
       updated_at: new Date().toISOString(),
     })
     .eq("id", keepId)
-    .eq("user_id", auth.userId)
     .select(ITEM_LIST_COLUMNS)
     .maybeSingle();
 
@@ -161,7 +156,6 @@ export async function POST(auth: RouteContext, request: Request, params: Params)
     .from("items")
     .update({ deleted_at: new Date().toISOString() })
     .in("id", uniqueOtherIds)
-    .eq("user_id", auth.userId)
     .is("deleted_at", null);
 
   if (deleteOthersError) {

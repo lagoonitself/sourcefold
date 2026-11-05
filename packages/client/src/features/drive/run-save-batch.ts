@@ -1,16 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "../../database.types";
-import { bodyFromDriveFile, safeName } from "@sourcefold/core";
-import {
-  createFolder,
-  downloadFileText,
-  getFile,
-  updateFile,
-  uploadFile,
-  DriveApiError,
-} from "../../google/drive";
+import { safeName } from "@sourcefold/core";
+import { createFolder, getFile, updateFile, uploadFile, DriveApiError } from "../../google/drive";
 import { DriveAuthError } from "../../google/errors";
 import type { Host } from "../../host";
+import { ContentGoneError, loadItemBody } from "../content/body";
 import {
   buildItemFile,
   driveFileName,
@@ -99,14 +93,6 @@ function getFolderAndDescendantIds(
 const DRIVE_COPY_GONE =
   "Its Drive file was deleted, and Drive held the only copy. Delete this item and add it again.";
 
-async function readBodyFromDrive(accessToken: string, driveFileId: string | null): Promise<string> {
-  const text = driveFileId ? await downloadFileText(accessToken, driveFileId) : null;
-  if (text === null) {
-    throw new Error(DRIVE_COPY_GONE);
-  }
-  return bodyFromDriveFile(text);
-}
-
 function isTransientError(err: unknown): boolean {
   if (err instanceof TypeError) {
     return true;
@@ -160,7 +146,7 @@ export async function runSaveBatch(
   supabase: SupabaseClient<Database>,
   userId: string,
   accessToken: string,
-  host: Pick<Host, "drive" | "fetchUrl">,
+  host: Pick<Host, "drive" | "fetchUrl" | "content">,
   budget = 20,
 ): Promise<SaveBatchResult> {
   const batchStartTime = Date.now();
@@ -455,6 +441,10 @@ export async function runSaveBatch(
             body = new Uint8Array(await blob.arrayBuffer());
           } else if (item.drive_file_id) {
             body = null;
+          } else if (item.content_sha256 && host.content) {
+            const stored = await host.content.getFile(item.id);
+            if (!stored) throw new Error(DRIVE_COPY_GONE);
+            body = stored.bytes;
           } else {
             throw new Error(DRIVE_COPY_GONE);
           }
@@ -462,13 +452,17 @@ export async function runSaveBatch(
           mimeType = "text/markdown";
           fileName = driveFileName(item.title, item.id, siblingRefs, "md", item.created_at);
           const folderPath = folderPathOf(item.folder_id, foldersById as Map<string, FolderRef>);
-          let markdown = item.markdown;
-          if (markdown === null && item.kind !== "note") {
-            // Text is only cleared once Drive has the file, so no Drive file means it never had
-            // text (an empty capture): nothing is lost, and the file is built with an empty body.
-            markdown = item.drive_file_id
-              ? await readBodyFromDrive(accessToken, item.drive_file_id)
-              : "";
+          // Text is only cleared once another store has it, so having none means it never had
+          // text (an empty capture): nothing is lost, and the file is built with an empty body.
+          let markdown: string | null;
+          try {
+            markdown =
+              item.kind === "note"
+                ? item.markdown
+                : await loadItemBody(supabase, host, userId, item);
+          } catch (err) {
+            if (err instanceof ContentGoneError) throw new Error(DRIVE_COPY_GONE);
+            throw err;
           }
           body = buildItemFile(
             { ...item, markdown, highlights: highlightsByItem.get(item.id) ?? [] },
@@ -505,7 +499,13 @@ export async function runSaveBatch(
           driveFileId = existing.id;
         } else {
           if (body === null) {
-            throw new Error(DRIVE_COPY_GONE);
+            // The Drive file is gone; an image uploaded through R2 still has its bytes there.
+            const stored =
+              item.kind === "image" && item.content_sha256 && host.content
+                ? await host.content.getFile(item.id)
+                : null;
+            if (!stored) throw new Error(DRIVE_COPY_GONE);
+            body = stored.bytes;
           }
           const created = await uploadFile(accessToken, {
             name: fileName,
@@ -538,10 +538,11 @@ export async function runSaveBatch(
           ]);
         }
 
-        const { data: contentCleared } = await supabase.rpc("mark_item_stored_in_drive", {
+        const { data: contentCleared } = await supabase.rpc("mark_item_saved_to_drive", {
           p_id: item.id,
           p_drive_file_id: driveFileId,
           p_seen_updated_at: item.updated_at,
+          p_r2: host.content !== null,
         });
         if (contentCleared && item.kind === "image" && item.storage_path) {
           await supabase.storage.from("images").remove([item.storage_path]);

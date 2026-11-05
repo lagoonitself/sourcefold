@@ -8,8 +8,8 @@ const PAGE_SIZE = 1000;
 
 /**
  * The user's highlights for these items, grouped by item, each list ordered by start_offset, then
- * created_at. One query per chunk of ids (not per item). Filters by user_id because the callers
- * use the admin client.
+ * created_at. One query per chunk of ids (not per item). Not filtered by user_id: sessions run
+ * under RLS (shared projects included) and token callers use a scopeToUser client.
  */
 export async function loadHighlightsForItems(
   db: SupabaseClient<Database>,
@@ -25,7 +25,6 @@ export async function loadHighlightsForItems(
       const { data, error } = await db
         .from("highlights")
         .select(HIGHLIGHT_COLUMNS)
-        .eq("user_id", userId)
         .in("item_id", chunk)
         .order("item_id", { ascending: true })
         .order("start_offset", { ascending: true })

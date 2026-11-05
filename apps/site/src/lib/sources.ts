@@ -141,7 +141,7 @@ export const EXTRA_KINDS: SourceInfo[] = [
     name: "Image",
     color: "var(--source-image)",
     savedWith: "Uploaded in the website or desktop app",
-    youGet: "The image, kept in your Drive",
+    youGet: "The image, kept in your library",
     exampleUrl: "",
     exampleTitle: "Dyno chart, 2JZ stock vs single turbo",
   },

@@ -2,9 +2,13 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
-## Unreleased
+## 0.7.0 (2026-11-06)
 
 ### New
+
+- **Share a project.** In a project's menu, **Share project…** gives you an invite link and a code (like `K7QM-2XPD`), one for people who can edit and, if you want, one for people who can only read. Anyone who joins with their own Google account sees the whole project, and changes reach everyone within a few seconds. Change someone's role, remove them, make a new link (the old one stops working) or turn the link off. To join, open the link, or choose **Join a shared project…** in the project switcher and paste the link or code.
+- **Google Drive is now an optional backup.** Your library lives in your Sourcefold account, with the text of every source kept in Sourcefold's storage (Cloudflare R2) and on each computer you use. **Settings → Back up to Google Drive** copies everything to Drive too, as before; switch it off and nothing more goes to Drive, and the Save to Drive button is hidden. The desktop app asks once, when you first sign in.
+- Sources you saved before keep working: each computer moves their text from your Drive to the new storage by itself, a few at a time, while it's open and signed in.
 
 - **Your computers stay in step.** Signed in with the same Google account, a source, group, highlight or note you add on one computer shows on the others within a few seconds, and so does its file in your Sourcefold folder. Changes from the website, the extension and Claude arrive the same way, and the website updates by itself too. A computer that was asleep or offline catches up when it's back. **Settings → Account** shows whether sync is on.
 

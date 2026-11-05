@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn, openUrl } from "@/lib/utils";
-import { Switch } from "../local-copy/LocalCopySettings";
+import { Switch } from "@/components/ui/Switch";
 import {
   AiCallError,
   CHATGPT_USAGE_URL,

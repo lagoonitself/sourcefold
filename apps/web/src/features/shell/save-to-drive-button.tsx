@@ -12,6 +12,8 @@ interface DriveStatus {
   last_saved_at: string | null;
   root_folder_id: string | null;
   connected: boolean;
+  /** False while the Google Drive backup is switched off in Settings. */
+  backup_enabled?: boolean;
 }
 
 function formatLastSaved(isoString: string | null | undefined): string {
@@ -209,6 +211,7 @@ export function SaveToDriveButton() {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+        if (statusRef.current?.backup_enabled === false) return;
         e.preventDefault();
 
         if (document.querySelector('[role="dialog"]')) {
@@ -247,6 +250,8 @@ export function SaveToDriveButton() {
       label = "Saving…";
     }
   }
+
+  if (status?.backup_enabled === false) return null;
 
   return (
     <Tooltip>

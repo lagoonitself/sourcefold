@@ -2,6 +2,7 @@ import { OAUTH_QUERY_PARAMS, OAUTH_SCOPES } from "@sourcefold/client";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import type { Session, SessionStatus } from "./types";
 import { closeLocalApi, getLocalApi, startLocalApiBridge } from "./local-api";
+import { CONTENT_URL } from "./build-env";
 import { getSupabase, getSupabaseConfig, isSupabaseConfigured } from "./supabase";
 import { openUrl } from "./utils";
 
@@ -116,6 +117,7 @@ async function reportSession(session: SupabaseSession): Promise<void> {
     expiresAt,
     userId: session.user.id,
     email: session.user.email ?? null,
+    contentUrl: CONTENT_URL ?? null,
   };
   try {
     await tauriInvoke("session_set", { session: reported });

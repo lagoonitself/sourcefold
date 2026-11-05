@@ -89,7 +89,7 @@ const TERMINAL_STEPS: TerminalStep[] = [
       label="Open source & self-hosted"
       title="Run your own instance in "
       marked="ten minutes"
-      lede="Sourcefold is MIT-licensed. Host the web app on Vercel's free tier, back it with Supabase free tier for Auth and Postgres, and push docs straight into your Google Drive. Everything is visible, audited and under your control."
+      lede="Sourcefold is MIT-licensed. Host the web app on Vercel's free tier, back it with Supabase free tier for Auth and Postgres, and keep an optional backup in your Google Drive. Everything is visible, audited and under your control."
     />
 
     <!-- Main Architecture + Terminal Grid -->
@@ -198,7 +198,7 @@ const TERMINAL_STEPS: TerminalStep[] = [
             <h3 class="h4 arch-title">Zero-cost free tier stack</h3>
           </div>
           <p class="muted text-sm arch-desc">
-            Vercel hosts the Next.js web application. Supabase provides Auth and Postgres for links, folders and notes. Google Drive stores full Markdown and Google Doc files. All fit well within free tiers for personal research libraries.
+            Vercel hosts the Next.js web application. Supabase provides Auth and Postgres for links, folders and notes. Cloudflare R2 holds the article text, and Google Drive is an optional backup. All fit well within free tiers for personal research libraries.
           </p>
         </div>
 

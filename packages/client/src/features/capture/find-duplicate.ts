@@ -38,7 +38,6 @@ export async function findDuplicate(
   const { data: item, error } = await db
     .from("items")
     .select("id, folder_id, folders!items_folder_id_fkey(name, deleted_at)")
-    .eq("user_id", userId)
     .eq("canonical_url", canonicalUrl)
     .eq("folder_id", folderId)
     .is("deleted_at", null)
@@ -81,7 +80,6 @@ export async function findDuplicateElsewhere(
   const { data: copies, error } = await db
     .from("items")
     .select("id, folder_id, created_at")
-    .eq("user_id", userId)
     .eq("canonical_url", canonicalUrl)
     .is("deleted_at", null)
     .order("created_at", { ascending: true });
@@ -138,7 +136,6 @@ export async function nextPosition(
   const { data } = await db
     .from("items")
     .select("position")
-    .eq("user_id", userId)
     .eq("folder_id", folderId)
     .is("deleted_at", null)
     .order("position", { ascending: false })
@@ -153,10 +150,11 @@ export async function nextFolderPosition(
   userId: string,
   parentId: string | null,
 ): Promise<number> {
-  let query = db.from("folders").select("position").eq("user_id", userId).is("deleted_at", null);
+  let query = db.from("folders").select("position").is("deleted_at", null);
 
   if (parentId === null) {
-    query = query.is("parent_id", null);
+    // Projects at the top level: only the caller's own decide the next slot.
+    query = query.eq("user_id", userId).is("parent_id", null);
   } else {
     query = query.eq("parent_id", parentId);
   }

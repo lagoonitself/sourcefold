@@ -129,6 +129,7 @@ export type Database = {
       };
       drive_state: {
         Row: {
+          backup_enabled: boolean;
           created_at: string;
           last_saved_at: string | null;
           root_folder_id: string | null;
@@ -137,6 +138,7 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          backup_enabled?: boolean;
           created_at?: string;
           last_saved_at?: string | null;
           root_folder_id?: string | null;
@@ -145,6 +147,7 @@ export type Database = {
           user_id?: string;
         };
         Update: {
+          backup_enabled?: boolean;
           created_at?: string;
           last_saved_at?: string | null;
           root_folder_id?: string | null;
@@ -158,6 +161,7 @@ export type Database = {
         Row: {
           archived_at: string | null;
           created_at: string;
+          created_by: string | null;
           deleted_at: string | null;
           drive_folder_id: string | null;
           drive_synced_at: string | null;
@@ -165,12 +169,14 @@ export type Database = {
           name: string;
           parent_id: string | null;
           position: number;
+          project_id: string;
           updated_at: string;
           user_id: string;
         };
         Insert: {
           archived_at?: string | null;
           created_at?: string;
+          created_by?: string | null;
           deleted_at?: string | null;
           drive_folder_id?: string | null;
           drive_synced_at?: string | null;
@@ -178,12 +184,14 @@ export type Database = {
           name: string;
           parent_id?: string | null;
           position?: number;
+          project_id?: string;
           updated_at?: string;
           user_id?: string;
         };
         Update: {
           archived_at?: string | null;
           created_at?: string;
+          created_by?: string | null;
           deleted_at?: string | null;
           drive_folder_id?: string | null;
           drive_synced_at?: string | null;
@@ -191,6 +199,7 @@ export type Database = {
           name?: string;
           parent_id?: string | null;
           position?: number;
+          project_id?: string;
           updated_at?: string;
           user_id?: string;
         };
@@ -333,7 +342,11 @@ export type Database = {
           author: string | null;
           author_type: string | null;
           canonical_url: string | null;
+          content_at: string | null;
+          content_bytes: number | null;
+          content_sha256: string | null;
           created_at: string;
+          created_by: string | null;
           deleted_at: string | null;
           drive_file_id: string | null;
           drive_synced_at: string | null;
@@ -345,6 +358,7 @@ export type Database = {
           meta: Json;
           note: string | null;
           position: number;
+          project_id: string | null;
           source_url: string | null;
           status: string;
           storage_path: string | null;
@@ -359,7 +373,11 @@ export type Database = {
           author?: string | null;
           author_type?: string | null;
           canonical_url?: string | null;
+          content_at?: string | null;
+          content_bytes?: number | null;
+          content_sha256?: string | null;
           created_at?: string;
+          created_by?: string | null;
           deleted_at?: string | null;
           drive_file_id?: string | null;
           drive_synced_at?: string | null;
@@ -371,6 +389,7 @@ export type Database = {
           meta?: Json;
           note?: string | null;
           position?: number;
+          project_id?: string | null;
           source_url?: string | null;
           status?: string;
           storage_path?: string | null;
@@ -385,7 +404,11 @@ export type Database = {
           author?: string | null;
           author_type?: string | null;
           canonical_url?: string | null;
+          content_at?: string | null;
+          content_bytes?: number | null;
+          content_sha256?: string | null;
           created_at?: string;
+          created_by?: string | null;
           deleted_at?: string | null;
           drive_file_id?: string | null;
           drive_synced_at?: string | null;
@@ -397,6 +420,7 @@ export type Database = {
           meta?: Json;
           note?: string | null;
           position?: number;
+          project_id?: string | null;
           source_url?: string | null;
           status?: string;
           storage_path?: string | null;
@@ -489,6 +513,117 @@ export type Database = {
           },
         ];
       };
+      outline_sections: {
+        Row: {
+          created_at: string;
+          id: string;
+          position: number;
+          project_id: string;
+          title: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          position?: number;
+          project_id: string;
+          title: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          position?: number;
+          project_id?: string;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "outline_sections_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_invites: {
+        Row: {
+          code: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          project_id: string;
+          revoked_at: string | null;
+          role: string;
+        };
+        Insert: {
+          code: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          project_id: string;
+          revoked_at?: string | null;
+          role: string;
+        };
+        Update: {
+          code?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          project_id?: string;
+          revoked_at?: string | null;
+          role?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_invites_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_members: {
+        Row: {
+          added_by: string | null;
+          created_at: string;
+          project_id: string;
+          role: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          added_by?: string | null;
+          created_at?: string;
+          project_id: string;
+          role?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          added_by?: string | null;
+          created_at?: string;
+          project_id?: string;
+          role?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "folders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       shelf_links: {
         Row: {
           created_at: string;
@@ -534,6 +669,18 @@ export type Database = {
         };
         Relationships: [];
       };
+      signup_allow_list: {
+        Row: {
+          email: string;
+        };
+        Insert: {
+          email: string;
+        };
+        Update: {
+          email?: string;
+        };
+        Relationships: [];
+      };
       text_undos: {
         Row: {
           after_hash: string;
@@ -568,44 +715,6 @@ export type Database = {
             columns: ["item_id"];
             isOneToOne: false;
             referencedRelation: "items";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      outline_sections: {
-        Row: {
-          created_at: string;
-          id: string;
-          position: number;
-          project_id: string;
-          title: string;
-          updated_at: string;
-          user_id: string;
-        };
-        Insert: {
-          created_at?: string;
-          id?: string;
-          position?: number;
-          project_id: string;
-          title: string;
-          updated_at?: string;
-          user_id?: string;
-        };
-        Update: {
-          created_at?: string;
-          id?: string;
-          position?: number;
-          project_id?: string;
-          title?: string;
-          updated_at?: string;
-          user_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "outline_sections_project_id_fkey";
-            columns: ["project_id"];
-            isOneToOne: false;
-            referencedRelation: "folders";
             referencedColumns: ["id"];
           },
         ];
@@ -684,6 +793,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      accept_project_invite: { Args: { p_code: string }; Returns: string };
       acquire_drive_sync_lock: {
         Args: { p_seconds?: number; p_user_id: string };
         Returns: boolean;
@@ -695,24 +805,7 @@ export type Database = {
           p_user_id: string;
           p_worker: string;
         };
-        Returns: {
-          added_by: string;
-          attempts: number;
-          claimed_at: string | null;
-          claimed_by: string | null;
-          created_at: string;
-          folder_id: string;
-          id: string;
-          item_id: string | null;
-          kind: string | null;
-          message: string | null;
-          needs: string;
-          status: string;
-          title: string | null;
-          updated_at: string;
-          url: string;
-          user_id: string;
-        }[];
+        Returns: Database["public"]["Tables"]["link_queue"]["Row"][];
         SetofOptions: {
           from: "*";
           to: "link_queue";
@@ -720,56 +813,10 @@ export type Database = {
           isSetofReturn: true;
         };
       };
-      drive_dirty_folders: {
-        Args: { p_user_id?: string };
-        Returns: {
-          archived_at: string | null;
-          created_at: string;
-          deleted_at: string | null;
-          drive_folder_id: string | null;
-          drive_synced_at: string | null;
-          id: string;
-          name: string;
-          parent_id: string | null;
-          position: number;
-          updated_at: string;
-          user_id: string;
-        }[];
-        SetofOptions: {
-          from: "*";
-          to: "folders";
-          isOneToOne: false;
-          isSetofReturn: true;
-        };
-      };
-      drive_dirty_items: {
+      content_access: { Args: { p_item_id: string }; Returns: Json };
+      content_drive_only_items: {
         Args: { p_limit?: number; p_user_id?: string };
-        Returns: {
-          author: string | null;
-          author_type: string | null;
-          canonical_url: string | null;
-          created_at: string;
-          deleted_at: string | null;
-          drive_file_id: string | null;
-          drive_synced_at: string | null;
-          error: string | null;
-          folder_id: string;
-          id: string;
-          kind: string;
-          markdown: string | null;
-          meta: Json;
-          note: string | null;
-          position: number;
-          source_url: string | null;
-          status: string;
-          storage_path: string | null;
-          summary: string | null;
-          tags: string[];
-          title: string;
-          triage: string | null;
-          updated_at: string;
-          user_id: string;
-        }[];
+        Returns: Database["public"]["Tables"]["items"]["Row"][];
         SetofOptions: {
           from: "*";
           to: "items";
@@ -777,7 +824,60 @@ export type Database = {
           isSetofReturn: true;
         };
       };
-      drive_unsaved_count: { Args: { p_user_id?: string }; Returns: number };
+      content_waiting_items: {
+        Args: { p_limit?: number; p_user_id?: string };
+        Returns: Database["public"]["Tables"]["items"]["Row"][];
+        SetofOptions: {
+          from: "*";
+          to: "items";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      drive_dirty_folders:
+        | {
+            Args: never;
+            Returns: Database["public"]["Tables"]["folders"]["Row"][];
+            SetofOptions: {
+              from: "*";
+              to: "folders";
+              isOneToOne: false;
+              isSetofReturn: true;
+            };
+          }
+        | {
+            Args: { p_user_id?: string };
+            Returns: Database["public"]["Tables"]["folders"]["Row"][];
+            SetofOptions: {
+              from: "*";
+              to: "folders";
+              isOneToOne: false;
+              isSetofReturn: true;
+            };
+          };
+      drive_dirty_items:
+        | {
+            Args: { p_limit?: number };
+            Returns: Database["public"]["Tables"]["items"]["Row"][];
+            SetofOptions: {
+              from: "*";
+              to: "items";
+              isOneToOne: false;
+              isSetofReturn: true;
+            };
+          }
+        | {
+            Args: { p_limit?: number; p_user_id?: string };
+            Returns: Database["public"]["Tables"]["items"]["Row"][];
+            SetofOptions: {
+              from: "*";
+              to: "items";
+              isOneToOne: false;
+              isSetofReturn: true;
+            };
+          };
+      drive_unsaved_count:
+        { Args: never; Returns: number } | { Args: { p_user_id?: string }; Returns: number };
       folder_item_counts: {
         Args: { p_user_id: string };
         Returns: {
@@ -785,10 +885,35 @@ export type Database = {
           item_count: number;
         }[];
       };
+      get_project_invite: {
+        Args: { p_project_id: string; p_role?: string };
+        Returns: string;
+      };
+      get_project_sharing: { Args: { p_project_id: string }; Returns: Json };
       health: { Args: never; Returns: string };
+      hook_before_user_created: { Args: { event: Json }; Returns: Json };
       mark_folder_synced: {
         Args: { p_drive_folder_id: string; p_id: string };
         Returns: undefined;
+      };
+      mark_item_content_stored: {
+        Args: {
+          p_bytes: number;
+          p_id: string;
+          p_seen_updated_at: string;
+          p_sha256: string;
+          p_user_id?: string;
+        };
+        Returns: boolean;
+      };
+      mark_item_saved_to_drive: {
+        Args: {
+          p_drive_file_id: string;
+          p_id: string;
+          p_r2?: boolean;
+          p_seen_updated_at: string;
+        };
+        Returns: boolean;
       };
       mark_item_stored_in_drive: {
         Args: {
@@ -811,22 +936,53 @@ export type Database = {
         Args: { p_drive_file_id: string; p_id: string };
         Returns: undefined;
       };
+      preview_project_invite: { Args: { p_code: string }; Returns: Json };
+      project_access: {
+        Args: { p_user_id?: string };
+        Returns: {
+          member_count: number;
+          owner_email: string;
+          owner_id: string;
+          owner_name: string;
+          project_id: string;
+          your_role: string;
+        }[];
+      };
       release_drive_sync_lock: {
         Args: { p_user_id: string };
         Returns: undefined;
       };
-      set_project_archived: {
-        Args: { p_archived: boolean; p_id: string };
-        Returns: boolean;
+      remove_project_member: {
+        Args: { p_project_id: string; p_user_id: string };
+        Returns: undefined;
+      };
+      reset_project_invite: {
+        Args: { p_project_id: string; p_role?: string };
+        Returns: string;
+      };
+      revoke_project_invite: {
+        Args: { p_project_id: string; p_role?: string };
+        Returns: undefined;
       };
       save_google_refresh_token: {
         Args: { p_refresh_token: string };
         Returns: undefined;
       };
-      soft_delete_folder: {
-        Args: { p_folder_id: string; p_user_id?: string };
+      set_drive_backup: { Args: { p_enabled: boolean }; Returns: boolean };
+      set_project_archived: {
+        Args: { p_archived: boolean; p_id: string };
+        Returns: boolean;
+      };
+      set_project_member_role: {
+        Args: { p_project_id: string; p_role: string; p_user_id: string };
         Returns: undefined;
       };
+      soft_delete_folder:
+        | { Args: { p_folder_id: string }; Returns: undefined }
+        | {
+            Args: { p_folder_id: string; p_user_id?: string };
+            Returns: undefined;
+          };
     };
     Enums: {
       [_ in never]: never;

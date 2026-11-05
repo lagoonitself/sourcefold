@@ -1,6 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../../database.types";
 
+/** On a project that involves other people: the caller's role and who owns it. */
+export type FolderSharing = {
+  role: "owner" | "editor" | "viewer";
+  owner_name: string;
+  owner_email: string;
+  member_count: number;
+};
+
 export type FolderItem = {
   id: string;
   parent_id: string | null;
@@ -9,6 +17,8 @@ export type FolderItem = {
   item_count: number;
   /** True only for an archived project (top-level folder). */
   archived: boolean;
+  /** Only on a shared project (parent_id null); absent for a project nobody else is part of. */
+  sharing?: FolderSharing;
 };
 
 /**
@@ -20,15 +30,15 @@ export async function loadFolders(
   userId: string,
   { includeArchived = false }: { includeArchived?: boolean } = {},
 ): Promise<FolderItem[]> {
-  const [foldersResult, countsResult] = await Promise.all([
+  const [foldersResult, countsResult, accessResult] = await Promise.all([
     db
       .from("folders")
       .select("id, parent_id, name, position, archived_at")
-      .eq("user_id", userId)
       .is("deleted_at", null)
       .order("position", { ascending: true })
       .order("name", { ascending: true }),
     db.rpc("folder_item_counts", { p_user_id: userId }),
+    db.rpc("project_access", { p_user_id: userId }),
   ]);
 
   if (foldersResult.error) {
@@ -47,14 +57,33 @@ export async function loadFolders(
     }
   }
 
-  let folders: FolderItem[] = (foldersResult.data ?? []).map((folder) => ({
-    id: folder.id,
-    parent_id: folder.parent_id,
-    name: folder.name,
-    position: folder.position,
-    item_count: itemCounts.get(folder.id) ?? 0,
-    archived: folder.parent_id === null && folder.archived_at !== null,
-  }));
+  // An error here (a token client, an older database) just means nothing is shown as shared.
+  const sharingOf = new Map<string, FolderSharing>();
+  if (!accessResult.error) {
+    for (const row of accessResult.data ?? []) {
+      const role = row.your_role;
+      if (role !== "owner" && role !== "editor" && role !== "viewer") continue;
+      sharingOf.set(row.project_id, {
+        role,
+        owner_name: row.owner_name,
+        owner_email: row.owner_email,
+        member_count: Number(row.member_count) || 0,
+      });
+    }
+  }
+
+  let folders: FolderItem[] = (foldersResult.data ?? []).map((folder) => {
+    const sharing = folder.parent_id === null ? sharingOf.get(folder.id) : undefined;
+    return {
+      id: folder.id,
+      parent_id: folder.parent_id,
+      name: folder.name,
+      position: folder.position,
+      item_count: itemCounts.get(folder.id) ?? 0,
+      archived: folder.parent_id === null && folder.archived_at !== null,
+      ...(sharing ? { sharing } : {}),
+    };
+  });
 
   if (!includeArchived) {
     const hidden = archivedFolderIds(folders);

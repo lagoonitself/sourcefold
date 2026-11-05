@@ -3,8 +3,8 @@ import type { Database } from "../../database.types";
 import { findProjectId, projectFolderIds } from "../projects/project";
 
 // Research tools work inside one project (a top-level folder). These helpers resolve a folder to
-// its project and a group to its path. Every query filters by user_id because the token routes
-// use the admin client.
+// its project and a group to its path. Queries are not filtered by user_id: session clients run
+// under RLS (which includes shared projects) and token clients are wrapped by scopeToUser.
 
 export interface LiveFolder {
   id: string;
@@ -31,16 +31,17 @@ export async function selectAllPages<T>(
   return rows;
 }
 
-/** The user's folders that aren't deleted: projects and groups. */
+/** The folders the user can reach that aren't deleted: projects and groups, shared ones too. */
 export async function loadLiveFolders(
   db: SupabaseClient<Database>,
-  userId: string,
+  userId?: string,
 ): Promise<LiveFolder[]> {
+  // Kept so existing callers compile; scope comes from RLS (sessions) or scopeToUser (tokens).
+  void userId;
   return selectAllPages<LiveFolder>((from, to) =>
     db
       .from("folders")
       .select("id, parent_id, name")
-      .eq("user_id", userId)
       .is("deleted_at", null)
       .order("id", { ascending: true })
       .range(from, to),
@@ -99,7 +100,6 @@ export async function loadItemsInGroups<T extends { created_at: string; id: stri
         db
           .from("items")
           .select(columns)
-          .eq("user_id", userId)
           .in("folder_id", chunk)
           .is("deleted_at", null)
           .order("created_at", { ascending: true })

@@ -27,7 +27,6 @@ export async function GET(auth: RouteContext, request: Request) {
       .from("cards")
       .select(CARD_COLUMNS)
       .eq("project_id", project)
-      .eq("user_id", auth.userId)
       .order("position", { ascending: true })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
@@ -51,7 +50,6 @@ export async function GET(auth: RouteContext, request: Request) {
       .from("cards")
       .select(CARD_COLUMNS)
       .eq("item_id", item)
-      .eq("user_id", auth.userId)
       .order("position", { ascending: true })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });

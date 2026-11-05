@@ -8,6 +8,7 @@ import { getSourceKind, SourceTile } from "@/features/items/source-kinds";
 import { buildFolderNames } from "@/features/search/labels";
 import type { Folder, Item, Project } from "@/lib/types";
 import { filterFuzzy } from "./fuzzy";
+import { useBackupEnabled } from "@/features/drive/backup-store";
 import { SHORTCUT_COMMANDS } from "../shortcuts/registry";
 import { formatKeyBinding, isMacPlatform, splitComboForKbd } from "../shortcuts/key-utils";
 import {
@@ -137,6 +138,7 @@ export function CommandPalette({
   const [query, setQuery] = React.useState("");
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const isMac = React.useMemo(() => isMacPlatform(), []);
+  const backupEnabled = useBackupEnabled();
   const listRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -156,6 +158,8 @@ export function CommandPalette({
     // 1. Static registry commands (exclude palette and escape)
     for (const cmd of SHORTCUT_COMMANDS) {
       if (cmd.id === "app.command-palette" || cmd.id === "app.escape") continue;
+      // Backup to Google Drive is off: there is nothing to save, so the command is not offered.
+      if (cmd.id === "app.save-to-drive" && !backupEnabled) continue;
       const primaryCombo = cmd.combos[0];
       list.push({
         id: cmd.id,
@@ -250,6 +254,7 @@ export function CommandPalette({
     folders,
     items,
     isMac,
+    backupEnabled,
     names,
     activeProjectId,
     onExecuteCommand,

@@ -10,8 +10,11 @@ import {
   Download,
   Pencil,
   Plus,
+  Share2,
   Trash2,
   Upload,
+  UserPlus,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -40,6 +43,10 @@ import {
   ProjectFileInput,
 } from "@/features/project-file/import-project-dialog";
 import type { ProjectFileContents } from "@sourcefold/core/project-file";
+import { sharedLabel } from "@/features/sharing/helpers";
+import { JoinDialog } from "@/features/sharing/join-dialog";
+import { ShareDialog } from "@/features/sharing/share-dialog";
+import type { SharedFolderNode } from "@/features/sharing/types";
 import { NameDialog } from "./name-dialog";
 import { rememberProject } from "./project";
 
@@ -55,6 +62,8 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [importContents, setImportContents] = useState<ProjectFileContents | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -154,6 +163,12 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
           className="flex h-9 w-full items-center gap-2 rounded-[6px] border border-input bg-background px-2.5 text-left text-sm font-medium text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <span className="flex-1 truncate">{current?.name ?? "Choose a project"}</span>
+          {(current as SharedFolderNode | null)?.sharing && (
+            <Users
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-label="Shared project"
+            />
+          )}
           <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-[248px]">
@@ -194,8 +209,16 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
             <Upload className="size-4" aria-hidden="true" />
             Import project file
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setIsJoining(true)}>
+            <UserPlus className="size-4" aria-hidden="true" />
+            Join a shared project…
+          </DropdownMenuItem>
           {current && (
             <>
+              <DropdownMenuItem onClick={() => setIsSharing(true)}>
+                <Share2 className="size-4" aria-hidden="true" />
+                Share project…
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsRenaming(true)}>
                 <Pencil className="size-4" aria-hidden="true" />
                 Rename project
@@ -225,6 +248,13 @@ export function ProjectSwitcher({ projects, current }: ProjectSwitcherProps) {
       </DropdownMenu>
 
       <NewProjectDialog open={isCreating} onOpenChange={setIsCreating} onSubmit={createProject} />
+
+      <ShareDialog
+        open={isSharing}
+        onOpenChange={setIsSharing}
+        project={current ? { id: current.id, name: current.name } : null}
+      />
+      <JoinDialog open={isJoining} onOpenChange={setIsJoining} />
 
       <ProjectFileInput inputRef={importInputRef} onContents={setImportContents} />
       <ImportProjectDialog contents={importContents} onClose={() => setImportContents(null)} />
@@ -280,11 +310,18 @@ function ProjectItem({
   onOpen: (projectId: string) => void;
   muted?: boolean;
 }) {
+  const sharing = (project as SharedFolderNode).sharing;
   return (
     <DropdownMenuItem onClick={() => onOpen(project.id)}>
       <span className={muted ? "flex-1 truncate text-muted-foreground" : "flex-1 truncate"}>
         {project.name}
       </span>
+      {sharing && (
+        <span className="flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground">
+          <Users className="size-3.5" aria-hidden="true" />
+          {sharedLabel(sharing)}
+        </span>
+      )}
       {isCurrent && <Check className="size-4 shrink-0" aria-label="Current project" />}
     </DropdownMenuItem>
   );

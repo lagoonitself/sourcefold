@@ -86,6 +86,10 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // In-app updates: checks latest.json on the newest GitHub release (tauri.conf.json →
+        // plugins.updater), installs the signed installer and restarts.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(db)
         .manage(auth_flow_state)
         .manage(local_api::LocalApiBridge::default())

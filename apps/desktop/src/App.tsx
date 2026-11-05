@@ -31,6 +31,7 @@ import { SearchDialog } from "@/features/search/SearchDialog";
 import { MeaningIndexer } from "@/features/search/embedding";
 import type { NoteHit, PassageHit } from "@/features/search/search-api";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
+import { UpdateWatcher } from "@/features/updates/UpdateWatcher";
 import { useAgentEvents } from "@/features/claude/use-agent-events";
 import type { ShowNavigation } from "@/features/claude/agent-show";
 import { NoteDialog } from "@/features/items/NoteDialog";
@@ -1099,6 +1100,8 @@ export function App() {
       <TldrProvider projectId={activeProjectId} folders={folders} />
 
       <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+
+      <UpdateWatcher />
 
       <SettingsDialog
         open={settingsOpen}

@@ -1,6 +1,6 @@
 [package]
 name = "sourcefold-desktop"
-version = "0.5.0"
+version = "0.6.0"
 description = "Sourcefold Desktop App"
 authors = ["Sourcefold"]
 edition = "2021"
@@ -27,3 +27,5 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 tauri-plugin-dialog = "2"
 sha2 = "0.10"
 base64 = "0.22"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"

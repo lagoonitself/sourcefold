@@ -2,6 +2,23 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
+## 0.6.0 (2026-11-05)
+
+### New
+
+- **The desktop app updates itself.** It checks for a new version when it starts (and every few hours), and a message offers **Update and restart**: the new version downloads, installs and opens by itself. **Settings → General → Updates** shows your version and has **Check for updates**. This is the last version you install by hand. After an update, the app also offers to update Sourcefold in Claude Desktop: click **Update**, then **Install** in Claude's window.
+- **A better reader.** Reading settings (font, size, width, spacing), the contents and footnotes in the margins, your place kept when you come back, and Focus.
+- **Sourcefold in Claude on the web.** Add Sourcefold as a connector on claude.ai. Links Claude adds there that need your computer (YouTube, paid Substack posts) wait until the desktop app or the extension is open.
+
+### Fixed
+
+- Claude Desktop can use the desktop app's sign-in again, and Claude's status check says when that sign-in was refused or has expired.
+- Claude's `edit_note` refuses anything that isn't a note, instead of changing a source.
+- Removing text (in the reader or from Claude) also removes the highlights inside the cut, and Undo says when there is nothing left to undo.
+- Claude's replies are clearer: `add_links` says what `allow_duplicates` did, arXiv papers are labelled arXiv, the web connector no longer offers desktop-only features, and archiving a project explains what went wrong when it fails.
+- Captured math, tables, footnotes and Substack posts on custom domains come out cleaner.
+- The local copy keeps binary files (images, PDFs) intact.
+
 ## 0.5.0 (2026-10-24)
 
 ### New

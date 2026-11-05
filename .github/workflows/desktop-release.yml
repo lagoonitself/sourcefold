@@ -10,6 +10,13 @@ name: Release
 # Sourcefold-Windows-Setup.exe, Sourcefold-Mac.dmg, Sourcefold-Chrome-Extension.zip and
 # Sourcefold-Claude.mcpb (the desktop app's Settings → Claude falls back to downloading it).
 #
+# In-app updates: the desktop app reads releases/latest/download/latest.json (tauri.conf.json →
+# plugins.updater). Each desktop build signs its update file with the repository secret
+# TAURI_SIGNING_PRIVATE_KEY (and TAURI_SIGNING_PRIVATE_KEY_PASSWORD if the key has one), and the
+# publish job writes latest.json from the signatures. Windows updates with the setup .exe itself;
+# Mac with Sourcefold-Mac.app.tar.gz. The key's public half is in tauri.conf.json: never change the
+# key, or every installed app stops accepting updates.
+#
 # Set the repository variables SOURCEFOLD_SUPABASE_URL and SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY so
 # the desktop app and the extension sign in to your Supabase project out of the box (they need no
 # website). The optional SOURCEFOLD_WEB_URL points the release notes at the website.
@@ -76,12 +83,17 @@ jobs:
             rust-targets: ""
             suffix: "_x64-setup.exe"
             asset: Sourcefold-Windows-Setup.exe
+            # Windows updates by running the installer itself, so its signature is all it needs.
+            update-name: ""
+            update-asset: ""
           - name: Mac
             platform: macos-latest
-            args: "--target universal-apple-darwin --bundles dmg"
+            args: "--target universal-apple-darwin --bundles app,dmg"
             rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
             suffix: "_universal.dmg"
             asset: Sourcefold-Mac.dmg
+            update-name: Sourcefold.app.tar.gz
+            update-asset: Sourcefold-Mac.app.tar.gz
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -119,6 +131,8 @@ jobs:
           VITE_SUPABASE_URL: ${{ vars.SOURCEFOLD_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SOURCEFOLD_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SOURCEFOLD_WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: >-
           npm run tauri -- build ${{ matrix.args }}
           --config '{"bundle":{"resources":{"../../mcp/dist/Sourcefold-Claude.mcpb":"Sourcefold-Claude.mcpb"}}}'
@@ -136,6 +150,25 @@ jobs:
           echo "Built $FILE"
           cp "$FILE" "${{ matrix.asset }}"
           gh release upload "$TAG" "${{ matrix.asset }}" --clobber
+
+          # The update file and its signature, for latest.json (built by the publish job).
+          UPDATE_NAME="${{ matrix.update-name }}"
+          UPDATE_ASSET="${{ matrix.update-asset }}"
+          if [ -z "$UPDATE_NAME" ]; then
+            UPDATE_FILE="$FILE"
+            UPDATE_ASSET="${{ matrix.asset }}"
+          else
+            UPDATE_FILE=$(find "$(dirname "$FILE")/.." -path '*/macos/*' -name "$UPDATE_NAME" | head -n 1)
+            if [ -z "$UPDATE_FILE" ]; then echo "$UPDATE_NAME wasn't built."; exit 1; fi
+            cp "$UPDATE_FILE" "$UPDATE_ASSET"
+            gh release upload "$TAG" "$UPDATE_ASSET" --clobber
+          fi
+          if [ ! -f "$UPDATE_FILE.sig" ]; then
+            echo "$UPDATE_FILE.sig is missing. Is the TAURI_SIGNING_PRIVATE_KEY secret set?"
+            exit 1
+          fi
+          cp "$UPDATE_FILE.sig" "$UPDATE_ASSET.sig"
+          gh release upload "$TAG" "$UPDATE_ASSET.sig" --clobber
 
   extension:
     name: Chrome and Claude extensions
@@ -184,13 +217,47 @@ jobs:
     needs: [desktop, extension]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Write latest.json for in-app updates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          VERSION="${TAG#v}"
+          gh release download "$TAG" --repo "$REPO" --dir sigs --pattern '*.sig'
+          awk -v v="$VERSION" '
+            index($0, "## " v " ") == 1 || $0 == "## " v { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > changes.md
+          BASE="https://github.com/$REPO/releases/download/$TAG"
+          MAC_SIG=$(cat sigs/Sourcefold-Mac.app.tar.gz.sig)
+          jq -n \
+            --arg version "$VERSION" \
+            --rawfile notes changes.md \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg win_sig "$(cat sigs/Sourcefold-Windows-Setup.exe.sig)" \
+            --arg win_url "$BASE/Sourcefold-Windows-Setup.exe" \
+            --arg mac_sig "$MAC_SIG" \
+            --arg mac_url "$BASE/Sourcefold-Mac.app.tar.gz" \
+            '{version: $version, notes: $notes, pub_date: $date, platforms: {
+              "windows-x86_64": {signature: $win_sig, url: $win_url},
+              "darwin-aarch64": {signature: $mac_sig, url: $mac_url},
+              "darwin-x86_64": {signature: $mac_sig, url: $mac_url}
+            }}' > latest.json
+          cat latest.json
+          gh release upload "$TAG" latest.json --repo "$REPO" --clobber
+
       - name: Check every download is attached
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ASSETS=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
           echo "$ASSETS"
-          for name in Sourcefold-Windows-Setup.exe Sourcefold-Mac.dmg Sourcefold-Chrome-Extension.zip Sourcefold-Claude.mcpb; do
+          for name in Sourcefold-Windows-Setup.exe Sourcefold-Mac.dmg Sourcefold-Chrome-Extension.zip Sourcefold-Claude.mcpb \
+            Sourcefold-Windows-Setup.exe.sig Sourcefold-Mac.app.tar.gz Sourcefold-Mac.app.tar.gz.sig latest.json; do
             echo "$ASSETS" | grep -qx "$name" || { echo "Missing $name"; exit 1; }
           done
 

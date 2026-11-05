@@ -101,7 +101,7 @@ Other AI apps that support MCP (Claude Code, Cursor and others) can run the same
 
 ## Updating
 
-Download the new installer from the [latest release](https://github.com/lagoonitself/sourcefold/releases/latest) and run it; your library is kept. For Claude Desktop, click **Add to Claude Desktop** again (or open the new `.mcpb`). For the extension, unzip the new version over the old folder and click the reload icon on Sourcefold in `chrome://extensions`.
+From version 0.6.0 the desktop app updates itself: when a new version is out it shows **Update and restart**, and **Settings → General → Updates** has **Check for updates**. Your library is kept. Older versions need the new installer from the [latest release](https://github.com/lagoonitself/sourcefold/releases/latest) once. After an update the app offers to update Sourcefold in Claude Desktop too: click **Update**, then **Install** in Claude's window (or click **Add to Claude Desktop** in Settings → Claude). For the extension, unzip the new version over the old folder and click the reload icon on Sourcefold in `chrome://extensions`.
 
 ## Problems?
 

@@ -211,6 +211,15 @@ Plan: `docs/dev/PLAN-sharing.md` (2026-10-22).
 - [ ] Phase 4: history panel, Undo per change, source versions in the reader.
 - [ ] Phase 5: shared projects in each member's own Drive.
 
+## In-app updates (2026-11-05)
+
+- [x] Tauri updater and process plugins; `latest.json` on the newest release; signed with a key kept in the owner's home folder (`~/.tauri/sourcefold-updater.key`), public half in `tauri.conf.json`.
+- [x] Startup and six-hourly check with an "Update and restart" toast; Settings → General → Updates.
+- [x] After an update, offer to update Sourcefold in Claude Desktop (the `.mcpb` follows the app's version).
+- [x] Release workflow uploads the signatures, the Mac `.app.tar.gz` and `latest.json`.
+- [ ] Owner adds the `TAURI_SIGNING_PRIVATE_KEY` repository secret and releases v0.6.0, then checks that the next release arrives inside the app.
+- [ ] The Chrome extension still updates by hand (unpacked) until the Chrome Web Store listing.
+
 ## Later
 
 - [ ] Chrome Web Store listing for the extension ($5 one-time fee; the store build must drop the manifest `key`, and the desktop native host must also allow the store's extension ID).

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Sourcefold",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "identifier": "com.sourcefold.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -40,6 +40,18 @@
     "macOS": {
       "minimumSystemVersion": "11.0",
       "signingIdentity": "-"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCNzcwODc2ODg3OTU5N0IKUldSN1dYbUlkZ2gzMnhnSzFuaHdHZnR0Z1d3WHFjSko4WW1DOGVFZGhCcjA5UUZUOW5TRlRucTMK",
+      "endpoints": [
+        "https://github.com/lagoonitself/sourcefold/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

@@ -39,6 +39,7 @@ import { LocalCopySettings } from "../local-copy/LocalCopySettings";
 import { SearchSettings } from "../search/SearchSettings";
 import { ClaudeSettings } from "../claude/ClaudeSettings";
 import { TldrSettings } from "../tldr/TldrSettings";
+import { UpdateSettings } from "../updates/UpdateSettings";
 import { ReaderSettingsPanel } from "../reader/ReaderSettings";
 import { OPEN_SETTINGS_EVENT } from "../tldr/tldr-settings-link";
 
@@ -292,6 +293,8 @@ export function SettingsDialog({
             {/* Section Content */}
             {activeSection === "general" && (
               <div className="flex flex-col gap-5">
+                <UpdateSettings />
+
                 {/* Storage Directory Row */}
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-col gap-0.5">

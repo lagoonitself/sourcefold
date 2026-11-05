@@ -3,6 +3,8 @@ import { Check, CircleAlert, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { isTauri } from "@/lib/api";
 import { cn, errorMessage } from "@/lib/utils";
+import { rememberClaudeBundleVersion } from "../updates/claude-bundle-version";
+import { getAppVersion } from "../updates/update-store";
 import { openClaudeExtension } from "./claude-api";
 import { CLAUDE_APP_OPEN_NOTE, CLAUDE_INSTALL_STARTED, claudeStatusLine } from "./claude-status";
 
@@ -23,6 +25,7 @@ export function ClaudeSettings({ signedIn, offline, email }: ClaudeSettingsProps
     setResult(null);
     try {
       await openClaudeExtension();
+      rememberClaudeBundleVersion(await getAppVersion());
       setResult({ ok: true, text: CLAUDE_INSTALL_STARTED });
     } catch (err) {
       setResult({ ok: false, text: errorMessage(err, "Couldn't open the Claude extension.") });

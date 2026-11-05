@@ -70,6 +70,35 @@ export function supabaseConfigProblem(config: ClientConfig): string | null {
   return null;
 }
 
+const DEVICE_ID_STORAGE_KEY = "sourcefold:device_id";
+let memoryDeviceId: string | null = null;
+
+/**
+ * This install's id. Every database write carries it, so live sync can skip the echo of this
+ * computer's own changes (docs/dev/PLAN-sync.md). Not secret and not tied to the account.
+ */
+export function getDeviceId(): string {
+  const store = storage();
+  try {
+    const saved = store?.getItem(DEVICE_ID_STORAGE_KEY);
+    if (saved && /^[\w-]{8,64}$/.test(saved)) return saved;
+  } catch {
+    // Falls through to a new id.
+  }
+  if (!memoryDeviceId) {
+    memoryDeviceId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+  try {
+    store?.setItem(DEVICE_ID_STORAGE_KEY, memoryDeviceId);
+  } catch {
+    // Kept in memory for this run.
+  }
+  return memoryDeviceId;
+}
+
 let client: SourcefoldSupabase | null = null;
 let clientFor = "";
 
@@ -81,7 +110,7 @@ export function getSupabase(): SourcefoldSupabase {
     if (!isSupabaseConfigured(config)) {
       throw new Error("This copy of Sourcefold has no account server set. Add it under Advanced.");
     }
-    client = createSupabase(config);
+    client = createSupabase(config, undefined, { deviceId: getDeviceId() });
     clientFor = key;
   }
   return client;

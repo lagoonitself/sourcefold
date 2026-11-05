@@ -36,8 +36,10 @@ export function onLocalCopyChange(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-export async function syncLocalCopy(): Promise<LocalCopyReport | null> {
-  if (!isTauri()) return null;
+let running: Promise<LocalCopyReport | null> | null = null;
+let again = false;
+
+async function runOnce(): Promise<LocalCopyReport> {
   const report = await tauriInvoke<LocalCopyReport>("sync_local_copy");
   if (report.status !== "busy") {
     lastReport = report;
@@ -45,6 +47,32 @@ export async function syncLocalCopy(): Promise<LocalCopyReport | null> {
     listeners.forEach((l) => l());
   }
   return report;
+}
+
+/**
+ * Brings the copy on this computer up to date. Asked while a run is going (a change arrived from
+ * another computer mid-run), it runs once more afterwards instead of dropping the request, so the
+ * newest change always lands. Many asks during one run still make only one more run.
+ */
+export function syncLocalCopy(): Promise<LocalCopyReport | null> {
+  if (!isTauri()) return Promise.resolve(null);
+  if (running) {
+    again = true;
+    return running;
+  }
+  running = (async () => {
+    try {
+      let report: LocalCopyReport;
+      do {
+        again = false;
+        report = await runOnce();
+      } while (again);
+      return report;
+    } finally {
+      running = null;
+    }
+  })();
+  return running;
 }
 
 export function getLocalCopyEnabled(): Promise<boolean> {

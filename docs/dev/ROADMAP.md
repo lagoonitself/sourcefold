@@ -242,6 +242,18 @@ Plan and contract: `docs/dev/PLAN-shelf.md`. Sites kept with a note, tags and a 
 - [ ] Owner tests.
 - [ ] Later: dead-link check, Obsidian `Links.md`, shelf in Claude's MCP tools.
 
+## Live sync between computers (2026-11-05, branch `live-sync`)
+
+Plan and record: `docs/dev/PLAN-sync.md`. A change on one computer (or the website, the extension, Claude) shows on the others within a few seconds, files in the Sourcefold folder included.
+
+- [x] Migration `20261106000000_live_sync.sql`: statement-level triggers send one small Realtime Broadcast per account on `sync:<user_id>`; RLS lets each account hear only its own topic. Checked on an in-memory Postgres with Supabase stand-ins (11 checks).
+- [x] `createLiveSync` in `packages/client` (coalescing, own-echo skipping by device id, rejoin with backoff, catch-up after reconnect, online and visibility), 15 tests; device header on database requests only.
+- [x] Desktop: `LiveSyncProvider`, per-install device id, local copy reruns once when asked mid-run, Settings → Account shows the sync state.
+- [x] Website: `LiveRefresh` in the app layout.
+- [ ] Owner applies the migration (the agent's attempt was blocked by the permission check).
+- [ ] Owner tests on two computers, then merge and release.
+- [ ] Later: reload an open reader when its source changes elsewhere; move an offline library into the account.
+
 ## Later
 
 - [ ] Chrome Web Store listing for the extension ($5 one-time fee; the store build must drop the manifest `key`, and the desktop native host must also allow the store's extension ID).

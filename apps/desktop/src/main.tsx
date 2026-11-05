@@ -14,6 +14,7 @@ import "@fontsource-variable/atkinson-hyperlegible-next/wght-italic.css";
 import { App } from "./App";
 import { AuthProvider } from "./features/auth";
 import { isMacPlatform } from "./features/shortcuts/key-utils";
+import { LiveSyncProvider } from "./features/sync/LiveSyncProvider";
 import "./index.css";
 
 // Lets CSS make room for the macOS traffic lights, which sit over the app (see tauri.conf.json).
@@ -23,7 +24,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <MotionConfig reducedMotion="user">
       <AuthProvider>
-        <App />
+        <LiveSyncProvider>
+          <App />
+        </LiveSyncProvider>
       </AuthProvider>
       <Toaster
         position="bottom-right"

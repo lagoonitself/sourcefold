@@ -42,6 +42,7 @@ import { TldrSettings } from "../tldr/TldrSettings";
 import { UpdateSettings } from "../updates/UpdateSettings";
 import { ReaderSettingsPanel } from "../reader/ReaderSettings";
 import { OPEN_SETTINGS_EVENT } from "../tldr/tldr-settings-link";
+import { LiveSyncRow } from "../sync/LiveSyncRow";
 
 export interface SettingsDialogProps {
   open: boolean;
@@ -537,6 +538,8 @@ export function SettingsDialog({
                         </span>
                       </div>
                     </div>
+
+                    <LiveSyncRow />
 
                     <div className="pt-1">
                       <Button

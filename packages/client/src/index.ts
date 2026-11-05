@@ -19,12 +19,34 @@ export {
 } from "./router";
 export { createDrivePusher, DRIVE_PUSH_DELAY_MS, type DrivePusher } from "./drive/push";
 
+export {
+  browserSyncEnvironment,
+  createLiveSync,
+  parseSyncMessage,
+  supabaseSyncTransport,
+  syncTopic,
+  SYNC_EVENT,
+  type ChannelStatus,
+  type LiveSync,
+  type LiveSyncEnvironment,
+  type LiveSyncOptions,
+  type LiveSyncState,
+  type LiveSyncTransport,
+  type RealtimeClient,
+  type SyncBatch,
+  type SyncMessage,
+} from "./live-sync";
+
+/** Request header naming the device that made a write (see notify_sync in the database). */
+export const DEVICE_HEADER = "x-sourcefold-device";
+
 export const OAUTH_SCOPES = "https://www.googleapis.com/auth/drive.file";
 export const OAUTH_QUERY_PARAMS = { access_type: "offline", prompt: "consent" } as const;
 
 export function createSupabase(
   config: ClientConfig,
   storage?: SupportedStorage,
+  options: { deviceId?: string | null } = {},
 ): SourcefoldSupabase {
   return createClient<Database>(config.supabaseUrl, config.supabasePublishableKey, {
     auth: {
@@ -35,5 +57,27 @@ export function createSupabase(
       storageKey: "sourcefold:auth",
       ...(storage ? { storage } : {}),
     },
+    // Live sync tells each device which changes were its own (docs/dev/PLAN-sync.md).
+    ...(options.deviceId ? { global: { fetch: withDeviceHeader(options.deviceId) } } : {}),
   });
+}
+
+/**
+ * Adds the device header to database requests (`/rest/v1/`) only. Other Supabase services, such
+ * as the Drive token Edge Function, allow a fixed list of headers and would refuse it.
+ */
+export function withDeviceHeader(
+  deviceId: string,
+  baseFetch: typeof fetch = (...args) => fetch(...args),
+): typeof fetch {
+  return (input, init) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (!/\/rest\/v1\//.test(url)) return baseFetch(input, init);
+    const headers = new Headers(
+      init?.headers ??
+        (typeof input === "object" && "headers" in input ? input.headers : undefined),
+    );
+    headers.set(DEVICE_HEADER, deviceId);
+    return baseFetch(input, { ...init, headers });
+  };
 }

@@ -4,6 +4,7 @@ import { FolderSidebar } from "@/features/folders/folder-sidebar";
 import { UserMenu } from "@/features/auth/user-menu";
 import { TopBar } from "@/features/shell/top-bar";
 import { SidebarSkeleton } from "@/features/shell/sidebar-skeleton";
+import { LiveRefresh } from "@/features/sync/live-refresh";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -32,6 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <TopBar />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
+      <LiveRefresh />
     </div>
   );
 }

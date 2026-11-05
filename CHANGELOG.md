@@ -2,6 +2,12 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
+## Unreleased
+
+### New
+
+- **Your computers stay in step.** Signed in with the same Google account, a source, group, highlight or note you add on one computer shows on the others within a few seconds, and so does its file in your Sourcefold folder. Changes from the website, the extension and Claude arrive the same way, and the website updates by itself too. A computer that was asleep or offline catches up when it's back. **Settings → Account** shows whether sync is on.
+
 ## 0.6.1 (2026-11-05)
 
 ### New

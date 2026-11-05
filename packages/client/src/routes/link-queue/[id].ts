@@ -116,7 +116,8 @@ export async function DELETE(ctx: RouteContext, _request: Request, params: { id:
     .update({ status: "cancelled", claimed_by: null, claimed_at: null })
     .eq("id", params.id)
     .eq("user_id", ctx.userId)
-    .in("status", ["waiting", "working"])
+    // A failed link can be dismissed too, so it stops asking for attention.
+    .in("status", ["waiting", "working", "failed"])
     .select(COLUMNS)
     .maybeSingle();
   if (cancelError) {

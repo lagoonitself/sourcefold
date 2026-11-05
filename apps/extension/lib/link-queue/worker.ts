@@ -51,6 +51,8 @@ export interface LinkQueueDeps {
   paceMs: number;
   /** How long to wait before asking an X page again, until the post is in the DOM. */
   pollMs: number;
+  /** A run saved this many links (at least one). */
+  onSaved?: (count: number) => void;
 }
 
 const X_PENDING = ["Couldn't find the post on this page.", "Couldn't read this X page."];
@@ -294,7 +296,24 @@ async function processRow(
   }
 }
 
-async function drain(deps: LinkQueueDeps): Promise<void> {
+async function drain(plain: LinkQueueDeps): Promise<void> {
+  let savedCount = 0;
+  const deps: LinkQueueDeps = {
+    ...plain,
+    save: async (url, folderId, captured) => {
+      const outcome = await plain.save(url, folderId, captured);
+      if (outcome.status === "saved") savedCount += 1;
+      return outcome;
+    },
+  };
+  try {
+    await drainQueue(deps);
+  } finally {
+    if (savedCount > 0) plain.onSaved?.(savedCount);
+  }
+}
+
+async function drainQueue(deps: LinkQueueDeps): Promise<void> {
   if (!(await deps.desktopReachable())) {
     await clearProgress(deps);
     return;

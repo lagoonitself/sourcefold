@@ -1,5 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { detectLinkKind } from "@sourcefold/core";
+import {
+  describeQueuedLink,
+  detectLinkKind,
+  summarizeLinks,
+  workersAlive,
+  type LinkWorkersSeen,
+  type QueuedLinkInfo,
+} from "@sourcefold/core";
 import { formatWait } from "@sourcefold/core/capture";
 import { z } from "zod";
 import {
@@ -206,6 +213,10 @@ async function resolveGroup(
     );
   }
   return { id: group.id, path: index.pathOf(group.id) };
+}
+
+function queuedInfo(result: RemoteResult): QueuedLinkInfo {
+  return { needs: result.needs ?? "desktop", status: "waiting", message: result.message ?? null };
 }
 
 interface RemoteResult {
@@ -459,10 +470,55 @@ async function readLinks(entries: string[]): Promise<{ urls: string[]; skipped: 
   return { urls: local.urls, skipped };
 }
 
+/** Which helpers are running, from the check-ins; null when they can't be read. */
+async function readLinkWorkers(ctx: ToolContext): Promise<LinkWorkersSeen | null> {
+  try {
+    return await ctx.api.get<LinkWorkersSeen>("/link-queue/workers");
+  } catch {
+    return null;
+  }
+}
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/** The closing sentence of add_links for links left waiting: which helper, and is it running. */
+function waitingSentence(waiting: RemoteResult[], seen: LinkWorkersSeen | null): string {
+  if (!seen) {
+    return `${plural(waiting.length, "link")} ${waiting.length === 1 ? "is" : "are"} waiting for your computer. ${waiting.length === 1 ? "It'll" : "They'll"} be saved the next time the Sourcefold desktop app is open (X posts also need Chrome with the Sourcefold extension). Check with get_add_progress.`;
+  }
+  const alive = workersAlive(seen);
+  const browser = waiting.filter((row) => row.needs === "browser").length;
+  const desktop = waiting.length - browser;
+  const parts: string[] = [];
+  if (desktop > 0) {
+    const them = desktop === 1 ? "it" : "them";
+    parts.push(
+      `${plural(desktop, "link")} ${desktop === 1 ? "waits" : "wait"} for the Sourcefold desktop app, which ${alive.desktop ? `is open and will save ${them} in a minute` : "isn't open"}.`,
+    );
+  }
+  if (browser > 0) {
+    const them = browser === 1 ? "it" : "them";
+    const chrome = alive.chrome
+      ? `is open and will save ${them} in a minute`
+      : alive.chromeIdle
+        ? "is open but isn't signed in or can't reach the desktop app yet"
+        : "isn't open";
+    const tail = desktop === 0 ? `; your desktop app ${alive.desktop ? "is" : "isn't"} open` : "";
+    parts.push(
+      `${plural(browser, "X post")} ${browser === 1 ? "waits" : "wait"} for Chrome with the Sourcefold extension, which ${chrome}${tail}.`,
+    );
+  }
+  parts.push("Check with get_add_progress.");
+  return parts.join(" ");
+}
+
 function formatRemoteResults(
   group: { id: string; path: string },
   results: RemoteResult[],
   skipped: SkippedLink[] = [],
+  seen: LinkWorkersSeen | null = null,
 ): string {
   const count = (status: RemoteResult["status"]) =>
     results.filter((row) => row.status === status).length;
@@ -480,9 +536,7 @@ function formatRemoteResults(
     const title = result.title ? `${result.title} — ${result.url}` : result.url;
     const state =
       result.status === "waiting"
-        ? result.needs === "browser"
-          ? "waiting for Chrome"
-          : "waiting for your computer"
+        ? lowerFirst(describeQueuedLink(queuedInfo(result), seen).label)
         : result.status === "duplicate"
           ? "already saved"
           : result.status === "unavailable"
@@ -493,9 +547,7 @@ function formatRemoteResults(
   }
   lines.push(...skippedLines(skipped));
   if (waiting.length > 0) {
-    lines.push(
-      `${plural(waiting.length, "link")} ${waiting.length === 1 ? "is" : "are"} waiting for your computer. ${waiting.length === 1 ? "It'll" : "They'll"} be saved the next time the Sourcefold desktop app is open (X posts also need Chrome with the Sourcefold extension). Check with get_add_progress.`,
-    );
+    lines.push(waitingSentence(waiting, seen));
   } else {
     lines.push("Finished.");
   }
@@ -639,40 +691,48 @@ async function addLinksRemote(
   }
   if (args.allow_duplicates) await settleQueuedDuplicates(ctx, group.id, batch, deadline);
   await flushRemoteQueue(ctx, group.id, batch);
-  const reply = formatRemoteResults(group, results, skipped);
+  const seen = results.some((row) => row.status === "waiting") ? await readLinkWorkers(ctx) : null;
+  const reply = formatRemoteResults(group, results, skipped, seen);
   return left > 0
     ? `${reply}\nOnly the first ${REMOTE_MAX_LINKS} links were taken; ${left} more were left out. Call add_links again with the rest.`
     : reply;
 }
 
-function formatQueueRows(rows: LinkQueueRow[]): string {
-  if (rows.length === 0) return "No links are waiting for your computer.";
-  return rows
-    .map((row) => {
-      const title = row.title ? `${row.title} — ${row.url}` : row.url;
-      const state =
-        row.status === "waiting"
-          ? row.needs === "browser"
-            ? "waiting for Chrome"
-            : "waiting for your computer"
-          : row.status === "working"
-            ? row.needs === "browser"
-              ? "Chrome is saving"
-              : "your computer is saving"
-            : row.status === "saved"
-              ? "saved"
-              : row.status === "duplicate"
-                ? "already saved"
-                : row.status;
-      // "saved as [id]", never "saved saved as [id]" (QA 2026-11-04 P2-4).
-      const saved = !row.item_id
-        ? ""
-        : row.status === "saved"
-          ? ` as [${row.item_id}]`
-          : ` [${row.item_id}]`;
-      return `- [${row.id}] ${state}${saved}: ${title}${row.message ? ` (${row.message})` : ""} — added by ${row.added_by}`;
-    })
-    .join("\n");
+function formatQueueRows(
+  rows: LinkQueueRow[],
+  seen: LinkWorkersSeen | null,
+  recent = false,
+): string {
+  if (rows.length === 0) {
+    return recent
+      ? "No links were added in the last seven days."
+      : "No links are waiting for your computer.";
+  }
+  const lines = rows.map((row) => {
+    const status = describeQueuedLink(row, seen);
+    const title = row.title ? `${row.title} — ${row.url}` : row.url;
+    // "saved as [id]", never "saved saved as [id]" (QA 2026-11-04 P2-4).
+    const saved = !row.item_id
+      ? ""
+      : row.status === "saved"
+        ? ` as [${row.item_id}]`
+        : ` [${row.item_id}]`;
+    const hint = status.hint ? ` ${status.hint}` : "";
+    const note =
+      row.message && !status.hint.includes(row.message) && row.status !== "failed"
+        ? ` (${row.message})`
+        : "";
+    return `- [${row.id}] ${lowerFirst(status.label)}${saved}: ${title}${note}${hint} — added by ${row.added_by}`;
+  });
+  const summary = summarizeLinks(rows, seen);
+  const statuses = rows.map((row) => describeQueuedLink(row, seen));
+  const counts = [
+    `${summary.saved} saved`,
+    `${statuses.filter((st) => st.state === "up_next" || st.state.startsWith("waiting")).length} waiting`,
+    `${summary.needsYou} need${summary.needsYou === 1 ? "s" : ""} you`,
+  ];
+  lines.push(`${counts.join(", ")}.${summary.nextStep ? ` Next: ${summary.nextStep}` : ""}`);
+  return lines.join("\n");
 }
 
 async function remoteAddProgress(
@@ -687,7 +747,8 @@ async function remoteAddProgress(
       limit: 500,
     },
   });
-  return formatQueueRows(rows);
+  const seen = rows.length > 0 ? await readLinkWorkers(ctx) : null;
+  return formatQueueRows(rows, seen, args.recent ?? false);
 }
 
 async function cancelWaitingLinks(
@@ -742,7 +803,7 @@ export function registerAddTools(
     title: "Add links",
     description:
       ctx.mode === "remote"
-        ? "Saves links into a group, like pasting them into Sourcefold's Add links. Works for Grokipedia and Wikipedia articles, web pages, PDFs and arXiv papers, Hacker News threads, Bluesky posts and Substack posts (including a publication on its own domain). A YouTube playlist or channel, or a Substack publication, is expanded into its videos or posts (up to limit_per_collection each; Substack can be narrowed by date).\n\nThis is the web connector: each call saves what a cloud server can fetch, then returns. YouTube, Reddit and pages that refuse the cloud wait for the Sourcefold desktop app. X posts wait for Chrome with the Sourcefold extension. There is no job id. Check what is still waiting with get_add_progress, which lists each waiting link with its queue id. Links already saved in the group are reported, not saved twice. Use list_collection first to look at a playlist or publication without saving."
+        ? "Saves links into a group, like pasting them into Sourcefold's Add links. Works for Grokipedia and Wikipedia articles, web pages, PDFs and arXiv papers, Hacker News threads, Bluesky posts and Substack posts (including a publication on its own domain). A YouTube playlist or channel, or a Substack publication, is expanded into its videos or posts (up to limit_per_collection each; Substack can be narrowed by date).\n\nThis is the web connector: each call saves what a cloud server can fetch, then returns. YouTube, Reddit and pages that refuse the cloud wait for the Sourcefold desktop app. X posts wait for Chrome with the Sourcefold extension. There is no job id. Check what is still waiting with get_add_progress, which lists each waiting link with its queue id and shows whether the desktop app and Chrome are running. Links already saved in the group are reported, not saved twice. Use list_collection first to look at a playlist or publication without saving."
         : "Saves links into a group, like pasting them into Sourcefold's Add links. Works for Grokipedia and Wikipedia articles, YouTube videos (their transcript), web pages, PDFs and arXiv papers, Reddit and Hacker News threads, Bluesky posts and Substack posts (including a publication on its own domain). A YouTube playlist or channel, or a Substack publication, is expanded into its videos or posts (up to limit_per_collection each; Substack can be narrowed by date).\n\nSaving runs in the background, one link after another, and this call returns a job id. YouTube videos are spaced a few seconds apart and wait when YouTube pushes back. Check that job with get_add_progress. Links the cloud or this computer can't fetch wait for the desktop app, and X posts wait for Chrome with the Sourcefold extension. Links already saved in the group are reported, not saved twice. Use list_collection first to look at a playlist or publication without saving.",
     input: {
       group_id: z.string().describe("The group to save into (not a project)."),
@@ -815,7 +876,7 @@ export function registerAddTools(
     title: "Add progress",
     description:
       ctx.mode === "remote"
-        ? "Lists links that add_links left waiting for the Sourcefold desktop app or for Chrome with the extension. Each open row includes its queue id in brackets; pass those ids to cancel_waiting_links to cancel one link. By default this shows links still waiting or being saved. Pass recent=true for rows finished in the last seven days, ids for specific rows, or group_id to filter. There are no background job ids on the web connector."
+        ? "Lists links that add_links left waiting for the Sourcefold desktop app or for Chrome with the extension, and says whether the desktop app and Chrome are running and what to open. Each open row includes its queue id in brackets; pass those ids to cancel_waiting_links to cancel one link. By default this shows links still waiting or being saved. Pass recent=true for rows finished in the last seven days, ids for specific rows, or group_id to filter. There are no background job ids on the web connector."
         : "Checks an add_links job. Pass the job id add_links returned. Omit it to list recent jobs. wait_seconds waits for the job to finish before answering. stop=true stops it after the current link. Links that end up waiting for the desktop app or Chrome are included, each with its queue id.",
     input: {
       job_id: z.string().optional().describe("The job id add_links answered with."),

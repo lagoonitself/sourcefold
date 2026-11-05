@@ -234,6 +234,27 @@ export function App() {
     }
   }, []);
 
+  // A saved link from the "Links from Claude" panel opens its source like the palette does.
+  const openLinkedItem = React.useCallback(async (itemId: string) => {
+    try {
+      const source = await getItem(itemId);
+      openSource(source, {
+        image: (image) => {
+          openImage(image).catch((err) =>
+            toast.error(errorMessage(err, "Couldn't open that image.")),
+          );
+        },
+        reader: (item) => {
+          setReaderHighlightId(null);
+          setReaderItem(item);
+        },
+        browser: (url) => void openUrl(url),
+      });
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't open that source."));
+    }
+  }, []);
+
   // Open reader for a research card
   const handleOpenCard = React.useCallback(
     async (card: Card) => {
@@ -883,6 +904,8 @@ export function App() {
             canAddLinks={canAddLinks}
             projectView={projectView}
             shelfOpen={shelfOpen}
+            folders={folders}
+            onOpenLinkedItem={(id) => void openLinkedItem(id)}
           />
 
           {shelfOpen ? (

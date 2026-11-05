@@ -262,3 +262,11 @@ Plan and record: `docs/dev/PLAN-sync.md`. A change on one computer (or the websi
 - [ ] Pasted links for pages that build their text with JavaScript (DeepMind, Meta AI): render them in a hidden desktop window first. The extension already handles them.
 - [ ] More dedicated sources: GitHub (README, issues, PRs), Semantic Scholar, PubMed, bioRxiv, OpenReview, Stack Overflow, Threads, Mastodon, podcast transcripts.
 - [ ] Speech-to-text (Whisper) for YouTube videos without captions.
+
+## Links that wait for your computer: clear status (2026-11-06)
+
+Plan: `docs/dev/PLAN-link-status.md`.
+
+- [x] Check-ins from the desktop app and the extension (`link_workers`), one shared wording (`packages/core/src/link-status.ts`), the Links from Claude list on the desktop and in the extension, the extension's badge, X without Allow, Claude's replies.
+- [ ] Owner applies `20261108000000_link_workers.sql`.
+- [ ] A list of waiting links on the website.

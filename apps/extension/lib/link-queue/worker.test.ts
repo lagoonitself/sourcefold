@@ -390,4 +390,27 @@ describe("link queue worker", () => {
     expect(patch).toHaveBeenCalledWith(failed.id, { status: "waiting", needs: "browser" });
     expect(claim).toHaveBeenCalled();
   });
+
+  it("reports how many links a run saved", async () => {
+    let claims = 0;
+    const onSaved = vi.fn();
+    const { run } = controller({
+      onSaved,
+      api: {
+        claim: async () => {
+          claims += 1;
+          return claims === 1 ? [row()] : [];
+        },
+      },
+    });
+    await run();
+    expect(onSaved).toHaveBeenCalledWith(1);
+  });
+
+  it("does not report a run that saved nothing", async () => {
+    const onSaved = vi.fn();
+    const { run } = controller({ onSaved });
+    await run();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
 });

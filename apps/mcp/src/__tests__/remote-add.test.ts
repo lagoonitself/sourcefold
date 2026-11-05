@@ -18,7 +18,7 @@ const GROUP = {
   position: 0,
 };
 
-function remoteWeb() {
+function remoteWeb(workers?: unknown) {
   const queueBodies: unknown[] = [];
   const queueRows: LinkQueueRow[] = [];
   const web = fakeWeb({
@@ -48,6 +48,9 @@ function remoteWeb() {
       queueRows.push(...rows);
       return { status: 201, json: { data: rows } };
     },
+    ...(workers
+      ? { "GET /link-queue/workers": () => ({ json: { data: workers } }) }
+      : {}),
     "GET /link-queue": ({ query }) => ({
       json: {
         data:
@@ -256,6 +259,61 @@ describe("remote add_links", () => {
     const recent = await h.call("get_add_progress", { recent: true });
     expect(recent.text).toContain("saved as [00000000-0000-4000-8000-000000000098]");
     expect(recent.text).not.toContain("saved saved");
+  });
+
+  it("says which helper a waiting link needs and whether it is running", async () => {
+    const now = Date.now();
+    const { web } = remoteWeb({
+      desktop_seen_at: new Date(now - 10_000).toISOString(),
+      extension_seen_at: null,
+      extension_can_run: false,
+    });
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx), {
+      web,
+      desktop: closedDesktop(),
+      mode: "remote",
+    });
+    const x = await h.call("add_links", {
+      group_id: GROUP.id,
+      links: ["https://x.com/a/status/1", "https://x.com/a/status/2"],
+    });
+    expect(x.text).toContain(
+      "2 X posts wait for Chrome with the Sourcefold extension, which isn't open; your desktop app is open.",
+    );
+    expect(x.text).toContain("- waiting for Chrome:");
+    const yt = await h.call("add_links", {
+      group_id: GROUP.id,
+      links: ["https://www.youtube.com/watch?v=aircAruvnKk"],
+    });
+    expect(yt.text).toContain(
+      "1 link waits for the Sourcefold desktop app, which is open and will save it in a minute.",
+    );
+    expect(yt.text).toContain("- up next:");
+
+    const open = await h.call("get_add_progress");
+    expect(open.text).toContain("waiting for Chrome:");
+    expect(open.text).toContain("Open Chrome with the Sourcefold extension to save it.");
+    expect(open.text).toMatch(/1 saved|0 saved/);
+    expect(open.text).toMatch(/2 waiting|3 waiting/);
+    expect(open.text).toContain("Next:");
+  });
+
+  it("falls back to plain wording when the workers answer fails", async () => {
+    const { web } = remoteWeb();
+    const h = await connect((server, ctx) => void registerAddTools(server, ctx), {
+      web,
+      desktop: closedDesktop(),
+      mode: "remote",
+    });
+    await h.call("add_links", {
+      group_id: GROUP.id,
+      links: ["https://www.youtube.com/watch?v=aircAruvnKk"],
+    });
+    const open = await h.call("get_add_progress");
+    expect(open.isError).toBe(false);
+    expect(open.text).toContain("waiting for your computer");
+    expect(open.text).toContain("It's saved while the Sourcefold desktop app is open.");
+    expect(open.text).toContain("0 saved, 1 waiting, 0 need you.");
   });
 
   // QA 2026-11-04 P1-2: allow_duplicates in the web connector.

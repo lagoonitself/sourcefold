@@ -32,6 +32,7 @@ import * as itemsCheck from "./routes/items/check";
 import * as linkQueue from "./routes/link-queue";
 import * as linkQueueClaim from "./routes/link-queue/claim";
 import * as linkQueueItem from "./routes/link-queue/[id]";
+import * as linkQueueWorkers from "./routes/link-queue/workers";
 import * as mirror from "./routes/mirror";
 import * as notes from "./routes/notes";
 import * as outlineSections from "./routes/outline-sections";
@@ -80,6 +81,7 @@ export const LOCAL_ROUTES: ReadonlyArray<readonly [string, RouteModule]> = [
   ["/api/link-queue", linkQueue],
   ["/api/link-queue/claim", linkQueueClaim],
   ["/api/link-queue/[id]", linkQueueItem],
+  ["/api/link-queue/workers", linkQueueWorkers],
   ["/api/mirror", mirror],
   ["/api/notes", notes],
   ["/api/outline-sections", outlineSections],

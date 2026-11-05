@@ -11,7 +11,7 @@ export type LinkQueuePatch =
       item_id?: string;
     }
   | { status: "waiting"; message?: string }
-  | { status: "waiting"; needs: "browser"; message?: string };
+  | { status: "waiting"; needs: "desktop" | "browser"; message?: string };
 
 /** What one Add-links save returns. Refusals and YouTube limits are thrown, not returned. */
 export type SavedLink =

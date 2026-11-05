@@ -39,6 +39,9 @@ export default defineConfig({
       "https://*.supabase.co/*",
       "https://www.googleapis.com/*",
       "https://grokipedia.com/*",
+      // X posts open in a tab and are read there, so no Allow click is needed for them.
+      "https://x.com/*",
+      "https://twitter.com/*",
       "https://cdn.syndication.twimg.com/*",
       "https://api.fxtwitter.com/*",
       "https://pbs.twimg.com/*",

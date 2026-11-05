@@ -513,6 +513,33 @@ export type Database = {
           },
         ];
       };
+      link_workers: {
+        Row: {
+          can_run: boolean;
+          kind: string;
+          seen_at: string;
+          user_id: string;
+          version: string | null;
+          worker_id: string;
+        };
+        Insert: {
+          can_run?: boolean;
+          kind: string;
+          seen_at?: string;
+          user_id?: string;
+          version?: string | null;
+          worker_id: string;
+        };
+        Update: {
+          can_run?: boolean;
+          kind?: string;
+          seen_at?: string;
+          user_id?: string;
+          version?: string | null;
+          worker_id?: string;
+        };
+        Relationships: [];
+      };
       outline_sections: {
         Row: {
           created_at: string;
@@ -797,6 +824,16 @@ export type Database = {
       acquire_drive_sync_lock: {
         Args: { p_seconds?: number; p_user_id: string };
         Returns: boolean;
+      };
+      link_worker_check_in: {
+        Args: {
+          p_can_run?: boolean;
+          p_kind: string;
+          p_user_id?: string;
+          p_version?: string;
+          p_worker: string;
+        };
+        Returns: undefined;
       };
       claim_link_queue: {
         Args: {

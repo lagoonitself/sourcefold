@@ -12,15 +12,17 @@ import {
   signOut,
 } from "../lib/account";
 import { serveAccountChannel } from "../lib/account-channel";
-import { permissionBannerText } from "../lib/link-queue/copy";
-import { createExtensionLinkQueue, listenForLinkQueue } from "../lib/link-queue/start";
-import { readLinkQueueState } from "../lib/link-queue/state";
-import type { LinkQueueState } from "../lib/link-queue/types";
+import {
+  checkInExtension,
+  createExtensionLinkQueue,
+  listenForLinkQueue,
+  readLinkBadge,
+} from "../lib/link-queue/start";
 import { clearShelfIndex, findShelfLink, refreshShelfIndex, SHELF_INDEX_KEY } from "../lib/shelf";
 
 const SUCCESS_COLOR = "#1F5E4E";
 const ERROR_COLOR = "#B42318";
-const PERMISSION_COLOR = "#B54708";
+const ATTENTION_COLOR = "#B54708";
 const SHELF_INK_COLOR = "#1C2533";
 const BADGE_CLEAR_ALARM = "sourcefold-clear-badge";
 const LINK_QUEUE_ALARM = "sourcefold-link-queue";
@@ -30,7 +32,7 @@ interface Badge {
   color: string;
 }
 
-let permissionBadgeOn = false;
+let attentionBadgeOn = false;
 /** The badge the existing code last put on the toolbar icon for every tab, or null. */
 let shownBadge: Badge | null = null;
 
@@ -39,30 +41,47 @@ let shownBadge: Badge | null = null;
 const badgedTabs = new Set<number>();
 const SHELF_NOTE_BADGE: Badge = { text: "•", color: SHELF_INK_COLOR };
 
-async function showPermissionBadge(state: NonNullable<LinkQueueState["permission"]>) {
-  permissionBadgeOn = true;
-  const text = state.count > 9 ? "9+" : String(state.count);
-  await browser.action.setBadgeBackgroundColor({ color: PERMISSION_COLOR });
+/** Orange count of links that need the person (open an app, Allow, sign in, Retry). */
+async function showAttentionBadge(text: string, title: string) {
+  attentionBadgeOn = true;
+  await browser.action.setBadgeBackgroundColor({ color: ATTENTION_COLOR });
   await browser.action.setBadgeText({ text });
-  await browser.action.setTitle({ title: permissionBannerText(state.count, state.hosts) });
-  shownBadge = { text, color: PERMISSION_COLOR };
+  await browser.action.setTitle({ title });
+  shownBadge = { text, color: ATTENTION_COLOR };
   void applyShelfBadges();
 }
 
-async function clearPermissionBadge() {
-  if (!permissionBadgeOn) return;
-  permissionBadgeOn = false;
+async function clearAttentionBadge() {
+  if (!attentionBadgeOn) return;
+  attentionBadgeOn = false;
   await browser.action.setBadgeText({ text: "" });
   await browser.action.setTitle({ title: "Sourcefold" });
   shownBadge = null;
   void applyShelfBadges();
 }
 
-async function showSuccessBadge() {
+/** A green check is on the icon; the count waits until it clears. */
+let celebratingUntil = 0;
+
+async function refreshLinkBadge() {
+  if (Date.now() < celebratingUntil) return;
+  const badge = await readLinkBadge();
+  if (!badge) return;
+  if (badge.text) await showAttentionBadge(badge.text, badge.title);
+  else await clearAttentionBadge();
+}
+
+async function showLinksSavedBadge() {
+  celebratingUntil = Date.now() + 5000;
+  attentionBadgeOn = false;
+  await showSuccessBadge(5000);
+}
+
+async function showSuccessBadge(ms = 3000) {
   await browser.action.setBadgeBackgroundColor({ color: SUCCESS_COLOR });
   await browser.action.setBadgeText({ text: "✓" });
   await browser.action.setTitle({ title: "Sourcefold" });
-  await browser.alarms.create(BADGE_CLEAR_ALARM, { when: Date.now() + 3000 });
+  await browser.alarms.create(BADGE_CLEAR_ALARM, { when: Date.now() + ms });
   shownBadge = { text: "✓", color: SUCCESS_COLOR };
   void applyShelfBadges();
 }
@@ -139,31 +158,38 @@ export default defineBackground(() => {
   });
 
   const linkQueue = createExtensionLinkQueue({
-    onState: async (state) => {
-      if (state.permission && state.permission.count > 0)
-        await showPermissionBadge(state.permission);
-      else await clearPermissionBadge();
+    onState: async () => {
+      await refreshLinkBadge().catch(() => {});
+    },
+    onSaved: () => {
+      void showLinksSavedBadge().catch(() => {});
     },
   });
   listenForLinkQueue(linkQueue);
-  void browser.alarms.create(LINK_QUEUE_ALARM, { periodInMinutes: 1 });
-  void linkQueue.run();
+  const tick = async () => {
+    await checkInExtension();
+    await linkQueue.run();
+    await refreshLinkBadge().catch(() => {});
+  };
+  void browser.alarms.create(LINK_QUEUE_ALARM, { periodInMinutes: 0.5 });
+  void tick();
 
   browser.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === BADGE_CLEAR_ALARM) {
-      const state = await readLinkQueueState().catch(() => null);
-      if (state?.permission && state.permission.count > 0) {
-        await showPermissionBadge(state.permission);
+      celebratingUntil = 0;
+      const badge = await readLinkBadge();
+      if (badge?.text) {
+        await showAttentionBadge(badge.text, badge.title);
         return;
       }
-      permissionBadgeOn = false;
+      attentionBadgeOn = false;
       shownBadge = null;
       await browser.action.setBadgeText({ text: "" });
       await browser.action.setTitle({ title: "Sourcefold" });
       void applyShelfBadges();
       return;
     }
-    if (alarm.name === LINK_QUEUE_ALARM) await linkQueue.run();
+    if (alarm.name === LINK_QUEUE_ALARM) await tick();
   });
 
   // The shelf badge: looked up from the cache on every tab change. The network is only used by
@@ -180,7 +206,7 @@ export default defineBackground(() => {
   });
 
   browser.runtime.onStartup.addListener(() => {
-    void linkQueue.run();
+    void tick();
     void applyShelfBadges();
     void refreshShelfIndex().catch(() => {});
   });

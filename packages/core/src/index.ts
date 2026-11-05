@@ -17,6 +17,7 @@ export * from "./highlights";
 export * from "./research";
 export * from "./tldr";
 export * from "./shelf";
+export * from "./link-status";
 export { SOURCE_CAPTURE_KINDS, isSourceCaptureKind } from "./capture-types";
 export type {
   CaptureRequest,

@@ -755,6 +755,61 @@
 .queue-banner .btn-sm {
   flex-shrink: 0;
 }
+.queue-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.queue-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.queue-item-text {
+  min-width: 0;
+}
+
+.queue-item-text p {
+  margin: 0;
+}
+
+.queue-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-item-status {
+  color: var(--muted-foreground);
+}
+
+.queue-item-status strong {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.queue-item-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
 
 /* Shelf: Shelve sits beside Save; the note panel shows once the page is on the shelf */
 .save-row {

@@ -23,6 +23,10 @@ export interface TopBarProps {
   projectView?: ProjectView | null;
   /** The shelf is in the sheet: the breadcrumb reads just "Shelf". */
   shelfOpen?: boolean;
+  /** All folders, to name the group a queued link was added to. */
+  folders: Folder[];
+  /** Opens a saved source by its item id (from the Links from Claude panel). */
+  onOpenLinkedItem: (itemId: string) => void;
 }
 
 /** Where you are, search, Drive status and the main action. It also drags the window on macOS. */
@@ -38,6 +42,8 @@ export function TopBar({
   canAddLinks,
   projectView,
   shelfOpen = false,
+  folders,
+  onOpenLinkedItem,
 }: TopBarProps) {
   const mod = isMac ? "⌘" : "Ctrl+";
 
@@ -134,7 +140,7 @@ export function TopBar({
         <Kbd className="hidden @[520px]/topbar:inline-flex">/</Kbd>
       </button>
 
-      <LinkQueueStatus />
+      <LinkQueueStatus folders={folders} onOpenItem={onOpenLinkedItem} />
       <DriveSyncStatus />
 
       <Button

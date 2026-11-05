@@ -29,7 +29,7 @@ and organize sources. Links added through MCP are saved to Sourcefold automatica
 
 Sourcefold first tries to save each link from its web server. If a site blocks the server, the link
 waits for your computer. Open the signed-in Sourcefold desktop app to save links waiting for the
-desktop. X posts also need Chrome with the Sourcefold extension open while the desktop app is open.
+desktop. X posts also need Chrome with the Sourcefold extension open while the desktop app is open. The desktop app's top bar (**Links from Claude**) and the extension's popup list each link with what it's waiting for and whether it was saved; the extension's icon shows a number when a link needs you.
 Ask the connected assistant for the add progress to see what is waiting.
 
 Clients that ask for a Bearer token instead of OAuth can use an access token from Sourcefold

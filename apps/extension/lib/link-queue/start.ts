@@ -10,8 +10,16 @@ import {
   waitForQueueTab,
 } from "./browser-tab";
 import { isLinkQueueMessage } from "./messages";
-import { claimBrowserRow, listLinkQueue, patchLinkQueue } from "./queue-api";
+import {
+  claimBrowserRow,
+  fetchLinkWorkers,
+  listLinkQueue,
+  listRecentAll,
+  patchLinkQueue,
+  postLinkCheckIn,
+} from "./queue-api";
 import { saveQueuePage } from "./save-page";
+import { badgeText, badgeTitle, canRunQueue, checkInBody, needsYouCount } from "./status";
 import { extensionWorkerId, readLinkQueueState, writeLinkQueueState } from "./state";
 import type { LinkQueueState } from "./types";
 import { createLinkQueueController, type LinkQueueController } from "./worker";
@@ -22,6 +30,7 @@ const POLL_MS = 1_500;
 
 export function createExtensionLinkQueue(options?: {
   onState?: (state: LinkQueueState) => Promise<void> | void;
+  onSaved?: (count: number) => void;
 }): LinkQueueController {
   void closeLeftoverQueueTab().catch(() => {});
   return createLinkQueueController({
@@ -50,6 +59,7 @@ export function createExtensionLinkQueue(options?: {
     timeoutMs: TIMEOUT_MS,
     paceMs: PACE_MS,
     pollMs: POLL_MS,
+    onSaved: options?.onSaved,
   });
 }
 
@@ -60,4 +70,33 @@ export function listenForLinkQueue(controller: LinkQueueController): void {
     else void controller.run();
     sendResponse({ ok: true });
   });
+}
+
+/** Tells the server this extension is running. A failure (older server, offline) is ignored. */
+export async function checkInExtension(): Promise<void> {
+  try {
+    const signedIn = (await resolveAccountTarget()).type === "account";
+    if (!signedIn) return;
+    const reachable = await isDesktopReachable();
+    await postLinkCheckIn(
+      checkInBody(
+        await extensionWorkerId(),
+        canRunQueue(signedIn, reachable),
+        browser.runtime.getManifest().version,
+      ),
+    );
+  } catch {
+    // Silent: the queue works without check-ins.
+  }
+}
+
+/** What the toolbar badge should show now, or null when the server can't be asked. */
+export async function readLinkBadge(): Promise<{ text: string; title: string } | null> {
+  try {
+    const rows = await listRecentAll();
+    const seen = await fetchLinkWorkers().catch(() => null);
+    return { text: badgeText(needsYouCount(rows, seen)), title: badgeTitle(rows, seen) };
+  } catch {
+    return null;
+  }
 }

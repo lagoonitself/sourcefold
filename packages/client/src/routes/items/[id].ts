@@ -24,11 +24,16 @@ function hasEditableSourceText(kind: string): boolean {
 
 const patchItemSchema = z
   .object({
+    // One line: a newline in a title broke one-line-per-source lists (QA 2026-11-05).
     title: z
       .string()
-      .trim()
-      .min(1, "Title must be between 1 and 500 characters.")
-      .max(500, "Title must be between 1 and 500 characters.")
+      .transform((value) => value.replace(/\s+/g, " ").trim())
+      .pipe(
+        z
+          .string()
+          .min(1, "A title can't be empty or only spaces.")
+          .max(500, "A title must be at most 500 characters."),
+      )
       .optional(),
     folder_id: z.string().uuid("Invalid folder ID").optional(),
     note: z

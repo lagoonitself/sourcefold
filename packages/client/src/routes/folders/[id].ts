@@ -14,7 +14,13 @@ const patchFolderSchema = z
       .max(200, "Folder name must be at most 200 characters")
       .optional(),
     parent_id: z.string().uuid("Invalid parent folder ID").nullable().optional(),
-    position: z.number().int().optional(),
+    // The column is a 32-bit integer (QA 2026-11-05: larger numbers failed as "Something went wrong").
+    position: z
+      .number()
+      .int()
+      .min(0, "Position can't be negative.")
+      .max(2_147_483_647, "Position must be at most 2147483647.")
+      .optional(),
     archived: z.boolean().optional(),
   })
   .refine(

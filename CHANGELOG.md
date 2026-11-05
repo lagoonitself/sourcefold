@@ -12,7 +12,16 @@ Each release's downloads are on the [releases page](https://github.com/lagoonits
 
 ### Fixed
 
-- Claude Desktop can use the desktop app's sign-in again, and Claude's status check says when that sign-in was refused or has expired.
+- Claude Desktop can use the desktop app's sign-in again, and Claude's status check says when that sign-in was refused or has expired. It now works straight from the desktop app's sign-in, with no website involved, so `list_projects`, `find_sources` and the rest no longer say "isn't signed in" while the app is signed in.
+- **Security:** links to your own computer or local network (`localhost`, `192.168.x.x`, `10.x.x.x`, `169.254.169.254` and the like) are refused when Claude adds them, by the link queue, and by the desktop app and the extension before they open a waiting link, so they can never be opened from your computer or in Chrome.
+- Claude's `add_links` accounts for every link it's given: a link given twice, text that isn't a link and `file:` links are listed as left out instead of vanishing, and a slow or hostile site can no longer fail the whole call.
+- Notes keep exactly what you wrote: a first `# Heading`, later `# Headings` and the first line's indent are no longer changed.
+- `set_source_info` changes nothing when one of the ids is wrong, and refuses `source_id` with `source_ids` or `tags` with `add_tags`/`remove_tags`.
+- `move_sources` with `if_duplicate: "merge"` works.
+- A group's position must be between 0 and 2,147,483,647, instead of failing with "Something went wrong".
+- Substack date filters find older posts (the archive stops after a few weeks; the sitemap is used then), and an impossible date like `2026-02-30` is refused.
+- `show_in_app` says so when an id doesn't exist, instead of "Opened".
+- Smaller fixes: titles are kept on one line, whitespace-only titles and outline section names that already exist are refused, `add_broll` refuses notes and images, clearer messages for missing sources and for groups outside the `project` guard, and the web connector's `add_image` takes only a web address.
 - Claude's `edit_note` refuses anything that isn't a note, instead of changing a source.
 - Removing text (in the reader or from Claude) also removes the highlights inside the cut, and Undo says when there is nothing left to undo.
 - Claude's replies are clearer: `add_links` says what `allow_duplicates` did, arXiv papers are labelled arXiv, the web connector no longer offers desktop-only features, and archiving a project explains what went wrong when it fails.

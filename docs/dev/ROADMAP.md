@@ -220,6 +220,14 @@ Plan: `docs/dev/PLAN-sharing.md` (2026-10-22).
 - [ ] Owner adds the `TAURI_SIGNING_PRIVATE_KEY` repository secret and releases v0.6.0, then checks that the next release arrives inside the app.
 - [ ] The Chrome extension still updates by hand (unpacked) until the Chrome Web Store listing.
 
+## MCP QA fixes, round 2 (2026-11-05)
+
+- [x] Claude Desktop runs the website's API itself from the desktop app's Supabase sign-in (no website needed); `show_in_app` checks ids.
+- [x] Local-network links refused in `add_links` (by name and by DNS), the link-queue route, the desktop drain and the extension worker.
+- [x] `add_links` reports every left-out entry; probes time out; real calendar dates; Substack falls back to the sitemap for older dates.
+- [x] Notes kept as written (TypeScript and Rust builders, golden `note-headings`); `set_source_info` all-or-nothing; `move_sources` merge; position bounds; one-line titles; smaller messages.
+- [ ] Owner re-runs the desktop and web MCP checks after v0.6.0.
+
 ## Later
 
 - [ ] Chrome Web Store listing for the extension ($5 one-time fee; the store build must drop the manifest `key`, and the desktop native host must also allow the store's extension ID).

@@ -354,12 +354,23 @@ describe("move_sources", () => {
               id,
               kind: "web",
               title: `Title ${id}`,
-              source_url: `https://example.com/${id}`,
               folder_id: "g1",
             },
           },
         };
       },
+      // QA 2026-11-05: GET /items/:id has no link, so merge must find it in the group list.
+      "GET /items": () => ({
+        json: {
+          data: ["a", "dup"].map((id) => ({
+            id,
+            kind: "web",
+            title: `Title ${id}`,
+            source_url: `https://example.com/${id}`,
+            folder_id: "g1",
+          })),
+        },
+      }),
       "PATCH /items/*": ({ path }) => {
         const id = path.split("/").pop()!;
         if (id === "dup") {
@@ -372,7 +383,7 @@ describe("move_sources", () => {
       },
       "POST /items/check": ({ body }) => {
         checkBody = body;
-        return { json: { item_id: "target-existing-id" } };
+        return { json: { data: { exists: true, item_id: "target-existing-id" } } };
       },
       "POST /items/*/merge": ({ path, body }) => {
         mergePath = path;
@@ -491,7 +502,7 @@ describe("the project guard", () => {
     expect(intoOther.text).toContain("outside the project");
     const del = await h.call("delete_group", { group_id: "g9", project: "Cars" });
     expect(del.isError).toBe(true);
-    expect(del.text).toContain('Group "AI research › Papers" [g9] is in AI research');
+    expect(del.text).toContain('Group "AI research › Papers" [g9] is in the project "AI research"');
     const archive = await h.call("update_group", {
       group_id: "p9",
       archived: true,

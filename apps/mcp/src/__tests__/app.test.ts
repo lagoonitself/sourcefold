@@ -6,23 +6,40 @@ import { registerAppTools } from "../tools/app";
 import { createWebApi } from "../web-api";
 import { closedDesktop, connect, fakeDesktop, fakeWeb } from "./harness";
 
+const appWeb = () =>
+  fakeWeb({
+    "GET /folders": () => ({
+      json: {
+        data: [
+          { id: "p1", parent_id: null, name: "Cars", position: 0, item_count: 0 },
+          { id: "g1", parent_id: "p1", name: "Engines", position: 0, item_count: 1 },
+        ],
+      },
+    }),
+    "GET /items/*": ({ path }) =>
+      path === "/items/s1"
+        ? { json: { data: { id: "s1", title: "Turbo", folder_id: "g1" } } }
+        : { status: 404, json: { error: { message: "Item not found." } } },
+    "GET /highlights": () => ({ json: { data: [{ id: "h1" }] } }),
+  });
+
 describe("show_in_app", () => {
   it("shows a group, a source, and a highlight with its source", async () => {
     const desktop = fakeDesktop();
-    const h = await connect(registerAppTools, { web: fakeWeb({}), desktop });
+    const h = await connect(registerAppTools, { web: appWeb(), desktop });
     expect((await h.call("show_in_app", { group_id: "g1" })).text).toBe(
-      "Opened group [g1] in the Sourcefold app.",
+      'Opened "Cars › Engines" in the Sourcefold app.',
     );
     await h.call("show_in_app", { source_id: "s1" });
     const highlight = await h.call("show_in_app", { source_id: "s1", highlight_id: "h1" });
-    expect(highlight.text).toContain("highlight [h1] in source [s1]");
+    expect(highlight.text).toContain('the highlight in "Turbo"');
     expect(desktop.show).toHaveBeenNthCalledWith(1, { group_id: "g1" });
     expect(desktop.show).toHaveBeenNthCalledWith(2, { source_id: "s1" });
     expect(desktop.show).toHaveBeenNthCalledWith(3, { source_id: "s1", highlight_id: "h1" });
   });
 
   it("asks for the desktop app to be opened when it is closed", async () => {
-    const h = await connect(registerAppTools, { web: fakeWeb({}), desktop: closedDesktop() });
+    const h = await connect(registerAppTools, { web: appWeb(), desktop: closedDesktop() });
     const { text, isError } = await h.call("show_in_app", { group_id: "g1" });
     expect(isError).toBe(true);
     expect(text).toBe("Open the Sourcefold desktop app first.");
@@ -39,6 +56,21 @@ describe("show_in_app", () => {
     const lonely = await h.call("show_in_app", { highlight_id: "h1" });
     expect(lonely.isError).toBe(true);
     expect(lonely.text).toContain("source_id");
+    expect(desktop.show).not.toHaveBeenCalled();
+  });
+
+  // QA 2026-11-05: a made-up all-zeros id was "opened".
+  it("refuses ids that don't exist, without opening anything", async () => {
+    const desktop = fakeDesktop();
+    const h = await connect(registerAppTools, { web: appWeb(), desktop });
+    const zero = "00000000-0000-0000-0000-000000000000";
+    const group = await h.call("show_in_app", { group_id: zero });
+    expect(group.isError).toBe(true);
+    expect(group.text).toContain(`No project or group with id ${zero}`);
+    const source = await h.call("show_in_app", { source_id: zero });
+    expect(source.text).toContain(`No source with id ${zero}`);
+    const highlight = await h.call("show_in_app", { source_id: "s1", highlight_id: zero });
+    expect(highlight.text).toContain(`No highlight with id ${zero}`);
     expect(desktop.show).not.toHaveBeenCalled();
   });
 });

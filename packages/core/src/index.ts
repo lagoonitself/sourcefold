@@ -1,6 +1,7 @@
 // Browser-safe helpers. Server-only parsers live in ./server.
 export { safeName, uniqueNames, type UniqueNameEntry } from "./file-name";
 export { slugify } from "./slugify";
+export { isLocalNetworkUrl } from "./local-address";
 export {
   InvalidUrlError,
   canonicalizeUrl,

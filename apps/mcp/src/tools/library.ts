@@ -94,11 +94,12 @@ export function registerLibraryTools(server: McpServer, ctx: ToolContext): void 
               ? "the web connector's sign-in"
               : "the access token in SOURCEFOLD_TOKEN (Claude Desktop → Settings → Extensions → Sourcefold, or your MCP client's settings)";
         if (rejected) {
-          lines.push(`Not signed in: ${creds.webUrl} refused ${how}. ${rejected}`);
-        } else {
           lines.push(
-            `Signed in${creds.email ? ` as ${creds.email}` : ""} at ${creds.webUrl}, using ${how}.`,
+            `Not signed in: ${creds.supabase ? "Sourcefold" : creds.webUrl} refused ${how}. ${rejected}`,
           );
+        } else {
+          const where = creds.supabase ? "" : ` at ${creds.webUrl}`;
+          lines.push(`Signed in${creds.email ? ` as ${creds.email}` : ""}${where}, using ${how}.`);
         }
       }
 

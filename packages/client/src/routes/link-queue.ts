@@ -1,3 +1,4 @@
+import { isLocalNetworkUrl } from "@sourcefold/core";
 import { z } from "zod";
 import type { RouteContext } from "../context";
 import { invalidFolderMessage } from "../features/capture/find-duplicate";
@@ -42,7 +43,11 @@ const linkSchema = z.object({
       } catch {
         return false;
       }
-    }, "Enter an http or https link."),
+    }, "Enter an http or https link.")
+    .refine(
+      (value) => !isLocalNetworkUrl(value),
+      "Sourcefold doesn't open links to this computer or your local network.",
+    ),
   kind: z.string().max(40).nullable().optional(),
   needs: z.enum(["desktop", "browser"]).optional(),
   message: z.string().max(1000).optional(),

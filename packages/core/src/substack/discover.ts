@@ -266,7 +266,20 @@ export async function discoverSubstackPosts(
 ): Promise<DiscoveredPost[]> {
   const root = new URL(substackPublicationRoot(publicationUrl));
   try {
-    return await fromArchiveApi(root, fetch, options);
+    const posts = await fromArchiveApi(root, fetch, options);
+    // Without a sign-in the archive often stops after the last month or two (QA 2026-11-05:
+    // dates before about six weeks ago found nothing), while the sitemap lists every post.
+    if (posts.length === 0 && (options.after || options.before)) {
+      try {
+        return await fromSitemap(root, fetch, options);
+      } catch (sitemapError) {
+        if (sitemapError instanceof DOMException && sitemapError.name === "AbortError") {
+          throw sitemapError;
+        }
+        return posts;
+      }
+    }
+    return posts;
   } catch (apiError) {
     if (apiError instanceof DOMException && apiError.name === "AbortError") throw apiError;
     try {

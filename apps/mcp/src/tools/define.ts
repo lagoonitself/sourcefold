@@ -81,7 +81,13 @@ export function defineTool<S extends Shape>(
       }
       return { content: [{ type: "text", text }] };
     } catch (err) {
-      return { content: [{ type: "text", text: messageOf(err) }], isError: true };
+      let text = messageOf(err);
+      // The API's bare "Item not found." didn't say which id or what to do (QA 2026-11-05).
+      if (/^Item not found\.?$/i.test(text.trim())) {
+        const id = (args as Record<string, unknown>).source_id;
+        text = `${typeof id === "string" ? `No source with id ${id}` : "That source wasn't found"}. Use list_sources or find_sources to find source ids.`;
+      }
+      return { content: [{ type: "text", text }], isError: true };
     } finally {
       // Also after a partial failure: some of a batch may have changed.
       if (!spec.readOnly) await ctx.desktop.changed();

@@ -542,6 +542,8 @@ describe("get_source", () => {
     });
     const { text, isError } = await h.call("get_source", { source_id: "gone" });
     expect(isError).toBe(true);
-    expect(text).toBe("Item not found.");
+    expect(text).toBe(
+      "No source with id gone. Use list_sources or find_sources to find source ids.",
+    );
   });
 });

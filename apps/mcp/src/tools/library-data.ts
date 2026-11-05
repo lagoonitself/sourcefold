@@ -113,8 +113,16 @@ export function requireInProject(
   folderId: string,
   what: string,
 ): void {
-  if (!project || index.projectOf(folderId)?.id === project.id) return;
-  const where = index.byId.has(folderId) ? `in ${index.pathOf(folderId)}` : "in another project";
+  const owner = index.projectOf(folderId);
+  if (!project || owner?.id === project.id) return;
+  // A source is "in" its group's path; a group or project itself is in its project (naming its
+  // own path made a group "in" itself, QA 2026-11-05).
+  const itself = what.includes(`[${folderId}]`);
+  const where = !owner
+    ? "in another project"
+    : itself
+      ? `in the project "${owner.name}"`
+      : `in ${index.pathOf(folderId)}`;
   throw new Error(
     `${what} is ${where}, outside the project "${project.name}", so it was left untouched.`,
   );

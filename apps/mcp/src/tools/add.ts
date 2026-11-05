@@ -1,7 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { detectLinkKind } from "@sourcefold/core";
-import { extractUrls, formatWait } from "@sourcefold/core/capture";
+import { formatWait } from "@sourcefold/core/capture";
 import { z } from "zod";
+import {
+  readLinkArgs,
+  refuseLocalAddresses,
+  skippedLines,
+  type SkippedLink,
+} from "../links/link-args";
 import { createNodeSourceFetch, createPublicFetch } from "../links/public-fetch";
 import {
   checkDuplicate,
@@ -45,9 +51,14 @@ export {
   type Pacing,
 };
 
+/** A real calendar day: 2026-02-30 is refused, not ignored (QA 2026-11-05). */
 const DATE = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD.")
+  .refine((day) => {
+    const date = new Date(`${day}T00:00:00Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === day;
+  }, "Not a real date. Use YYYY-MM-DD.")
   .optional();
 /** Claude Desktop cuts a tool call off after about a minute. */
 const MAX_WAIT_SECONDS = 50;
@@ -218,6 +229,19 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
     }, timeoutMs);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Whether a site's front page is a Substack publication, in at most a few seconds and never
+ * throwing: a slow or hostile site once used up the whole call (QA 2026-11-05, a 502).
+ */
+async function probeCollection(url: string, deps: LinkDeps): Promise<"publication" | null> {
+  try {
+    const kind = await withTimeout(collectionKind(url, deps), 5_000);
+    return kind === "publication" ? kind : null;
+  } catch {
+    return null;
+  }
 }
 
 function queueReason(reason: string): string {
@@ -415,7 +439,31 @@ function directQueueTarget(url: string, kind: LinkKind | null) {
   return null;
 }
 
-function formatRemoteResults(group: { id: string; path: string }, results: RemoteResult[]): string {
+/**
+ * The links to save, and every entry left out with its reason (QA 2026-11-05: duplicates, text
+ * and file: links vanished, and local-network links were queued for the user's computer). Throws
+ * only when nothing is left to save, saying why each entry was left out.
+ */
+async function readLinks(entries: string[]): Promise<{ urls: string[]; skipped: SkippedLink[] }> {
+  const read = readLinkArgs(entries);
+  const local = await refuseLocalAddresses(read.urls);
+  const skipped = [...read.skipped, ...local.skipped];
+  if (local.urls.length === 0) {
+    throw new Error(
+      [
+        "No links to save. Pass full addresses starting with https://.",
+        ...skippedLines(skipped),
+      ].join("\n"),
+    );
+  }
+  return { urls: local.urls, skipped };
+}
+
+function formatRemoteResults(
+  group: { id: string; path: string },
+  results: RemoteResult[],
+  skipped: SkippedLink[] = [],
+): string {
   const count = (status: RemoteResult["status"]) =>
     results.filter((row) => row.status === status).length;
   const waiting = results.filter((row) => row.status === "waiting");
@@ -425,6 +473,7 @@ function formatRemoteResults(group: { id: string; path: string }, results: Remot
     `${count("unavailable")} unavailable`,
     `${count("failed")} failed`,
     `${waiting.length} waiting`,
+    ...(skipped.length > 0 ? [`${skipped.length} left out`] : []),
   ];
   const lines = [`Adding to ${group.path} [${group.id}]: ${summary.join(", ")}.`];
   for (const result of results) {
@@ -442,6 +491,7 @@ function formatRemoteResults(group: { id: string; path: string }, results: Remot
     const id = result.itemId ? ` [${result.itemId}]` : "";
     lines.push(`- ${state}${id}: ${title}${result.message ? ` (${result.message})` : ""}`);
   }
+  lines.push(...skippedLines(skipped));
   if (waiting.length > 0) {
     lines.push(
       `${plural(waiting.length, "link")} ${waiting.length === 1 ? "is" : "are"} waiting for your computer. ${waiting.length === 1 ? "It'll" : "They'll"} be saved the next time the Sourcefold desktop app is open (X posts also need Chrome with the Sourcefold extension). Check with get_add_progress.`,
@@ -464,10 +514,7 @@ async function addLinksRemote(
   ctx: ToolContext,
 ): Promise<string> {
   const deadline = Date.now() + REMOTE_BUDGET_MS;
-  const found = [...new Set(extractUrls(args.links.join("\n")))];
-  if (found.length === 0) {
-    throw new Error("No links found. Pass full addresses starting with https://.");
-  }
+  const { urls: found, skipped } = await readLinks(args.links);
   const urls = found.slice(0, REMOTE_MAX_LINKS);
   const left = found.length - urls.length;
   const batch: QueuedLink[] = [];
@@ -482,7 +529,7 @@ async function addLinksRemote(
   for (const url of urls) {
     let kind = classifyLink(url);
     if (kind !== "publication" && kind !== "youtube_list") {
-      const probed = await collectionKind(url, deps);
+      const probed = await probeCollection(url, deps);
       if (probed === "publication") kind = "publication";
     }
     if (!kind) {
@@ -592,7 +639,7 @@ async function addLinksRemote(
   }
   if (args.allow_duplicates) await settleQueuedDuplicates(ctx, group.id, batch, deadline);
   await flushRemoteQueue(ctx, group.id, batch);
-  const reply = formatRemoteResults(group, results);
+  const reply = formatRemoteResults(group, results, skipped);
   return left > 0
     ? `${reply}\nOnly the first ${REMOTE_MAX_LINKS} links were taken; ${left} more were left out. Call add_links again with the rest.`
     : reply;
@@ -738,16 +785,14 @@ export function registerAddTools(
     openWorld: true,
     run: async (args) => {
       if (ctx.mode === "remote") return addLinksRemote(args, ctx);
-      const urls = [...new Set(extractUrls(args.links.join("\n")))];
-      if (urls.length === 0)
-        throw new Error("No links found. Pass full addresses starting with https://.");
+      const { urls, skipped } = await readLinks(args.links);
       const group = await resolveGroup(ctx, args.group_id);
       const deps = await linkDepsFactory(ctx)();
       const rows = [];
       for (const url of urls) {
         let kind = classifyLink(url);
         if (kind !== "publication" && kind !== "youtube_list") {
-          const probed = await collectionKind(url, deps);
+          const probed = await probeCollection(url, deps);
           if (probed === "publication") kind = "publication";
         }
         rows.push({ url, kind });
@@ -759,7 +804,9 @@ export function registerAddTools(
         allowDuplicates: args.allow_duplicates ?? false,
       });
       await jobs.waitForEnd(job, (args.wait_seconds ?? 25) * 1000);
-      return formatJob(job, Date.now(), jobs.ahead(job));
+      const reply = formatJob(job, Date.now(), jobs.ahead(job));
+      if (skipped.length === 0) return reply;
+      return [reply, "Left out:", ...skippedLines(skipped)].join("\n");
     },
   });
 

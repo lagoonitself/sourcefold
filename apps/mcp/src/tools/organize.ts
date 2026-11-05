@@ -7,6 +7,7 @@ import { kindLabel, messageOf, plural, sourceLine, type FolderIndex } from "./fo
 import {
   isProject,
   loadFolderIndex,
+  loadFolderItems,
   mapLimit,
   PROJECT_GUARD_DESCRIPTION,
   requireFolder,
@@ -131,6 +132,8 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
       position: z
         .number()
         .int()
+        .min(0)
+        .max(2_147_483_647)
         .optional()
         .describe("Place among its siblings, starting at 0 (lower comes first)."),
       archived: z
@@ -142,7 +145,10 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
     idempotent: true,
     run: async ({ group_id, name, parent_id, position, archived, project }, { api }) => {
       const body: Record<string, unknown> = {};
-      if (name !== undefined) body.name = name;
+      if (name !== undefined) {
+        if (!name.trim()) throw new Error("A name can't be only spaces.");
+        body.name = name.trim();
+      }
       if (parent_id !== undefined) body.parent_id = parent_id;
       if (position !== undefined) body.position = position;
       if (Object.keys(body).length === 0 && archived === undefined) {
@@ -288,9 +294,11 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
       forgetCachedSource(source_id);
       const changes = [
         title !== undefined ? `renamed from "${before.title}"` : null,
-        group_id !== undefined
-          ? `moved from ${where(index, before.folder_id)} to ${where(index, group_id)}`
-          : null,
+        group_id === undefined
+          ? null
+          : group_id === before.folder_id
+            ? `already in ${where(index, group_id)}`
+            : `moved from ${where(index, before.folder_id)} to ${where(index, group_id)}`,
         note !== undefined ? (note ? "note set" : "note cleared") : null,
       ].filter(Boolean);
       return `Updated (${changes.join(", ")}): ${sourceLine(item)} · in ${where(index, item.folder_id)}`;
@@ -352,19 +360,20 @@ export function registerOrganizeTools(server: McpServer, ctx: ToolContext): void
               return { id, outcome: { status: "skipped", ref } as MoveOutcome };
             }
             if (isDup && if_duplicate === "merge") {
+              // GET /items/:id has no link; the group's list does (QA 2026-11-05: merge always
+              // failed with the plain duplicate error because the link was never found).
               let url = ref.canonical_url || ref.source_url;
               if (!url) {
-                const full = await api.get<{
-                  canonical_url?: string | null;
-                  source_url?: string | null;
-                }>(`/items/${encodeURIComponent(id)}`);
-                url = full.canonical_url || full.source_url;
+                const siblings = await loadFolderItems(api, ref.folder_id);
+                const full = siblings.find((item) => item.id === id);
+                url = full?.canonical_url || full?.source_url || null;
               }
               if (!url) throw patchErr;
-              const check = await api.post<{ item_id: string }>("/items/check", {
+              const check = await api.post<{ exists?: boolean; item_id?: string }>("/items/check", {
                 url,
                 folder_id: group_id,
               });
+              if (!check.exists || !check.item_id) throw patchErr;
               await api.post(`/items/${encodeURIComponent(check.item_id)}/merge`, {
                 ids: [id],
               });

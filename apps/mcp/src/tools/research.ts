@@ -35,6 +35,7 @@ import {
 import { z } from "zod";
 import { findQuote, readerTextOf } from "../reader-text";
 import type { Folder, Item } from "../types";
+import { ApiError } from "../web-api";
 import { defineTool, type ToolContext } from "./define";
 import { formatDate, formatSeconds, plural, truncate } from "./format";
 import {
@@ -199,7 +200,16 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
         project,
       } = args;
 
-      const ids = source_ids ?? (source_id ? [source_id] : []);
+      // Conflicting arguments were silently ignored (QA 2026-11-05).
+      if (source_ids && source_id) {
+        throw new Error("Give source_ids or source_id, not both.");
+      }
+      if (tags !== undefined && (add_tags !== undefined || remove_tags !== undefined)) {
+        throw new Error(
+          "Give tags (the full new list) or add_tags/remove_tags (changes to the current list), not both.",
+        );
+      }
+      const ids = [...new Set(source_ids ?? (source_id ? [source_id] : []))];
       if (ids.length === 0) {
         throw new Error("Provide either source_ids or source_id.");
       }
@@ -215,8 +225,21 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
 
       const results: string[] = [];
 
+      // Every source is found and checked before any is changed: one bad id used to fail the
+      // call after the others had already been changed (QA 2026-11-05).
+      const plans: { id: string; item: Item; patch: Record<string, unknown> }[] = [];
       for (const id of ids) {
-        const item = await api.get<Item>(`/items/${encodeURIComponent(id)}`);
+        let item: Item;
+        try {
+          item = await api.get<Item>(`/items/${encodeURIComponent(id)}`);
+        } catch (err) {
+          if (err instanceof ApiError && (err.status === 404 || err.status === 400)) {
+            throw new Error(
+              `No source with id ${id}. Nothing was changed. Use list_sources or find_sources to find ids.`,
+            );
+          }
+          throw err;
+        }
         requireInProject(index, targetProject, item.folder_id, `"${item.title}"`);
 
         const patch: Record<string, unknown> = {};
@@ -241,7 +264,9 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
           }
           const cleaned = normalizeTags(current);
           if (cleaned.length > RESEARCH_LIMITS.tags) {
-            throw new Error(`A source can have at most ${RESEARCH_LIMITS.tags} tags.`);
+            throw new Error(
+              `A source can have at most ${RESEARCH_LIMITS.tags} tags ("${item.title}" would have ${cleaned.length}). Nothing was changed.`,
+            );
           }
           patch.tags = cleaned;
         }
@@ -261,7 +286,10 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
           const s = summary.trim();
           patch.summary = s.length > 0 ? s : null;
         }
+        plans.push({ id, item, patch });
+      }
 
+      for (const { id, item, patch } of plans) {
         if (Object.keys(patch).length > 0) {
           const updated = await api.patch<Item>(`/items/${encodeURIComponent(id)}`, patch);
           forgetCachedSource(id);
@@ -645,6 +673,12 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
       if (source_id) {
         const item = await api.get<Item>(`/items/${encodeURIComponent(source_id)}`);
         requireInProject(index, targetProject, item.folder_id, `"${item.title}"`);
+        // A note or a picture has no footage to clip (QA 2026-11-05).
+        if (item.kind === "note" || item.kind === "image") {
+          throw new Error(
+            `"${item.title}" is ${item.kind === "note" ? "a note" : "an image"}, not a video, so it can't be b-roll. Give a video source or a video url.`,
+          );
+        }
         proj = index.projectOf(item.folder_id);
         itemId = item.id;
         clipTitle = item.title;
@@ -843,6 +877,12 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
           const a = actions[i]!;
           switch (a.action) {
             case "add_section": {
+              // Sections are found by name ignoring case, like tags, so two with one name could
+              // never be told apart (QA 2026-11-05).
+              const clash = sections.find((s) => sameTag(s.title, a.title.trim()));
+              if (clash) {
+                throw new Error(`There is already a section "${clash.title}" [${clash.id}].`);
+              }
               const sorted = sortSections(sections);
               let position: number;
               if (a.after) {
@@ -875,6 +915,12 @@ export function registerResearchTools(server: McpServer, ctx: ToolContext): void
             case "rename_section": {
               const target = findSection(a.section);
               if (!target) throw new Error(`No section "${a.section}" to rename.`);
+              const clash = sections.find(
+                (s) => s.id !== target.id && sameTag(s.title, a.title.trim()),
+              );
+              if (clash) {
+                throw new Error(`There is already a section "${clash.title}" [${clash.id}].`);
+              }
               const updated = await api.put<OutlineSection>(
                 `/outline-sections/${encodeURIComponent(target.id)}`,
                 {

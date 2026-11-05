@@ -233,6 +233,58 @@ export function bodyFromDriveFile(fileText: string): string {
   return body.replace(/^\n+/, "").trimEnd() + "\n";
 }
 
+/** Drops blank lines at the start (never a line's own indent) and whitespace at the end. */
+function trimBlankLines(text: string): string {
+  return text.replace(/^(?:[ \t]*\n)+/, "").trimEnd();
+}
+
+/**
+ * A note's body: as written, minus a leading "# <title>" line (the one a file built here starts
+ * with). Matches `clean_note_body` in apps/desktop/src-tauri/src/service.rs.
+ */
+function noteBody(raw: string, title: string): string {
+  const text = trimBlankLines(raw);
+  const first = text.split("\n", 1)[0] ?? "";
+  if (first.startsWith("# ") && first.slice(2).trim() === title.trim()) {
+    return trimBlankLines(text.slice(first.length));
+  }
+  return text;
+}
+
+/** A captured source's body: no title, subtitle or "Saved from" line, headings from `##`. */
+function cleanCapturedBody(raw: string, kind: string, meta: Record<string, unknown>): string {
+  let text = raw.trim();
+
+  // Strip leading # Title if present (repeatedly or once)
+  if (text.startsWith("# ")) {
+    text = text.replace(/^#[^\n]*\n*/, "").trimStart();
+  }
+
+  // If Substack and has subtitle, strip matching *subtitle* line if present
+  if (kind === "substack" && typeof meta.subtitle === "string" && meta.subtitle.trim()) {
+    const expectedSubtitle = `*${meta.subtitle.trim()}*`;
+    if (text.startsWith(expectedSubtitle)) {
+      text = text.slice(expectedSubtitle.length).trimStart();
+    }
+  }
+
+  // Strip any old or existing source lines: "> Saved from ..."
+  while (text.startsWith("> Saved from ") || text.startsWith(">Saved from ")) {
+    text = text.replace(/^>[^\n]*\n*/, "").trimStart();
+  }
+
+  // In case there was another leading "# " before or after the source line
+  if (text.startsWith("# ")) {
+    text = text.replace(/^#[^\n]*\n*/, "").trimStart();
+  }
+
+  // Ensure body headings start at ##
+  text = text.replace(/^#\s+(.+)$/gm, "## $1");
+
+  // Collapse 3+ newlines to 2
+  return text.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /**
  * Builds the canonical Drive Markdown file content for an item.
  * Layout:
@@ -407,36 +459,12 @@ export function buildItemFile(item: BuildItemInput, folderPath?: string): string
 
   rawBody = stripTrailingSections(rawBody);
 
-  let text = rawBody.trim();
-
-  // Strip leading # Title if present (repeatedly or once)
-  if (text.startsWith("# ")) {
-    text = text.replace(/^#[^\n]*\n*/, "").trimStart();
-  }
-
-  // If Substack and has subtitle, strip matching *subtitle* line if present
-  if (item.kind === "substack" && typeof meta.subtitle === "string" && meta.subtitle.trim()) {
-    const expectedSubtitle = `*${meta.subtitle.trim()}*`;
-    if (text.startsWith(expectedSubtitle)) {
-      text = text.slice(expectedSubtitle.length).trimStart();
-    }
-  }
-
-  // Strip any old or existing source lines: "> Saved from ..."
-  while (text.startsWith("> Saved from ") || text.startsWith(">Saved from ")) {
-    text = text.replace(/^>[^\n]*\n*/, "").trimStart();
-  }
-
-  // In case there was another leading "# " before or after the source line
-  if (text.startsWith("# ")) {
-    text = text.replace(/^#[^\n]*\n*/, "").trimStart();
-  }
-
-  // Ensure body headings start at ##
-  text = text.replace(/^#\s+(.+)$/gm, "## $1");
-
-  // Collapse 3+ newlines to 2
-  text = text.replace(/\n{3,}/g, "\n\n").trim();
+  // A note is the user's own text: keep it as written (QA 2026-11-05: a leading "# Heading" was
+  // deleted, later "# H1"s became "## H1" and the first line's indent was lost).
+  const text =
+    item.kind === "note"
+      ? noteBody(rawBody, item.title)
+      : cleanCapturedBody(rawBody, item.kind, meta);
 
   // Assemble sections
   const sections: string[] = [];

@@ -125,11 +125,15 @@ export function registerImagesTools(
         ? options.publicFetch
         : createPublicFetch(options);
 
+  // The web connector runs on Sourcefold's server: a "file on this computer" would be a file on
+  // that server, so it takes only a url (QA 2026-11-05).
+  const remote = ctx.mode === "remote";
   defineTool(server, ctx, {
     name: "add_image",
     title: "Add an image",
-    description:
-      "Adds a picture (PNG, JPEG, GIF or WebP, up to 10 MB) to a group as an image source. Give exactly one of path (a file on this computer) or url (a web address to download it from). The title defaults to the file name. Sources can't live directly in a project, so group_id must be a group. Answers with the new image's id.",
+    description: remote
+      ? "Adds a picture (PNG, JPEG, GIF or WebP, up to 10 MB) to a group as an image source, downloaded from url (a public web address). This web connector can't read files on the user's computer; for those, the user adds them in the Sourcefold app or uses Claude Desktop with the Sourcefold extension. The title defaults to the file name. Sources can't live directly in a project, so group_id must be a group. Answers with the new image's id."
+      : "Adds a picture (PNG, JPEG, GIF or WebP, up to 10 MB) to a group as an image source. Give exactly one of path (a file on this computer) or url (a web address to download it from). The title defaults to the file name. Sources can't live directly in a project, so group_id must be a group. Answers with the new image's id.",
     input: {
       group_id: z.string().min(1).describe("Id of the group to put the image in."),
       path: z
@@ -148,6 +152,11 @@ export function registerImagesTools(
     },
     openWorld: true,
     run: async ({ group_id, path, url, title }, { api }) => {
+      if (remote && path) {
+        throw new Error(
+          "This web connector runs on Sourcefold's server and can't read files on your computer. Give a public url, or add the file in the Sourcefold app.",
+        );
+      }
       if ((path ? 1 : 0) + (url ? 1 : 0) !== 1) {
         throw new Error(
           "Give exactly one of path (a file on this computer) or url (a web address).",

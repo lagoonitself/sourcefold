@@ -1,3 +1,4 @@
+import { isLocalNetworkUrl } from "@sourcefold/core";
 import { isYouTubeRateLimit } from "@sourcefold/core/capture";
 import type { LinkQueueRow } from "@sourcefold/client";
 import { isSessionExpiredError } from "@/lib/remote-client";
@@ -168,6 +169,12 @@ export async function drainDesktopQueue(hooks: DrainHooks): Promise<BatchSummary
   return summary;
 
   async function processRow(row: LinkQueueRow): Promise<RowResult> {
+    // Never open, or hand to Chrome, a link to this computer or the local network.
+    if (isLocalNetworkUrl(row.url)) {
+      state.lastWasYouTube = false;
+      await fail(row, "Sourcefold doesn't open links to this computer or your local network.");
+      return "done";
+    }
     const kind = classifyQueuedLink(row.url, row.kind);
     if (kind === "x") {
       state.lastWasYouTube = false;

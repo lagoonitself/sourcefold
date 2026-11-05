@@ -73,6 +73,11 @@ export interface WebApi {
 export interface WebApiDeps {
   credentials?: () => Credentials | null;
   fetch?: typeof fetch;
+  /**
+   * Answers a request in this process for a sign-in with `supabase` set (the desktop app's), the
+   * way the website would. Without it such a sign-in goes to `webUrl` like any other.
+   */
+  localFetch?: (creds: Credentials, pathAndQuery: string, init: RequestInit) => Promise<Response>;
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -102,12 +107,16 @@ export function createWebApi(deps: WebApiDeps = {}): WebApi {
 
     let res: Response;
     try {
-      res = await fetchImpl(url, {
+      const init: RequestInit = {
         method,
         headers,
         body,
         signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-      });
+      };
+      res =
+        creds.supabase && deps.localFetch
+          ? await deps.localFetch(creds, `${url.pathname}${url.search}`, init)
+          : await fetchImpl(url, init);
     } catch (err) {
       const reason =
         err instanceof Error && err.name === "TimeoutError"

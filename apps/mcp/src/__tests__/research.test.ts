@@ -29,6 +29,36 @@ function makeItem(id: string, folderId: string, extra: Partial<Item> = {}): Item
 }
 
 describe("set_source_info", () => {
+  // QA 2026-11-05: one bad id failed the call after the valid ones had already changed.
+  it("changes nothing when one id is wrong, and refuses conflicting arguments", async () => {
+    const fake = fakeWeb({
+      "GET /folders": () => ({ json: { data: folders } }),
+      "GET /items/*": ({ path }) =>
+        path === "/items/bad"
+          ? { status: 404, json: { error: { message: "Item not found." } } }
+          : { json: { data: makeItem(path.split("/").pop()!, "g1") } },
+      "PATCH /items/*": () => ({ json: { data: makeItem("x", "g1") } }),
+    });
+    const h = await connect(registerResearchTools, { web: fake });
+    const bad = await h.call("set_source_info", { source_ids: ["i1", "bad"], status: "keep" });
+    expect(bad.isError).toBe(true);
+    expect(bad.text).toContain("No source with id bad. Nothing was changed.");
+    expect(fake.calls.some((c) => c.startsWith("PATCH"))).toBe(false);
+
+    const both = await h.call("set_source_info", {
+      source_ids: ["i1"],
+      source_id: "i2",
+      status: "keep",
+    });
+    expect(both.text).toBe("Give source_ids or source_id, not both.");
+    const tags = await h.call("set_source_info", {
+      source_id: "i1",
+      tags: ["a"],
+      add_tags: ["b"],
+    });
+    expect(tags.text).toContain("not both");
+  });
+
   it("updates status, tags, author, author_type, and summary on a single source", async () => {
     const item = makeItem("i1", "g1");
     let patchReceived: Record<string, unknown> | null = null;

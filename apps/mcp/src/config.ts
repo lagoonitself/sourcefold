@@ -19,6 +19,11 @@ export interface Credentials {
   email: string | null;
   /** Unix seconds when the token stops working; only the desktop app's sign-in has one. */
   expiresAt?: number | null;
+  /**
+   * Set for the desktop app's Supabase sign-in (since 2026-10-23): the server then runs the
+   * website's API itself against Supabase (`@sourcefold/client`), so no website is needed.
+   */
+  supabase?: { url: string; publishableKey: string; userId: string };
 }
 
 export const NOT_SIGNED_IN_MESSAGE =
@@ -67,6 +72,9 @@ export function readJsonFile<T>(path: string): T | null {
  * before that hold `web_url` and an `sf_` `token`.
  */
 interface DesktopSession {
+  supabase_url?: unknown;
+  publishable_key?: unknown;
+  user_id?: unknown;
   access_token?: unknown;
   expires_at?: unknown;
   email?: unknown;
@@ -91,8 +99,23 @@ export function loadCredentials(env: NodeJS.ProcessEnv = process.env): Credentia
   }
 
   const accessToken = text(session?.access_token);
+  const expiresAt = typeof session?.expires_at === "number" ? session.expires_at : null;
+  const supabaseUrl = text(session?.supabase_url);
+  const publishableKey = text(session?.publishable_key);
+  const userId = text(session?.user_id);
+  // The desktop's Supabase sign-in works without any website (QA 2026-11-05: the session file
+  // has no web address, so the old path read it as "not signed in" while the app was signed in).
+  if (accessToken && supabaseUrl && publishableKey && userId) {
+    return {
+      webUrl: trimSlash(supabaseUrl),
+      token: accessToken,
+      source: "desktop",
+      email,
+      expiresAt,
+      supabase: { url: trimSlash(supabaseUrl), publishableKey, userId },
+    };
+  }
   if (accessToken && webUrl) {
-    const expiresAt = typeof session?.expires_at === "number" ? session.expires_at : null;
     return { webUrl: trimSlash(webUrl), token: accessToken, source: "desktop", email, expiresAt };
   }
 

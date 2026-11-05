@@ -41,16 +41,44 @@ describe("loadCredentials", () => {
   });
 
   // QA 2026-11-04 P0-2: the desktop app's current session.json was never read.
-  it("reads the desktop app's current session.json", () => {
+  // QA 2026-11-05: with no website address baked in, the desktop's sign-in read as "not signed
+  // in". It now goes straight to Supabase, with or without a website.
+  it.each([undefined, "https://app.test/"])(
+    "reads the desktop app's current session.json (website %s)",
+    (web) => {
+      const env = withSession(desktopSession(4_102_444_800));
+      if (!env) return;
+      expect(loadCredentials({ ...env, SOURCEFOLD_WEB_URL: web })).toEqual({
+        webUrl: "https://project.supabase.co",
+        token: "eyJ.desktop.jwt",
+        source: "desktop",
+        email: "a@b.c",
+        expiresAt: 4_102_444_800,
+        supabase: {
+          url: "https://project.supabase.co",
+          publishableKey: "sb_publishable_test",
+          userId: "00000000-0000-4000-8000-000000000001",
+        },
+      });
+    },
+  );
+
+  it("sends a Supabase sign-in to the local API, not the website", async () => {
     const env = withSession(desktopSession(4_102_444_800));
     if (!env) return;
-    expect(loadCredentials({ ...env, SOURCEFOLD_WEB_URL: "https://app.test/" })).toEqual({
-      webUrl: "https://app.test",
-      token: "eyJ.desktop.jwt",
-      source: "desktop",
-      email: "a@b.c",
-      expiresAt: 4_102_444_800,
+    const seen: string[] = [];
+    const api = createWebApi({
+      credentials: () => loadCredentials(env),
+      fetch: async () => {
+        throw new Error("the website must not be called");
+      },
+      localFetch: async (_creds, path) => {
+        seen.push(path);
+        return Response.json({ data: [] });
+      },
     });
+    await api.get("/folders", { query: { project_id: "p" } });
+    expect(seen).toEqual(["/api/folders?project_id=p"]);
   });
 
   it("prefers a pasted token over the desktop app's sign-in", () => {

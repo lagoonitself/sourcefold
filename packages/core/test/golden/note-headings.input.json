@@ -1,0 +1,7 @@
+{
+  "kind": "note",
+  "title": "Plan",
+  "folder": "Work",
+  "created": "2026-11-05",
+  "body": "    indented first line\n\n# Heading that differs from the title\n\nText.\n\n# Another H1\n\nMore."
+}

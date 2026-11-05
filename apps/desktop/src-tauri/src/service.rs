@@ -1376,6 +1376,54 @@ pub(crate) fn item_file_fields(item: &Item, title: String, folder: Option<String
     }
 }
 
+/// Drops blank lines at the start (never a line's own indent) and whitespace at the end.
+fn trim_blank_lines(text: &str) -> String {
+    let mut rest = text;
+    loop {
+        match rest.find('\n') {
+            Some(pos) if rest[..pos].trim().is_empty() => rest = &rest[pos + 1..],
+            _ => break,
+        }
+    }
+    if rest.trim().is_empty() {
+        return String::new();
+    }
+    rest.trim_end().to_string()
+}
+
+/// A note is the user's own text: kept as written (QA 2026-11-05: a leading "# Heading" was
+/// deleted, later "# H1"s became "## H1" and the first line's indent was lost). Only a leading
+/// "# <title>" line, the one a file built here starts with, is dropped. Matches `noteBody` in
+/// packages/core/src/drive-file.ts.
+pub fn clean_note_body(body: &str, title: &str) -> String {
+    let mut raw = body.replace("\r\n", "\n");
+    if raw.starts_with('\u{feff}') {
+        raw.remove(0);
+    }
+    if let Some(stripped) = raw.strip_prefix("---\n") {
+        if let Some(end_idx) = stripped.find("\n---\n") {
+            raw = stripped[end_idx + 5..].to_string();
+        }
+    }
+    if let Some(note_start) = raw.rfind("\n## My note\n") {
+        raw.truncate(note_start);
+    }
+    if let Some(hl_start) = raw.rfind(HIGHLIGHTS_HEADING) {
+        raw.truncate(hl_start);
+    }
+    if let Some(sum_start) = raw.rfind("\n## My summary\n") {
+        raw.truncate(sum_start);
+    }
+    let text = trim_blank_lines(&raw);
+    let first = text.split('\n').next().unwrap_or("");
+    if let Some(heading) = first.strip_prefix("# ") {
+        if heading.trim() == title.trim() {
+            return trim_blank_lines(&text[first.len()..]);
+        }
+    }
+    text
+}
+
 pub fn clean_body_markdown(kind: &str, body: &str, subtitle: Option<&str>) -> String {
     let mut raw = body.replace("\r\n", "\n");
     if raw.starts_with('﻿') {
@@ -1703,7 +1751,11 @@ pub fn build_item_file_with_highlights(
         sections.push(source_line);
     }
 
-    let cleaned_body = clean_body_markdown(kind, body, fields.subtitle.as_deref());
+    let cleaned_body = if kind == "note" {
+        clean_note_body(body, &fields.title)
+    } else {
+        clean_body_markdown(kind, body, fields.subtitle.as_deref())
+    };
     if !cleaned_body.is_empty() {
         sections.push(cleaned_body);
     }

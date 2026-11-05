@@ -1,3 +1,4 @@
+import { isLocalNetworkUrl } from "@sourcefold/core";
 import type { CaptureResult } from "../capture-page";
 import { pageKindOf } from "../page-kind";
 import {
@@ -224,6 +225,15 @@ async function processRow(
   const host = hostOf(row.url) || "this site";
   if (!origin) {
     await deps.api.patch(row.id, { status: "failed", message: "This page can't be saved." });
+    return "next";
+  }
+  // A queued link must never open a page on this computer or the local network in the user's
+  // own browser session (QA 2026-11-05).
+  if (isLocalNetworkUrl(row.url)) {
+    await deps.api.patch(row.id, {
+      status: "failed",
+      message: "Sourcefold doesn't open links to this computer or your local network.",
+    });
     return "next";
   }
   const allowed = await deps.permissionsContains([origin]);

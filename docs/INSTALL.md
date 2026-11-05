@@ -95,7 +95,7 @@ Lets Claude read, add and organize your library from a normal Claude chat. You n
 2. **Without the desktop app:** download [Sourcefold-Claude.mcpb](https://github.com/lagoonitself/sourcefold/releases/latest/download/Sourcefold-Claude.mcpb) and double-click it (or drag it onto Claude Desktop). On the website open **Settings**, click **Create token** and paste it into **Access token** in the install window. Fill in **Website address** only if your website isn't the one the download was built for.
 3. Start a new chat in Claude Desktop and ask, for example, "List my Sourcefold projects" or "Add this YouTube playlist to my Cars › Turbo group". The first time Claude uses a Sourcefold tool it asks for permission; choose **Always allow** for the ones you're happy with.
 
-Claude Desktop starts Sourcefold by itself whenever it runs; there is nothing to keep open. With the Sourcefold desktop app open as well, Claude can also search inside your sources, open a source or highlight in the app for you, and save paid Substack posts with your cookie. X posts still need the browser extension.
+Claude Desktop starts Sourcefold by itself whenever it runs. With the desktop app's sign-in, Claude works directly with your library (no website needed); that sign-in is renewed while the desktop app runs and lasts about an hour after you close it, so open the app now and then, or use an access token (step 2) if Claude should work for long stretches with the app closed. With the Sourcefold desktop app open as well, Claude can also search inside your sources, open a source or highlight in the app for you, and save paid Substack posts with your cookie. X posts still need the browser extension.
 
 Other AI apps that support MCP (Claude Code, Cursor and others) can run the same server: unzip the `.mcpb` and run `node server/index.mjs` from that folder as a stdio MCP server, for example `claude mcp add sourcefold -- node /path/to/unzipped/server/index.mjs`.
 
@@ -108,6 +108,7 @@ From version 0.6.0 the desktop app updates itself: when a new version is out it 
 - **"This account can't use Sourcefold"** when signing in: the website only lets in the people its owner chose. Ask them to add you.
 - **Reddit, DeepMind, Meta AI or some news sites fail when pasted:** they block servers or build the page with JavaScript. Save them with the extension while the page is open.
 - **YouTube on the website:** YouTube blocks servers. Use the desktop app or the extension.
+- **"Sourcefold doesn't open links to this computer or your local network":** links to `localhost`, your router or other local addresses are never saved, so nothing can use Sourcefold to reach your own network.
 - **A saved page seems to be missing:** a group lists only its own sources, not its subgroups'. The extension shows the full path when it saves (for example `Cars / Engines`).
 - **Extension asks you to sign in again:** click **Sign in with Google** in the popup or in the extension's **Options**.
 - **Extension says the desktop app is too old:** update the desktop app, or sign in with Google in the extension.

@@ -217,7 +217,8 @@ Plan: `docs/dev/PLAN-sharing.md` (2026-10-22).
 - [x] Startup and six-hourly check with an "Update and restart" toast; Settings → General → Updates.
 - [x] After an update, offer to update Sourcefold in Claude Desktop (the `.mcpb` follows the app's version).
 - [x] Release workflow uploads the signatures, the Mac `.app.tar.gz` and `latest.json`.
-- [ ] Owner adds the `TAURI_SIGNING_PRIVATE_KEY` repository secret and releases v0.6.0, then checks that the next release arrives inside the app.
+- [x] `TAURI_SIGNING_PRIVATE_KEY` repository secret set and v0.6.0 released (2026-11-05).
+- [ ] Owner installs 0.6.0 by hand once, then checks that the next release arrives inside the app.
 - [ ] The Chrome extension still updates by hand (unpacked) until the Chrome Web Store listing.
 
 ## MCP QA fixes, round 2 (2026-11-05)

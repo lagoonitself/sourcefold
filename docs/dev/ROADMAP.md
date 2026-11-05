@@ -241,10 +241,6 @@ Plan and contract: `docs/dev/PLAN-shelf.md`. Sites kept with a note, tags and a 
 - [ ] Owner applies the migration and tests.
 - [ ] Later: dead-link check, Obsidian `Links.md`, shelf in Claude's MCP tools.
 
-## Planned: Lively mode (opt-in animated look, pets)
-
-Plan: `docs/dev/PLAN-lively.md`; mockup `docs/dev/mockups/lively.html`. Waiting for the owner's yes on the mockup before agents build it.
-
 ## Later
 
 - [ ] Chrome Web Store listing for the extension ($5 one-time fee; the store build must drop the manifest `key`, and the desktop native host must also allow the store's extension ID).

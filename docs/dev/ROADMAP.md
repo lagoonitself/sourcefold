@@ -276,4 +276,5 @@ Plan: `docs/dev/PLAN-link-status.md`.
 - [x] Find the cause: the desktop app reloaded everything every ~1.5 s (link-queue claim → "library changed" → reload → claim)
 - [x] Link-queue bookkeeping no longer reloads the app; Retry starts the runner directly
 - [x] Safety-net reload every 2 minutes (was 30 s), focus reload at most once a minute, no duplicate Drive status timer
-- [ ] Owner merges and releases 0.7.1, then checks Disk IO and request counts a day later
+- [x] Merged and released as v0.7.1 (installed apps update themselves)
+- [ ] Owner checks Disk IO and request counts a day later

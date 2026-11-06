@@ -1,6 +1,6 @@
 [package]
 name = "sourcefold-desktop"
-version = "0.7.0"
+version = "0.7.1"
 description = "Sourcefold Desktop App"
 authors = ["Sourcefold"]
 edition = "2021"

@@ -2,7 +2,7 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
-## Unreleased
+## 0.7.1 (2026-11-06)
 
 ### Fixed
 

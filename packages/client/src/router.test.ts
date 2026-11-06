@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { callsOf, createFakeDb } from "./test/fake-db";
-import { createLocalApi, LOCAL_ROUTES, matchRoute } from "./router";
+import { changesLibrary, createLocalApi, LOCAL_ROUTES, matchRoute } from "./router";
 import type { LocalApiDeps } from "./types";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
@@ -155,5 +155,30 @@ describe("createLocalApi", () => {
     });
     expect(res.status).toBe(201);
     expect(onItemsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't reload the app for link-queue bookkeeping", async () => {
+    // The desktop claims waiting links on every reload; a claim that reloaded looped forever.
+    expect(changesLibrary("/api/link-queue/claim")).toBe(false);
+    expect(changesLibrary("/api/link-queue/workers")).toBe(false);
+    expect(changesLibrary("/api/link-queue")).toBe(false);
+    expect(changesLibrary("/api/link-queue/abc")).toBe(false);
+    expect(changesLibrary("/api/link-queueish")).toBe(true);
+    expect(changesLibrary("/api/folders")).toBe(true);
+    expect(changesLibrary("/api/items/abc")).toBe(true);
+
+    const fake = createFakeDb({ rpc: [] });
+    const onItemsChanged = vi.fn();
+    const local = createLocalApi({
+      supabase: signedIn(fake.db),
+      fetchUrl: vi.fn(),
+      parseHtml: vi.fn(),
+      onItemsChanged,
+    });
+    await local.fetch("/api/link-queue/claim", {
+      method: "POST",
+      body: JSON.stringify({ needs: "desktop", worker: "w1", limit: 1 }),
+    });
+    expect(onItemsChanged).not.toHaveBeenCalled();
   });
 });

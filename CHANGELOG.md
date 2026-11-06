@@ -2,6 +2,12 @@
 
 Each release's downloads are on the [releases page](https://github.com/lagoonitself/sourcefold/releases). The release workflow copies the section for the tagged version into the release notes, so every version needs a section here before it's tagged.
 
+## Unreleased
+
+### Fixed
+
+- The desktop app no longer reloads your whole library every second and a half while it's open and signed in. Checking for links from Claude counted as a change and started the next reload, which used up the database's disk budget. It now reloads when something changes (live sync), when you switch back to it (at most once a minute) and every 2 minutes as a safety net.
+
 ## 0.7.0 (2026-11-06)
 
 ### New

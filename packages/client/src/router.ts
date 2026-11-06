@@ -123,6 +123,19 @@ function failureResponse(err: unknown): Response {
 const LOCAL_ORIGIN = "http://sourcefold.local";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+
+/**
+ * Writes that are only bookkeeping for the link queue (claiming waiting links, checking in,
+ * marking a row done), not changes to sources or groups. They must not reload the app: the
+ * desktop claims on every reload, so a claim that reloaded would start the next claim, and the
+ * app re-read the whole library every 1.5 s, all day (Supabase Disk IO warning, 2026-11-06).
+ * Saving a claimed link goes through its own route, which does reload.
+ */
+const BOOKKEEPING_PREFIXES = ["/api/link-queue"];
+
+export function changesLibrary(pathname: string): boolean {
+  return !BOOKKEEPING_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 type Method = (typeof METHODS)[number];
 
 function splitPath(path: string): string[] {
@@ -240,7 +253,7 @@ export function createLocalApi(
       console.error(`${method} ${url.pathname} failed:`, err);
       return failureResponse(err);
     }
-    if (method !== "GET" && response.ok) deps.onItemsChanged?.();
+    if (method !== "GET" && response.ok && changesLibrary(url.pathname)) deps.onItemsChanged?.();
     return response;
   }
 

@@ -7,6 +7,11 @@ import { syncLocalCopy } from "../local-copy/local-copy";
 import { getSessionStatus, sessionFromStatus, type Session } from "@/lib/remote-client";
 import { WelcomeScreen } from "./WelcomeScreen";
 
+/** The signed-in safety-net reload; live sync does the real work. */
+export const SAFETY_REFRESH_MS = 2 * 60_000;
+/** Switching back to the window reloads at most this often. */
+export const FOCUS_REFRESH_MIN_MS = 60_000;
+
 export interface AuthContextType {
   signedIn: boolean;
   offlineMode: boolean;
@@ -76,12 +81,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => window.removeEventListener("sourcefold:refresh", sync);
   }, [signedIn, offlineMode]);
 
-  // Signed-in views reload on window focus and every 30 s while visible. Nothing runs once the
-  // session is gone (sign-out, or a 401 that cleared it).
+  // Signed-in views reload on window focus (at most once a minute) and every 2 minutes while
+  // visible. Live sync brings changes from elsewhere within seconds, so this is only the safety
+  // net; each reload is ~25 database requests, which is why it isn't every 30 s any more.
+  // Nothing runs once the session is gone (sign-out, or a 401 that cleared it).
   React.useEffect(() => {
     if (!signedIn) return;
 
+    let lastFocusRefresh = 0;
     const onFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusRefresh < FOCUS_REFRESH_MIN_MS) return;
+      lastFocusRefresh = now;
       window.dispatchEvent(new Event("sourcefold:refresh"));
     };
     window.addEventListener("focus", onFocus);
@@ -90,7 +101,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (typeof document !== "undefined" && !document.hidden) {
         window.dispatchEvent(new Event("sourcefold:refresh"));
       }
-    }, 30000);
+    }, SAFETY_REFRESH_MS);
 
     return () => {
       clearInterval(interval);

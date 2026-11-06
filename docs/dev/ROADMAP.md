@@ -270,3 +270,10 @@ Plan: `docs/dev/PLAN-link-status.md`.
 - [x] Check-ins from the desktop app and the extension (`link_workers`), one shared wording (`packages/core/src/link-status.ts`), the Links from Claude list on the desktop and in the extension, the extension's badge, X without Allow, Claude's replies.
 - [ ] Owner applies `20261108000000_link_workers.sql`.
 - [ ] A list of waiting links on the website.
+
+## Fix: desktop reload loop (Supabase Disk IO warning, 2026-11-06)
+
+- [x] Find the cause: the desktop app reloaded everything every ~1.5 s (link-queue claim → "library changed" → reload → claim)
+- [x] Link-queue bookkeeping no longer reloads the app; Retry starts the runner directly
+- [x] Safety-net reload every 2 minutes (was 30 s), focus reload at most once a minute, no duplicate Drive status timer
+- [ ] Owner merges and releases 0.7.1, then checks Disk IO and request counts a day later

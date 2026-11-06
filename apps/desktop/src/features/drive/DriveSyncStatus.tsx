@@ -74,22 +74,10 @@ export function DriveSyncStatus({ className, onSaved }: DriveSyncStatusProps) {
       void loadStatus();
     }
 
-    const interval = setInterval(() => {
-      if (isRemoteConfigured()) {
-        void loadStatus();
-      }
-    }, 30000);
-
-    const onFocus = () => {
-      if (isRemoteConfigured()) {
-        void loadStatus();
-      }
-    };
-    window.addEventListener("focus", onFocus);
+    // No timer or focus listener of its own: `sourcefold:refresh` (focus, the safety-net timer,
+    // live sync, local changes) already reloads it.
 
     return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
       window.removeEventListener("sourcefold:auth-changed", onAuthChanged);
       window.removeEventListener("sourcefold:refresh", loadStatus);
     };

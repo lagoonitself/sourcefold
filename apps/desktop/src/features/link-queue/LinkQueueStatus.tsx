@@ -73,6 +73,8 @@ export function LinkQueueStatus({ folders, onOpenItem }: LinkQueueStatusProps) {
   const [lastLooked, setLastLooked] = React.useState(() => readLastLooked());
   const [panelOpen, setPanelOpen] = React.useState(false);
   const refreshRef = React.useRef<() => Promise<void>>(async () => {});
+  // Starts the runner directly: link-queue writes (retry, claim) no longer reload the app.
+  const startRef = React.useRef<() => void>(() => {});
 
   React.useEffect(() => {
     if (!active) {
@@ -180,6 +182,7 @@ export function LinkQueueStatus({ folders, onOpenItem }: LinkQueueStatusProps) {
     window.addEventListener("sourcefold:refresh", onRefresh);
     window.addEventListener("sourcefold:auth-changed", onAuth);
 
+    startRef.current = () => void runner.start();
     void checkIn();
     void runner.start();
     const checkInTimer = window.setInterval(() => {
@@ -198,6 +201,7 @@ export function LinkQueueStatus({ folders, onOpenItem }: LinkQueueStatusProps) {
       window.removeEventListener("sourcefold:refresh", onRefresh);
       window.removeEventListener("sourcefold:auth-changed", onAuth);
       refreshRef.current = async () => {};
+      startRef.current = () => {};
     };
   }, [active]);
 
@@ -259,7 +263,10 @@ export function LinkQueueStatus({ folders, onOpenItem }: LinkQueueStatusProps) {
           onPanelChange(false);
           onOpenItem(itemId);
         }}
-        onChanged={() => refreshRef.current()}
+        onChanged={async () => {
+          await refreshRef.current();
+          startRef.current();
+        }}
       />
     </>
   );

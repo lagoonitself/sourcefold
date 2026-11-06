@@ -23,20 +23,30 @@ name: Release
 # SOURCEFOLD_CONTENT_URL is the Content Worker's address (where source text is kept in R2); without
 # it the apps keep text in Google Drive as before.
 
+# Or run it by hand (Actions → Release → Run workflow, or the API) with a version such as 0.7.1:
+# it tags the chosen branch's latest commit as v0.7.1 and releases that. Agents in cloud sessions
+# can't push tags, so this is how they release. A tag made here doesn't start a second run
+# (GitHub doesn't trigger workflows from its own token's pushes).
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the v (e.g. 0.7.1). The branch must already have it in tauri.conf.json and CHANGELOG.md."
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.version || github.ref }}
   cancel-in-progress: false
 
 env:
-  TAG: ${{ github.ref_name }}
+  TAG: ${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
   WEB_URL: ${{ vars.SOURCEFOLD_WEB_URL }}
 
 jobs:
@@ -46,6 +56,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Tag this commit (run by hand)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VERSION="${TAG#v}"
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Version must look like 0.7.1 (no v)."; exit 1
+          fi
+          CONF=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+          if [ "$CONF" != "$VERSION" ]; then
+            echo "tauri.conf.json says $CONF, not $VERSION. Bump the versions first."; exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists."; exit 1
+          fi
+          git tag "$TAG"
+          git push origin "refs/tags/$TAG"
 
       - name: Create draft release
         env:
@@ -99,6 +126,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -180,6 +209,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -223,6 +254,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
 
       - name: Write latest.json for in-app updates
         env:
